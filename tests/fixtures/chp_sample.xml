@@ -1,0 +1,53 @@
+<?xml version="1.0" ?>
+<State><Center ID = "SAHB">
+<Dispatch ID = "SACC">
+
+		<Log ID = "260705SA1309">
+			<LogTime>"Jul  5 2026  9:53PM"</LogTime>
+			<LogType>"1125-Traffic Hazard"</LogType>
+			<Location>"Jackson Rd / Mayhew Rd"</Location>
+			<LocationDesc>"WB JEO"</LocationDesc>
+			<Area>"East Sac"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"38531446:121344046"</LATLON>
+			<LogDetails>
+		<details>
+			<DetailTime>"Jul  5 2026  9:54PM"</DetailTime>
+			<IncidentDetail>"[3] NEG VEHS"</IncidentDetail>
+		</details></LogDetails></Log>
+
+		<Log ID = "260705SA1293">
+			<LogTime>"Jul  5 2026  9:43PM"</LogTime>
+			<LogType>"1183-Trfc Collision-Unkn Inj"</LogType>
+			<Location>"I80 E / Mace Blvd"</Location>
+			<LocationDesc>"EB JEO"</LocationDesc>
+			<Area>"Woodland"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"38552469:121694383"</LATLON>
+			<LogDetails>
+		<details>
+			<DetailTime>"Jul  5 2026  9:53PM"</DetailTime>
+			<IncidentDetail>"[2] DRVR OF MC ON RHS BEHIND THE BARRIER"</IncidentDetail>
+		</details></LogDetails></Log>
+
+		<Log ID = "260705SA0001">
+			<LogTime>"Jul  5 2026  8:00PM"</LogTime>
+			<LogType>"1125-Traffic Hazard"</LogType>
+			<Location>"No Coordinates Rd"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"Nowhere"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"0:0"</LATLON>
+			<LogDetails></LogDetails></Log>
+
+		<Log ID = "260705SA0002">
+			<LogTime>"Jul  5 2026  8:05PM"</LogTime>
+			<LogType>"1125-Traffic Hazard"</LogType>
+			<Location>"Missing Latlon Ave"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"Nowhere"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LogDetails></LogDetails></Log>
+</Dispatch>
+</Center>
+</State>
