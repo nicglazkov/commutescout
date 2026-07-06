@@ -333,7 +333,8 @@ def write_badge(all_results: list[dict], path: Path) -> None:
     label_w = round(len(label) * char_w + 12)
     msg_w = round(len(message) * char_w + 12)
     total_w = label_w + msg_w
-    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}" height="20" role="img" aria-label="{label}: {message}">
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}" height="20" \
+role="img" aria-label="{label}: {message}">
   <linearGradient id="s" x2="0" y2="100%">
     <stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/>
   </linearGradient>
@@ -343,7 +344,8 @@ def write_badge(all_results: list[dict], path: Path) -> None:
     <rect x="{label_w}" width="{msg_w}" height="20" fill="{color}"/>
     <rect width="{total_w}" height="20" fill="url(#s)"/>
   </g>
-  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
+  <g fill="#fff" text-anchor="middle" font-size="11" \
+font-family="Verdana,Geneva,DejaVu Sans,sans-serif">
     <text x="{label_w / 2}" y="14">{label}</text>
     <text x="{label_w + msg_w / 2}" y="14">{message}</text>
   </g>
