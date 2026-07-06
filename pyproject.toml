@@ -28,6 +28,7 @@ dev = [
     "respx>=0.21",
     "ruff>=0.6",
 ]
+evals = ["anthropic>=0.40", "pyyaml>=6"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ca_roads", "src/ca_roads_mcp", "src/ca_roads_demo"]
@@ -35,6 +36,7 @@ packages = ["src/ca_roads", "src/ca_roads_mcp", "src/ca_roads_demo"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
@@ -43,3 +45,6 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"evals/build_fixtures.py" = ["E501"]  # fixture data tables read better on one line

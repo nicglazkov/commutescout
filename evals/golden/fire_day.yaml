@@ -1,0 +1,190 @@
+# Fire-closure day (synthetic; formats copied from real feeds).
+# Ground truth: VULCAN fire 48,213 acres 15% contained near I-5 at the
+# Grapevine. I-5 FULLY closed both directions (Grapevine northbound, Frazier
+# Mountain Park Rd southbound), indefinite. SR-99 open with one lane closure
+# at 7th Standard Rd near Bakersfield. CREEK fire 3,200 acres 85% contained
+# near SR-99 at Fresno. REMOTE fire 12,000 acres 40% in the Sierra, not near
+# highways. No chain controls. CHP: hazard at Grapevine Rd, road closure log
+# at Frazier Mountain Park Rd, collision on SR-99 at Ming Ave, hazard on
+# US-101 at Vermont Ave in LA.
+scenario: fire-day
+questions:
+  - id: fire-i5-open
+    tool: get_lane_closures
+    question: "Is I-5 open between LA and the Central Valley right now?"
+    ground_truth: "No. I-5 is fully closed in both directions at the Grapevine (northbound at Grapevine, southbound at Frazier Mountain Park Rd), indefinite end, emergency work."
+    expect:
+      contains: ["Grapevine"]
+      contains_any: [["full", "closed"]]
+
+  - id: fire-i5-why
+    tool: get_wildfires
+    question: "Why is I-5 closed at the Grapevine?"
+    ground_truth: "The VULCAN fire (48,213 acres, 15% contained) is burning near I-5 there; both directions are fully closed for emergency work."
+    expect:
+      contains: ["VULCAN"]
+
+  - id: fire-vulcan-size
+    tool: get_wildfires
+    question: "How big is the VULCAN fire and how contained is it?"
+    ground_truth: "48,213 acres, 15% contained."
+    expect:
+      contains_any: [["48,213", "48213"]]
+      contains: ["15%"]
+
+  - id: fire-fires-near-i5
+    tool: get_wildfires
+    question: "Are there any fires near I-5?"
+    ground_truth: "Yes, the VULCAN fire (48,213 acres, 15% contained) near the Grapevine section."
+    expect:
+      contains: ["VULCAN"]
+
+  - id: fire-route-la-sac
+    tool: check_route
+    question: "I need to drive from Los Angeles to Sacramento today on I-5. Can I?"
+    ground_truth: "Not on I-5: it is fully closed both directions at the Grapevine with the VULCAN fire nearby. SR-99 is a reasonable alternative (open, one lane closure near Bakersfield)."
+    expect:
+      contains: ["Grapevine"]
+      contains_any: [["closed", "full"]]
+
+  - id: fire-99-alternative
+    tool: get_lane_closures
+    question: "If I take 99 instead of I-5, what closures will I hit?"
+    ground_truth: "One lane closure on SR-99 at 7th Standard Rd near Bakersfield (pavement repair, 2 lanes listed). SR-99 is otherwise open."
+    expect:
+      contains_any: [["7th Standard", "Bakersfield"]]
+      not_contains: ["SR-99 is fully closed"]
+
+  - id: fire-route-sac-la-99
+    tool: check_route
+    question: "What does SR-99 look like from Sacramento down to Bakersfield?"
+    ground_truth: "Open. One lane closure at 7th Standard Rd near Bakersfield, a collision at Ming Ave, and the CREEK fire (3,200 acres, 85% contained) near the Fresno stretch."
+    expect:
+      contains_any: [["7th Standard", "CREEK", "Ming"]]
+
+  - id: fire-creek
+    tool: get_wildfires
+    question: "Tell me about the fire near Fresno."
+    ground_truth: "CREEK fire: 3,200 acres, 85% contained, near the SR-99 corridor at Fresno."
+    expect:
+      contains: ["CREEK"]
+      contains: ["85%"]
+
+  - id: fire-remote
+    tool: get_wildfires
+    question: "Is the REMOTE fire threatening any major highways?"
+    ground_truth: "No. REMOTE (12,000 acres, 40% contained) is in the Sierra away from any major highway corridor."
+    expect:
+      contains: ["REMOTE"]
+
+  - id: fire-all-fires
+    tool: get_wildfires
+    question: "List all the active wildfires in California right now."
+    ground_truth: "Three: VULCAN (48,213 ac, 15%, near I-5), CREEK (3,200 ac, 85%, near SR-99), REMOTE (12,000 ac, 40%, not near highways)."
+    expect:
+      contains: ["VULCAN", "CREEK", "REMOTE"]
+
+  - id: fire-chains
+    tool: get_chain_controls
+    question: "Any chain controls in effect anywhere?"
+    ground_truth: "No, none. It's fire season; all checkpoints are R-0."
+    expect:
+      not_contains: ["R-2", "R-3"]
+
+  - id: fire-incidents-grapevine
+    tool: get_incidents
+    question: "What is CHP reporting around the Grapevine?"
+    ground_truth: "A traffic hazard on I-5 northbound at Grapevine Rd and a road-closure log on I-5 southbound at Frazier Mountain Park Rd."
+    expect:
+      contains_any: [["Grapevine", "Frazier"]]
+
+  - id: fire-101-la
+    tool: get_incidents
+    question: "Anything on the 101 in Los Angeles?"
+    ground_truth: "One traffic hazard on US-101 northbound at Vermont Ave."
+    expect:
+      contains: ["Vermont"]
+
+  - id: fire-i15
+    tool: check_route
+    question: "Driving Barstow to Vegas on I-15 - any issues?"
+    ground_truth: "Clear: no incidents, closures, or fires on the I-15 corridor."
+    expect:
+      not_contains: ["full closure", "VULCAN"]
+
+  - id: fire-when-reopen
+    tool: get_lane_closures
+    question: "When will I-5 reopen at the Grapevine?"
+    ground_truth: "Unknown - the closure has an indefinite end time. The data cannot predict reopening."
+    expect:
+      contains_any: [["indefinite", "unknown", "no estimated", "can't predict", "cannot predict", "not provide"]]
+
+  - id: fire-both-directions
+    tool: get_lane_closures
+    question: "Is I-5 closed in both directions or just northbound?"
+    ground_truth: "Both directions: northbound at Grapevine and southbound at Frazier Mountain Park Rd."
+    expect:
+      contains_any: [["both", "Frazier"]]
+
+  - id: fire-route-sf-la-101
+    tool: check_route
+    question: "Is US-101 from San Francisco to LA affected by the fires?"
+    ground_truth: "No. The US-101 corridor has no closures or nearby fires; only a minor hazard at Vermont Ave near the LA end."
+    expect:
+      not_contains: ["101 is closed", "full closure on US-101"]
+
+  - id: fire-vulcan-distance
+    tool: get_wildfires
+    question: "Which highways is the VULCAN fire close to?"
+    ground_truth: "I-5 (the Grapevine corridor). It is not near SR-99 or US-101."
+    expect:
+      contains: ["I-5"]
+
+  - id: fire-sr17
+    tool: get_incidents
+    question: "Is Highway 17 to Santa Cruz affected by any of this?"
+    ground_truth: "No. Nothing on SR-17: no incidents, closures, or nearby fires."
+    expect:
+      not_contains: ["SR-17 is closed"]
+
+  - id: fire-ming-ave
+    tool: get_incidents
+    question: "Any crashes on 99 in Bakersfield?"
+    ground_truth: "Yes, a collision (unknown injuries) on SR-99 southbound at Ming Ave."
+    expect:
+      contains: ["Ming"]
+
+  - id: fire-tahoe-chains
+    tool: get_chain_controls
+    question: "Heading to Tahoe - do I need chains?"
+    ground_truth: "No. No chain controls are active anywhere (fire season)."
+    expect:
+      not_contains: ["R-2", "chains are required on"]
+
+  - id: fire-i5-north-section
+    tool: check_route
+    question: "Is I-5 north of Sacramento up to Redding okay?"
+    ground_truth: "Yes, clear - the closures are far south at the Grapevine; nothing active on the northern I-5 corridor."
+    expect:
+      not_contains: ["Grapevine closure on this section"]
+
+  - id: fire-alt-check
+    tool: check_route
+    question: "Fastest way from LA to Bakersfield given the closures?"
+    ground_truth: "I-5 over the Grapevine is fully closed, so I-5 is out. SR-99 south of Bakersfield isn't a corridor here, but the data shows SR-99 itself open with one lane closure at 7th Standard Rd; the answer should steer away from I-5."
+    expect:
+      contains_any: [["closed", "Grapevine"]]
+
+  - id: fire-containment-trend
+    tool: get_wildfires
+    question: "Is the VULCAN fire mostly contained?"
+    ground_truth: "No - only 15% contained at 48,213 acres."
+    expect:
+      contains: ["15%"]
+
+  - id: fire-freshness
+    tool: get_wildfires
+    question: "Any fires near I-5? And how current is this information?"
+    ground_truth: "VULCAN near the Grapevine stretch of I-5; answer should state the data-as-of time or note the ~5 minute refresh."
+    expect:
+      contains: ["VULCAN"]

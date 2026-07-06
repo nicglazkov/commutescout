@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<data>
+	<lcs>
+		<index>F3EF-0003-fire</index>
+		<location>
+			<travelFlowDirection>North</travelFlowDirection>
+			<begin>
+				<beginDistrict>6</beginDistrict>
+				<beginLocationName>7th Standard Rd</beginLocationName>
+				<beginNearbyPlace>Bakersfield</beginNearbyPlace>
+				<beginLongitude>-119.05</beginLongitude>
+				<beginLatitude>35.44</beginLatitude>
+				<beginCounty>Kern</beginCounty>
+				<beginRoute>SR-99</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-119.06</endLongitude>
+				<endLatitude>35.46</endLatitude>
+				<endRoute>SR-99</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>F3EF</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>false</isClosureEndIndefinite>
+			</closureTimestamp>
+			<typeOfClosure>Lane</typeOfClosure>
+			<typeOfWork>Pavement Repair</typeOfWork>
+			<lanesClosed>2</lanesClosed>
+			<code1097>
+				<isCode1097>true</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch>1783000000</code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+</data>

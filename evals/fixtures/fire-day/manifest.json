@@ -1,0 +1,6 @@
+{
+  "scenario": "fire-day",
+  "synthetic": true,
+  "description": "Fire closure: VULCAN fire (48,213 ac, 15%) near I-5 Grapevine, I-5 fully closed both directions, SR-99 open with one lane closure.",
+  "built_by": "evals/build_fixtures.py"
+}

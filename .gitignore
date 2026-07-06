@@ -21,3 +21,6 @@ venv/
 dist/
 build/
 *.egg-info/
+
+# Eval raw results are artifacts, not source (badge.json is kept)
+evals/results/results-*.json

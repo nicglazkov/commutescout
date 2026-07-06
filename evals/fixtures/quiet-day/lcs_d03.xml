@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<data>
+	<lcs>
+		<index>Q2CD-0002-quiet</index>
+		<location>
+			<travelFlowDirection>East</travelFlowDirection>
+			<begin>
+				<beginDistrict>3</beginDistrict>
+				<beginLocationName>Chiles Rd</beginLocationName>
+				<beginNearbyPlace>Davis</beginNearbyPlace>
+				<beginLongitude>-121.7</beginLongitude>
+				<beginLatitude>38.545</beginLatitude>
+				<beginCounty>Yolo</beginCounty>
+				<beginRoute>I-80</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-121.69</endLongitude>
+				<endLatitude>38.55</endLatitude>
+				<endRoute>I-80</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>Q2CD</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>false</isClosureEndIndefinite>
+			</closureTimestamp>
+			<typeOfClosure>Lane</typeOfClosure>
+			<typeOfWork>Litter Removal</typeOfWork>
+			<lanesClosed>RShoulder</lanesClosed>
+			<code1097>
+				<isCode1097>true</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch>1783000000</code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+	<lcs>
+		<index>Q3EF-0003-quiet</index>
+		<location>
+			<travelFlowDirection>East</travelFlowDirection>
+			<begin>
+				<beginDistrict>3</beginDistrict>
+				<beginLocationName>Watt Ave</beginLocationName>
+				<beginNearbyPlace>Sacramento</beginNearbyPlace>
+				<beginLongitude>-121.38</beginLongitude>
+				<beginLatitude>38.56</beginLatitude>
+				<beginCounty>Sacramento</beginCounty>
+				<beginRoute>US-50</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-121.36</endLongitude>
+				<endLatitude>38.562</endLatitude>
+				<endRoute>US-50</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>Q3EF</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>false</isClosureEndIndefinite>
+			</closureTimestamp>
+			<typeOfClosure>Lane</typeOfClosure>
+			<typeOfWork>Electrical Work</typeOfWork>
+			<lanesClosed>2</lanesClosed>
+			<code1097>
+				<isCode1097>false</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch></code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+</data>

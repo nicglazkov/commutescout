@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<data>
+	<cc>
+		<index>3-ED-50-25.4-E-110</index>
+		<location>
+			<district>3</district>
+			<locationName>Pollock Pines</locationName>
+			<nearbyPlace>Pollock Pines</nearbyPlace>
+			<longitude>-120.586</longitude>
+			<latitude>38.761</latitude>
+			<direction>East</direction>
+			<county>El Dorado</county>
+			<route>US-50</route>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-1</status>
+			<statusDescription>Chains or snow tires with M+S rating required.</statusDescription>
+		</statusData>
+	</cc>
+
+	<cc>
+		<index>3-ED-50-33.2-E-101</index>
+		<location>
+			<district>3</district>
+			<locationName>Twin Bridges</locationName>
+			<nearbyPlace>Twin Bridges</nearbyPlace>
+			<longitude>-120.117</longitude>
+			<latitude>38.809</latitude>
+			<direction>East</direction>
+			<county>El Dorado</county>
+			<route>US-50</route>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-2</status>
+			<statusDescription>Chains are required on all vehicles except four wheel drive vehicles with snow tires on all four wheels.</statusDescription>
+		</statusData>
+	</cc>
+
+	<cc>
+		<index>3-ED-50-45.0-W-102</index>
+		<location>
+			<district>3</district>
+			<locationName>Meyers</locationName>
+			<nearbyPlace>Meyers</nearbyPlace>
+			<longitude>-119.983</longitude>
+			<latitude>38.857</latitude>
+			<direction>West</direction>
+			<county>El Dorado</county>
+			<route>US-50</route>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-2</status>
+			<statusDescription>Chains are required on all vehicles except four wheel drive vehicles with snow tires on all four wheels.</statusDescription>
+		</statusData>
+	</cc>
+
+	<cc>
+		<index>3-PLA-80-30.5-E-120</index>
+		<location>
+			<district>3</district>
+			<locationName>Baxter</locationName>
+			<nearbyPlace>Alta</nearbyPlace>
+			<longitude>-120.78</longitude>
+			<latitude>39.2</latitude>
+			<direction>East</direction>
+			<county>Placer</county>
+			<route>I-80</route>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-1</status>
+			<statusDescription>Chains or snow tires with M+S rating required.</statusDescription>
+		</statusData>
+	</cc>
+
+	<cc>
+		<index>3-NEV-80-40.2-E-121</index>
+		<location>
+			<district>3</district>
+			<locationName>Kingvale</locationName>
+			<nearbyPlace>Kingvale</nearbyPlace>
+			<longitude>-120.443</longitude>
+			<latitude>39.316</latitude>
+			<direction>East</direction>
+			<county>Nevada</county>
+			<route>I-80</route>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-2</status>
+			<statusDescription>Chains are required on all vehicles except four wheel drive vehicles with snow tires on all four wheels.</statusDescription>
+		</statusData>
+	</cc>
+
+	<cc>
+		<index>3-NEV-80-48.0-W-122</index>
+		<location>
+			<district>3</district>
+			<locationName>Donner Lake Interchange</locationName>
+			<nearbyPlace>Truckee</nearbyPlace>
+			<longitude>-120.27</longitude>
+			<latitude>39.324</latitude>
+			<direction>West</direction>
+			<county>Nevada</county>
+			<route>I-80</route>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-2</status>
+			<statusDescription>Chains are required on all vehicles except four wheel drive vehicles with snow tires on all four wheels.</statusDescription>
+		</statusData>
+	</cc>
+
+	<cc>
+		<index>3-PLA-89-5.0-S-130</index>
+		<location>
+			<district>3</district>
+			<locationName>Tahoe City Wye</locationName>
+			<nearbyPlace>Tahoe City</nearbyPlace>
+			<longitude>-120.145</longitude>
+			<latitude>39.17</latitude>
+			<direction>South</direction>
+			<county>Placer</county>
+			<route>SR-89</route>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-2</status>
+			<statusDescription>Chains are required on all vehicles except four wheel drive vehicles with snow tires on all four wheels.</statusDescription>
+		</statusData>
+	</cc>
+
+</data>

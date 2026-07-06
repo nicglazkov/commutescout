@@ -1,0 +1,66 @@
+<?xml version="1.0" ?>
+<State><Center ID = "SAHB">
+<Dispatch ID = "SACC">
+
+		<Log ID = "260115SD0001">
+			<LogTime>"Jul  5 2026  7:12AM"</LogTime>
+			<LogType>"1183-Trfc Collision-Unkn Inj"</LogType>
+			<Location>"I80 W / Donner Pass Rd"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"Truckee"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"39324000:120235000"</LATLON>
+			<LogDetails></LogDetails></Log>
+
+		<Log ID = "260115SD0002">
+			<LogTime>"Jul  5 2026  7:30AM"</LogTime>
+			<LogType>"1125-Traffic Hazard"</LogType>
+			<Location>"I80 E / Kingvale"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"Truckee"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"39316000:120440000"</LATLON>
+			<LogDetails></LogDetails></Log>
+
+		<Log ID = "260115SD0003">
+			<LogTime>"Jul  5 2026  7:41AM"</LogTime>
+			<LogType>"1182-Trfc Collision-No Inj"</LogType>
+			<Location>"US50 E / Echo Summit"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"South Lake Tahoe"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"38812000:120031000"</LATLON>
+			<LogDetails></LogDetails></Log>
+
+		<Log ID = "260115SD0004">
+			<LogTime>"Jul  5 2026  8:02AM"</LogTime>
+			<LogType>"1125-Traffic Hazard"</LogType>
+			<Location>"SR89 S / Emerald Bay Rd"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"South Lake Tahoe"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"38955000:120110000"</LATLON>
+			<LogDetails></LogDetails></Log>
+
+		<Log ID = "260115SD0005">
+			<LogTime>"Jul  5 2026  8:15AM"</LogTime>
+			<LogType>"1125-Traffic Hazard"</LogType>
+			<Location>"Jackson Rd / Mayhew Rd"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"East Sac"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"38531000:121344000"</LATLON>
+			<LogDetails></LogDetails></Log>
+
+		<Log ID = "260115SD0006">
+			<LogTime>"Jul  5 2026  8:22AM"</LogTime>
+			<LogType>"1182-Trfc Collision-No Inj"</LogType>
+			<Location>"I80 E / Douglas Blvd"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"North Sac"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"38751000:121281000"</LATLON>
+			<LogDetails></LogDetails></Log>
+</Dispatch>
+</Center>
+</State>

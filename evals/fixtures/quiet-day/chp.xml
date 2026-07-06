@@ -1,0 +1,46 @@
+<?xml version="1.0" ?>
+<State><Center ID = "SAHB">
+<Dispatch ID = "SACC">
+
+		<Log ID = "260705QD0001">
+			<LogTime>"Jul  5 2026  9:10AM"</LogTime>
+			<LogType>"1125-Traffic Hazard"</LogType>
+			<Location>"US101 S / Cesar Chavez St"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"SF Bay"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"37750000:122404000"</LATLON>
+			<LogDetails></LogDetails></Log>
+
+		<Log ID = "260705QD0002">
+			<LogTime>"Jul  5 2026  9:40AM"</LogTime>
+			<LogType>"1182-Trfc Collision-No Inj"</LogType>
+			<Location>"I80 W / University Ave"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"Golden Gate"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"37870000:122300000"</LATLON>
+			<LogDetails></LogDetails></Log>
+
+		<Log ID = "260705QD0003">
+			<LogTime>"Jul  5 2026 10:05AM"</LogTime>
+			<LogType>"1125-Traffic Hazard"</LogType>
+			<Location>"Jackson Rd / Mayhew Rd"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"East Sac"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"38531000:121344000"</LATLON>
+			<LogDetails></LogDetails></Log>
+
+		<Log ID = "260705QD0004">
+			<LogTime>"Jul  5 2026 10:20AM"</LogTime>
+			<LogType>"1183-Trfc Collision-Unkn Inj"</LogType>
+			<Location>"SR99 N / Ming Ave"</Location>
+			<LocationDesc>""</LocationDesc>
+			<Area>"Bakersfield"</Area>
+			<ThomasBrothers>""</ThomasBrothers>
+			<LATLON>"35340000:119020000"</LATLON>
+			<LogDetails></LogDetails></Log>
+</Dispatch>
+</Center>
+</State>
