@@ -24,6 +24,7 @@ from ca_roads_mcp.ratelimit import RateLimiter, RateLimitMiddleware
 
 MODEL = os.environ.get("DEMO_MODEL", "claude-sonnet-5")
 MAX_QUESTION_CHARS = 300
+MAX_PRIOR_ANSWER_CHARS = 8000
 MAX_TOOL_TURNS = 6
 MAX_TOKENS_PER_TURN = 1024
 
@@ -56,6 +57,12 @@ Caltrans lane closures and chain controls, wildfires). Rules:
   "one-way-traffic" means passable with flagging delays, "lane" means some
   of the lanes (the lanes field says how many of how many). Never call a
   ramp closure a highway closure.
+- First answers are for a driver in a hurry: verdict first, then only what
+  changes their plans. When the user asks to "tell me more", switch modes:
+  go through the tool data thoroughly - every relevant event with its
+  location, direction, lanes, delay, and timing - grouped under short
+  headings, still in plain language. Re-query tools if you need detail you
+  didn't fetch the first time.
 - For a question about a town or place (not a specific highway), use your
   own knowledge of California geography to pass center="lat,lon" with
   radius_km 15-30 to get_incidents AND get_lane_closures (plus
@@ -298,7 +305,11 @@ def extract_geo(tool: str, result: dict) -> dict | None:
     return payload or None
 
 
-async def answer_stream(question: str, location: tuple[float, float] | None = None):
+async def answer_stream(
+    question: str,
+    location: tuple[float, float] | None = None,
+    prior: dict | None = None,
+):
     client = get_client()
     content = question
     if location:
@@ -307,7 +318,13 @@ async def answer_stream(question: str, location: tuple[float, float] | None = No
             f"{location[0]:.4f},{location[1]:.4f}.)"
         )
         yield _sse({"map": {"user": [location[0], location[1]]}})
-    messages = [{"role": "user", "content": content}]
+    messages = []
+    if prior:
+        # Stateless follow-up: the page sends back the previous exchange so
+        # "tell me more" has context without server-side sessions.
+        messages.append({"role": "user", "content": prior["question"]})
+        messages.append({"role": "assistant", "content": prior["answer"]})
+    messages.append({"role": "user", "content": content})
     for _ in range(MAX_TOOL_TURNS):
         async with client.messages.stream(
             model=MODEL,
@@ -382,11 +399,18 @@ async def ask(request: Request):
                 {"error": "location looks outside California"}, status_code=400
             )
         location = (lat, lon)
+    prior = None
+    raw_prior = body.get("prior")
+    if isinstance(raw_prior, dict):
+        prior_q = str(raw_prior.get("question") or "")[:MAX_QUESTION_CHARS]
+        prior_a = str(raw_prior.get("answer") or "")[:MAX_PRIOR_ANSWER_CHARS]
+        if prior_q and prior_a:
+            prior = {"question": prior_q, "answer": prior_a}
     blocked = guards.try_start_question(client_ip(request))
     if blocked:
         return JSONResponse({"error": blocked}, status_code=429)
     return StreamingResponse(
-        answer_stream(question, location),
+        answer_stream(question, location, prior),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

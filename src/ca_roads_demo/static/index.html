@@ -37,6 +37,8 @@
     background: var(--pine);
     color: var(--cream);
     padding: 14px 20px;
+    /* Faint contour lines: a nod to topo maps, not a template gradient. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='90' viewBox='0 0 260 90'%3E%3Cg fill='none' stroke='%23f6f1e6' stroke-opacity='0.07' stroke-width='1.2'%3E%3Cpath d='M-10 62 C 40 38 90 82 140 56 S 240 30 270 58'/%3E%3Cpath d='M-10 44 C 45 22 95 64 145 40 S 235 14 270 40'/%3E%3Cpath d='M-10 80 C 50 58 100 96 150 74 S 245 50 270 78'/%3E%3C/g%3E%3C/svg%3E");
   }
   .header-inner {
     max-width: 1060px; margin: 0 auto;
@@ -171,6 +173,28 @@
     0% { left: 2%; } 46% { left: 86%; } 54% { left: 86%; } 100% { left: 2%; }
   }
   .loadmsg { margin-top: 12px; font-size: 0.84rem; color: var(--ink-soft); }
+  .loadtime { margin-top: 4px; font-size: 0.76rem; color: #9a9585; }
+  .more-btn {
+    display: none; margin: 16px 0 2px;
+    font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+    color: var(--pine); background: var(--cream);
+    border: 1.5px solid var(--pine-soft); border-radius: 999px;
+    padding: 9px 18px;
+  }
+  .more-btn.active { display: inline-block; }
+  .more-btn:hover { background: #ebe4d2; }
+  .more-rule {
+    border: 0; border-top: 1px solid var(--line); margin: 18px 0 4px;
+  }
+  .more-heading {
+    font-size: 0.74rem; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--ink-soft); margin: 0 0 10px;
+  }
+  /* The first paragraph is the verdict; give it weight. */
+  .text > p:first-child {
+    font-size: 1.06rem; padding-left: 12px;
+    border-left: 3px solid var(--terracotta);
+  }
   .loadmsg::after {
     content: ""; display: inline-block; width: 1.2em; text-align: left;
     animation: dots 1.4s steps(4) infinite;
@@ -227,13 +251,14 @@
 
 <main>
   <h1>What's the road <em>actually</em> doing?</h1>
-  <p class="lede">Ask about any major California highway. Answers come from the
-  official live feeds, with the events plotted on a map.</p>
+  <p class="lede">Ask in plain words, like you'd ask a friend who works
+  dispatch. The answer comes straight from the live CHP and Caltrans feeds,
+  with everything plotted on a map.</p>
 
   <form id="form">
     <input type="text" id="q" maxlength="300" required autocomplete="off"
            placeholder="Do I need chains to get to Tahoe?">
-    <button class="ask" id="go" type="submit">Ask</button>
+    <button class="ask" id="go" type="submit">Check roads</button>
   </form>
   <div class="examples">
     <button type="button">Is 17 clear right now?</button>
@@ -256,10 +281,12 @@
       <div class="loader" id="loader">
         <div class="roadbar"><span class="car"></span></div>
         <div class="loadmsg" id="loadmsg">Waking up the dispatcher</div>
+        <div class="loadtime" id="loadtime">usually 5 to 15 seconds</div>
       </div>
       <div class="status" id="status"></div>
       <div class="chips" id="chips"></div>
       <div class="text" id="answer"></div>
+      <button type="button" class="more-btn" id="morebtn">Tell me more</button>
     </div>
     <div class="map-card" id="mapcard">
       <div id="map"></div>
@@ -310,15 +337,21 @@ const LOAD_MSGS = [
   'Looking for fires near the road',
   'Putting the picture together',
 ];
-let loadTimer = null, loadIdx = 0;
+const loadtime = document.getElementById('loadtime');
+let loadTimer = null, loadIdx = 0, loadStart = 0;
 function startLoader() {
   loadIdx = 0;
+  loadStart = Date.now();
   loadmsg.textContent = LOAD_MSGS[0];
+  loadtime.textContent = 'usually 5 to 15 seconds';
   loader.classList.add('active');
   clearInterval(loadTimer);
   loadTimer = setInterval(() => {
     loadIdx = (loadIdx + 1) % LOAD_MSGS.length;
     loadmsg.textContent = LOAD_MSGS[loadIdx];
+    const elapsed = (Date.now() - loadStart) / 1000;
+    if (elapsed > 30) loadtime.textContent = 'still working, almost there';
+    else if (elapsed > 15) loadtime.textContent = 'busy feeds today, can take up to 30 seconds';
   }, 2100);
 }
 function loaderNote(text) { loadmsg.textContent = text; }
@@ -499,19 +532,35 @@ document.querySelectorAll('.examples button').forEach(b => {
   b.addEventListener('click', () => { input.value = b.textContent; form.requestSubmit(); });
 });
 
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const question = input.value.trim();
-  if (!question) return;
+const morebtn = document.getElementById('morebtn');
+let lastQuestion = '', lastAnswerRaw = '';
+
+async function runQuery(question, prior) {
   go.disabled = true;
+  morebtn.classList.remove('active');
+  morebtn.disabled = true;
   result.classList.add('active');
-  answer.innerHTML = '';
-  resetMap();
+  let target = answer;
+  if (prior) {
+    // Follow-up detail streams under a divider; the map keeps building.
+    const rule = document.createElement('hr');
+    rule.className = 'more-rule';
+    const heading = document.createElement('p');
+    heading.className = 'more-heading';
+    heading.textContent = 'The full picture';
+    const section = document.createElement('div');
+    answer.append(rule, heading, section);
+    target = section;
+  } else {
+    answer.innerHTML = '';
+    resetMap();
+  }
   startLoader();
   let raw = '';
   try {
     const payload = {question};
     if (useloc.checked && userLocation) payload.location = userLocation;
+    if (prior) payload.prior = prior;
     const res = await fetch('/api/ask', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -520,7 +569,7 @@ form.addEventListener('submit', async (e) => {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       stopLoader();
-      answer.textContent = err.error || `Request failed (${res.status}).`;
+      target.textContent = err.error || `Request failed (${res.status}).`;
       return;
     }
     const reader = res.body.getReader();
@@ -537,7 +586,7 @@ form.addEventListener('submit', async (e) => {
         const msg = JSON.parse(part.slice(6));
         if (msg.text) {
           raw += msg.text;
-          answer.innerHTML = renderMd(raw);
+          target.innerHTML = renderMd(raw);
           statusEl.textContent = '';
           stopLoader();
         }
@@ -550,6 +599,16 @@ form.addEventListener('submit', async (e) => {
         if (msg.done) { statusEl.textContent = ''; }
       }
     }
+    if (!prior) {
+      lastQuestion = question;
+      lastAnswerRaw = raw;
+      // Offer depth when there's clearly more behind the summary.
+      const totalEvents = Object.values(chipCounts).reduce((a, b) => a + b, 0);
+      if (totalEvents >= 4 || raw.length > 900) {
+        morebtn.disabled = false;
+        morebtn.classList.add('active');
+      }
+    }
   } catch (err) {
     statusEl.textContent = 'Connection error. Try again.';
   } finally {
@@ -557,6 +616,20 @@ form.addEventListener('submit', async (e) => {
     go.disabled = false;
     statusEl.textContent = '';
   }
+}
+
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const question = input.value.trim();
+  if (question) runQuery(question, null);
+});
+
+morebtn.addEventListener('click', () => {
+  if (!lastQuestion || !lastAnswerRaw) return;
+  runQuery(
+    'Tell me more. Go through everything you found in detail.',
+    {question: lastQuestion, answer: lastAnswerRaw}
+  );
 });
 </script>
 </body>
