@@ -3,91 +3,237 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CA Roads - live California road conditions</title>
+<title>CA Roads. Live California road conditions</title>
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
-  :root { color-scheme: light dark; }
+  :root {
+    --pine: #1c3a2e;
+    --pine-soft: #2d5c46;
+    --cream: #f6f1e6;
+    --card: #fffdf7;
+    --ink: #26261f;
+    --ink-soft: #6d6a5e;
+    --terracotta: #c9611a;
+    --amber: #e08a3c;
+    --line: #e2dbc9;
+  }
   * { box-sizing: border-box; }
+  html, body { margin: 0; }
   body {
-    margin: 0;
-    font-family: system-ui, -apple-system, sans-serif;
-    line-height: 1.5;
-    background: #fafaf8;
-    color: #1a1a1a;
+    font-family: "Public Sans", system-ui, sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    line-height: 1.55;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
   }
-  @media (prefers-color-scheme: dark) {
-    body { background: #16181a; color: #e6e6e3; }
-    input, .answer { background: #1f2225 !important; color: inherit; border-color: #3a3d40 !important; }
-    button { background: #d97a26 !important; }
-    .hint button { background: none !important; color: #9aa0a6 !important; border-color: #3a3d40 !important; }
+  header {
+    background: var(--pine);
+    color: var(--cream);
+    padding: 14px 20px;
   }
-  main { max-width: 640px; width: 100%; margin: 0 auto; padding: 24px 16px; flex: 1; }
-  h1 { font-size: 1.5rem; margin: 8px 0 4px; }
-  .sub { margin: 0 0 20px; color: #666; }
-  form { display: flex; gap: 8px; }
-  input {
-    flex: 1; font-size: 1rem; padding: 12px;
-    border: 1px solid #ccc; border-radius: 8px; background: #fff;
+  .header-inner {
+    max-width: 1060px; margin: 0 auto;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   }
-  button {
-    font-size: 1rem; padding: 12px 18px; border: 0; border-radius: 8px;
-    background: #c9611a; color: #fff; cursor: pointer;
+  .header-inner img { width: 40px; height: 40px; border-radius: 9px; }
+  .wordmark {
+    font-family: "Fraunces", serif;
+    font-size: 1.35rem; font-weight: 600; letter-spacing: 0.01em;
   }
-  button:disabled { opacity: 0.5; cursor: default; }
-  .hint { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .hint button {
-    background: none; border: 1px solid #ccc; color: #555;
-    font-size: 0.85rem; padding: 6px 10px; border-radius: 999px;
+  .sources-chip {
+    margin-left: auto; font-size: 0.78rem; color: #cfc9b4;
+    border: 1px solid #3f5d4e; border-radius: 999px; padding: 4px 12px;
+    white-space: nowrap;
   }
-  .answer {
-    margin-top: 20px; padding: 16px; border: 1px solid #ddd; border-radius: 8px;
-    background: #fff; white-space: pre-wrap; word-wrap: break-word;
-    min-height: 40px; display: none;
+  main {
+    max-width: 1060px; width: 100%; margin: 0 auto; padding: 28px 20px 40px;
+    flex: 1;
   }
-  .status { color: #888; font-size: 0.9rem; margin-top: 8px; min-height: 1.2em; }
+  h1 {
+    font-family: "Fraunces", serif;
+    font-weight: 600; font-size: clamp(1.6rem, 4vw, 2.3rem);
+    margin: 0 0 6px; letter-spacing: -0.01em;
+  }
+  h1 em { font-style: italic; color: var(--terracotta); }
+  .lede { margin: 0 0 22px; color: var(--ink-soft); max-width: 46ch; }
+  form { display: flex; gap: 10px; max-width: 640px; }
+  input[type="text"] {
+    flex: 1; font: inherit; padding: 13px 16px;
+    border: 1.5px solid var(--line); border-radius: 10px;
+    background: var(--card); color: var(--ink);
+    transition: border-color 0.15s;
+  }
+  input[type="text"]:focus { outline: none; border-color: var(--pine-soft); }
+  button.ask {
+    font: inherit; font-weight: 600; padding: 13px 22px;
+    border: 0; border-radius: 10px; cursor: pointer;
+    background: var(--terracotta); color: #fff;
+  }
+  button.ask:hover { background: #b4550f; }
+  button.ask:disabled { opacity: 0.55; cursor: default; }
+  .examples { margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .examples button {
+    font: inherit; font-size: 0.83rem; cursor: pointer;
+    background: transparent; color: var(--ink-soft);
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 13px;
+  }
+  .examples button:hover { border-color: var(--pine-soft); color: var(--pine); }
+  .result {
+    margin-top: 26px; display: none;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 18px; align-items: start;
+  }
+  .result.active { display: grid; }
+  @media (max-width: 840px) { .result.active { grid-template-columns: 1fr; } }
+  .answer-card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 20px 22px;
+  }
+  .answer-card .status {
+    font-size: 0.82rem; color: var(--terracotta); min-height: 1.3em;
+    margin-bottom: 8px; font-weight: 500;
+  }
+  .answer-card .text { white-space: pre-wrap; word-wrap: break-word; }
+  .answer-card .text:empty::before { content: " "; }
+  .map-card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; overflow: hidden; display: none;
+  }
+  .map-card.active { display: block; }
+  #map { height: 420px; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    padding: 10px 14px; font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line);
+  }
+  .legend span::before {
+    content: ""; display: inline-block; width: 9px; height: 9px;
+    border-radius: 50%; margin-right: 5px; background: var(--dot);
+  }
   footer {
-    text-align: center; font-size: 0.8rem; color: #888; padding: 16px;
+    border-top: 1px solid var(--line);
+    padding: 18px 20px; text-align: center;
+    font-size: 0.8rem; color: var(--ink-soft);
   }
   footer a { color: inherit; }
 </style>
 </head>
 <body>
+<header>
+  <div class="header-inner">
+    <img src="/logo.svg" alt="">
+    <span class="wordmark">CA Roads</span>
+    <span class="sources-chip">live from CHP &middot; Caltrans &middot; WFIGS</span>
+  </div>
+</header>
+
 <main>
-  <h1>CA Roads</h1>
-  <p class="sub">Ask about current California road conditions. Live data from
-  CHP, Caltrans, and WFIGS.</p>
+  <h1>What's the road <em>actually</em> doing?</h1>
+  <p class="lede">Ask about any major California highway. Answers come from the
+  official live feeds, with the events plotted on a map.</p>
 
   <form id="form">
-    <input id="q" maxlength="300" placeholder="Do I need chains to get to Tahoe?"
-           autocomplete="off" required>
-    <button id="go" type="submit">Ask</button>
+    <input type="text" id="q" maxlength="300" required autocomplete="off"
+           placeholder="Do I need chains to get to Tahoe?">
+    <button class="ask" id="go" type="submit">Ask</button>
   </form>
-  <div class="hint">
+  <div class="examples">
     <button type="button">Is 17 clear right now?</button>
     <button type="button">Anything on I-80 between Sacramento and Reno?</button>
     <button type="button">Any fires near I-5?</button>
+    <button type="button">Lane closures on 101 in the Bay Area?</button>
   </div>
 
-  <div class="answer" id="answer"></div>
-  <div class="status" id="status"></div>
+  <div class="result" id="result">
+    <div class="answer-card">
+      <div class="status" id="status"></div>
+      <div class="text" id="answer"></div>
+    </div>
+    <div class="map-card" id="mapcard">
+      <div id="map"></div>
+      <div class="legend">
+        <span style="--dot:#c9611a">incident</span>
+        <span style="--dot:#a02c2c">closure</span>
+        <span style="--dot:#2b6cb0">chain control</span>
+        <span style="--dot:#d97706">wildfire</span>
+        <span style="--dot:#1c3a2e">route</span>
+      </div>
+    </div>
+  </div>
 </main>
 
 <footer>
-  Data: CHP, Caltrans, WFIGS. Not affiliated with any agency.
-  Verify before you drive.
+  Data: CHP, Caltrans, WFIGS. Not affiliated with any agency. Conditions
+  change fast; verify before you drive (511 or
+  <a href="https://quickmap.dot.ca.gov">quickmap.dot.ca.gov</a>).
   &middot; <a href="https://github.com/nicglazkov/ca-roads-mcp">GitHub</a>
 </footer>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 const form = document.getElementById('form');
 const input = document.getElementById('q');
 const go = document.getElementById('go');
 const answer = document.getElementById('answer');
-const status = document.getElementById('status');
+const statusEl = document.getElementById('status');
+const result = document.getElementById('result');
+const mapcard = document.getElementById('mapcard');
 
-document.querySelectorAll('.hint button').forEach(b => {
+const KIND_COLORS = {
+  incident: '#c9611a',
+  lane_closure: '#a02c2c',
+  chain_control: '#2b6cb0',
+  wildfire: '#d97706',
+};
+
+let map = null;
+let layer = null;
+
+function ensureMap() {
+  mapcard.classList.add('active');
+  if (map) return;
+  map = L.map('map', { scrollWheelZoom: false }).setView([37.5, -120.5], 6);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 17,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(map);
+  layer = L.featureGroup().addTo(map);
+}
+
+function resetMap() {
+  if (layer) layer.clearLayers();
+  mapcard.classList.remove('active');
+}
+
+function drawGeo(geo) {
+  ensureMap();
+  if (geo.route) {
+    L.polyline(geo.route, { color: '#1c3a2e', weight: 3, opacity: 0.7, dashArray: '6 6' })
+      .addTo(layer);
+  }
+  for (const m of geo.markers || []) {
+    L.circleMarker([m.lat, m.lon], {
+      radius: 7,
+      color: '#fffdf7',
+      weight: 1.5,
+      fillColor: KIND_COLORS[m.kind] || '#26261f',
+      fillOpacity: 0.95,
+    }).bindPopup(m.label ? String(m.label) : m.kind).addTo(layer);
+  }
+  const bounds = layer.getBounds();
+  if (bounds.isValid()) map.fitBounds(bounds.pad(0.18), { maxZoom: 11 });
+  setTimeout(() => map.invalidateSize(), 60);
+}
+
+document.querySelectorAll('.examples button').forEach(b => {
   b.addEventListener('click', () => { input.value = b.textContent; form.requestSubmit(); });
 });
 
@@ -96,9 +242,10 @@ form.addEventListener('submit', async (e) => {
   const question = input.value.trim();
   if (!question) return;
   go.disabled = true;
-  answer.style.display = 'block';
+  result.classList.add('active');
   answer.textContent = '';
-  status.textContent = 'Checking live feeds...';
+  resetMap();
+  statusEl.textContent = 'Checking the live feeds…';
   try {
     const res = await fetch('/api/ask', {
       method: 'POST',
@@ -108,7 +255,7 @@ form.addEventListener('submit', async (e) => {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       answer.textContent = err.error || `Request failed (${res.status}).`;
-      status.textContent = '';
+      statusEl.textContent = '';
       return;
     }
     const reader = res.body.getReader();
@@ -123,15 +270,17 @@ form.addEventListener('submit', async (e) => {
       for (const part of parts) {
         if (!part.startsWith('data: ')) continue;
         const msg = JSON.parse(part.slice(6));
-        if (msg.text) { answer.textContent += msg.text; status.textContent = ''; }
-        if (msg.tool) { status.textContent = 'Looking up ' + msg.tool.replaceAll('_', ' ') + '...'; }
-        if (msg.done) { status.textContent = ''; }
+        if (msg.text) { answer.textContent += msg.text; statusEl.textContent = ''; }
+        if (msg.tool) { statusEl.textContent = 'Looking up ' + msg.tool.replaceAll('_', ' ') + '…'; }
+        if (msg.map) { drawGeo(msg.map); }
+        if (msg.done) { statusEl.textContent = ''; }
       }
     }
   } catch (err) {
-    status.textContent = 'Connection error. Try again.';
+    statusEl.textContent = 'Connection error. Try again.';
   } finally {
     go.disabled = false;
+    statusEl.textContent = '';
   }
 });
 </script>

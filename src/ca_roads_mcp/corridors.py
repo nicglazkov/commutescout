@@ -330,7 +330,7 @@ def distance_to_corridor(
     corridor: Corridor, lat: float, lon: float
 ) -> tuple[float, float]:
     """(distance from point to polyline, distance along polyline of the
-    nearest point), both in meters. Approximates each segment by sampling —
+    nearest point), both in meters. Approximates each segment by sampling -
     coarse but plenty for 4-8 km buffers."""
     best_dist = float("inf")
     best_along = 0.0
