@@ -195,3 +195,11 @@ questions:
     expect:
       contains: ["R-2"]
       contains_any: [["Donner", "Kingvale"]]
+
+  - id: storm-region-sierra
+    tool: check_region
+    question: "How are the mountains looking today?"
+    ground_truth: "Rough: nine chain-control points active (strictest R-2 on I-80, US-50, SR-88, SR-89), SR-89 fully closed at Emerald Bay, a lane closure at Baxter, and several storm collisions around Donner and Echo Summit."
+    expect:
+      contains: ["R-2"]
+      contains_any: [["Emerald Bay", "89"]]

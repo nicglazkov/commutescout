@@ -203,3 +203,10 @@ questions:
     ground_truth: "A collision on SR-99 at Ming Ave and a lane closure on SR-99 at 7th Standard Rd; I-5 to the south is fully closed at the Grapevine."
     expect:
       contains_any: [["Ming", "7th Standard"]]
+
+  - id: fire-region-socal
+    tool: check_region
+    question: "What's happening in Southern California?"
+    ground_truth: "I-5 fully closed both directions at the Grapevine (2 full closures), the VULCAN fire (48,213 acres, 15% contained) in the region, plus a hazard on US-101 at Vermont Ave in LA."
+    expect:
+      contains: ["Grapevine", "VULCAN"]
