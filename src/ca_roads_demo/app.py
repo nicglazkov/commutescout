@@ -51,6 +51,11 @@ Caltrans lane closures and chain controls, wildfires). Rules:
 - Regional reports are capped to the most severe items with exact counts.
   Report the counts, lead with full closures and injury collisions, and
   group the rest ("plus 12 minor incidents") instead of listing everything.
+- Closures are not all equal: only closure_class "full-roadway" means the
+  road is closed. "ramp" means one ramp/connector is closed (say which),
+  "one-way-traffic" means passable with flagging delays, "lane" means some
+  of the lanes (the lanes field says how many of how many). Never call a
+  ramp closure a highway closure.
 - For a question about a town or place (not a specific highway), use your
   own knowledge of California geography to pass center="lat,lon" with
   radius_km 15-30 to get_incidents AND get_lane_closures (plus

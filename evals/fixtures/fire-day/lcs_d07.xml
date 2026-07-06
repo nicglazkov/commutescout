@@ -28,9 +28,13 @@
 				<closureEndEpoch>1900000000</closureEndEpoch>
 				<isClosureEndIndefinite>true</isClosureEndIndefinite>
 			</closureTimestamp>
+			<facility>Mainline</facility>
 			<typeOfClosure>Full</typeOfClosure>
 			<typeOfWork>Emergency Work</typeOfWork>
+			<durationOfClosure>Standard</durationOfClosure>
+			<estimatedDelay>Not Reported</estimatedDelay>
 			<lanesClosed>All</lanesClosed>
+			<totalExistingLanes>2</totalExistingLanes>
 			<code1097>
 				<isCode1097>true</isCode1097>
 				<code1097Timestamp>
@@ -74,9 +78,13 @@
 				<closureEndEpoch>1900000000</closureEndEpoch>
 				<isClosureEndIndefinite>true</isClosureEndIndefinite>
 			</closureTimestamp>
+			<facility>Mainline</facility>
 			<typeOfClosure>Full</typeOfClosure>
 			<typeOfWork>Emergency Work</typeOfWork>
+			<durationOfClosure>Standard</durationOfClosure>
+			<estimatedDelay>Not Reported</estimatedDelay>
 			<lanesClosed>All</lanesClosed>
+			<totalExistingLanes>2</totalExistingLanes>
 			<code1097>
 				<isCode1097>true</isCode1097>
 				<code1097Timestamp>

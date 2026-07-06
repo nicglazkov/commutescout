@@ -52,7 +52,8 @@ def chp_doc(logs: list[str]) -> str:
 def lcs_record(
     index, district, route, county, direction, loc, place, lat, lon,
     end_lat, end_lon, closure_type, work, lanes, is_1097,
-    indefinite=False, end_epoch=FAR_FUTURE_EPOCH,
+    indefinite=False, end_epoch=FAR_FUTURE_EPOCH, facility="Mainline",
+    total_lanes=2, delay="Not Reported",
 ):
     return f"""
 \t<lcs>
@@ -83,9 +84,13 @@ def lcs_record(
 \t\t\t\t<closureEndEpoch>{end_epoch}</closureEndEpoch>
 \t\t\t\t<isClosureEndIndefinite>{str(indefinite).lower()}</isClosureEndIndefinite>
 \t\t\t</closureTimestamp>
+\t\t\t<facility>{facility}</facility>
 \t\t\t<typeOfClosure>{closure_type}</typeOfClosure>
 \t\t\t<typeOfWork>{work}</typeOfWork>
+\t\t\t<durationOfClosure>Standard</durationOfClosure>
+\t\t\t<estimatedDelay>{delay}</estimatedDelay>
 \t\t\t<lanesClosed>{lanes}</lanesClosed>
+\t\t\t<totalExistingLanes>{total_lanes}</totalExistingLanes>
 \t\t\t<code1097>
 \t\t\t\t<isCode1097>{str(is_1097).lower()}</isCode1097>
 \t\t\t\t<code1097Timestamp>
@@ -203,7 +208,19 @@ def build_quiet_day(out: Path) -> None:
     (out / "lcs_d04.xml").write_text(cwwp_doc([
         lcs_record("Q1AB-0001-quiet", 4, "US-101", "Santa Clara", "South",
                    "Trimble Rd", "San Jose", 37.387, -121.925, 37.370, -121.918,
-                   "Lane", "Pavement Repair", "1, RShoulder", is_1097=True),
+                   "Lane", "Pavement Repair", "1, RShoulder", is_1097=True,
+                   total_lanes=4, delay="5"),
+        # Full closure of an ON-RAMP: must never be reported as a closed
+        # highway.
+        lcs_record("Q4GH-0004-quiet", 4, "US-101", "Santa Clara", "North",
+                   "Story Rd", "San Jose", 37.330, -121.855, 37.332, -121.853,
+                   "Full", "Bridge Work", "All", is_1097=True,
+                   facility="On Ramp", total_lanes=1),
+        # One-way traffic control on a two-lane mountain road: passable.
+        lcs_record("Q5IJ-0005-quiet", 4, "SR-84", "San Mateo", "West",
+                   "La Honda", "La Honda", 37.319, -122.274, 37.315, -122.290,
+                   "One-Way Traffic", "Tree Work", "1", is_1097=True,
+                   facility="Conventional Hwy", total_lanes=2, delay="10"),
     ]))
     (out / "lcs_d03.xml").write_text(cwwp_doc([
         # Shoulder-only: must not be reported.

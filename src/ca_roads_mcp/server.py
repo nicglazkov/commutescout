@@ -151,7 +151,7 @@ async def check_route(from_place: str, to_place: str) -> dict:
         elif e.source == "lcs":
             kind = "lane_closure"
             counts["closures"] += 1
-            if record.type_of_closure.lower() == "full":
+            if lcs_feed.is_full_roadway_closure(record):
                 full_closures += 1
             detail = closure_dict(record)
         elif e.source == "chains":
@@ -249,12 +249,13 @@ async def check_region(region: str) -> dict:
     closures = [
         c for c in lcs_r.records if resolved.contains(c.begin_lat, c.begin_lon)
     ]
-    closures.sort(key=lambda c: c.type_of_closure.lower() != "full")
+    closures.sort(key=lcs_feed.closure_severity)
     chains = [c for c in cc_r.records if resolved.contains(c.lat, c.lon)]
     fires = [f for f in fire_r.records if resolved.contains(f.lat, f.lon)]
     fires.sort(key=lambda f: -(f.size_acres or 0))
 
-    full_closures = sum(1 for c in closures if c.type_of_closure.lower() == "full")
+    full_closures = sum(1 for c in closures if lcs_feed.is_full_roadway_closure(c))
+    ramp_closures = sum(1 for c in closures if lcs_feed.closure_class(c) == "ramp")
     injury = sum(1 for i in incidents if incident_severity(i.log_type) <= 1)
     max_chain = max((c.status for c in chains), default="")
 
@@ -279,8 +280,10 @@ async def check_region(region: str) -> dict:
             + (f", {injury} involving injuries" if injury else "")
         )
     if closures:
-        detail = f", {full_closures} FULL" if full_closures else ""
-        bits.append(f"{len(closures)} lane closure(s) in place{detail}")
+        detail = f", {full_closures} FULL roadway" if full_closures else ""
+        if ramp_closures:
+            detail += f", {ramp_closures} ramp-only"
+        bits.append(f"{len(closures)} closure(s) in place{detail}")
     if chains:
         bits.append(f"{len(chains)} chain control(s) active, strictest {max_chain}")
     if fires:
@@ -308,6 +311,7 @@ async def check_region(region: str) -> dict:
             "injury_incidents": injury,
             "lane_closures": len(closures),
             "full_closures": full_closures,
+            "ramp_closures": ramp_closures,
             "chain_controls": len(chains),
             "wildfires": len(fires),
         },
@@ -413,8 +417,19 @@ async def get_lane_closures(
     inside the circle. For a town or place, center is the filter that
     catches work on EVERY road around it, including small state routes.
 
-    Each record says whether it is a FULL closure and which lanes are
-    closed. Shoulder-only work is excluded.
+    Read closure_class on each record, it is what the closure means for
+    through traffic:
+    - "full-roadway": the road itself is closed in that direction. The only
+      class that means "you can't drive through".
+    - "ramp": a ramp or connector is closed (even when the raw record says
+      "Full", that means the ramp is fully closed, not the highway).
+    - "one-way-traffic": alternating single lane with flagging; passable
+      with delays. Common on two-lane mountain roads.
+    - "alternating-lanes", "moving", "traffic-break": rolling or brief work;
+      minor delays.
+    - "lane": some lanes closed; the lanes field says how many of how many.
+    estimated_delay_minutes is present when crews reported one.
+    Shoulder-only work is excluded entirely.
     """
     districts = [district] if district else None
     result = await get_road().lane_closures(districts=districts)

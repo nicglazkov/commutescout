@@ -54,6 +54,13 @@ def _to_optional_float(value: str) -> float | None:
         return None
 
 
+def _to_optional_int(value: str) -> int | None:
+    try:
+        return int(value)
+    except ValueError:  # "Not Reported", empty, etc.
+        return None
+
+
 def parse_lcs_xml(data: bytes, district: int) -> tuple[list[LaneClosure], bool]:
     """Parse one district feed; second value is True if the document was
     malformed and only complete records were salvaged."""
@@ -73,8 +80,14 @@ def parse_lcs_xml(data: bytes, district: int) -> tuple[list[LaneClosure], bool]:
                 location_name=child_text(rec, "beginLocationName"),
                 nearby_place=child_text(rec, "beginNearbyPlace"),
                 type_of_closure=child_text(rec, "typeOfClosure"),
+                facility=child_text(rec, "facility"),
                 type_of_work=child_text(rec, "typeOfWork"),
                 lanes_closed=child_text(rec, "lanesClosed"),
+                total_lanes=_to_optional_int(child_text(rec, "totalExistingLanes")),
+                estimated_delay_minutes=_to_optional_int(
+                    child_text(rec, "estimatedDelay")
+                ),
+                duration=child_text(rec, "durationOfClosure"),
                 begin_lat=_to_float(child_text(rec, "beginLatitude")),
                 begin_lon=_to_float(child_text(rec, "beginLongitude")),
                 end_lat=_to_float(child_text(rec, "endLatitude")),
@@ -124,12 +137,92 @@ def is_active(closure: LaneClosure, now_epoch: int | None = None) -> bool:
     )
 
 
+# Facility values observed in the live feeds (2026-07). Ramps and connectors
+# get their own class: a "Full" closure of an on-ramp is routine night work,
+# not a closed highway, and conflating them badly overstates severity.
+_RAMP_FACILITIES = {
+    "on ramp", "off ramp", "connector", "hov connector", "truck connector",
+    "collector",
+}
+_ROADWAY_FACILITIES = {
+    "mainline", "conventional hwy", "toll bridge", "tunnels/tubes", "",
+}
+
+# closure_class values, roughly worst-for-through-traffic first.
+_CLASS_SEVERITY = {
+    "full-roadway": 0,        # the road itself is closed (in that direction)
+    "one-way-traffic": 1,     # alternating single lane, flagging delays
+    "alternating-lanes": 2,
+    "lane": 3,
+    "moving": 4,              # rolling work zone
+    "traffic-break": 5,       # brief CHP-held stops
+    "ramp": 6,                # a ramp/connector, not the roadway
+    "other": 7,               # surface street, rest area, ...
+}
+
+
+def closure_class(closure: LaneClosure) -> str:
+    """Classify what a closure record actually means for through traffic."""
+    facility = closure.facility.lower()
+    kind = closure.type_of_closure.lower()
+    if facility in _RAMP_FACILITIES:
+        return "ramp"
+    if facility not in _ROADWAY_FACILITIES:
+        return "other"
+    if kind == "full":
+        return "full-roadway"
+    if kind == "one-way traffic":
+        return "one-way-traffic"
+    if kind == "alternating lanes":
+        return "alternating-lanes"
+    if kind == "moving":
+        return "moving"
+    if kind == "traffic break":
+        return "traffic-break"
+    return "lane"
+
+
+def closure_severity(closure: LaneClosure) -> int:
+    return _CLASS_SEVERITY.get(closure_class(closure), 7)
+
+
+def is_full_roadway_closure(closure: LaneClosure) -> bool:
+    """True only when the roadway itself is fully closed - ramp and connector
+    closures never count, however 'Full' their record says."""
+    return closure_class(closure) == "full-roadway"
+
+
+def lanes_summary(closure: LaneClosure) -> str | None:
+    """'2 of 4 lanes closed' when the feed gives enough to say it."""
+    if not closure.lanes_closed:
+        return None
+    if closure.lanes_closed.lower() == "all":
+        return "all lanes closed"
+    numbered = [p for p in closure.lanes_closed.split(",") if p.strip().isdigit()]
+    if numbered and closure.total_lanes:
+        return f"{len(numbered)} of {closure.total_lanes} lanes closed"
+    return f"lanes: {closure.lanes_closed}"
+
+
 def describe(closure: LaneClosure) -> str:
-    what = (
-        "FULL CLOSURE"
-        if closure.type_of_closure.lower() == "full"
-        else f"{closure.type_of_closure} closure"
-    )
+    cls = closure_class(closure)
+    direction = f" ({closure.direction.lower()}bound)" if closure.direction else ""
+    if cls == "full-roadway":
+        what = f"FULL CLOSURE{direction}"
+    elif cls == "ramp":
+        what = f"{closure.facility} closed{direction}"
+    elif cls == "one-way-traffic":
+        what = "one-way traffic control (alternating single lane)"
+    elif cls == "alternating-lanes":
+        what = "alternating lane closures"
+    elif cls == "moving":
+        what = f"moving work zone{direction}"
+    elif cls == "traffic-break":
+        what = "brief full stops (traffic break)"
+    elif cls == "lane":
+        what = "lane closure"
+    else:
+        what = f"{closure.type_of_closure} closure ({closure.facility})"
     parts = []
     if closure.route:
         parts.append(closure.route)
@@ -139,8 +232,11 @@ def describe(closure: LaneClosure) -> str:
         text += f" @ {closure.location_name}"
     if closure.nearby_place:
         text += f" ({closure.nearby_place})"
-    if closure.lanes_closed and closure.type_of_closure.lower() != "full":
-        text += f", lanes: {closure.lanes_closed}"
+    lanes = lanes_summary(closure)
+    if lanes and cls == "lane":
+        text += f", {lanes}"
+    if closure.estimated_delay_minutes:
+        text += f", est. delay {closure.estimated_delay_minutes} min"
     return text
 
 

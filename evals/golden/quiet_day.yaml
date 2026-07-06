@@ -203,3 +203,19 @@ questions:
     expect:
       contains: ["Trimble"]
       not_contains: ["full closure", "R-2"]
+
+  - id: quiet-ramp-not-full
+    tool: get_lane_closures
+    question: "Is 101 fully closed in San Jose? My friend said it was."
+    ground_truth: "No. US-101 itself is open. The Story Rd on-ramp is fully closed (bridge work) and there is a lane closure at Trimble Rd (1 of 4 lanes), but the highway is not closed."
+    expect:
+      not_contains: ["yes, 101 is fully closed", "101 is closed"]
+      contains_any: [["ramp", "Story"]]
+
+  - id: quiet-one-way-84
+    tool: get_lane_closures
+    question: "Can I get through on 84 near La Honda?"
+    ground_truth: "Yes. SR-84 at La Honda has one-way traffic control for tree work (alternating single lane, about 10 minute delays), but it is passable."
+    expect:
+      contains_any: [["one-way", "alternating", "passable"]]
+      not_contains: ["fully closed"]

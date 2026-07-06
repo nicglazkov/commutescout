@@ -28,9 +28,13 @@
 				<closureEndEpoch>1900000000</closureEndEpoch>
 				<isClosureEndIndefinite>false</isClosureEndIndefinite>
 			</closureTimestamp>
+			<facility>Mainline</facility>
 			<typeOfClosure>Lane</typeOfClosure>
 			<typeOfWork>Pavement Repair</typeOfWork>
+			<durationOfClosure>Standard</durationOfClosure>
+			<estimatedDelay>Not Reported</estimatedDelay>
 			<lanesClosed>2</lanesClosed>
+			<totalExistingLanes>2</totalExistingLanes>
 			<code1097>
 				<isCode1097>true</isCode1097>
 				<code1097Timestamp>

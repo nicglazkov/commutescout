@@ -88,10 +88,20 @@ def closure_dict(c: LaneClosure) -> dict:
         "direction": c.direction,
         "location": c.location_name,
         "nearby_place": c.nearby_place,
+        # What the record means for through traffic. "full-roadway" is the
+        # only class where the road itself is closed; "ramp" closures affect
+        # only that ramp/connector; "one-way-traffic" means passable with
+        # flagging delays.
+        "closure_class": lcs_feed.closure_class(c),
         "closure_type": c.type_of_closure,
+        "facility": c.facility,
         "work_type": c.type_of_work,
         "lanes_closed": c.lanes_closed,
-        "is_full_closure": c.type_of_closure.lower() == "full",
+        "total_lanes": c.total_lanes,
+        "lanes": lcs_feed.lanes_summary(c),
+        "estimated_delay_minutes": c.estimated_delay_minutes,
+        "duration": c.duration,
+        "is_full_closure": lcs_feed.is_full_roadway_closure(c),
         "begin": {"lat": c.begin_lat, "lon": c.begin_lon},
         "end": {"lat": c.end_lat, "lon": c.end_lon},
         "scheduled_end_epoch": c.end_epoch if not c.indefinite_end else None,

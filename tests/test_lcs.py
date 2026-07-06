@@ -88,7 +88,8 @@ def test_describe(fixture_bytes):
     closures = parse_fixture(fixture_bytes)
     assert (
         lcs.describe(closures[0])
-        == "I-5 Lane closure @ Sacramento County Line (Thornton), lanes: 2, RShoulder"
+        == ("I-5 lane closure @ Sacramento County Line (Thornton), "
+           "1 of 2 lanes closed, est. delay 10 min")
     )
     ghost = closures[3]
     assert lcs.describe(ghost).startswith("I-80 FULL CLOSURE")
@@ -120,3 +121,64 @@ async def test_source_uses_cache_within_ttl(fixture_bytes):
         await source.get(districts=[3])
         await source.get(districts=[3])
         assert route.call_count == 1
+
+
+def make_closure(**overrides):
+    import dataclasses
+
+    from ca_roads.models import LaneClosure
+
+    base = LaneClosure(
+        index="X", district=4, route="US-101", county="", direction="North",
+        location_name="loc", nearby_place="", type_of_closure="Lane",
+        facility="Mainline", type_of_work="", lanes_closed="1",
+        total_lanes=4, estimated_delay_minutes=None, duration="Standard",
+        begin_lat=37.0, begin_lon=-121.9, end_lat=0.0, end_lon=0.0,
+        begin_milepost=None, end_milepost=None, start_epoch=1, end_epoch=0,
+        indefinite_end=True, is_1097=True, is_1098=False, is_1022=False,
+        epoch_1097=1,
+    )
+    return dataclasses.replace(base, **overrides)
+
+
+def test_closure_class_taxonomy():
+    assert lcs.closure_class(make_closure()) == "lane"
+    assert lcs.closure_class(make_closure(type_of_closure="Full")) == "full-roadway"
+    # A Full closure of a ramp or connector is a ramp closure, full stop.
+    assert lcs.closure_class(
+        make_closure(type_of_closure="Full", facility="On Ramp")
+    ) == "ramp"
+    assert lcs.closure_class(
+        make_closure(type_of_closure="Lane", facility="Connector")
+    ) == "ramp"
+    assert lcs.closure_class(
+        make_closure(type_of_closure="One-Way Traffic", facility="Conventional Hwy")
+    ) == "one-way-traffic"
+    assert lcs.closure_class(
+        make_closure(type_of_closure="Alternating Lanes")
+    ) == "alternating-lanes"
+    assert lcs.closure_class(make_closure(type_of_closure="Moving")) == "moving"
+    assert lcs.closure_class(
+        make_closure(type_of_closure="Traffic Break")
+    ) == "traffic-break"
+    assert lcs.closure_class(make_closure(facility="Surface Street")) == "other"
+
+
+def test_is_full_roadway_only_for_roadways():
+    assert lcs.is_full_roadway_closure(make_closure(type_of_closure="Full"))
+    assert lcs.is_full_roadway_closure(
+        make_closure(type_of_closure="Full", facility="Toll Bridge")
+    )
+    assert not lcs.is_full_roadway_closure(
+        make_closure(type_of_closure="Full", facility="Off Ramp")
+    )
+    assert not lcs.is_full_roadway_closure(make_closure())
+
+
+def test_lanes_summary():
+    assert lcs.lanes_summary(make_closure(lanes_closed="1, 2")) == "2 of 4 lanes closed"
+    assert lcs.lanes_summary(make_closure(lanes_closed="All")) == "all lanes closed"
+    assert lcs.lanes_summary(
+        make_closure(lanes_closed="Left HOV", total_lanes=None)
+    ) == "lanes: Left HOV"
+    assert lcs.lanes_summary(make_closure(lanes_closed="")) is None

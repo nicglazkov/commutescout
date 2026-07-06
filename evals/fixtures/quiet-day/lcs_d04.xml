@@ -28,9 +28,113 @@
 				<closureEndEpoch>1900000000</closureEndEpoch>
 				<isClosureEndIndefinite>false</isClosureEndIndefinite>
 			</closureTimestamp>
+			<facility>Mainline</facility>
 			<typeOfClosure>Lane</typeOfClosure>
 			<typeOfWork>Pavement Repair</typeOfWork>
+			<durationOfClosure>Standard</durationOfClosure>
+			<estimatedDelay>5</estimatedDelay>
 			<lanesClosed>1, RShoulder</lanesClosed>
+			<totalExistingLanes>4</totalExistingLanes>
+			<code1097>
+				<isCode1097>true</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch>1783000000</code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+	<lcs>
+		<index>Q4GH-0004-quiet</index>
+		<location>
+			<travelFlowDirection>North</travelFlowDirection>
+			<begin>
+				<beginDistrict>4</beginDistrict>
+				<beginLocationName>Story Rd</beginLocationName>
+				<beginNearbyPlace>San Jose</beginNearbyPlace>
+				<beginLongitude>-121.855</beginLongitude>
+				<beginLatitude>37.33</beginLatitude>
+				<beginCounty>Santa Clara</beginCounty>
+				<beginRoute>US-101</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-121.853</endLongitude>
+				<endLatitude>37.332</endLatitude>
+				<endRoute>US-101</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>Q4GH</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>false</isClosureEndIndefinite>
+			</closureTimestamp>
+			<facility>On Ramp</facility>
+			<typeOfClosure>Full</typeOfClosure>
+			<typeOfWork>Bridge Work</typeOfWork>
+			<durationOfClosure>Standard</durationOfClosure>
+			<estimatedDelay>Not Reported</estimatedDelay>
+			<lanesClosed>All</lanesClosed>
+			<totalExistingLanes>1</totalExistingLanes>
+			<code1097>
+				<isCode1097>true</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch>1783000000</code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+	<lcs>
+		<index>Q5IJ-0005-quiet</index>
+		<location>
+			<travelFlowDirection>West</travelFlowDirection>
+			<begin>
+				<beginDistrict>4</beginDistrict>
+				<beginLocationName>La Honda</beginLocationName>
+				<beginNearbyPlace>La Honda</beginNearbyPlace>
+				<beginLongitude>-122.274</beginLongitude>
+				<beginLatitude>37.319</beginLatitude>
+				<beginCounty>San Mateo</beginCounty>
+				<beginRoute>SR-84</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-122.29</endLongitude>
+				<endLatitude>37.315</endLatitude>
+				<endRoute>SR-84</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>Q5IJ</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>false</isClosureEndIndefinite>
+			</closureTimestamp>
+			<facility>Conventional Hwy</facility>
+			<typeOfClosure>One-Way Traffic</typeOfClosure>
+			<typeOfWork>Tree Work</typeOfWork>
+			<durationOfClosure>Standard</durationOfClosure>
+			<estimatedDelay>10</estimatedDelay>
+			<lanesClosed>1</lanesClosed>
+			<totalExistingLanes>2</totalExistingLanes>
 			<code1097>
 				<isCode1097>true</isCode1097>
 				<code1097Timestamp>

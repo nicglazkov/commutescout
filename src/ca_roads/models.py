@@ -36,8 +36,12 @@ class LaneClosure:
     location_name: str
     nearby_place: str
     type_of_closure: str
+    facility: str
     type_of_work: str
     lanes_closed: str
+    total_lanes: int | None
+    estimated_delay_minutes: int | None
+    duration: str
     begin_lat: float
     begin_lon: float
     end_lat: float

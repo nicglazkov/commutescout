@@ -66,9 +66,17 @@ async def test_quiet_no_chains_message(scenario):
 
 
 @for_scenario("quiet-day")
-async def test_quiet_single_closure_and_shoulder_excluded(scenario):
+async def test_quiet_closures_classified_and_shoulder_excluded(scenario):
     result = await tool_server.get_lane_closures()
-    assert [c["location"] for c in result["closures"]] == ["Trimble Rd"]
+    by_location = {c["location"]: c for c in result["closures"]}
+    assert set(by_location) == {"Trimble Rd", "Story Rd", "La Honda"}
+    assert by_location["Trimble Rd"]["closure_class"] == "lane"
+    assert by_location["Trimble Rd"]["lanes"] == "1 of 4 lanes closed"
+    # A "Full" closure of an on-ramp is a ramp closure, not a closed highway.
+    assert by_location["Story Rd"]["closure_class"] == "ramp"
+    assert not by_location["Story Rd"]["is_full_closure"]
+    assert by_location["La Honda"]["closure_class"] == "one-way-traffic"
+    assert by_location["La Honda"]["estimated_delay_minutes"] == 10
 
 
 @for_scenario("quiet-day")
@@ -122,7 +130,7 @@ async def test_area_miss_returns_warning_with_dispatch_areas(scenario):
 @for_scenario("quiet-day")
 async def test_center_filter_catches_closures_on_any_road(scenario):
     result = await tool_server.get_lane_closures(center="37.39,-121.93", radius_km=15)
-    assert [c["location"] for c in result["closures"]] == ["Trimble Rd"]
+    assert {c["location"] for c in result["closures"]} == {"Trimble Rd", "Story Rd"}
     far = await tool_server.get_lane_closures(center="38.58,-121.49", radius_km=15)
     assert far["count"] == 0
 
@@ -146,8 +154,9 @@ async def test_center_filter_wildfires_around_lebec(scenario):
 async def test_region_bay_area_report(scenario):
     result = await tool_server.check_region("the bay area")
     assert result["region"] == "San Francisco Bay Area"
-    assert result["counts"]["lane_closures"] == 1
-    assert [c["location"] for c in result["closures"]] == ["Trimble Rd"]
+    assert result["counts"]["lane_closures"] == 3
+    assert result["counts"]["full_closures"] == 0  # the ramp Full doesn't count
+    assert result["counts"]["ramp_closures"] == 1
     # SF and Berkeley incidents are in-region; Sacramento and Bakersfield not.
     locations = " ".join(i["location"] for i in result["incidents"])
     assert "Cesar Chavez" in locations and "University" in locations
