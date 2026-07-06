@@ -18,8 +18,10 @@ dependencies = [
 
 [project.scripts]
 ca-roads-mcp = "ca_roads_mcp.server:main"
+ca-roads-demo = "ca_roads_demo.app:main"
 
 [project.optional-dependencies]
+demo = ["anthropic>=0.40"]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
@@ -28,7 +30,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ca_roads", "src/ca_roads_mcp"]
+packages = ["src/ca_roads", "src/ca_roads_mcp", "src/ca_roads_demo"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CA Roads - live California road conditions</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+    background: #fafaf8;
+    color: #1a1a1a;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #16181a; color: #e6e6e3; }
+    input, .answer { background: #1f2225 !important; color: inherit; border-color: #3a3d40 !important; }
+    button { background: #d97a26 !important; }
+    .hint button { background: none !important; color: #9aa0a6 !important; border-color: #3a3d40 !important; }
+  }
+  main { max-width: 640px; width: 100%; margin: 0 auto; padding: 24px 16px; flex: 1; }
+  h1 { font-size: 1.5rem; margin: 8px 0 4px; }
+  .sub { margin: 0 0 20px; color: #666; }
+  form { display: flex; gap: 8px; }
+  input {
+    flex: 1; font-size: 1rem; padding: 12px;
+    border: 1px solid #ccc; border-radius: 8px; background: #fff;
+  }
+  button {
+    font-size: 1rem; padding: 12px 18px; border: 0; border-radius: 8px;
+    background: #c9611a; color: #fff; cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .hint { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .hint button {
+    background: none; border: 1px solid #ccc; color: #555;
+    font-size: 0.85rem; padding: 6px 10px; border-radius: 999px;
+  }
+  .answer {
+    margin-top: 20px; padding: 16px; border: 1px solid #ddd; border-radius: 8px;
+    background: #fff; white-space: pre-wrap; word-wrap: break-word;
+    min-height: 40px; display: none;
+  }
+  .status { color: #888; font-size: 0.9rem; margin-top: 8px; min-height: 1.2em; }
+  footer {
+    text-align: center; font-size: 0.8rem; color: #888; padding: 16px;
+  }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CA Roads</h1>
+  <p class="sub">Ask about current California road conditions. Live data from
+  CHP, Caltrans, and WFIGS.</p>
+
+  <form id="form">
+    <input id="q" maxlength="300" placeholder="Do I need chains to get to Tahoe?"
+           autocomplete="off" required>
+    <button id="go" type="submit">Ask</button>
+  </form>
+  <div class="hint">
+    <button type="button">Is 17 clear right now?</button>
+    <button type="button">Anything on I-80 between Sacramento and Reno?</button>
+    <button type="button">Any fires near I-5?</button>
+  </div>
+
+  <div class="answer" id="answer"></div>
+  <div class="status" id="status"></div>
+</main>
+
+<footer>
+  Data: CHP, Caltrans, WFIGS. Not affiliated with any agency.
+  Verify before you drive.
+  &middot; <a href="https://github.com/nicglazkov/ca-roads-mcp">GitHub</a>
+</footer>
+
+<script>
+const form = document.getElementById('form');
+const input = document.getElementById('q');
+const go = document.getElementById('go');
+const answer = document.getElementById('answer');
+const status = document.getElementById('status');
+
+document.querySelectorAll('.hint button').forEach(b => {
+  b.addEventListener('click', () => { input.value = b.textContent; form.requestSubmit(); });
+});
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const question = input.value.trim();
+  if (!question) return;
+  go.disabled = true;
+  answer.style.display = 'block';
+  answer.textContent = '';
+  status.textContent = 'Checking live feeds...';
+  try {
+    const res = await fetch('/api/ask', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question}),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      answer.textContent = err.error || `Request failed (${res.status}).`;
+      status.textContent = '';
+      return;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+      for (const part of parts) {
+        if (!part.startsWith('data: ')) continue;
+        const msg = JSON.parse(part.slice(6));
+        if (msg.text) { answer.textContent += msg.text; status.textContent = ''; }
+        if (msg.tool) { status.textContent = 'Looking up ' + msg.tool.replaceAll('_', ' ') + '...'; }
+        if (msg.done) { status.textContent = ''; }
+      }
+    }
+  } catch (err) {
+    status.textContent = 'Connection error. Try again.';
+  } finally {
+    go.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
