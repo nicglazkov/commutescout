@@ -316,14 +316,40 @@ def write_report(all_results: list[dict], models: list[str], path: Path) -> None
 
 
 def write_badge(all_results: list[dict], path: Path) -> None:
+    """Write both badge forms: shields endpoint JSON, and a rendered SVG the
+    README embeds by relative path (works while the repo is private, where
+    shields cannot read raw.githubusercontent.com)."""
     passed = sum(1 for r in all_results if r["passed"])
     total = len(all_results)
     pct = 100 * passed / total if total else 0
-    color = "brightgreen" if pct >= 90 else "yellow" if pct >= 75 else "red"
+    color = "#4c1" if pct >= 90 else "#dfb317" if pct >= 75 else "#e05d44"
+    message = f"{passed}/{total} pass"
     path.write_text(json.dumps({
-        "schemaVersion": 1, "label": "evals",
-        "message": f"{passed}/{total} pass", "color": color,
+        "schemaVersion": 1, "label": "evals", "message": message,
+        "color": "brightgreen" if pct >= 90 else "yellow" if pct >= 75 else "red",
     }))
+    label = "evals"
+    char_w = 6.2
+    label_w = round(len(label) * char_w + 12)
+    msg_w = round(len(message) * char_w + 12)
+    total_w = label_w + msg_w
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}" height="20" role="img" aria-label="{label}: {message}">
+  <linearGradient id="s" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
+  <clipPath id="r"><rect width="{total_w}" height="20" rx="3" fill="#fff"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect width="{label_w}" height="20" fill="#555"/>
+    <rect x="{label_w}" width="{msg_w}" height="20" fill="{color}"/>
+    <rect width="{total_w}" height="20" fill="url(#s)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
+    <text x="{label_w / 2}" y="14">{label}</text>
+    <text x="{label_w + msg_w / 2}" y="14">{message}</text>
+  </g>
+</svg>
+"""
+    path.with_suffix(".svg").write_text(svg)
 
 
 async def main() -> None:
