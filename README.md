@@ -10,6 +10,8 @@ any MCP client) and ask "do I need chains to get to Tahoe?" or "is 17 clear
 right now?" - the answer comes from the same live feeds CHP and Caltrans
 publish, not from the model's memory.
 
+No AI assistant? [Try the web demo](https://ca-roads-demo-15002631928.us-west1.run.app).
+
 ## Data sources
 
 | Source | Data | Refresh |
