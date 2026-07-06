@@ -69,7 +69,7 @@ def routes_mentioned(text: str) -> set[str]:
             out.add(f"US-{number}")
         elif prefix in ("sr", "ca"):
             out.add(f"SR-{number}")
-        else:  # hwy / rt / rte — class unknown, infer from number
+        else:  # hwy / rt / rte - class unknown, infer from number
             normalized = normalize_route(str(number))
             if normalized:
                 out.add(normalized)
