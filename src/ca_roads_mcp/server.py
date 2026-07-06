@@ -378,10 +378,15 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8080)))
     args = parser.parse_args()
     if args.transport == "http":
+        import uvicorn
+
+        from ca_roads_mcp.ratelimit import RateLimitMiddleware
+
         mcp.settings.host = args.host
         mcp.settings.port = args.port
         mcp.settings.stateless_http = True
-        mcp.run(transport="streamable-http")
+        app = RateLimitMiddleware(mcp.streamable_http_app())
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:
         mcp.run(transport="stdio")
 
