@@ -100,8 +100,47 @@
     font-size: 0.82rem; color: var(--terracotta); min-height: 1.3em;
     margin-bottom: 8px; font-weight: 500;
   }
-  .answer-card .text { white-space: pre-wrap; word-wrap: break-word; }
-  .answer-card .text:empty::before { content: " "; }
+  .loader { display: none; padding: 10px 0 16px; }
+  .loader.active { display: block; }
+  .roadbar {
+    position: relative; height: 6px; border-radius: 3px; overflow: hidden;
+    background: repeating-linear-gradient(90deg,
+      var(--pine) 0 16px, #cfc7ae 16px 28px);
+    animation: roll 0.7s linear infinite;
+  }
+  @keyframes roll { from { background-position: 0 0; } to { background-position: -28px 0; } }
+  .car {
+    position: absolute; top: -6px; width: 26px; height: 12px;
+    border-radius: 3px 8px 2px 2px; background: var(--terracotta);
+    box-shadow: 0 8px 0 -5px rgba(38,38,31,0.25);
+    animation: cruise 3.4s ease-in-out infinite;
+  }
+  @keyframes cruise {
+    0% { left: 2%; } 46% { left: 86%; } 54% { left: 86%; } 100% { left: 2%; }
+  }
+  .loadmsg { margin-top: 12px; font-size: 0.84rem; color: var(--ink-soft); }
+  .loadmsg::after {
+    content: ""; display: inline-block; width: 1.2em; text-align: left;
+    animation: dots 1.4s steps(4) infinite;
+  }
+  @keyframes dots {
+    0% { content: ""; } 25% { content: "."; } 50% { content: ".."; }
+    75% { content: "..."; } 100% { content: ""; }
+  }
+  .answer-card .text { word-wrap: break-word; }
+  .text p { margin: 0 0 10px; }
+  .text p:last-child { margin-bottom: 0; }
+  .text h4 {
+    font-family: "Fraunces", serif; font-size: 1.02rem;
+    margin: 14px 0 6px; letter-spacing: 0;
+  }
+  .text ol, .text ul { margin: 4px 0 12px; padding-left: 22px; }
+  .text li { margin: 4px 0; }
+  .text code {
+    font-size: 0.88em; background: var(--cream);
+    border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
+  }
+  .text strong { color: var(--pine); }
   .map-card {
     background: var(--card); border: 1px solid var(--line);
     border-radius: 14px; overflow: hidden; display: none;
@@ -153,6 +192,10 @@
 
   <div class="result" id="result">
     <div class="answer-card">
+      <div class="loader" id="loader">
+        <div class="roadbar"><span class="car"></span></div>
+        <div class="loadmsg" id="loadmsg">Waking up the dispatcher</div>
+      </div>
       <div class="status" id="status"></div>
       <div class="text" id="answer"></div>
     </div>
@@ -186,6 +229,8 @@ const answer = document.getElementById('answer');
 const statusEl = document.getElementById('status');
 const result = document.getElementById('result');
 const mapcard = document.getElementById('mapcard');
+const loader = document.getElementById('loader');
+const loadmsg = document.getElementById('loadmsg');
 
 const KIND_COLORS = {
   incident: '#c9611a',
@@ -194,8 +239,81 @@ const KIND_COLORS = {
   wildfire: '#d97706',
 };
 
+// ── Loading animation ────────────────────────────────────────────────
+const LOAD_MSGS = [
+  'Waking up the dispatcher',
+  'Reading the CHP wire',
+  'Checking Caltrans closures',
+  'Scanning chain controls',
+  'Looking for fires near the road',
+  'Putting the picture together',
+];
+let loadTimer = null, loadIdx = 0;
+function startLoader() {
+  loadIdx = 0;
+  loadmsg.textContent = LOAD_MSGS[0];
+  loader.classList.add('active');
+  clearInterval(loadTimer);
+  loadTimer = setInterval(() => {
+    loadIdx = (loadIdx + 1) % LOAD_MSGS.length;
+    loadmsg.textContent = LOAD_MSGS[loadIdx];
+  }, 2100);
+}
+function loaderNote(text) { loadmsg.textContent = text; }
+function stopLoader() {
+  clearInterval(loadTimer);
+  loader.classList.remove('active');
+}
+
+// ── Tiny markdown renderer (bold, italics, code, headings, lists) ────
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function inline(s) {
+  return s
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*\s][^*]*)\*/g, '<em>$1</em>');
+}
+function renderMd(md) {
+  const lines = esc(md).split('\n');
+  let html = '', list = null, para = [];
+  const flushPara = () => {
+    if (para.length) { html += '<p>' + para.map(inline).join('<br>') + '</p>'; para = []; }
+  };
+  const flushList = () => {
+    if (list) {
+      html += '<' + list.tag + '>' +
+        list.items.map(i => '<li>' + inline(i) + '</li>').join('') +
+        '</' + list.tag + '>';
+      list = null;
+    }
+  };
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    const h = line.match(/^#{1,4}\s+(.*)/);
+    const ol = line.match(/^\s*\d+[.)]\s+(.*)/);
+    const ul = line.match(/^\s*[-*•]\s+(.*)/);
+    if (h) { flushPara(); flushList(); html += '<h4>' + inline(h[1]) + '</h4>'; }
+    else if (ol) {
+      flushPara();
+      if (!list || list.tag !== 'ol') { flushList(); list = {tag: 'ol', items: []}; }
+      list.items.push(ol[1]);
+    } else if (ul) {
+      flushPara();
+      if (!list || list.tag !== 'ul') { flushList(); list = {tag: 'ul', items: []}; }
+      list.items.push(ul[1]);
+    } else if (!line.trim()) { flushPara(); flushList(); }
+    else { flushList(); para.push(line); }
+  }
+  flushPara(); flushList();
+  return html;
+}
+
+// ── Map ──────────────────────────────────────────────────────────────
 let map = null;
-let layer = null;
+let layerPrimary = null; // route, incidents, closures, chains: drives zoom
+let layerFires = null;   // fires: shown, but never widen the view alone
 
 function ensureMap() {
   mapcard.classList.add('active');
@@ -205,11 +323,13 @@ function ensureMap() {
     maxZoom: 17,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
-  layer = L.featureGroup().addTo(map);
+  layerPrimary = L.featureGroup().addTo(map);
+  layerFires = L.featureGroup().addTo(map);
 }
 
 function resetMap() {
-  if (layer) layer.clearLayers();
+  if (layerPrimary) layerPrimary.clearLayers();
+  if (layerFires) layerFires.clearLayers();
   mapcard.classList.remove('active');
 }
 
@@ -217,18 +337,22 @@ function drawGeo(geo) {
   ensureMap();
   if (geo.route) {
     L.polyline(geo.route, { color: '#1c3a2e', weight: 3, opacity: 0.7, dashArray: '6 6' })
-      .addTo(layer);
+      .addTo(layerPrimary);
   }
   for (const m of geo.markers || []) {
+    const target = m.kind === 'wildfire' ? layerFires : layerPrimary;
     L.circleMarker([m.lat, m.lon], {
       radius: 7,
       color: '#fffdf7',
       weight: 1.5,
       fillColor: KIND_COLORS[m.kind] || '#26261f',
       fillOpacity: 0.95,
-    }).bindPopup(m.label ? String(m.label) : m.kind).addTo(layer);
+    }).bindPopup(m.label ? String(m.label) : m.kind).addTo(target);
   }
-  const bounds = layer.getBounds();
+  // Zoom to the road-relevant layer; fall back to fires only when the
+  // question was purely about fires.
+  const primary = layerPrimary.getBounds();
+  const bounds = primary.isValid() ? primary : layerFires.getBounds();
   if (bounds.isValid()) map.fitBounds(bounds.pad(0.18), { maxZoom: 11 });
   setTimeout(() => map.invalidateSize(), 60);
 }
@@ -243,9 +367,10 @@ form.addEventListener('submit', async (e) => {
   if (!question) return;
   go.disabled = true;
   result.classList.add('active');
-  answer.textContent = '';
+  answer.innerHTML = '';
   resetMap();
-  statusEl.textContent = 'Checking the live feeds…';
+  startLoader();
+  let raw = '';
   try {
     const res = await fetch('/api/ask', {
       method: 'POST',
@@ -254,8 +379,8 @@ form.addEventListener('submit', async (e) => {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      stopLoader();
       answer.textContent = err.error || `Request failed (${res.status}).`;
-      statusEl.textContent = '';
       return;
     }
     const reader = res.body.getReader();
@@ -270,8 +395,17 @@ form.addEventListener('submit', async (e) => {
       for (const part of parts) {
         if (!part.startsWith('data: ')) continue;
         const msg = JSON.parse(part.slice(6));
-        if (msg.text) { answer.textContent += msg.text; statusEl.textContent = ''; }
-        if (msg.tool) { statusEl.textContent = 'Looking up ' + msg.tool.replaceAll('_', ' ') + '…'; }
+        if (msg.text) {
+          raw += msg.text;
+          answer.innerHTML = renderMd(raw);
+          statusEl.textContent = '';
+          stopLoader();
+        }
+        if (msg.tool) {
+          const label = 'Looking up ' + msg.tool.replaceAll('_', ' ');
+          if (loader.classList.contains('active')) loaderNote(label);
+          else statusEl.textContent = label + '…';
+        }
         if (msg.map) { drawGeo(msg.map); }
         if (msg.done) { statusEl.textContent = ''; }
       }
@@ -279,6 +413,7 @@ form.addEventListener('submit', async (e) => {
   } catch (err) {
     statusEl.textContent = 'Connection error. Try again.';
   } finally {
+    stopLoader();
     go.disabled = false;
     statusEl.textContent = '';
   }

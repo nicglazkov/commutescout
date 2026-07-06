@@ -48,6 +48,8 @@ Caltrans lane closures and chain controls, wildfires). Rules:
 - Use check_route for trip questions between two places; use the filtered
   tools for single-road or single-area questions.
 - Be concise and practical for a driver. Lead with the answer.
+- Simple markdown is fine (bold, short lists). Plain punctuation: never use
+  em dashes.
 - State how fresh the data is (data_as_of) and mention any feed problems.
 - You report current status, not forecasts.
 - End with: "Verify before you drive: 511 or quickmap.dot.ca.gov."
@@ -221,7 +223,12 @@ def extract_geo(tool: str, result: dict) -> dict | None:
     for item in result.get("chain_controls", []):
         add("chain_control", item.get("lat"), item.get("lon"),
             item.get("summary", ""))
-    for item in result.get("wildfires", []):
+    wildfires = result.get("wildfires", [])
+    if wildfires and not (result.get("filters") or {}).get("near_route"):
+        # Unfiltered statewide fire list: only map fires near a major highway,
+        # otherwise the map zooms out to the whole state.
+        wildfires = [f for f in wildfires if f.get("near_highways")]
+    for item in wildfires:
         add("wildfire", item.get("lat"), item.get("lon"), item.get("summary", ""))
 
     payload: dict = {}
