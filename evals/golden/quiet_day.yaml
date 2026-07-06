@@ -195,3 +195,11 @@ questions:
     ground_truth: "Nothing meaningful: no active lane closures (the I-80 record near Davis is shoulder-only litter removal) and no incidents in the immediate Davis area."
     expect:
       not_contains: ["full closure"]
+
+  - id: quiet-region-bay-area
+    tool: check_region
+    question: "How is the Bay Area right now?"
+    ground_truth: "Quiet: one lane closure (US-101 at Trimble Rd, San Jose), two minor incidents (US-101 Cesar Chavez in SF, I-80 University Ave in Berkeley), no chains, no fires in the region."
+    expect:
+      contains: ["Trimble"]
+      not_contains: ["full closure", "R-2"]

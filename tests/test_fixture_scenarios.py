@@ -140,3 +140,38 @@ async def test_center_filter_chain_controls_around_truckee(scenario):
 async def test_center_filter_wildfires_around_lebec(scenario):
     result = await tool_server.get_wildfires(center="34.84,-118.86", radius_km=50)
     assert [f["name"] for f in result["wildfires"]] == ["VULCAN"]
+
+
+@for_scenario("quiet-day")
+async def test_region_bay_area_report(scenario):
+    result = await tool_server.check_region("the bay area")
+    assert result["region"] == "San Francisco Bay Area"
+    assert result["counts"]["lane_closures"] == 1
+    assert [c["location"] for c in result["closures"]] == ["Trimble Rd"]
+    # SF and Berkeley incidents are in-region; Sacramento and Bakersfield not.
+    locations = " ".join(i["location"] for i in result["incidents"])
+    assert "Cesar Chavez" in locations and "University" in locations
+    assert "Jackson" not in locations and "Ming" not in locations
+
+
+@for_scenario("storm-day")
+async def test_region_sierra_report(scenario):
+    result = await tool_server.check_region("the sierra")
+    assert result["counts"]["chain_controls"] == 9
+    assert result["counts"]["full_closures"] == 1
+    assert "strictest R-2" in result["summary"]
+
+
+@for_scenario("fire-day")
+async def test_region_socal_report(scenario):
+    result = await tool_server.check_region("socal")
+    assert result["counts"]["full_closures"] == 2
+    assert [f["name"] for f in result["wildfires"]] == ["VULCAN"]
+    # Full closures sort first, injury collision leads incidents.
+    assert result["closures"][0]["is_full_closure"]
+
+
+@for_scenario("quiet-day")
+async def test_region_unknown_lists_options(scenario):
+    result = await tool_server.check_region("the moon")
+    assert "supported_regions" in result

@@ -45,8 +45,12 @@ California road conditions using the tools provided (live CHP incidents,
 Caltrans lane closures and chain controls, wildfires). Rules:
 - Only answer California road-condition questions. Politely decline anything
   else in one sentence.
-- Use check_route for trip questions between two places; use the filtered
-  tools for single-road or single-area questions.
+- Use check_route for trip questions between two places; check_region for
+  area-scale questions (the Bay Area, SoCal, the Sierra); the filtered
+  tools for single-road or single-place questions.
+- Regional reports are capped to the most severe items with exact counts.
+  Report the counts, lead with full closures and injury collisions, and
+  group the rest ("plus 12 minor incidents") instead of listing everything.
 - For a question about a town or place (not a specific highway), use your
   own knowledge of California geography to pass center="lat,lon" with
   radius_km 15-30 to get_incidents AND get_lane_closures (plus
@@ -84,6 +88,22 @@ TOOL_DEFS = [
                 "to_place": {"type": "string"},
             },
             "required": ["from_place", "to_place"],
+        },
+    },
+    {
+        "name": "check_region",
+        "description": (
+            "Full current-conditions report for a whole California region in "
+            "one call: incidents (severity-sorted), lane closures, chain "
+            "controls, wildfires. USE THIS for area-scale questions like "
+            "'how is the Bay Area' or 'what's happening in SoCal'. Regions: "
+            "bay area, sacramento area, sierra/tahoe, central valley, socal, "
+            "san diego, central coast, north state."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"region": {"type": "string"}},
+            "required": ["region"],
         },
     },
     {
@@ -159,6 +179,7 @@ TOOL_DEFS = [
 ]
 
 TOOL_FUNCS = {
+    "check_region": tools.check_region,
     "check_route": tools.check_route,
     "get_incidents": tools.get_incidents,
     "get_lane_closures": tools.get_lane_closures,
@@ -256,7 +277,8 @@ def extract_geo(tool: str, result: dict) -> dict | None:
             item.get("summary", ""))
     wildfires = result.get("wildfires", [])
     filters = result.get("filters") or {}
-    if wildfires and not (filters.get("near_route") or filters.get("center")):
+    scoped = filters.get("near_route") or filters.get("center") or filters.get("region")
+    if wildfires and not scoped:
         # Unfiltered statewide fire list: only map fires near a major highway,
         # otherwise the map zooms out to the whole state.
         wildfires = [f for f in wildfires if f.get("near_highways")]
