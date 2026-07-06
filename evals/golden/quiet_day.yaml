@@ -181,3 +181,17 @@ questions:
     ground_truth: "Yes - no closures or incidents on the SR-1 Big Sur corridor."
     expect:
       not_contains: ["closed at", "full closure"]
+
+  - id: quiet-place-san-jose
+    tool: get_lane_closures
+    question: "Anything happening around San Jose right now?"
+    ground_truth: "One lane closure on US-101 at Trimble Rd (pavement repair); otherwise nothing notable around San Jose."
+    expect:
+      contains: ["Trimble"]
+
+  - id: quiet-place-davis
+    tool: get_incidents
+    question: "How are things around Davis?"
+    ground_truth: "Nothing meaningful: no active lane closures (the I-80 record near Davis is shoulder-only litter removal) and no incidents in the immediate Davis area."
+    expect:
+      not_contains: ["full closure"]

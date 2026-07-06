@@ -47,6 +47,12 @@ Caltrans lane closures and chain controls, wildfires). Rules:
   else in one sentence.
 - Use check_route for trip questions between two places; use the filtered
   tools for single-road or single-area questions.
+- For a question about a town or place (not a specific highway), use your
+  own knowledge of California geography to pass center="lat,lon" with
+  radius_km 15-30 to get_incidents AND get_lane_closures (plus
+  get_chain_controls in the mountains and get_wildfires in fire season).
+  A circle covers every road around the place; a single highway filter or
+  the CHP area filter does not.
 - Be concise and practical for a driver. Lead with the answer.
 - Simple markdown is fine (bold, short lists). Plain punctuation: never use
   em dashes.
@@ -75,9 +81,11 @@ TOOL_DEFS = [
     {
         "name": "get_incidents",
         "description": (
-            "Live CHP incidents statewide. Optional filters: highway (e.g. "
-            "'I-80', '17'), area (CHP dispatch area substring), center "
-            "('lat,lon') with radius_km."
+            "Live CHP incidents statewide. Filters: highway (e.g. 'I-80', "
+            "'17'); center 'lat,lon' with radius_km - USE THIS for a town or "
+            "place name (you know the coordinates), it catches every road "
+            "around it; area matches CHP dispatch-area names like 'Hollister "
+            "Gilroy' or 'East Sac', NOT town names."
         ),
         "input_schema": {
             "type": "object",
@@ -93,13 +101,16 @@ TOOL_DEFS = [
         "name": "get_lane_closures",
         "description": (
             "Caltrans lane/road closures physically in place right now. "
-            "Optional filters: route, district (1-12)."
+            "Filters: route; district (1-12); center 'lat,lon' with "
+            "radius_km for all closures around a place, on any road."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "route": {"type": "string"},
                 "district": {"type": "integer"},
+                "center": {"type": "string"},
+                "radius_km": {"type": "number"},
             },
         },
     },
@@ -107,22 +118,34 @@ TOOL_DEFS = [
         "name": "get_chain_controls",
         "description": (
             "Current chain-control levels (R-1/R-2/R-3) on mountain highways. "
-            "Optional filter: route."
+            "Filters: route; center 'lat,lon' with radius_km for all "
+            "checkpoints around a place."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {"route": {"type": "string"}},
+            "properties": {
+                "route": {"type": "string"},
+                "center": {"type": "string"},
+                "radius_km": {"type": "number"},
+            },
         },
     },
     {
         "name": "get_wildfires",
         "description": (
             "Active California wildfires with size and containment, flagged "
-            "when within ~10 miles of major highways. Optional: near_route."
+            "when within ~10 miles of major highways. Filters: near_route; "
+            "center 'lat,lon' with radius_km for fires around a place. Note: "
+            "brand-new local fires often show in get_incidents (CHP 'FIRE-"
+            "Report of Fire') before this interagency feed lists them."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {"near_route": {"type": "string"}},
+            "properties": {
+                "near_route": {"type": "string"},
+                "center": {"type": "string"},
+                "radius_km": {"type": "number"},
+            },
         },
     },
 ]
@@ -224,7 +247,8 @@ def extract_geo(tool: str, result: dict) -> dict | None:
         add("chain_control", item.get("lat"), item.get("lon"),
             item.get("summary", ""))
     wildfires = result.get("wildfires", [])
-    if wildfires and not (result.get("filters") or {}).get("near_route"):
+    filters = result.get("filters") or {}
+    if wildfires and not (filters.get("near_route") or filters.get("center")):
         # Unfiltered statewide fire list: only map fires near a major highway,
         # otherwise the map zooms out to the whole state.
         wildfires = [f for f in wildfires if f.get("near_highways")]

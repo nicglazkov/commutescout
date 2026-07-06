@@ -187,3 +187,11 @@ questions:
     ground_truth: "R-1 Baxter, R-2 Kingvale and Donner Lake Interchange, with a data-as-of timestamp mentioned."
     expect:
       contains: ["R-2"]
+
+  - id: storm-place-truckee
+    tool: get_chain_controls
+    question: "How are things around Truckee?"
+    ground_truth: "Chain controls around Truckee: R-2 at Donner Lake Interchange and Kingvale, R-1 at Baxter, plus a collision at Donner Pass Rd and a hazard at Kingvale. SR-88 Carson Pass is far away and not part of the Truckee picture."
+    expect:
+      contains: ["R-2"]
+      contains_any: [["Donner", "Kingvale"]]
