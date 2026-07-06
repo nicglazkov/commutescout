@@ -7,6 +7,7 @@ freshness and trust instead of assuming the data is live and complete.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from ca_roads.feeds import chains as chains_feed
@@ -48,11 +49,29 @@ def source_status(result: FeedResult) -> dict:
     return status
 
 
+# "Us101 N / Ccg" or "I80 W / Mace Blvd": the letter after the route token is
+# the travel direction. "NB/SB/EB/WB" tokens appear in some locations too.
+_DIR_AFTER_ROUTE_RE = re.compile(
+    r"\b(?:I|US|SR|CA|HWY|RT|RTE)\s*-?\s*\d{1,3}\s+([NSEW])\b", re.IGNORECASE
+)
+_DIR_TOKEN_RE = re.compile(r"\b([NSEW])B\b", re.IGNORECASE)
+_DIR_NAMES = {"N": "northbound", "S": "southbound", "E": "eastbound", "W": "westbound"}
+
+
+def direction_hint(location: str) -> str | None:
+    """Travel direction parsed from a CHP free-text location, when present."""
+    m = _DIR_AFTER_ROUTE_RE.search(location or "")
+    if not m:
+        m = _DIR_TOKEN_RE.search(location or "")
+    return _DIR_NAMES[m.group(1).upper()] if m else None
+
+
 def incident_dict(i: ChpIncident) -> dict:
     return {
         "id": i.id,
         "type": i.log_type,
         "location": i.location,
+        "direction_hint": direction_hint(i.location),
         "area": i.area,
         "lat": i.lat,
         "lon": i.lon,
