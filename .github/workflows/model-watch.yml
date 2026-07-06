@@ -1,0 +1,40 @@
+name: Model watch
+
+on:
+  schedule:
+    - cron: "17 15 * * 1" # Mondays
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install anthropic
+      - name: Check model catalog
+        id: check
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e
+          python scripts/check_models.py | tee changes.txt
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+      - name: Open review issue and update snapshot
+        if: steps.check.outputs.status == '3'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "New Claude model(s) available - review demo/eval model choice" \
+            --body "$(printf 'The Models API lists models not in scripts/known_models.json:\n\n```\n%s\n```\n\nReview whether the demo (DEMO_MODEL) or eval models should change. Check pricing and run the evals against the candidate before switching.\n' "$(cat changes.txt)")"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scripts/known_models.json
+          git commit -m "chore: update known-models snapshot"
+          git push

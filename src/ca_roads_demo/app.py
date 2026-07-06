@@ -22,16 +22,22 @@ from starlette.routing import Route
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.ratelimit import RateLimiter, RateLimitMiddleware
 
-MODEL = "claude-haiku-4-5"
+MODEL = os.environ.get("DEMO_MODEL", "claude-sonnet-5")
 MAX_QUESTION_CHARS = 300
 MAX_TOOL_TURNS = 6
 MAX_TOKENS_PER_TURN = 1024
 
-# Cost guards. The dollar cap is computed from actual usage at Haiku pricing.
+# Cost guards. The dollar cap is computed from actual usage at list pricing
+# (standard rates, not intro discounts, so the cap errs on the early side).
 PER_IP_DAILY_QUESTIONS = int(os.environ.get("DEMO_PER_IP_DAILY", "20"))
 GLOBAL_DAILY_DOLLARS = float(os.environ.get("DEMO_DAILY_DOLLARS", "3.0"))
-HAIKU_INPUT_PER_MTOK = 1.00
-HAIKU_OUTPUT_PER_MTOK = 5.00
+# (input $/MTok, output $/MTok); unknown models assume Sonnet pricing.
+PRICING_PER_MTOK = {
+    "claude-haiku-4-5": (1.00, 5.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-sonnet-5": (3.00, 15.00),
+}
+INPUT_PER_MTOK, OUTPUT_PER_MTOK = PRICING_PER_MTOK.get(MODEL, (3.00, 15.00))
 
 SYSTEM = """\
 You are the CA Roads demo assistant. You answer questions about CURRENT
@@ -169,8 +175,7 @@ class DailyGuards:
     def add_usage(self, input_tokens: int, output_tokens: int) -> None:
         self._roll()
         self.dollars += (
-            input_tokens * HAIKU_INPUT_PER_MTOK
-            + output_tokens * HAIKU_OUTPUT_PER_MTOK
+            input_tokens * INPUT_PER_MTOK + output_tokens * OUTPUT_PER_MTOK
         ) / 1_000_000
 
 
