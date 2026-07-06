@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="CA Roads logo">
+  <!-- Badge -->
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="#1c3a2e"/>
+  <!-- Sun -->
+  <circle cx="94" cy="34" r="13" fill="#e08a3c"/>
+  <!-- Far ridge -->
+  <path d="M10 78 L44 42 L62 62 L78 46 L118 84 L118 100 L10 100 Z" fill="#2d5c46"/>
+  <!-- Near ridge -->
+  <path d="M10 92 L36 66 L58 86 L86 60 L118 90 L118 108 L10 108 Z" fill="#3f7a5c"/>
+  <!-- Snow caps -->
+  <path d="M44 42 L52 51 L47 51 L41 45 Z" fill="#f2ead9"/>
+  <path d="M78 46 L86 54 L80 54 L74 50 Z" fill="#f2ead9"/>
+  <!-- Road -->
+  <path d="M50 124 L78 124 L66 74 L62 74 Z" fill="#f2ead9"/>
+  <!-- Center line dashes -->
+  <path d="M63.4 118 L64.6 118 L64.4 108 L63.5 108 Z" fill="#c9611a"/>
+  <path d="M63.7 100 L64.5 100 L64.3 92 L63.8 92 Z" fill="#c9611a"/>
+  <path d="M63.9 85 L64.3 85 L64.2 79 L64.0 79 Z" fill="#c9611a"/>
+</svg>

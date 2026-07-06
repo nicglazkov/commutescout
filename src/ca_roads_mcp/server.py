@@ -163,11 +163,15 @@ async def check_route(from_place: str, to_place: str) -> dict:
         + "."
     )
 
+    waypoints = list(corridor.waypoints)
+    if match.reversed:
+        waypoints.reverse()
     return {
         "corridor": corridor.name,
         "direction": f"{from_place} -> {to_place}",
         "summary": summary,
         "events": items,
+        "route_geometry": [[lat, lon] for lat, lon in waypoints],
         "sources": [source_status(r) for r in (chp_r, lcs_r, cc_r, fire_r)],
     }
 

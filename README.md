@@ -1,16 +1,22 @@
-# ca-roads-mcp
+<div align="center">
+  <img src="docs/logo.svg" width="96" alt="CA Roads logo">
+  <h1>CA Roads</h1>
+  <p><b>Live California road conditions for AI assistants, over MCP.</b></p>
 
 [![CI](https://github.com/nicglazkov/ca-roads-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/nicglazkov/ca-roads-mcp/actions/workflows/ci.yml)
 [![Evals](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicglazkov%2Fca-roads-mcp%2Fmain%2Fevals%2Fresults%2Fbadge.json)](EVALS.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Live California road conditions for AI assistants, over
-[MCP](https://modelcontextprotocol.io). Add one connector URL to Claude (or
-any MCP client) and ask "do I need chains to get to Tahoe?" or "is 17 clear
-right now?" - the answer comes from the same live feeds CHP and Caltrans
-publish, not from the model's memory.
+</div>
 
-No AI assistant? [Try the web demo](https://ca-roads-demo-15002631928.us-west1.run.app).
+Add one connector URL to Claude (or any
+[MCP](https://modelcontextprotocol.io) client) and ask "do I need chains to
+get to Tahoe?" or "is 17 clear right now?". The answer comes from the same
+live feeds CHP and Caltrans publish, not from the model's memory.
+
+No AI assistant? [Try the web demo](https://ca-roads-demo-15002631928.us-west1.run.app):
+ask a question, watch the answer stream in, and see the incidents plotted on
+a map.
 
 ## Data sources
 
@@ -93,7 +99,8 @@ failure, and cross-source dedupe. `ca_roads_mcp` is the MCP surface;
 the same tools).
 
 Deployment notes are in [docs/deploy.md](docs/deploy.md); registry submission
-steps in [docs/registry.md](docs/registry.md).
+steps in [docs/registry.md](docs/registry.md); how to add a data source (and
+the v2 source shortlist) in [docs/adding-a-source.md](docs/adding-a-source.md).
 
 ## Disclaimer
 

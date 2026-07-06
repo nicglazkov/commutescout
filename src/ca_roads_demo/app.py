@@ -193,6 +193,45 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
+def extract_geo(tool: str, result: dict) -> dict | None:
+    """Pull mappable geometry out of a tool result for the page's map panel."""
+    markers: list[dict] = []
+
+    def add(kind: str, lat, lon, label: str) -> None:
+        if isinstance(lat, int | float) and isinstance(lon, int | float) and lat:
+            markers.append({"kind": kind, "lat": lat, "lon": lon, "label": label})
+
+    if tool == "check_route":
+        for event in result.get("events", []):
+            d = event.get("detail", {})
+            kind = event.get("kind", "incident")
+            label = event.get("summary", "")
+            if kind == "lane_closure":
+                begin = d.get("begin", {})
+                add(kind, begin.get("lat"), begin.get("lon"), label)
+            else:
+                add(kind, d.get("lat"), d.get("lon"), label)
+    for item in result.get("incidents", []):
+        add("incident", item.get("lat"), item.get("lon"),
+            f"{item.get('type', '')} @ {item.get('location', '')}")
+    for item in result.get("closures", []):
+        begin = item.get("begin", {})
+        add("lane_closure", begin.get("lat"), begin.get("lon"),
+            item.get("summary", ""))
+    for item in result.get("chain_controls", []):
+        add("chain_control", item.get("lat"), item.get("lon"),
+            item.get("summary", ""))
+    for item in result.get("wildfires", []):
+        add("wildfire", item.get("lat"), item.get("lon"), item.get("summary", ""))
+
+    payload: dict = {}
+    if markers:
+        payload["markers"] = markers
+    if result.get("route_geometry"):
+        payload["route"] = result["route_geometry"]
+    return payload or None
+
+
 async def answer_stream(question: str):
     client = get_client()
     messages = [{"role": "user", "content": question}]
@@ -217,10 +256,13 @@ async def answer_stream(question: str):
         results = []
         for block in tool_uses:
             func = TOOL_FUNCS.get(block.name)
+            geo = None
             try:
                 result = await func(**block.input) if func else {"error": "unknown tool"}
                 content = json.dumps(result, default=str)
                 is_error = False
+                if isinstance(result, dict):
+                    geo = extract_geo(block.name, result)
             except Exception as exc:  # noqa: BLE001 - surface tool failure to the model
                 content = f"tool failed: {type(exc).__name__}: {exc}"
                 is_error = True
@@ -233,6 +275,8 @@ async def answer_stream(question: str):
                 }
             )
             yield _sse({"tool": block.name})
+            if geo:
+                yield _sse({"map": geo})
         messages.append({"role": "user", "content": results})
     yield _sse({"text": "\n(Stopped: too many lookups for one question.)"})
     yield _sse({"done": True})
@@ -268,6 +312,10 @@ async def index(_: Request):
     return FileResponse(STATIC_DIR / "index.html")
 
 
+async def logo(_: Request):
+    return FileResponse(STATIC_DIR / "logo.svg")
+
+
 async def health(_: Request):
     return JSONResponse({"ok": True})
 
@@ -275,6 +323,7 @@ async def health(_: Request):
 app = Starlette(
     routes=[
         Route("/", index),
+        Route("/logo.svg", logo),
         # /healthz is intercepted by Google's frontend on Cloud Run and never
         # reaches the container; /health gets through.
         Route("/health", health),
