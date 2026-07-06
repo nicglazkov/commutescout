@@ -1,0 +1,49 @@
+{
+  "objectIdFieldName": "OBJECTID",
+  "features": [
+    {
+      "attributes": {
+        "IncidentName": "LOST",
+        "IncidentSize": 7834,
+        "PercentContained": 100,
+        "FireDiscoveryDateTime": 1781799660000,
+        "UniqueFireIdentifier": "2026-CAKRN-025007",
+        "IncidentTypeCategory": "WF"
+      },
+      "geometry": { "x": -119.75501255530713, "y": 35.41861600986279 }
+    },
+    {
+      "attributes": {
+        "IncidentName": "RIDGE",
+        "IncidentSize": null,
+        "PercentContained": null,
+        "FireDiscoveryDateTime": null,
+        "UniqueFireIdentifier": "2026-CAENF-001234",
+        "IncidentTypeCategory": "WF"
+      },
+      "geometry": { "x": -120.4, "y": 38.75 }
+    },
+    {
+      "attributes": {
+        "IncidentName": "PRESCRIBED BURN",
+        "IncidentSize": 100,
+        "PercentContained": 0,
+        "FireDiscoveryDateTime": 1783300000000,
+        "UniqueFireIdentifier": "2026-CAXXX-999999",
+        "IncidentTypeCategory": "RX"
+      },
+      "geometry": { "x": -121.0, "y": 39.0 }
+    },
+    {
+      "attributes": {
+        "IncidentName": "NO GEOMETRY",
+        "IncidentSize": 50,
+        "PercentContained": 10,
+        "FireDiscoveryDateTime": 1783300000000,
+        "UniqueFireIdentifier": "2026-CAYYY-888888",
+        "IncidentTypeCategory": "WF"
+      },
+      "geometry": null
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<data>
+	<cc>
+		<index>3-ALP-89-23.6-N-237</index>
+		<recordTimestamp>
+			<recordDate>2026-07-05</recordDate>
+			<recordTime>21:59:02</recordTime>
+		</recordTimestamp>
+		<location>
+			<district>3</district>
+			<locationName>Luther Pass</locationName>
+			<nearbyPlace>Markleeville</nearbyPlace>
+			<longitude>-119.939680</longitude>
+			<latitude>38.787944</latitude>
+			<elevation>7732</elevation>
+			<direction>North</direction>
+			<county>Alpine</county>
+			<route>SR-89</route>
+			<postmile>23.60</postmile>
+			<milepost>31.03</milepost>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-05-05</statusDate>
+				<statusTime>05:58:27</statusTime>
+			</statusTimestamp>
+			<status>R-0</status>
+			<statusDescription>No chain controls are in effect at this time.</statusDescription>
+		</statusData>
+	</cc>
+	<cc>
+		<index>3-ED-50-33.2-E-101</index>
+		<recordTimestamp>
+			<recordDate>2026-07-05</recordDate>
+			<recordTime>21:59:02</recordTime>
+		</recordTimestamp>
+		<location>
+			<district>3</district>
+			<locationName>Twin Bridges</locationName>
+			<nearbyPlace>Twin Bridges</nearbyPlace>
+			<longitude>-120.117000</longitude>
+			<latitude>38.809000</latitude>
+			<elevation>6100</elevation>
+			<direction>East</direction>
+			<county>El Dorado</county>
+			<route>US-50</route>
+			<postmile>33.20</postmile>
+			<milepost>60.10</milepost>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-2</status>
+			<statusDescription>Chains are required on all vehicles except four wheel drive vehicles with snow tires on all four wheels.</statusDescription>
+		</statusData>
+	</cc>
+	<cc>
+		<index>3-NEV-20-12.0-E-330</index>
+		<location>
+			<district>3</district>
+			<locationName>Out Of Service Point</locationName>
+			<nearbyPlace>Nevada City</nearbyPlace>
+			<longitude>-120.900000</longitude>
+			<latitude>39.300000</latitude>
+			<direction>East</direction>
+			<county>Nevada</county>
+			<route>SR-20</route>
+		</location>
+		<inService>false</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-2</status>
+			<statusDescription>Chains required.</statusDescription>
+		</statusData>
+	</cc>
+</data>
