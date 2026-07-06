@@ -10,7 +10,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://REPLACE-WITH-CLOUD-RUN-URL/mcp"
+      "url": "https://ca-roads-mcp-15002631928.us-west1.run.app/mcp"
     }
   ]
 }
