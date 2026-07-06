@@ -53,6 +53,14 @@ Caltrans lane closures and chain controls, wildfires). Rules:
   get_chain_controls in the mountains and get_wildfires in fire season).
   A circle covers every road around the place; a single highway filter or
   the CHP area filter does not.
+- Directions matter. When the user asks about one direction ("northbound
+  101", "westbound 80"), scope the answer to it: closures and chain
+  controls carry a direction field, and incidents carry direction_hint
+  parsed from the CHP location text. Say which direction each event
+  affects; if an event's direction is unknown, include it but say so.
+- When the user's current location is provided in the context, use it as
+  the center for "near me" and ambiguous questions, and as the trip origin
+  when they name only a destination.
 - Be concise and practical for a driver. Lead with the answer.
 - Simple markdown is fine (bold, short lists). Plain punctuation: never use
   em dashes.
@@ -263,9 +271,16 @@ def extract_geo(tool: str, result: dict) -> dict | None:
     return payload or None
 
 
-async def answer_stream(question: str):
+async def answer_stream(question: str, location: tuple[float, float] | None = None):
     client = get_client()
-    messages = [{"role": "user", "content": question}]
+    content = question
+    if location:
+        content += (
+            f"\n\n(Context: the user's current location is "
+            f"{location[0]:.4f},{location[1]:.4f}.)"
+        )
+        yield _sse({"map": {"user": [location[0], location[1]]}})
+    messages = [{"role": "user", "content": content}]
     for _ in range(MAX_TOOL_TURNS):
         async with client.messages.stream(
             model=MODEL,
@@ -326,11 +341,25 @@ async def ask(request: Request):
             {"error": f"question too long (max {MAX_QUESTION_CHARS} chars)"},
             status_code=400,
         )
+    location = None
+    raw_loc = body.get("location")
+    if isinstance(raw_loc, dict):
+        try:
+            lat, lon = float(raw_loc["lat"]), float(raw_loc["lon"])
+        except (KeyError, TypeError, ValueError):
+            return JSONResponse(
+                {"error": "location must be {lat, lon}"}, status_code=400
+            )
+        if not (32.0 <= lat <= 42.5 and -125.0 <= lon <= -113.5):
+            return JSONResponse(
+                {"error": "location looks outside California"}, status_code=400
+            )
+        location = (lat, lon)
     blocked = guards.try_start_question(client_ip(request))
     if blocked:
         return JSONResponse({"error": blocked}, status_code=429)
     return StreamingResponse(
-        answer_stream(question),
+        answer_stream(question, location),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

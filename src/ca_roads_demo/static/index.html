@@ -85,6 +85,58 @@
     border: 1px solid var(--line); border-radius: 999px; padding: 6px 13px;
   }
   .examples button:hover { border-color: var(--pine-soft); color: var(--pine); }
+  .locrow {
+    margin-top: 14px; display: flex; align-items: center; gap: 10px;
+    font-size: 0.86rem; color: var(--ink-soft);
+  }
+  .switch { position: relative; display: inline-block; width: 42px; height: 24px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .track {
+    position: absolute; inset: 0; cursor: pointer; border-radius: 999px;
+    background: #d8d0bc; transition: background 0.2s;
+  }
+  .track::before {
+    content: ""; position: absolute; height: 18px; width: 18px;
+    left: 3px; top: 3px; border-radius: 50%; background: #fffdf7;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.25); transition: transform 0.2s;
+  }
+  .switch input:checked + .track { background: var(--pine-soft); }
+  .switch input:checked + .track::before { transform: translateX(18px); }
+  .locstatus { min-height: 1.2em; }
+  .locstatus.on { color: var(--pine); font-weight: 500; }
+  .chips {
+    display: none; flex-wrap: wrap; gap: 8px; margin: 0 0 12px;
+  }
+  .chips.active { display: flex; }
+  .chip {
+    font-size: 0.78rem; font-weight: 600; color: var(--ink);
+    background: var(--cream); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px 11px;
+  }
+  .chip::before {
+    content: ""; display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 6px; background: var(--dot, #26261f);
+  }
+  .youarehere {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #2563eb; border: 2.5px solid #fff;
+    box-shadow: 0 0 0 rgba(37, 99, 235, 0.45);
+    animation: pulseblue 2s infinite;
+  }
+  @keyframes pulseblue {
+    0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); }
+    70% { box-shadow: 0 0 0 14px rgba(37, 99, 235, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+  }
+  .route-end {
+    width: 22px; height: 22px; border-radius: 50%; text-align: center;
+    background: var(--pine); color: #fffdf7; font: 700 11px/22px "Public Sans", sans-serif;
+    border: 2px solid #fffdf7; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .leaflet-popup-content-wrapper {
+    border-radius: 10px; font-family: "Public Sans", system-ui, sans-serif;
+  }
+  .leaflet-popup-content { margin: 10px 14px; font-size: 0.84rem; line-height: 1.45; }
   .result {
     margin-top: 26px; display: none;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -185,9 +237,18 @@
   </form>
   <div class="examples">
     <button type="button">Is 17 clear right now?</button>
+    <button type="button">How is northbound 101 up to SF?</button>
     <button type="button">Anything on I-80 between Sacramento and Reno?</button>
     <button type="button">Any fires near I-5?</button>
     <button type="button">Lane closures on 101 in the Bay Area?</button>
+  </div>
+  <div class="locrow">
+    <label class="switch">
+      <input type="checkbox" id="useloc">
+      <span class="track"></span>
+    </label>
+    <span>Use my location</span>
+    <span class="locstatus" id="locstatus"></span>
   </div>
 
   <div class="result" id="result">
@@ -197,6 +258,7 @@
         <div class="loadmsg" id="loadmsg">Waking up the dispatcher</div>
       </div>
       <div class="status" id="status"></div>
+      <div class="chips" id="chips"></div>
       <div class="text" id="answer"></div>
     </div>
     <div class="map-card" id="mapcard">
@@ -315,13 +377,29 @@ let map = null;
 let layerPrimary = null; // route, incidents, closures, chains: drives zoom
 let layerFires = null;   // fires: shown, but never widen the view alone
 
+const chipsEl = document.getElementById('chips');
+const KIND_LABELS = {
+  incident: 'incident', lane_closure: 'closure',
+  chain_control: 'chain control', wildfire: 'wildfire',
+};
+let chipCounts = {};
+
+function renderChips() {
+  const entries = Object.entries(chipCounts).filter(([, n]) => n > 0);
+  chipsEl.classList.toggle('active', entries.length > 0);
+  chipsEl.innerHTML = entries.map(([kind, n]) =>
+    `<span class="chip" style="--dot:${KIND_COLORS[kind]}">` +
+    `${n} ${KIND_LABELS[kind]}${n > 1 ? 's' : ''}</span>`).join('');
+}
+
 function ensureMap() {
   mapcard.classList.add('active');
   if (map) return;
   map = L.map('map', { scrollWheelZoom: false }).setView([37.5, -120.5], 6);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 17,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    subdomains: 'abcd',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
   }).addTo(map);
   layerPrimary = L.featureGroup().addTo(map);
   layerFires = L.featureGroup().addTo(map);
@@ -331,16 +409,36 @@ function resetMap() {
   if (layerPrimary) layerPrimary.clearLayers();
   if (layerFires) layerFires.clearLayers();
   mapcard.classList.remove('active');
+  chipCounts = {};
+  renderChips();
 }
 
 function drawGeo(geo) {
   ensureMap();
+  if (geo.user) {
+    L.marker(geo.user, {
+      icon: L.divIcon({ className: 'youarehere', iconSize: [16, 16] }),
+      interactive: false,
+      zIndexOffset: 500,
+    }).addTo(layerPrimary);
+  }
   if (geo.route) {
     L.polyline(geo.route, { color: '#1c3a2e', weight: 3, opacity: 0.7, dashArray: '6 6' })
       .addTo(layerPrimary);
+    const ends = [
+      [geo.route[0], 'A', 'Start of route'],
+      [geo.route[geo.route.length - 1], 'B', 'End of route'],
+    ];
+    for (const [pt, letter, label] of ends) {
+      L.marker(pt, {
+        icon: L.divIcon({ className: 'route-end', html: letter, iconSize: [22, 22] }),
+        zIndexOffset: 400,
+      }).bindPopup(label).addTo(layerPrimary);
+    }
   }
   for (const m of geo.markers || []) {
     const target = m.kind === 'wildfire' ? layerFires : layerPrimary;
+    chipCounts[m.kind] = (chipCounts[m.kind] || 0) + 1;
     L.circleMarker([m.lat, m.lon], {
       radius: 7,
       color: '#fffdf7',
@@ -349,6 +447,7 @@ function drawGeo(geo) {
       fillOpacity: 0.95,
     }).bindPopup(m.label ? String(m.label) : m.kind).addTo(target);
   }
+  renderChips();
   // Zoom to the road-relevant layer; fall back to fires only when the
   // question was purely about fires.
   const primary = layerPrimary.getBounds();
@@ -356,6 +455,45 @@ function drawGeo(geo) {
   if (bounds.isValid()) map.fitBounds(bounds.pad(0.18), { maxZoom: 11 });
   setTimeout(() => map.invalidateSize(), 60);
 }
+
+// ── Location toggle ──────────────────────────────────────────────────
+const useloc = document.getElementById('useloc');
+const locstatus = document.getElementById('locstatus');
+let userLocation = null;
+
+useloc.addEventListener('change', () => {
+  if (!useloc.checked) {
+    userLocation = null;
+    locstatus.textContent = '';
+    locstatus.classList.remove('on');
+    return;
+  }
+  if (!navigator.geolocation) {
+    locstatus.textContent = 'Not supported by this browser.';
+    useloc.checked = false;
+    return;
+  }
+  locstatus.textContent = 'Locating…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userLocation = {
+        lat: Math.round(pos.coords.latitude * 1e4) / 1e4,
+        lon: Math.round(pos.coords.longitude * 1e4) / 1e4,
+      };
+      locstatus.textContent =
+        `On (${userLocation.lat.toFixed(2)}, ${userLocation.lon.toFixed(2)}) - ` +
+        'sent only when you ask a question';
+      locstatus.classList.add('on');
+    },
+    () => {
+      locstatus.textContent = 'Location permission denied.';
+      locstatus.classList.remove('on');
+      useloc.checked = false;
+      userLocation = null;
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+  );
+});
 
 document.querySelectorAll('.examples button').forEach(b => {
   b.addEventListener('click', () => { input.value = b.textContent; form.requestSubmit(); });
@@ -372,10 +510,12 @@ form.addEventListener('submit', async (e) => {
   startLoader();
   let raw = '';
   try {
+    const payload = {question};
+    if (useloc.checked && userLocation) payload.location = userLocation;
     const res = await fetch('/api/ask', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({question}),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
