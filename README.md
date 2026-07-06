@@ -25,10 +25,10 @@ to trust the answer.
 
 ## Add to Claude
 
-Hosted (once deployed): add a custom connector with the URL
+Hosted: add a custom connector with the URL
 
 ```
-https://<service-url>/mcp
+https://ca-roads-mcp-15002631928.us-west1.run.app/mcp
 ```
 
 Local over stdio:

@@ -379,12 +379,20 @@ def main() -> None:
     args = parser.parse_args()
     if args.transport == "http":
         import uvicorn
+        from mcp.server.transport_security import TransportSecuritySettings
 
         from ca_roads_mcp.ratelimit import RateLimitMiddleware
 
         mcp.settings.host = args.host
         mcp.settings.port = args.port
         mcp.settings.stateless_http = True
+        # The SDK's DNS-rebinding protection only allows localhost hosts by
+        # default, which answers 421 behind Cloud Run's hostname. This is a
+        # public, unauthenticated, read-only API served over TLS by the
+        # platform; host-header validation adds nothing here.
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        )
         app = RateLimitMiddleware(mcp.streamable_http_app())
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:
