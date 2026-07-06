@@ -55,6 +55,17 @@ def get_road() -> RoadData:
 MILES_PER_METER = 1 / 1609.344
 
 
+def parse_center(center: str) -> tuple[float, float] | None:
+    try:
+        lat_s, lon_s = center.split(",")
+        return float(lat_s), float(lon_s)
+    except ValueError:
+        return None
+
+
+CENTER_FORMAT_ERROR = "center must be 'lat,lon', e.g. '38.58,-121.49'"
+
+
 @mcp.tool()
 async def check_route(from_place: str, to_place: str) -> dict:
     """Check current conditions along a major California highway corridor.
@@ -193,44 +204,66 @@ async def get_incidents(
     Filters (combinable):
     - highway: a route like "I-80", "US 50", "17", "Hwy 99". Matches
       incidents whose location text mentions that route.
-    - area: substring match on the CHP dispatch area name (e.g. "Truckee",
-      "East Sac", "San Jose"). These are CHP communication-center areas, not
-      counties.
-    - center: "lat,lon" with radius_km - incidents within that circle.
+    - center: "lat,lon" with radius_km - incidents within that circle. THIS
+      IS THE RIGHT FILTER FOR A TOWN OR PLACE NAME: use your knowledge of
+      where the place is (e.g. Coyote, CA -> "37.22,-121.74") with radius_km
+      15-30. A circle catches every road around the place, not just one
+      highway.
+    - area: substring match on the CHP dispatch-area name. These are CHP
+      communication-center names ("Hollister Gilroy", "East Sac", "Golden
+      Gate"), NOT town names - do not pass a town here.
 
     Limits: locations are free-text from dispatchers; a few incidents lack
     usable coordinates and are omitted. No history - current logs only.
     """
     result = await get_road().incidents()
     records = result.records
+    warning = None
     canonical = normalize_route(highway) if highway else None
     if canonical:
         records = [i for i in records if matches_route(i.location, canonical)]
     if area:
         needle = area.lower()
-        records = [i for i in records if needle in i.area.lower()]
+        matched = [i for i in records if needle in i.area.lower()]
+        if not matched and records:
+            # The #1 misuse is passing a town name; make the miss loud and
+            # give the model a recovery path instead of a silent zero.
+            active_areas = sorted({i.area for i in records if i.area})
+            warning = (
+                f"No incidents matched area='{area}'. The area filter matches "
+                "CHP dispatch-area names, not towns. Areas currently "
+                f"reporting incidents: {', '.join(active_areas)}. If you "
+                "meant a town or place, call again with center='lat,lon' "
+                "(radius_km 15-30) instead - that catches every road around "
+                "the place."
+            )
+        records = matched
     if center:
-        try:
-            lat_s, lon_s = center.split(",")
-            lat, lon = float(lat_s), float(lon_s)
-        except ValueError:
-            return {"error": "center must be 'lat,lon', e.g. '38.58,-121.49'"}
+        point = parse_center(center)
+        if point is None:
+            return {"error": CENTER_FORMAT_ERROR}
         records = [
             i
             for i in records
-            if haversine_meters(lat, lon, i.lat, i.lon) <= radius_km * 1000
+            if haversine_meters(*point, i.lat, i.lon) <= radius_km * 1000
         ]
-    return {
+    payload = {
         "count": len(records),
         "filters": {"highway": canonical, "area": area, "center": center},
         "incidents": [incident_dict(i) for i in records],
         "sources": [source_status(result)],
     }
+    if warning:
+        payload["warning"] = warning
+    return payload
 
 
 @mcp.tool()
 async def get_lane_closures(
-    route: str | None = None, district: int | None = None
+    route: str | None = None,
+    district: int | None = None,
+    center: str | None = None,
+    radius_km: float = 40,
 ) -> dict:
     """Caltrans lane and road closures physically in place RIGHT NOW.
 
@@ -241,7 +274,10 @@ async def get_lane_closures(
     Refresh: 5-minute cache over per-district Caltrans feeds.
 
     Filters: route (e.g. "I-80", "US 101", "1"); district (Caltrans district
-    1-12, e.g. 3 = Sacramento/Tahoe, 4 = Bay Area, 7 = Los Angeles).
+    1-12, e.g. 3 = Sacramento/Tahoe, 4 = Bay Area, 7 = Los Angeles);
+    center "lat,lon" with radius_km - closures whose begin or end point is
+    inside the circle. For a town or place, center is the filter that
+    catches work on EVERY road around it, including small state routes.
 
     Each record says whether it is a FULL closure and which lanes are
     closed. Shoulder-only work is excluded.
@@ -252,16 +288,34 @@ async def get_lane_closures(
     canonical = normalize_route(route) if route else None
     if canonical:
         records = [c for c in records if c.route == canonical]
+    if center:
+        point = parse_center(center)
+        if point is None:
+            return {"error": CENTER_FORMAT_ERROR}
+        limit = radius_km * 1000
+        records = [
+            c
+            for c in records
+            if haversine_meters(*point, c.begin_lat, c.begin_lon) <= limit
+            or (
+                (c.end_lat or c.end_lon)
+                and haversine_meters(*point, c.end_lat, c.end_lon) <= limit
+            )
+        ]
     return {
         "count": len(records),
-        "filters": {"route": canonical, "district": district},
+        "filters": {"route": canonical, "district": district, "center": center},
         "closures": [closure_dict(c) for c in records],
         "sources": [source_status(result)],
     }
 
 
 @mcp.tool()
-async def get_chain_controls(route: str | None = None) -> dict:
+async def get_chain_controls(
+    route: str | None = None,
+    center: str | None = None,
+    radius_km: float = 40,
+) -> dict:
     """Current chain-control requirements on California mountain highways.
 
     Data: Caltrans chain-control status for fixed checkpoints on mountain
@@ -270,7 +324,9 @@ async def get_chain_controls(route: str | None = None) -> dict:
     except 4WD/AWD with snow tires on all four; R-3 = chains on ALL vehicles
     (rare, usually precedes closure). Refresh: 5-minute cache.
 
-    Filter: route (e.g. "80", "US-50", "SR-88").
+    Filters: route (e.g. "80", "US-50", "SR-88"); center "lat,lon" with
+    radius_km for all checkpoints around a place (e.g. around Truckee),
+    whatever highway they are on.
 
     Off-season (roughly May-October) there are usually no controls anywhere;
     the response says so explicitly rather than returning an empty list.
@@ -282,36 +338,52 @@ async def get_chain_controls(route: str | None = None) -> dict:
     canonical = normalize_route(route) if route else None
     if canonical:
         records = [c for c in records if c.route == canonical]
+    if center:
+        point = parse_center(center)
+        if point is None:
+            return {"error": CENTER_FORMAT_ERROR}
+        records = [
+            c
+            for c in records
+            if haversine_meters(*point, c.lat, c.lon) <= radius_km * 1000
+        ]
     payload = {
         "count": len(records),
-        "filters": {"route": canonical},
+        "filters": {"route": canonical, "center": center},
         "chain_controls": [chain_control_dict(c) for c in records],
         "sources": [source_status(result)],
     }
     if not records and result.ok:
-        payload["message"] = (
-            "No chain controls active "
-            + (f"on {canonical}" if canonical else "anywhere in California")
-            + " right now."
+        where = f"on {canonical}" if canonical else (
+            "near that point" if center else "anywhere in California"
         )
+        payload["message"] = f"No chain controls active {where} right now."
     return payload
 
 
 @mcp.tool()
-async def get_wildfires(near_route: str | None = None) -> dict:
+async def get_wildfires(
+    near_route: str | None = None,
+    center: str | None = None,
+    radius_km: float = 50,
+) -> dict:
     """Active California wildfires, flagged when close to a major highway.
 
     Data: the interagency WFIGS current-wildfire feed (NIFC) - name, size in
     acres, percent contained, discovery date. Points are each fire's ORIGIN,
     not its perimeter: a large fire can affect roads far from this point.
     Refresh: 5-minute cache; size/containment typically update once or twice
-    a day.
+    a day. Small, fast-moving local fires may appear in CHP incident logs
+    (get_incidents, type "FIRE-Report of Fire") before this feed has them.
 
-    Filter: near_route (e.g. "I-5", "101") - only fires within ~10 miles of
-    that highway's corridor line. Without it, every active CA fire is
-    returned, each carrying a `near_highways` list of major corridors within
-    ~10 miles (empty = not near a covered major highway; it may still affect
-    local roads).
+    Filters:
+    - near_route (e.g. "I-5", "101") - only fires within ~10 miles of that
+      highway's corridor line.
+    - center "lat,lon" with radius_km - fires around a place, regardless of
+      highway.
+    Without either, every active CA fire is returned, each carrying a
+    `near_highways` list of major corridors within ~10 miles (empty = not
+    near a covered major highway; it may still affect local roads).
 
     This tool does NOT know about road closures caused by fires - cross-check
     get_incidents and get_lane_closures for the affected area.
@@ -327,6 +399,11 @@ async def get_wildfires(near_route: str | None = None) -> dict:
             "near_route and check the near_highways field instead.",
             "sources": [source_status(result)],
         }
+    point = None
+    if center:
+        point = parse_center(center)
+        if point is None:
+            return {"error": CENTER_FORMAT_ERROR}
 
     fires = []
     for f in result.records:
@@ -337,12 +414,14 @@ async def get_wildfires(near_route: str | None = None) -> dict:
                 near.append(c.routes[0])
         if canonical and canonical not in near:
             continue
+        if point and haversine_meters(*point, f.lat, f.lon) > radius_km * 1000:
+            continue
         d = wildfire_dict(f)
         d["near_highways"] = sorted(set(near))
         fires.append(d)
     return {
         "count": len(fires),
-        "filters": {"near_route": canonical},
+        "filters": {"near_route": canonical, "center": center},
         "wildfires": fires,
         "sources": [source_status(result)],
     }

@@ -188,3 +188,18 @@ questions:
     ground_truth: "VULCAN near the Grapevine stretch of I-5; answer should state the data-as-of time or note the ~5 minute refresh."
     expect:
       contains: ["VULCAN"]
+
+  - id: fire-place-lebec
+    tool: get_lane_closures
+    question: "How are things around Lebec?"
+    ground_truth: "Bad: I-5 is fully closed in both directions there (Grapevine northbound, Frazier Mountain Park Rd southbound) with the VULCAN fire (48,213 acres, 15% contained) nearby."
+    expect:
+      contains: ["Grapevine"]
+      contains_any: [["closed", "full"]]
+
+  - id: fire-place-bakersfield
+    tool: get_incidents
+    question: "Anything going on around Bakersfield?"
+    ground_truth: "A collision on SR-99 at Ming Ave and a lane closure on SR-99 at 7th Standard Rd; I-5 to the south is fully closed at the Grapevine."
+    expect:
+      contains_any: [["Ming", "7th Standard"]]

@@ -108,3 +108,35 @@ async def test_fire_remote_not_near_highways(scenario):
     result = await tool_server.get_wildfires()
     remote = next(f for f in result["wildfires"] if f["name"] == "REMOTE")
     assert remote["near_highways"] == []
+
+
+@for_scenario("quiet-day")
+async def test_area_miss_returns_warning_with_dispatch_areas(scenario):
+    result = await tool_server.get_incidents(area="Coyote")
+    assert result["count"] == 0
+    assert "dispatch-area" in result["warning"]
+    assert "East Sac" in result["warning"]  # recovery path lists real areas
+    assert "center=" in result["warning"]
+
+
+@for_scenario("quiet-day")
+async def test_center_filter_catches_closures_on_any_road(scenario):
+    result = await tool_server.get_lane_closures(center="37.39,-121.93", radius_km=15)
+    assert [c["location"] for c in result["closures"]] == ["Trimble Rd"]
+    far = await tool_server.get_lane_closures(center="38.58,-121.49", radius_km=15)
+    assert far["count"] == 0
+
+
+@for_scenario("storm-day")
+async def test_center_filter_chain_controls_around_truckee(scenario):
+    result = await tool_server.get_chain_controls(center="39.33,-120.18", radius_km=25)
+    names = {c["location"] for c in result["chain_controls"]}
+    assert "Donner Lake Interchange" in names
+    assert "Kingvale" in names
+    assert "Carson Pass" not in names  # 70+ km away
+
+
+@for_scenario("fire-day")
+async def test_center_filter_wildfires_around_lebec(scenario):
+    result = await tool_server.get_wildfires(center="34.84,-118.86", radius_km=50)
+    assert [f["name"] for f in result["wildfires"]] == ["VULCAN"]
