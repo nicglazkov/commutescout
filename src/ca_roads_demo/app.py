@@ -268,14 +268,16 @@ async def index(_: Request):
     return FileResponse(STATIC_DIR / "index.html")
 
 
-async def healthz(_: Request):
+async def health(_: Request):
     return JSONResponse({"ok": True})
 
 
 app = Starlette(
     routes=[
         Route("/", index),
-        Route("/healthz", healthz),
+        # /healthz is intercepted by Google's frontend on Cloud Run and never
+        # reaches the container; /health gets through.
+        Route("/health", health),
         Route("/api/ask", ask, methods=["POST"]),
     ]
 )
