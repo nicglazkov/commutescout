@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<data>
+	<lcs>
+		<index>S1AB-0001-storm</index>
+		<location>
+			<travelFlowDirection>South</travelFlowDirection>
+			<begin>
+				<beginDistrict>3</beginDistrict>
+				<beginLocationName>Emerald Bay</beginLocationName>
+				<beginNearbyPlace>South Lake Tahoe</beginNearbyPlace>
+				<beginLongitude>-120.11</beginLongitude>
+				<beginLatitude>38.952</beginLatitude>
+				<beginCounty>El Dorado</beginCounty>
+				<beginRoute>SR-89</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-120.08</endLongitude>
+				<endLatitude>38.94</endLatitude>
+				<endRoute>SR-89</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>S1AB</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>true</isClosureEndIndefinite>
+			</closureTimestamp>
+			<typeOfClosure>Full</typeOfClosure>
+			<typeOfWork>Emergency Work</typeOfWork>
+			<lanesClosed>All</lanesClosed>
+			<code1097>
+				<isCode1097>true</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch>1783000000</code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+	<lcs>
+		<index>S2CD-0002-storm</index>
+		<location>
+			<travelFlowDirection>East</travelFlowDirection>
+			<begin>
+				<beginDistrict>3</beginDistrict>
+				<beginLocationName>Baxter</beginLocationName>
+				<beginNearbyPlace>Alta</beginNearbyPlace>
+				<beginLongitude>-120.78</beginLongitude>
+				<beginLatitude>39.2</beginLatitude>
+				<beginCounty>Placer</beginCounty>
+				<beginRoute>I-80</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-120.7</endLongitude>
+				<endLatitude>39.23</endLatitude>
+				<endRoute>I-80</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>S2CD</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>false</isClosureEndIndefinite>
+			</closureTimestamp>
+			<typeOfClosure>Lane</typeOfClosure>
+			<typeOfWork>Winter Operations</typeOfWork>
+			<lanesClosed>1</lanesClosed>
+			<code1097>
+				<isCode1097>true</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch>1783000000</code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+	<lcs>
+		<index>S3EF-0003-storm</index>
+		<location>
+			<travelFlowDirection>East</travelFlowDirection>
+			<begin>
+				<beginDistrict>3</beginDistrict>
+				<beginLocationName>Placerville</beginLocationName>
+				<beginNearbyPlace>Placerville</beginNearbyPlace>
+				<beginLongitude>-120.8</beginLongitude>
+				<beginLatitude>38.73</beginLatitude>
+				<beginCounty>El Dorado</beginCounty>
+				<beginRoute>US-50</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-120.75</endLongitude>
+				<endLatitude>38.74</endLatitude>
+				<endRoute>US-50</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>S3EF</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>false</isClosureEndIndefinite>
+			</closureTimestamp>
+			<typeOfClosure>Lane</typeOfClosure>
+			<typeOfWork>Tree Work</typeOfWork>
+			<lanesClosed>1</lanesClosed>
+			<code1097>
+				<isCode1097>false</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch></code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+</data>

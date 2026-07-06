@@ -1,0 +1,183 @@
+# Quiet summer day: no chains anywhere, one US-101 lane closure (Trimble Rd,
+# San Jose), four minor CHP incidents, one fully contained fire far from
+# highways. Grading: `contains`/`contains_any`/`not_contains` are
+# case-insensitive substring checks on the final answer; `ground_truth` is
+# what the LLM judge scores correctness against.
+scenario: quiet-day
+questions:
+  - id: quiet-chains-us50
+    tool: get_chain_controls
+    question: "Are chains required on US-50 right now?"
+    ground_truth: "No. No chain controls are active anywhere; all checkpoints are R-0."
+    expect:
+      not_contains: ["R-1", "R-2", "R-3"]
+
+  - id: quiet-chains-tahoe
+    tool: get_chain_controls
+    question: "Do I need chains to get to Tahoe today?"
+    ground_truth: "No. No chain controls are active on I-80, US-50, or any Tahoe route."
+    expect:
+      not_contains: ["R-2", "R-3"]
+
+  - id: quiet-chains-statewide
+    tool: get_chain_controls
+    question: "Are there any chain controls anywhere in California right now?"
+    ground_truth: "No, none anywhere in the state."
+    expect:
+      not_contains: ["R-1", "R-2", "R-3"]
+
+  - id: quiet-sr17-clear
+    tool: get_incidents
+    question: "Is 17 clear right now?"
+    ground_truth: "Yes. No CHP incidents, closures, or chain controls on SR-17."
+    expect:
+      not_contains: ["collision on SR-17", "closure on SR-17"]
+
+  - id: quiet-101-closures
+    tool: get_lane_closures
+    question: "Any lane closures on 101 right now?"
+    ground_truth: "Yes, one: a lane closure on US-101 at Trimble Rd near San Jose (pavement repair, lane 1 plus right shoulder)."
+    expect:
+      contains: ["Trimble"]
+      contains_any: [["San Jose", "101"]]
+
+  - id: quiet-i80-closures
+    tool: get_lane_closures
+    question: "Are there any lane closures on I-80?"
+    ground_truth: "No. The only I-80 record is shoulder-only litter removal near Davis, which does not close a travel lane and should not be reported as a lane closure."
+    expect:
+      not_contains: ["full closure"]
+
+  - id: quiet-us50-watt
+    tool: get_lane_closures
+    question: "Is US-50 closed near Watt Ave in Sacramento?"
+    ground_truth: "No. There is scheduled electrical work at Watt Ave but it is not established (no CHP 1097), so nothing is closed."
+    expect:
+      not_contains: ["is closed", "currently closed"]
+
+  - id: quiet-closures-district4
+    tool: get_lane_closures
+    question: "What Caltrans closures are in place in the Bay Area right now?"
+    ground_truth: "One: US-101 at Trimble Rd near San Jose, lane 1 plus right shoulder, pavement repair."
+    expect:
+      contains: ["Trimble"]
+
+  - id: quiet-incidents-sf
+    tool: get_incidents
+    question: "Any incidents on 101 in San Francisco?"
+    ground_truth: "Yes, one traffic hazard on US-101 southbound at Cesar Chavez St."
+    expect:
+      contains: ["Cesar Chavez"]
+
+  - id: quiet-incidents-berkeley
+    tool: get_incidents
+    question: "Anything happening on I-80 near Berkeley?"
+    ground_truth: "Yes, a no-injury collision on I-80 westbound at University Ave."
+    expect:
+      contains: ["University"]
+
+  - id: quiet-incidents-bakersfield
+    tool: get_incidents
+    question: "Any crashes on 99 near Bakersfield?"
+    ground_truth: "Yes, a collision (unknown injuries) on SR-99 northbound at Ming Ave."
+    expect:
+      contains: ["Ming"]
+
+  - id: quiet-route-sac-reno
+    tool: check_route
+    question: "I'm driving from Sacramento to Reno on I-80. Anything I should know about?"
+    ground_truth: "The corridor is clear: no incidents, closures, chain controls, or fires along I-80 between Sacramento and Reno. (The Berkeley collision is outside this corridor.)"
+    expect:
+      not_contains: ["chain", "University Ave"]
+
+  - id: quiet-route-sac-tahoe
+    tool: check_route
+    question: "How does US-50 look between Sacramento and South Lake Tahoe?"
+    ground_truth: "Clear. No active incidents, closures, or chain controls on the corridor. Scheduled work at Watt Ave is not in place."
+    expect:
+      not_contains: ["R-2", "full closure"]
+
+  - id: quiet-route-sj-sc
+    tool: check_route
+    question: "Check the road from San Jose to Santa Cruz for me."
+    ground_truth: "SR-17 is clear: no incidents, closures, chain controls, or fires."
+    expect:
+      not_contains: ["closure in place", "chains required"]
+
+  - id: quiet-fires-statewide
+    tool: get_wildfires
+    question: "Are there any active wildfires in California right now?"
+    ground_truth: "One tracked fire: LOST, 7,834 acres, 100% contained, not near any major highway."
+    expect:
+      contains: ["LOST"]
+      contains_any: [["7,834", "7834"]]
+
+  - id: quiet-fires-i5
+    tool: get_wildfires
+    question: "Any fires near I-5?"
+    ground_truth: "No fires near I-5. The only tracked fire (LOST) is fully contained and far from major highways."
+    expect:
+      not_contains: ["VULCAN"]
+
+  - id: quiet-fires-containment
+    tool: get_wildfires
+    question: "How contained is the LOST fire?"
+    ground_truth: "100% contained at 7,834 acres."
+    expect:
+      contains: ["100%"]
+
+  - id: quiet-route-sf-la
+    tool: check_route
+    question: "Driving from San Francisco to Los Angeles on 101 - any problems?"
+    ground_truth: "One minor thing near the start: a traffic hazard on US-101 at Cesar Chavez St in SF. No closures, chains, or fires along the corridor."
+    expect:
+      not_contains: ["full closure", "chains"]
+
+  - id: quiet-chains-88
+    tool: get_chain_controls
+    question: "What's the chain requirement on SR-88 over Carson Pass?"
+    ground_truth: "None. Carson Pass checkpoints are R-0 (no controls)."
+    expect:
+      not_contains: ["R-2", "R-3"]
+
+  - id: quiet-i80-full-closure-hallucination
+    tool: get_lane_closures
+    question: "I heard I-80 is fully closed over Donner. Is that true?"
+    ground_truth: "No. There are no closures on I-80; the feed shows nothing in place over Donner."
+    expect:
+      not_contains: ["yes, I-80 is closed", "is fully closed"]
+
+  - id: quiet-incidents-sac
+    tool: get_incidents
+    question: "Any hazards reported in the Sacramento area?"
+    ground_truth: "One: a traffic hazard at Jackson Rd / Mayhew Rd in East Sacramento (a local road, not a highway)."
+    expect:
+      contains: ["Jackson"]
+
+  - id: quiet-freshness
+    tool: get_chain_controls
+    question: "Do I need chains on I-80 right now? Also tell me how fresh your data is."
+    ground_truth: "No chains required; the answer should include a data-as-of timestamp or explicit statement of data freshness."
+    expect:
+      not_contains: ["R-2"]
+
+  - id: quiet-forecast-refusal
+    tool: get_chain_controls
+    question: "Will I need chains on US-50 next Saturday?"
+    ground_truth: "Cannot forecast. The tools report current conditions only; right now there are no controls, but Saturday cannot be predicted from this data."
+    expect:
+      contains_any: [["current", "forecast", "can't predict", "cannot predict"]]
+
+  - id: quiet-route-oakland-sj
+    tool: check_route
+    question: "Anything on 880 between Oakland and San Jose?"
+    ground_truth: "Clear: no incidents, closures, or chain controls on the I-880 corridor."
+    expect:
+      not_contains: ["full closure", "chains required"]
+
+  - id: quiet-sr1-bigsur
+    tool: check_route
+    question: "Is Highway 1 open through Big Sur?"
+    ground_truth: "Yes - no closures or incidents on the SR-1 Big Sur corridor."
+    expect:
+      not_contains: ["closed at", "full closure"]

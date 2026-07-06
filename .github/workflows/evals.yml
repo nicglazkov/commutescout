@@ -1,0 +1,38 @@
+name: Evals
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev,evals]"
+      - name: Run evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python evals/run_evals.py --report EVALS.md
+      - name: Upload raw results
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: evals/results/
+      - name: Commit scorecard
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add EVALS.md evals/results/badge.json
+          git diff --cached --quiet || git commit -m "docs: update eval scorecard"
+          git push

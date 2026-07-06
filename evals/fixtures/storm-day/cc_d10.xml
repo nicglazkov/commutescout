@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<data>
+	<cc>
+		<index>10-ALP-88-5.0-E-201</index>
+		<location>
+			<district>10</district>
+			<locationName>Carson Pass</locationName>
+			<nearbyPlace>Kirkwood</nearbyPlace>
+			<longitude>-119.989</longitude>
+			<latitude>38.694</latitude>
+			<direction>East</direction>
+			<county>Alpine</county>
+			<route>SR-88</route>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-2</status>
+			<statusDescription>Chains are required on all vehicles except four wheel drive vehicles with snow tires on all four wheels.</statusDescription>
+		</statusData>
+	</cc>
+
+	<cc>
+		<index>10-AMA-88-40.0-E-202</index>
+		<location>
+			<district>10</district>
+			<locationName>Kirkwood Meadows</locationName>
+			<nearbyPlace>Kirkwood</nearbyPlace>
+			<longitude>-120.07</longitude>
+			<latitude>38.7</latitude>
+			<direction>East</direction>
+			<county>Amador</county>
+			<route>SR-88</route>
+		</location>
+		<inService>true</inService>
+		<statusData>
+			<statusTimestamp>
+				<statusDate>2026-07-05</statusDate>
+				<statusTime>06:15:00</statusTime>
+			</statusTimestamp>
+			<status>R-2</status>
+			<statusDescription>Chains are required on all vehicles except four wheel drive vehicles with snow tires on all four wheels.</statusDescription>
+		</statusData>
+	</cc>
+
+</data>

@@ -1,0 +1,6 @@
+{
+  "scenario": "quiet-day",
+  "synthetic": true,
+  "description": "Summer day: no chains, one US-101 lane closure, minor incidents, one fully contained fire far from highways.",
+  "built_by": "evals/build_fixtures.py"
+}

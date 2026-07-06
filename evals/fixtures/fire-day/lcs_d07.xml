@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<data>
+	<lcs>
+		<index>F1AB-0001-fire</index>
+		<location>
+			<travelFlowDirection>North</travelFlowDirection>
+			<begin>
+				<beginDistrict>7</beginDistrict>
+				<beginLocationName>Grapevine</beginLocationName>
+				<beginNearbyPlace>Lebec</beginNearbyPlace>
+				<beginLongitude>-118.92</beginLongitude>
+				<beginLatitude>34.93</beginLatitude>
+				<beginCounty>Los Angeles</beginCounty>
+				<beginRoute>I-5</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-118.94</endLongitude>
+				<endLatitude>34.98</endLatitude>
+				<endRoute>I-5</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>F1AB</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>true</isClosureEndIndefinite>
+			</closureTimestamp>
+			<typeOfClosure>Full</typeOfClosure>
+			<typeOfWork>Emergency Work</typeOfWork>
+			<lanesClosed>All</lanesClosed>
+			<code1097>
+				<isCode1097>true</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch>1783000000</code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+	<lcs>
+		<index>F2CD-0002-fire</index>
+		<location>
+			<travelFlowDirection>South</travelFlowDirection>
+			<begin>
+				<beginDistrict>7</beginDistrict>
+				<beginLocationName>Frazier Mountain Park Rd</beginLocationName>
+				<beginNearbyPlace>Lebec</beginNearbyPlace>
+				<beginLongitude>-118.86</beginLongitude>
+				<beginLatitude>34.844</beginLatitude>
+				<beginCounty>Los Angeles</beginCounty>
+				<beginRoute>I-5</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-118.85</endLongitude>
+				<endLatitude>34.82</endLatitude>
+				<endRoute>I-5</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>F2CD</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>true</isClosureEndIndefinite>
+			</closureTimestamp>
+			<typeOfClosure>Full</typeOfClosure>
+			<typeOfWork>Emergency Work</typeOfWork>
+			<lanesClosed>All</lanesClosed>
+			<code1097>
+				<isCode1097>true</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch>1783000000</code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+</data>

@@ -1,0 +1,47 @@
+{
+ "objectIdFieldName": "OBJECTID",
+ "features": [
+  {
+   "attributes": {
+    "IncidentName": "VULCAN",
+    "IncidentSize": 48213,
+    "PercentContained": 15,
+    "FireDiscoveryDateTime": 1783000000000,
+    "UniqueFireIdentifier": "2026-CAKRN-031001",
+    "IncidentTypeCategory": "WF"
+   },
+   "geometry": {
+    "x": -118.96,
+    "y": 34.955
+   }
+  },
+  {
+   "attributes": {
+    "IncidentName": "CREEK",
+    "IncidentSize": 3200,
+    "PercentContained": 85,
+    "FireDiscoveryDateTime": 1783000000000,
+    "UniqueFireIdentifier": "2026-CAFKU-031002",
+    "IncidentTypeCategory": "WF"
+   },
+   "geometry": {
+    "x": -119.75,
+    "y": 36.78
+   }
+  },
+  {
+   "attributes": {
+    "IncidentName": "REMOTE",
+    "IncidentSize": 12000,
+    "PercentContained": 40,
+    "FireDiscoveryDateTime": 1783000000000,
+    "UniqueFireIdentifier": "2026-CASNF-031003",
+    "IncidentTypeCategory": "WF"
+   },
+   "geometry": {
+    "x": -118.5,
+    "y": 37.0
+   }
+  }
+ ]
+}

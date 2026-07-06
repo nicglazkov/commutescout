@@ -1,0 +1,6 @@
+{
+  "scenario": "storm-day",
+  "synthetic": true,
+  "description": "Sierra storm: R-2 US-50 Twin Bridges to Meyers, R-1/R-2 I-80, R-2 SR-88/SR-89, SR-89 full closure at Emerald Bay, spinout incidents.",
+  "built_by": "evals/build_fixtures.py"
+}

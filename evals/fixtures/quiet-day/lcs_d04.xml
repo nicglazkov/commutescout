@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<data>
+	<lcs>
+		<index>Q1AB-0001-quiet</index>
+		<location>
+			<travelFlowDirection>South</travelFlowDirection>
+			<begin>
+				<beginDistrict>4</beginDistrict>
+				<beginLocationName>Trimble Rd</beginLocationName>
+				<beginNearbyPlace>San Jose</beginNearbyPlace>
+				<beginLongitude>-121.925</beginLongitude>
+				<beginLatitude>37.387</beginLatitude>
+				<beginCounty>Santa Clara</beginCounty>
+				<beginRoute>US-101</beginRoute>
+				<beginMilepost>10.0</beginMilepost>
+			</begin>
+			<end>
+				<endLongitude>-121.918</endLongitude>
+				<endLatitude>37.37</endLatitude>
+				<endRoute>US-101</endRoute>
+				<endMilepost>14.0</endMilepost>
+			</end>
+		</location>
+		<closure>
+			<closureID>Q1AB</closureID>
+			<closureTimestamp>
+				<closureStartEpoch>1783000000</closureStartEpoch>
+				<closureEndEpoch>1900000000</closureEndEpoch>
+				<isClosureEndIndefinite>false</isClosureEndIndefinite>
+			</closureTimestamp>
+			<typeOfClosure>Lane</typeOfClosure>
+			<typeOfWork>Pavement Repair</typeOfWork>
+			<lanesClosed>1, RShoulder</lanesClosed>
+			<code1097>
+				<isCode1097>true</isCode1097>
+				<code1097Timestamp>
+					<code1097Epoch>1783000000</code1097Epoch>
+				</code1097Timestamp>
+			</code1097>
+			<code1098>
+				<isCode1098>false</isCode1098>
+			</code1098>
+			<code1022>
+				<isCode1022>false</isCode1022>
+			</code1022>
+		</closure>
+	</lcs>
+
+</data>

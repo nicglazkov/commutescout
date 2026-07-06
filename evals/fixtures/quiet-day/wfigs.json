@@ -1,0 +1,19 @@
+{
+ "objectIdFieldName": "OBJECTID",
+ "features": [
+  {
+   "attributes": {
+    "IncidentName": "LOST",
+    "IncidentSize": 7834,
+    "PercentContained": 100,
+    "FireDiscoveryDateTime": 1783000000000,
+    "UniqueFireIdentifier": "2026-CAKRN-025007",
+    "IncidentTypeCategory": "WF"
+   },
+   "geometry": {
+    "x": -118.9,
+    "y": 36.5
+   }
+  }
+ ]
+}

@@ -1,0 +1,189 @@
+# Sierra storm day (synthetic; formats copied from real feeds).
+# Ground truth: US-50 R-1 at Pollock Pines, R-2 Twin Bridges and Meyers.
+# I-80 R-1 at Baxter, R-2 at Kingvale and Donner Lake Interchange.
+# SR-89 R-2 at Tahoe City Wye and FULL closure at Emerald Bay (emergency).
+# SR-88 R-2 at Carson Pass and Kirkwood Meadows.
+# I-80 lane closure at Baxter (winter ops). US-50 Placerville tree work is
+# scheduled but NOT established. Spinout collisions on I-80 and US-50.
+# No wildfires.
+scenario: storm-day
+questions:
+  - id: storm-chains-us50
+    tool: get_chain_controls
+    question: "Are chains required on US-50 right now?"
+    ground_truth: "Yes. R-2 from Twin Bridges to Meyers (chains required except 4WD/AWD with snow tires), and R-1 at Pollock Pines."
+    expect:
+      contains: ["R-2", "Twin Bridges", "Meyers"]
+
+  - id: storm-chains-i80
+    tool: get_chain_controls
+    question: "What are the chain controls on I-80 over Donner?"
+    ground_truth: "R-2 at Kingvale and Donner Lake Interchange, R-1 at Baxter."
+    expect:
+      contains: ["R-2", "Kingvale"]
+
+  - id: storm-chains-tahoe
+    tool: get_chain_controls
+    question: "Do I need chains to get to Tahoe today?"
+    ground_truth: "Yes on every route: I-80 R-2 (Kingvale, Donner Lake), US-50 R-2 (Twin Bridges to Meyers), SR-88 R-2 (Carson Pass), SR-89 R-2."
+    expect:
+      contains: ["R-2"]
+
+  - id: storm-chains-88
+    tool: get_chain_controls
+    question: "Chain status on SR-88 over Carson Pass?"
+    ground_truth: "R-2 at Carson Pass and Kirkwood Meadows."
+    expect:
+      contains: ["R-2", "Carson Pass"]
+
+  - id: storm-chains-4wd
+    tool: get_chain_controls
+    question: "I have a 4WD truck with snow tires on all four wheels. Do I need to put chains on for US-50?"
+    ground_truth: "No chains needed under R-2: chains are required on all vehicles EXCEPT four wheel drive with snow tires on all four wheels. Carry them anyway."
+    expect:
+      contains: ["R-2"]
+      contains_any: [["except", "exempt", "don't need", "do not need"]]
+
+  - id: storm-chains-r2-meaning
+    tool: get_chain_controls
+    question: "US-50 shows R-2. What does that actually mean for a regular sedan?"
+    ground_truth: "A 2WD sedan must put on chains. R-2 exempts only 4WD/AWD with snow tires on all four wheels."
+    expect:
+      contains: ["chains"]
+
+  - id: storm-sr89-closure
+    tool: get_lane_closures
+    question: "Is SR-89 open around Emerald Bay?"
+    ground_truth: "No. SR-89 has a FULL emergency closure at Emerald Bay, end time indefinite."
+    expect:
+      contains: ["Emerald Bay"]
+      contains_any: [["full", "closed"]]
+
+  - id: storm-i80-closures
+    tool: get_lane_closures
+    question: "Any Caltrans closures on I-80 right now?"
+    ground_truth: "One lane closure at Baxter (winter operations, lane 1). Not a full closure."
+    expect:
+      contains: ["Baxter"]
+      not_contains: ["full closure of I-80"]
+
+  - id: storm-placerville-not-established
+    tool: get_lane_closures
+    question: "Is there a closure on US-50 at Placerville right now?"
+    ground_truth: "No. Tree work at Placerville is scheduled but not established (no CHP 1097), so nothing is in place."
+    expect:
+      not_contains: ["is in place at Placerville"]
+
+  - id: storm-route-sac-tahoe
+    tool: check_route
+    question: "I'm driving from Sacramento to South Lake Tahoe this morning. What am I in for?"
+    ground_truth: "Chain controls: R-1 Pollock Pines, then R-2 Twin Bridges through Meyers; a collision near Echo Summit. No closures on US-50 itself."
+    expect:
+      contains: ["R-2", "Twin Bridges"]
+
+  - id: storm-route-sac-reno
+    tool: check_route
+    question: "Sacramento to Reno on I-80 - what's active along the way?"
+    ground_truth: "R-1 at Baxter, R-2 at Kingvale and Donner Lake Interchange; a lane closure at Baxter (winter ops); collisions near Donner Pass Rd and a hazard at Kingvale; a minor collision at Douglas Blvd near Roseville."
+    expect:
+      contains: ["R-2"]
+      contains_any: [["Kingvale", "Donner"]]
+
+  - id: storm-route-reno-sac
+    tool: check_route
+    question: "Heading home from Reno to Sacramento - what will I hit first?"
+    ground_truth: "Coming from Reno, the Donner-area controls come first (R-2 Donner Lake Interchange, then Kingvale), then Baxter (R-1 and the lane closure), then the minor Douglas Blvd collision near Roseville."
+    expect:
+      contains: ["R-2"]
+
+  - id: storm-incidents-i80
+    tool: get_incidents
+    question: "Any spinouts or crashes on I-80 in the mountains?"
+    ground_truth: "Yes: a collision at Donner Pass Rd (westbound) and a traffic hazard at Kingvale (eastbound)."
+    expect:
+      contains_any: [["Donner", "Kingvale"]]
+
+  - id: storm-incidents-us50
+    tool: get_incidents
+    question: "Anything on US-50 near Echo Summit?"
+    ground_truth: "Yes, a no-injury collision on US-50 eastbound at Echo Summit."
+    expect:
+      contains: ["Echo Summit"]
+
+  - id: storm-sr17
+    tool: get_chain_controls
+    question: "Do I need chains on Highway 17 to Santa Cruz?"
+    ground_truth: "No. There are no chain controls on SR-17; controls are only on the Sierra routes."
+    expect:
+      not_contains: ["R-2 on SR-17", "chains are required on SR-17"]
+
+  - id: storm-which-route-tahoe
+    tool: check_route
+    question: "Which is the better route to South Lake Tahoe right now, US-50 or going around via I-80?"
+    ground_truth: "Both have R-2 controls; US-50 is direct (R-2 Twin Bridges to Meyers). I-80 also has R-2 plus a lane closure at Baxter. Either way chains or 4WD+snow tires are needed; no full closures on either."
+    expect:
+      contains: ["R-2"]
+
+  - id: storm-fires
+    tool: get_wildfires
+    question: "Any wildfires burning near the Sierra highways?"
+    ground_truth: "No active wildfires anywhere in the feed."
+    expect:
+      not_contains: ["VULCAN", "acres burning"]
+
+  - id: storm-sr89-tahoe-city
+    tool: get_chain_controls
+    question: "Chains on SR-89 near Tahoe City?"
+    ground_truth: "Yes, R-2 at the Tahoe City Wye."
+    expect:
+      contains: ["R-2"]
+
+  - id: storm-kirkwood
+    tool: check_route
+    question: "Getting to Kirkwood from Jackson on 88 - conditions?"
+    ground_truth: "R-2 at Carson Pass and Kirkwood Meadows on SR-88. No closures on SR-88."
+    expect:
+      contains: ["R-2"]
+
+  - id: storm-truckee-incidents
+    tool: get_incidents
+    question: "What's CHP dealing with around Truckee?"
+    ground_truth: "A collision at Donner Pass Rd and a traffic hazard at Kingvale (both logged in the Truckee area)."
+    expect:
+      contains_any: [["Donner", "Kingvale"]]
+
+  - id: storm-i80-open
+    tool: get_lane_closures
+    question: "Is I-80 fully closed over the summit?"
+    ground_truth: "No. I-80 is open with R-2 chain controls and one lane closed at Baxter; there is no full closure."
+    expect:
+      not_contains: ["I-80 is fully closed", "yes, fully closed"]
+
+  - id: storm-lowest-elevation-control
+    tool: get_chain_controls
+    question: "Where do the chain controls start heading up US-50 from Sacramento?"
+    ground_truth: "First control going east is R-1 at Pollock Pines, then R-2 at Twin Bridges."
+    expect:
+      contains: ["Pollock Pines"]
+
+  - id: storm-sac-local
+    tool: get_incidents
+    question: "Anything unusual on Sacramento surface streets?"
+    ground_truth: "One traffic hazard at Jackson Rd / Mayhew Rd in East Sacramento."
+    expect:
+      contains: ["Jackson"]
+
+  - id: storm-emerald-bay-why
+    tool: get_lane_closures
+    question: "Why is the road closed at Emerald Bay?"
+    ground_truth: "SR-89 at Emerald Bay has a full emergency closure (winter emergency work, e.g. avalanche control), indefinite end."
+    expect:
+      contains: ["Emerald Bay"]
+      contains_any: [["emergency", "full"]]
+
+  - id: storm-freshness
+    tool: get_chain_controls
+    question: "Give me chain conditions for I-80 and tell me when this data was last updated."
+    ground_truth: "R-1 Baxter, R-2 Kingvale and Donner Lake Interchange, with a data-as-of timestamp mentioned."
+    expect:
+      contains: ["R-2"]
