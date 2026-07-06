@@ -4,7 +4,7 @@
   <p><b>Live California road conditions for AI assistants, over MCP.</b></p>
 
 [![CI](https://github.com/nicglazkov/ca-roads-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/nicglazkov/ca-roads-mcp/actions/workflows/ci.yml)
-[![Evals](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fnicglazkov%2Fca-roads-mcp%2Fmain%2Fevals%2Fresults%2Fbadge.json)](EVALS.md)
+[![Evals](evals/results/badge.svg)](EVALS.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 </div>
