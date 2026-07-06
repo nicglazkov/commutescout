@@ -1,0 +1,390 @@
+"""MCP server: live California road conditions.
+
+Five tools over the ca_roads feed layer, served over stdio (local dev) or
+streamable HTTP (hosted). Docstrings are written for the LLM consuming the
+tools: they say what the data is, how fresh it is, and where it falls short.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import os
+
+from mcp.server.fastmcp import FastMCP
+
+from ca_roads.dedupe import dedupe
+from ca_roads.feeds import chains as chains_feed
+from ca_roads.feeds import chp as chp_feed
+from ca_roads.feeds import lcs as lcs_feed
+from ca_roads.feeds import wildfire as wildfire_feed
+from ca_roads.geo import haversine_meters
+from ca_roads.roaddata import RoadData
+from ca_roads_mcp import corridors as corr
+from ca_roads_mcp.routes import matches_route, normalize_route
+from ca_roads_mcp.serialize import (
+    chain_control_dict,
+    closure_dict,
+    incident_dict,
+    source_status,
+    wildfire_dict,
+)
+
+INSTRUCTIONS = """\
+Live California road conditions from CHP (incidents), Caltrans (lane
+closures and chain controls), and WFIGS (wildfires). All data is official,
+public, and read-only. Every response carries a `sources` list with a
+`data_as_of` timestamp per source - always relay meaningful staleness or
+feed errors to the user. This service reports CURRENT conditions only; it
+cannot forecast. Remind users to verify before they drive (dial 511 or check
+quickmap.dot.ca.gov). Not affiliated with any government agency.
+"""
+
+mcp = FastMCP("CA Roads", instructions=INSTRUCTIONS)
+
+_road: RoadData | None = None
+
+
+def get_road() -> RoadData:
+    global _road
+    if _road is None:
+        _road = RoadData()
+    return _road
+
+
+MILES_PER_METER = 1 / 1609.344
+
+
+@mcp.tool()
+async def check_route(from_place: str, to_place: str) -> dict:
+    """Check current conditions along a major California highway corridor.
+
+    The flagship trip-check tool: give it a start and end place (city, town,
+    or landmark, e.g. "Sacramento" -> "Reno") and it returns everything
+    active along that corridor right now - CHP incidents, lane closures
+    physically in place, chain controls, and wildfires within ~10 miles -
+    ordered by position along the route, plus a plain-language summary.
+
+    Covers a curated set of major corridors (I-80 Sacramento-Reno, US-50 to
+    South Lake Tahoe, I-5, US-101, SR-17, SR-99, SR-1, I-15 to Vegas, Bay
+    Area freeways, Tahoe-area routes). It is NOT a general router: if the
+    places don't match a known corridor, the response lists the corridors it
+    does cover; fall back to get_incidents / get_lane_closures /
+    get_chain_controls with route filters for anything else.
+
+    Freshness: CHP incidents refresh about once a minute; closures, chain
+    controls, and fires are on a 5-minute cache. Current conditions only -
+    this cannot forecast tomorrow's weather or closures.
+    """
+    match = corr.resolve_corridor(from_place, to_place)
+    if match is None:
+        return {
+            "error": (
+                f"No corridor found covering '{from_place}' to '{to_place}'. "
+                "This tool covers a curated set of major California corridors."
+            ),
+            "supported_corridors": corr.corridor_names(),
+        }
+    corridor = match.corridor
+    districts = corr.corridor_districts(corridor)
+
+    road = get_road()
+    chp_r, lcs_r, cc_r, fire_r = await asyncio.gather(
+        road.incidents(),
+        road.lane_closures(districts=districts),
+        road.chain_controls(districts=districts),
+        road.wildfires(),
+    )
+
+    events = dedupe(
+        [chp_feed.to_event(i) for i in chp_r.records]
+        + [lcs_feed.to_event(c) for c in lcs_r.records]
+        + [chains_feed.to_event(c) for c in cc_r.records]
+        + [wildfire_feed.to_event(f) for f in fire_r.records]
+    )
+    placed = corr.events_on_corridor(corridor, events, match.reversed)
+
+    items = []
+    counts = {"incidents": 0, "closures": 0, "chain_controls": 0, "wildfires": 0}
+    max_chain = ""
+    full_closures = 0
+    for p in placed:
+        e = p.event
+        record = e.record
+        if e.source == "chp":
+            kind = "incident"
+            counts["incidents"] += 1
+            detail = incident_dict(record)
+        elif e.source == "lcs":
+            kind = "lane_closure"
+            counts["closures"] += 1
+            if record.type_of_closure.lower() == "full":
+                full_closures += 1
+            detail = closure_dict(record)
+        elif e.source == "chains":
+            kind = "chain_control"
+            counts["chain_controls"] += 1
+            max_chain = max(max_chain, record.status)
+            detail = chain_control_dict(record)
+        else:
+            kind = "wildfire"
+            counts["wildfires"] += 1
+            detail = wildfire_dict(record)
+        items.append(
+            {
+                "kind": kind,
+                "mile_along_route": round(p.along_m * MILES_PER_METER, 1),
+                "summary": e.summary,
+                "detail": detail,
+            }
+        )
+
+    summary_bits = []
+    if counts["chain_controls"]:
+        summary_bits.append(
+            f"{counts['chain_controls']} chain control point(s) active, "
+            f"strictest level {max_chain}"
+        )
+    if full_closures:
+        summary_bits.append(f"{full_closures} FULL closure(s) in place")
+    lane_only = counts["closures"] - full_closures
+    if lane_only > 0:
+        summary_bits.append(f"{lane_only} lane closure(s) in place")
+    if counts["incidents"]:
+        summary_bits.append(f"{counts['incidents']} active CHP incident(s)")
+    if counts["wildfires"]:
+        summary_bits.append(
+            f"{counts['wildfires']} wildfire(s) within ~10 miles of the route"
+        )
+    summary = (
+        f"{corridor.name}, {from_place} to {to_place}: "
+        + ("; ".join(summary_bits) if summary_bits else "no active incidents, "
+           "closures, chain controls, or nearby wildfires reported")
+        + "."
+    )
+
+    return {
+        "corridor": corridor.name,
+        "direction": f"{from_place} -> {to_place}",
+        "summary": summary,
+        "events": items,
+        "sources": [source_status(r) for r in (chp_r, lcs_r, cc_r, fire_r)],
+    }
+
+
+@mcp.tool()
+async def get_incidents(
+    highway: str | None = None,
+    area: str | None = None,
+    center: str | None = None,
+    radius_km: float = 40,
+) -> dict:
+    """Live CHP traffic incidents statewide, optionally filtered.
+
+    Data: the California Highway Patrol statewide computer-aided dispatch
+    feed - collisions, traffic hazards, disabled vehicles, closures as CHP
+    logs them. Refreshes about once a minute; incidents disappear when CHP
+    closes the log. Fetched live on every call.
+
+    Filters (combinable):
+    - highway: a route like "I-80", "US 50", "17", "Hwy 99". Matches
+      incidents whose location text mentions that route.
+    - area: substring match on the CHP dispatch area name (e.g. "Truckee",
+      "East Sac", "San Jose"). These are CHP communication-center areas, not
+      counties.
+    - center: "lat,lon" with radius_km - incidents within that circle.
+
+    Limits: locations are free-text from dispatchers; a few incidents lack
+    usable coordinates and are omitted. No history - current logs only.
+    """
+    result = await get_road().incidents()
+    records = result.records
+    canonical = normalize_route(highway) if highway else None
+    if canonical:
+        records = [i for i in records if matches_route(i.location, canonical)]
+    if area:
+        needle = area.lower()
+        records = [i for i in records if needle in i.area.lower()]
+    if center:
+        try:
+            lat_s, lon_s = center.split(",")
+            lat, lon = float(lat_s), float(lon_s)
+        except ValueError:
+            return {"error": "center must be 'lat,lon', e.g. '38.58,-121.49'"}
+        records = [
+            i
+            for i in records
+            if haversine_meters(lat, lon, i.lat, i.lon) <= radius_km * 1000
+        ]
+    return {
+        "count": len(records),
+        "filters": {"highway": canonical, "area": area, "center": center},
+        "incidents": [incident_dict(i) for i in records],
+        "sources": [source_status(result)],
+    }
+
+
+@mcp.tool()
+async def get_lane_closures(
+    route: str | None = None, district: int | None = None
+) -> dict:
+    """Caltrans lane and road closures physically in place RIGHT NOW.
+
+    Data: the Caltrans Lane Closure System (LCS). Only closures that crews
+    have actually established (CHP code 1097) and not yet picked up are
+    returned - scheduled-but-not-started closures are excluded, so this is
+    "what is blocking lanes now", not a construction calendar.
+    Refresh: 5-minute cache over per-district Caltrans feeds.
+
+    Filters: route (e.g. "I-80", "US 101", "1"); district (Caltrans district
+    1-12, e.g. 3 = Sacramento/Tahoe, 4 = Bay Area, 7 = Los Angeles).
+
+    Each record says whether it is a FULL closure and which lanes are
+    closed. Shoulder-only work is excluded.
+    """
+    districts = [district] if district else None
+    result = await get_road().lane_closures(districts=districts)
+    records = result.records
+    canonical = normalize_route(route) if route else None
+    if canonical:
+        records = [c for c in records if c.route == canonical]
+    return {
+        "count": len(records),
+        "filters": {"route": canonical, "district": district},
+        "closures": [closure_dict(c) for c in records],
+        "sources": [source_status(result)],
+    }
+
+
+@mcp.tool()
+async def get_chain_controls(route: str | None = None) -> dict:
+    """Current chain-control requirements on California mountain highways.
+
+    Data: Caltrans chain-control status for fixed checkpoints on mountain
+    routes (I-80 Donner, US-50 Echo Summit, SR-88, SR-89, and others).
+    Levels: R-1 = chains OR snow tires required; R-2 = chains required
+    except 4WD/AWD with snow tires on all four; R-3 = chains on ALL vehicles
+    (rare, usually precedes closure). Refresh: 5-minute cache.
+
+    Filter: route (e.g. "80", "US-50", "SR-88").
+
+    Off-season (roughly May-October) there are usually no controls anywhere;
+    the response says so explicitly rather than returning an empty list.
+    Chain requirements can change hour to hour in storms - tell the user the
+    data_as_of time and to carry chains anyway when snow is possible.
+    """
+    result = await get_road().chain_controls()
+    records = result.records
+    canonical = normalize_route(route) if route else None
+    if canonical:
+        records = [c for c in records if c.route == canonical]
+    payload = {
+        "count": len(records),
+        "filters": {"route": canonical},
+        "chain_controls": [chain_control_dict(c) for c in records],
+        "sources": [source_status(result)],
+    }
+    if not records and result.ok:
+        payload["message"] = (
+            "No chain controls active "
+            + (f"on {canonical}" if canonical else "anywhere in California")
+            + " right now."
+        )
+    return payload
+
+
+@mcp.tool()
+async def get_wildfires(near_route: str | None = None) -> dict:
+    """Active California wildfires, flagged when close to a major highway.
+
+    Data: the interagency WFIGS current-wildfire feed (NIFC) - name, size in
+    acres, percent contained, discovery date. Points are each fire's ORIGIN,
+    not its perimeter: a large fire can affect roads far from this point.
+    Refresh: 5-minute cache; size/containment typically update once or twice
+    a day.
+
+    Filter: near_route (e.g. "I-5", "101") - only fires within ~10 miles of
+    that highway's corridor line. Without it, every active CA fire is
+    returned, each carrying a `near_highways` list of major corridors within
+    ~10 miles (empty = not near a covered major highway; it may still affect
+    local roads).
+
+    This tool does NOT know about road closures caused by fires - cross-check
+    get_incidents and get_lane_closures for the affected area.
+    """
+    result = await get_road().wildfires()
+    canonical = normalize_route(near_route) if near_route else None
+    route_corridors = (
+        [c for c in corr.CORRIDORS if canonical in c.routes] if canonical else []
+    )
+    if canonical and not route_corridors:
+        return {
+            "error": f"No corridor line available for {canonical}; call without "
+            "near_route and check the near_highways field instead.",
+            "sources": [source_status(result)],
+        }
+
+    fires = []
+    for f in result.records:
+        near = []
+        for c in corr.CORRIDORS:
+            dist, _ = corr.distance_to_corridor(c, f.lat, f.lon)
+            if dist <= corr.FIRE_BUFFER_METERS:
+                near.append(c.routes[0])
+        if canonical and canonical not in near:
+            continue
+        d = wildfire_dict(f)
+        d["near_highways"] = sorted(set(near))
+        fires.append(d)
+    return {
+        "count": len(fires),
+        "filters": {"near_route": canonical},
+        "wildfires": fires,
+        "sources": [source_status(result)],
+    }
+
+
+@mcp.prompt()
+def road_trip_check(from_place: str, to_place: str) -> str:
+    """Check road conditions for a trip between two California places."""
+    return f"""\
+I'm about to drive from {from_place} to {to_place}. Check current road
+conditions for this trip:
+
+1. Call check_route with from_place="{from_place}" and to_place="{to_place}".
+2. If the corridor is covered, summarize what matters for a driver, in order
+   along the route: chain controls first (say what level and what vehicles
+   need), then full closures, then lane closures and incidents that could
+   cause delays, then any wildfires near the route.
+3. If check_route doesn't cover the trip, fall back to get_incidents,
+   get_lane_closures, and get_chain_controls filtered to the highways the
+   trip would use.
+4. Report the data_as_of times and any source errors so I know how fresh
+   this is. This is current status, not a forecast.
+5. Close with: conditions change - verify before driving (511 or
+   quickmap.dot.ca.gov).
+"""
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="CA Roads MCP server")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "http"],
+        default="stdio",
+        help="stdio for local use, http for hosted streamable HTTP",
+    )
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8080)))
+    args = parser.parse_args()
+    if args.transport == "http":
+        mcp.settings.host = args.host
+        mcp.settings.port = args.port
+        mcp.settings.stateless_http = True
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
