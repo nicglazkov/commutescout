@@ -21,6 +21,7 @@ from ca_roads.feeds import wildfire as wildfire_feed
 from ca_roads.geo import haversine_meters
 from ca_roads.roaddata import RoadData
 from ca_roads_mcp import corridors as corr
+from ca_roads_mcp import regions as reg
 from ca_roads_mcp.routes import matches_route, normalize_route
 from ca_roads_mcp.serialize import (
     chain_control_dict,
@@ -64,6 +65,27 @@ def parse_center(center: str) -> tuple[float, float] | None:
 
 
 CENTER_FORMAT_ERROR = "center must be 'lat,lon', e.g. '38.58,-121.49'"
+
+
+def incident_severity(log_type: str) -> int:
+    """Sort key for regional reports: worst first."""
+    lowered = log_type.lower()
+    if "1144" in lowered or "fatal" in lowered:
+        return 0
+    if any(code in lowered for code in ("1179", "1181", "20001")):
+        return 1  # injury collisions
+    if any(code in lowered for code in ("1182", "1183")) or "collision" in lowered:
+        return 2
+    if "fire" in lowered:
+        return 3
+    if "closure" in lowered:
+        return 4
+    return 5  # hazards, disabled vehicles, everything else
+
+
+REGION_INCIDENT_CAP = 15
+REGION_CLOSURE_CAP = 12
+REGION_FIRE_CAP = 10
 
 
 @mcp.tool()
@@ -183,6 +205,118 @@ async def check_route(from_place: str, to_place: str) -> dict:
         "summary": summary,
         "events": items,
         "route_geometry": [[lat, lon] for lat, lon in waypoints],
+        "sources": [source_status(r) for r in (chp_r, lcs_r, cc_r, fire_r)],
+    }
+
+
+@mcp.tool()
+async def check_region(region: str) -> dict:
+    """Full current-conditions report for a California region.
+
+    Use this for area-scale questions ("how is the Bay Area?", "what's
+    happening in SoCal?") instead of stitching together point queries. It
+    sweeps every source over the whole region at once: CHP incidents
+    (severity-sorted, worst first), lane closures in place (full closures
+    called out), chain controls, and wildfires inside the region.
+
+    Regions: Bay Area, Sacramento metro, Tahoe/Sierra, Central Valley,
+    Southern California, San Diego, Central Coast, North State. An
+    unrecognized region name returns the list.
+
+    Large regions are capped to the most severe items; the counts are
+    always exact and the response says when a list was truncated.
+    Freshness: CHP ~1/min fetched live, everything else 5-minute cache.
+    """
+    resolved = reg.resolve_region(region)
+    if resolved is None:
+        return {
+            "error": f"Unknown region '{region}'.",
+            "supported_regions": reg.region_names(),
+        }
+
+    road = get_road()
+    chp_r, lcs_r, cc_r, fire_r = await asyncio.gather(
+        road.incidents(),
+        road.lane_closures(districts=list(resolved.districts)),
+        road.chain_controls(districts=list(resolved.districts)),
+        road.wildfires(),
+    )
+
+    incidents = sorted(
+        (i for i in chp_r.records if resolved.contains(i.lat, i.lon)),
+        key=lambda i: incident_severity(i.log_type),
+    )
+    closures = [
+        c for c in lcs_r.records if resolved.contains(c.begin_lat, c.begin_lon)
+    ]
+    closures.sort(key=lambda c: c.type_of_closure.lower() != "full")
+    chains = [c for c in cc_r.records if resolved.contains(c.lat, c.lon)]
+    fires = [f for f in fire_r.records if resolved.contains(f.lat, f.lon)]
+    fires.sort(key=lambda f: -(f.size_acres or 0))
+
+    full_closures = sum(1 for c in closures if c.type_of_closure.lower() == "full")
+    injury = sum(1 for i in incidents if incident_severity(i.log_type) <= 1)
+    max_chain = max((c.status for c in chains), default="")
+
+    notes = []
+    if len(incidents) > REGION_INCIDENT_CAP:
+        notes.append(
+            f"showing the {REGION_INCIDENT_CAP} most severe of "
+            f"{len(incidents)} incidents"
+        )
+    if len(closures) > REGION_CLOSURE_CAP:
+        notes.append(
+            f"showing {REGION_CLOSURE_CAP} of {len(closures)} closures "
+            "(full closures first)"
+        )
+    if len(fires) > REGION_FIRE_CAP:
+        notes.append(f"showing the {REGION_FIRE_CAP} largest of {len(fires)} fires")
+
+    bits = []
+    if incidents:
+        bits.append(
+            f"{len(incidents)} active CHP incident(s)"
+            + (f", {injury} involving injuries" if injury else "")
+        )
+    if closures:
+        detail = f", {full_closures} FULL" if full_closures else ""
+        bits.append(f"{len(closures)} lane closure(s) in place{detail}")
+    if chains:
+        bits.append(f"{len(chains)} chain control(s) active, strictest {max_chain}")
+    if fires:
+        bits.append(f"{len(fires)} active wildfire(s) in the region")
+    summary = f"{resolved.name}: " + (
+        "; ".join(bits) if bits else "no active incidents, closures, chain "
+        "controls, or wildfires reported"
+    ) + "."
+
+    fire_dicts = []
+    for f in fires[:REGION_FIRE_CAP]:
+        d = wildfire_dict(f)
+        d["near_highways"] = sorted({
+            c.routes[0]
+            for c in corr.CORRIDORS
+            if corr.distance_to_corridor(c, f.lat, f.lon)[0] <= corr.FIRE_BUFFER_METERS
+        })
+        fire_dicts.append(d)
+
+    return {
+        "region": resolved.name,
+        "summary": summary,
+        "counts": {
+            "incidents": len(incidents),
+            "injury_incidents": injury,
+            "lane_closures": len(closures),
+            "full_closures": full_closures,
+            "chain_controls": len(chains),
+            "wildfires": len(fires),
+        },
+        "filters": {"region": resolved.id},
+        "incidents": [incident_dict(i) for i in incidents[:REGION_INCIDENT_CAP]],
+        "closures": [closure_dict(c) for c in closures[:REGION_CLOSURE_CAP]],
+        "chain_controls": [chain_control_dict(c) for c in chains],
+        "wildfires": fire_dicts,
+        "notes": notes,
         "sources": [source_status(r) for r in (chp_r, lcs_r, cc_r, fire_r)],
     }
 
