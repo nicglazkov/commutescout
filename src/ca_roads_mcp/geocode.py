@@ -15,7 +15,11 @@ to the fallback coordinates.
 from __future__ import annotations
 
 import asyncio
+import csv
+import re
 import time
+from collections import OrderedDict
+from importlib.resources import files
 
 import httpx
 
@@ -27,7 +31,70 @@ CALIFORNIA_VIEWBOX = "-124.6,42.1,-114.0,32.4"
 TIMEOUT_SECONDS = 6.0
 THROTTLE_SECONDS = 1.1  # tests set this to 0
 
-_cache: dict[str, tuple[float, float, str] | None] = {}
+_CACHE_MAX = 4096
+_cache: OrderedDict[str, tuple[float, float, str] | None] = OrderedDict()
+
+
+def _cache_put(key: str, value) -> None:
+    _cache[key] = value
+    _cache.move_to_end(key)
+    while len(_cache) > _CACHE_MAX:
+        _cache.popitem(last=False)
+
+
+# ── Offline gazetteer ────────────────────────────────────────────────────────
+# ~1,600 California cities/towns/CDPs from the Census 2024 place gazetteer
+# (plus the Nevada border towns the corridors end at). Known places resolve
+# with zero network calls; the external geocoders only see the misses.
+
+_gazetteer: dict[str, tuple[float, float, str]] | None = None
+_NOISE_RE = re.compile(r"[^a-z0-9 ]")
+
+
+def _norm(text: str) -> str:
+    return " ".join(_NOISE_RE.sub(" ", text.lower()).split())
+
+
+def _load_gazetteer() -> dict[str, tuple[float, float, str]]:
+    global _gazetteer
+    if _gazetteer is None:
+        table = {}
+        data = files("ca_roads_mcp").joinpath("data/ca_places.csv").read_text(
+            encoding="utf-8"
+        )
+        nevada = {"reno", "sparks", "carson city", "stateline", "minden",
+                  "gardnerville", "las vegas", "primm"}
+        for row in csv.DictReader(data.splitlines()):
+            state = "Nevada" if _norm(row["name"]) in nevada else "California"
+            table[_norm(row["name"])] = (
+                float(row["lat"]), float(row["lon"]), f"{row['name']}, {state}"
+            )
+        _gazetteer = table
+    return _gazetteer
+
+
+# Suffix words the gazetteer may absorb when trimming. Anything else
+# ("airport", "station", "boardwalk") is a point of interest whose real
+# location differs from the city center - those go to the network geocoders.
+_ABSORBABLE = {"downtown", "area", "city"}
+
+
+def gazetteer_lookup(place: str) -> tuple[float, float, str] | None:
+    """Offline place resolution: exact name, or a name plus generic suffix
+    words ("Truckee downtown" -> Truckee). POI-style queries miss on purpose."""
+    table = _load_gazetteer()
+    normalized = _norm(place)
+    for suffix in (" california", " ca"):
+        normalized = normalized.removesuffix(suffix)
+    words = normalized.split()
+    dropped: list[str] = []
+    while words:
+        hit = table.get(" ".join(words))
+        if hit and all(w in _ABSORBABLE for w in dropped):
+            return hit
+        dropped.insert(0, words[-1])
+        words = words[:-1]
+    return None
 
 # Nominatim's policy is one request per second; the throttle keeps ladder
 # retries polite and stops degraded answers under bursts.
@@ -133,20 +200,24 @@ async def geocode(
         return None
     key = query.lower()
     if key in _cache:
+        _cache.move_to_end(key)
         return _cache[key]
 
+    offline = gazetteer_lookup(query)
+    if offline:
+        _cache_put(key, offline)
+        return offline
+
+    # Network ladder for non-place-name queries (addresses, landmarks),
+    # trimmed to two Nominatim candidates; Photon is the cross-provider
+    # fallback. The gazetteer already handled locality-style fallbacks.
     is_border = any(t in key for t in _BORDER_TOWNS)
     ca_ok = "california" not in key and not key.endswith(" ca") and not is_border
     candidates: list[tuple[str, int]] = []
     if ca_ok:
         candidates.append((f"{query}, California", 1))
-    candidates.append((query, 1))
     candidates.append((query, 0))
     words = query.split()
-    for trims in (1, 2):
-        if len(words) - trims >= 1:
-            trimmed = " ".join(words[: len(words) - trims])
-            candidates.append((f"{trimmed}, California" if ca_ok else trimmed, 0))
 
     results: list = []
     saw_network_failure = False
@@ -163,7 +234,7 @@ async def geocode(
         resolved = (
             float(hit["lat"]), float(hit["lon"]), hit.get("display_name", "")
         )
-        _cache[key] = resolved
+        _cache_put(key, resolved)
         return resolved
 
     # Nominatim came up empty or is unavailable; try Photon.
@@ -171,8 +242,8 @@ async def geocode(
     if photon is None and len(words) > 1:
         photon = await _search_photon(client, " ".join(words[:-1]))
     if photon:
-        _cache[key] = photon
+        _cache_put(key, photon)
         return photon
     if not saw_network_failure:
-        _cache[key] = None  # definitive miss; network trouble retries later
+        _cache_put(key, None)  # definitive miss; network trouble retries later
     return None

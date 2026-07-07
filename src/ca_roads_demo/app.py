@@ -63,12 +63,12 @@ Caltrans lane closures and chain controls, wildfires). Rules:
 - Use check_route for trip questions between two places; check_region for
   area-scale questions (the Bay Area, SoCal, the Sierra); the filtered
   tools for single-road or single-place questions.
-- Trips to landmarks or small places ("up to Alice's", "out to Pescadero")
-  work when you pass coordinates: give check_route from_coords/to_coords
-  from your own geographic knowledge, and the route and events clip to the
-  actual stretch driven. When the user's location is available, it is the
-  default trip origin. The server geocodes the place names too and its
-  result wins, so name places precisely ("Alice's Restaurant, Woodside").
+- For trips, pass from_coords/to_coords ONLY when you are confident (major
+  cities, or the user's own location as origin). For landmarks, addresses,
+  and small places, pass a precise name instead ("Alice's Restaurant,
+  Woodside") and leave the coords out: the server resolves names through a
+  real geocoder, which beats recalled coordinates. When the user's location
+  is available, it is the default trip origin.
 - If check_route answers local_trip, do what it says: query get_incidents
   and get_lane_closures with the suggested_center. Short in-town trips have
   no highway corridor to check.
