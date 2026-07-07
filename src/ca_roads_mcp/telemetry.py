@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sys
 from datetime import UTC, datetime
 
@@ -45,3 +46,27 @@ def visitor_hash(ip: str) -> str:
 def log_event(event: str, **fields) -> None:
     payload = {"log_type": "ca_roads_event", "event": event, **fields}
     print(json.dumps(payload, default=str), file=sys.stdout, flush=True)
+
+
+_PRECISE_COORD_RE = re.compile(r"(-?\d{1,3}\.\d{3,})")
+
+
+def redact_coords(value):
+    """Round any coordinate-looking number to 2 decimals (~1 km).
+
+    Tool arguments can embed the user's shared location (trip origins,
+    center points). The disclosed telemetry contract is a location_shared
+    boolean, so anything more precise than neighborhood level is rounded
+    before logging. Works recursively over dicts, lists, strings, floats.
+    """
+    if isinstance(value, dict):
+        return {k: redact_coords(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_coords(v) for v in value]
+    if isinstance(value, float) and abs(value) <= 180 and value != round(value, 2):
+        return round(value, 2)
+    if isinstance(value, str):
+        return _PRECISE_COORD_RE.sub(
+            lambda m: f"{float(m.group(1)):.2f}", value
+        )
+    return value
