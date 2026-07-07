@@ -17,9 +17,10 @@
   </p>
 </div>
 
-Ask "do I need chains to get to Tahoe?" or "is 17 clear right now?" and get
-an answer from the same live feeds CHP and Caltrans publish, not from the
-model's memory. One connector URL, no account, no key.
+Ask "do I need chains to get to Tahoe?" or "is 17 clear right now?" and the
+answer comes from the live feeds CHP and Caltrans publish. The model reads
+the actual dispatch logs instead of guessing from memory. One connector URL.
+No account and no key.
 
 No AI assistant? The [web demo](https://ca-roads-demo-15002631928.us-west1.run.app)
 answers the same questions in a browser and plots everything on a map.
@@ -62,9 +63,10 @@ Or from a checkout: `pip install .` then `ca-roads-mcp` (stdio) or
 | **Caltrans chain controls** | R-1/R-2/R-3 requirements at mountain checkpoints | 5-minute cache |
 | **WFIGS** | Active wildfires (name, size, containment), flagged within ~10 miles of major highways | 5-minute cache |
 
-Closures are not treated as one thing. Every record carries a
-`closure_class` derived from the Caltrans facility and closure type, because
-a "Full" closure of an on-ramp is routine night work, not a closed highway:
+Every closure record carries a `closure_class` derived from the Caltrans
+facility and closure type. The raw feed marks an on-ramp repair "Full", and
+reporting that as a closed highway would be wrong, so the classes keep them
+apart:
 
 | closure_class | Means | Can you drive through? |
 |---|---|---|
@@ -92,12 +94,12 @@ flagged stale, with the error attached.
 
 A `road_trip_check` prompt template shows clients how to compose the tools
 for a trip check. Place names work everywhere: the assistant resolves a town
-to coordinates and a `center` radius catches every road around it, not just
-the main highway.
+to coordinates, and a `center` radius sweeps every road around it, including
+the small ones.
 
 ## Evals
 
-The eval suite is a first-class deliverable, not an afterthought:
+The eval suite ships with the server and gates every release:
 
 - **Recorded fixtures** for three scenarios: a Sierra storm day (R-2 chains
   Twin Bridges to Meyers, avalanche closure at Emerald Bay), a fire-closure
@@ -146,8 +148,9 @@ Three packages, cleanly layered:
 - **`ca_roads`**: the feed layer. No MCP dependency. Async httpx fetchers,
   per-district TTL caches, stale-serve on upstream failure, parsers that
   salvage complete records from truncated feeds (CHP cuts its XML mid-record
-  on busy days), and hard-won rules like "a missing district feed is an
-  empty result, not an error".
+  on busy days), and rules learned from running these feeds in production,
+  like treating a missing district feed as an empty result instead of an
+  error.
 - **`ca_roads_mcp`**: the MCP surface. FastMCP server, curated corridor and
   region tables, route-name normalization ("17", "hwy 50", "I80" all work),
   and docstrings written for the LLM consumer: what the data is, its refresh
