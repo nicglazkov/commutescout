@@ -13,7 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          # Score the released code, not whatever main moved to since.
+          ref: ${{ github.event.release.tag_name || 'main' }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -24,16 +25,29 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_CA_ROADS_DEMO_PROD }}
           PYTHONPATH: .
+          EVAL_SOURCE_REF: ${{ github.event.release.tag_name || github.sha }}
         run: python evals/run_evals.py --report EVALS.md
       - name: Upload raw results
         uses: actions/upload-artifact@v4
         with:
           name: eval-results
           path: evals/results/
-      - name: Commit scorecard
+      - name: Commit scorecard to main
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add EVALS.md evals/results/badge.json evals/results/badge.svg
+          # The run happened on the release tag; carry the generated files
+          # onto main so the scorecard lands where readers look.
+          mkdir -p /tmp/evalout
+          cp EVALS.md evals/results/badge.json evals/results/badge.svg /tmp/evalout/
+          cp evals/results/history.jsonl /tmp/evalout/ 2>/dev/null || true
+          git stash --include-untracked || true
+          git fetch origin main
+          git checkout main
+          cp /tmp/evalout/EVALS.md EVALS.md
+          cp /tmp/evalout/badge.json evals/results/badge.json
+          cp /tmp/evalout/badge.svg evals/results/badge.svg
+          [ -f /tmp/evalout/history.jsonl ] && cp /tmp/evalout/history.jsonl evals/results/history.jsonl
+          git add EVALS.md evals/results/badge.json evals/results/badge.svg evals/results/history.jsonl
           git diff --cached --quiet || git commit -m "docs: update eval scorecard"
-          git push
+          git push origin main

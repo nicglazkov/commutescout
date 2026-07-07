@@ -456,7 +456,9 @@ async def get_incidents(
       highway.
     - area: substring match on the CHP dispatch-area name. These are CHP
       communication-center names ("Hollister Gilroy", "East Sac", "Golden
-      Gate"), NOT town names - do not pass a town here.
+      Gate"), NOT town names - do not pass a town here. There is no county
+      filter because CHP's feed carries no county field; for a county, use
+      center on the county seat with a radius covering the county.
 
     Limits: locations are free-text from dispatchers; a few incidents lack
     usable coordinates and are omitted. No history - current logs only.
