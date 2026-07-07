@@ -487,6 +487,18 @@ function resetMap() {
 // Fetch road-following geometry from OSRM so the drawn route hugs the
 // actual highway and ends at the true destination. The corridor skeleton
 // draws immediately as a fallback and is replaced when OSRM answers.
+async function osrmRoute(points) {
+  const pts = points
+    .map(([lat, lon]) => `${lon.toFixed(5)},${lat.toFixed(5)}`).join(';');
+  const res = await fetch(
+    `https://router.project-osrm.org/route/v1/driving/${pts}` +
+    '?overview=full&geometries=geojson', { signal: AbortSignal.timeout(8000) }
+  );
+  const data = await res.json();
+  if (data.code !== 'Ok' || !data.routes?.length) return null;
+  return data.routes[0];
+}
+
 async function roadSnap(geo, fallbackLine) {
   const start = geo.origin || geo.route[0];
   const end = geo.destination || geo.route[geo.route.length - 1];
@@ -494,16 +506,19 @@ async function roadSnap(geo, fallbackLine) {
   const inner = geo.route.slice(1, -1);
   const step = Math.max(1, Math.ceil(inner.length / 7));
   const vias = inner.filter((_, i) => i % step === 0);
-  const pts = [start, ...vias, end]
-    .map(([lat, lon]) => `${lon.toFixed(5)},${lat.toFixed(5)}`).join(';');
   try {
-    const res = await fetch(
-      `https://router.project-osrm.org/route/v1/driving/${pts}` +
-      '?overview=full&geometries=geojson', { signal: AbortSignal.timeout(8000) }
-    );
-    const data = await res.json();
-    if (data.code !== 'Ok' || !data.routes?.length) return;
-    const road = data.routes[0];
+    // Ask for the corridor-following route AND the unconstrained fastest
+    // route; take the fastest unless the corridor route is close (it's the
+    // one the reported events sit on).
+    const [viaRoute, direct] = await Promise.all([
+      osrmRoute([start, ...vias, end]).catch(() => null),
+      osrmRoute([start, end]).catch(() => null),
+    ]);
+    let road = viaRoute || direct;
+    if (viaRoute && direct && viaRoute.duration > direct.duration * 1.15) {
+      road = direct;
+    }
+    if (!road) return;
     layerPrimary.removeLayer(fallbackLine);
     L.polyline(road.geometry.coordinates.map(([lon, lat]) => [lat, lon]), {
       color: '#1c3a2e', weight: 4, opacity: 0.75,

@@ -27,6 +27,12 @@ class RoadData:
         self.chains = chains_feed.ChainSource(self._client)
         self.wildfires_source = wildfire_feed.WildfireSource(self._client)
 
+    @property
+    def client(self) -> httpx.AsyncClient:
+        """The shared HTTP client, for consumers that make adjacent calls
+        (e.g. geocoding) on the same connection pool."""
+        return self._client
+
     async def aclose(self) -> None:
         if self._owns_client:
             await self._client.aclose()

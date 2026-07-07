@@ -22,6 +22,7 @@ from ca_roads.geo import haversine_meters
 from ca_roads.roaddata import RoadData
 from ca_roads_mcp import corridors as corr
 from ca_roads_mcp import regions as reg
+from ca_roads_mcp.geocode import geocode
 from ca_roads_mcp.routes import matches_route, normalize_route
 from ca_roads_mcp.serialize import (
     chain_control_dict,
@@ -127,6 +128,21 @@ async def check_route(
     if to_coords and to_point is None:
         return {"error": f"to_coords: {CENTER_FORMAT_ERROR}"}
 
+    # Place names resolve through a real geocoder; caller-supplied
+    # coordinates are the fallback. Recalled coordinates for landmarks can
+    # be miles off, and the geocoder pins the actual building.
+    road = get_road()
+    resolved_notes: list[str] = []
+    from_geo, to_geo = await asyncio.gather(
+        geocode(road.client, from_place), geocode(road.client, to_place)
+    )
+    if from_geo:
+        from_point = (from_geo[0], from_geo[1])
+    if to_geo:
+        to_point = (to_geo[0], to_geo[1])
+        short_name = ", ".join(to_geo[2].split(", ")[:3])
+        resolved_notes.append(f"destination resolved to: {short_name}")
+
     match = corr.resolve_corridor_ext(from_place, to_place, from_point, to_point)
     if match is None:
         return {
@@ -169,7 +185,6 @@ async def check_route(
     window_lo = max(0.0, min(along_from, along_to) - 3_000)
     window_hi = min(total, max(along_from, along_to) + 3_000)
 
-    road = get_road()
     chp_r, lcs_r, cc_r, fire_r = await asyncio.gather(
         road.incidents(),
         road.lane_closures(districts=districts),
@@ -270,8 +285,9 @@ async def check_route(
         "route_geometry": corr.clip_geometry(corridor, along_from, along_to),
         "sources": [source_status(r) for r in (chp_r, lcs_r, cc_r, fire_r)],
     }
-    if clip_notes:
-        result["notes"] = clip_notes
+    all_notes = resolved_notes + clip_notes
+    if all_notes:
+        result["notes"] = all_notes
     return result
 
 
