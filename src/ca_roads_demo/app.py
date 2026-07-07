@@ -24,7 +24,7 @@ from starlette.routing import Route
 
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.ratelimit import RateLimiter, RateLimitMiddleware
-from ca_roads_mcp.telemetry import log_event, visitor_hash
+from ca_roads_mcp.telemetry import log_event, redact_coords, visitor_hash
 
 try:
     VERSION = version("ca-roads-mcp")
@@ -404,7 +404,7 @@ async def answer_stream(
                 is_error = True
             tool_calls.append({
                 "tool": block.name,
-                "args": block.input,
+                "args": redact_coords(block.input),
                 "ms": round((time.monotonic() - tool_started) * 1000),
                 "error": is_error,
             })

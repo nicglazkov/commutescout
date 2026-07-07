@@ -27,3 +27,24 @@ def test_visitor_hash_rotates_and_anonymizes():
     assert a == visitor_hash("203.0.113.7")  # stable within the day
     assert a != visitor_hash("203.0.113.8")
     assert "203" not in a and len(a) == 12
+
+
+def test_logged_tool_args_never_carry_precise_coordinates():
+    import json
+    import re
+
+    from ca_roads_mcp.telemetry import redact_coords
+
+    args = {
+        "center": "37.3382,-121.8863",
+        "from_coords": "37.33820,-121.88630",
+        "radius_km": 25.0,
+        "nested": {"to_coords": "34.0561,-118.2365"},
+        "places": ["17288 Skyline Blvd"],
+    }
+    redacted = redact_coords(args)
+    blob = json.dumps(redacted)
+    assert not re.search(r"-?\d{1,3}\.\d{3,}", blob)
+    assert redacted["center"] == "37.34,-121.89"
+    assert redacted["radius_km"] == 25.0  # non-coordinate values untouched
+    assert redacted["places"] == ["17288 Skyline Blvd"]  # street numbers kept
