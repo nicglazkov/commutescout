@@ -224,3 +224,24 @@ def test_synthetic_fixtures_have_not_rotted():
         "Synthetic fixture closures expire within a year (FAR_FUTURE_EPOCH). "
         "Bump it in evals/build_fixtures.py and rerun the builder."
     )
+
+
+@for_scenario("real-2026-07-07")
+async def test_real_recording_plays_back(scenario):
+    """The first real (non-synthetic) recording: 2026-07-07, fire season.
+    Pins the day's headline numbers so fixture serving (gzip + recorded
+    status replay) stays honest end to end."""
+    road = tool_server.get_road()
+    chp = await road.incidents()
+    lcs = await road.lane_closures()
+    chains = await road.chain_controls()
+    fires = await road.wildfires()
+    assert len(chp.records) == 197
+    assert len(lcs.records) == 293
+    assert len(chains.records) == 0  # July; D12's 500 replays as recorded
+    assert len(fires.records) == 232
+
+    fires_i5 = await tool_server.get_wildfires(near_route="I-5")
+    assert fires_i5["count"] > 40
+    names = {f["name"] for f in fires_i5["wildfires"]}
+    assert "BIG" in names
