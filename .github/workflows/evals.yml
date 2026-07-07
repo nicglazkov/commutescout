@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install
-        run: pip install -e ".[dev,evals]"
+        run: pip install -e ".[dev,evals]" -c constraints.txt
       - name: Run evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_CA_ROADS_DEMO_PROD }}

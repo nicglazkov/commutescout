@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install anthropic
+      - run: pip install anthropic -c constraints.txt
       - name: Check model catalog
         id: check
         env:
