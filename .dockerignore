@@ -8,7 +8,6 @@ __pycache__
 .ruff_cache
 tests
 evals
-docs-private
 dist
 build
 *.egg-info

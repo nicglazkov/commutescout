@@ -31,10 +31,13 @@ Submission form asks for a name, the connector URL, and a description.
 - Longer description:
 
   > CA Roads gives your assistant live California road intelligence. Ask
-  > "do I need chains to get to Tahoe?" or "is 17 clear right now?" and it
-  > answers from the same feeds Caltrans and CHP publish: real-time
-  > incidents, lane closures that are physically in place, chain-control
-  > levels, and active wildfires near major highways. Every answer carries
-  > per-source timestamps so the assistant can tell you how fresh the data
-  > is. Read-only public data, no account needed. Not affiliated with any
+  > "do I need chains to get to Tahoe?", "is 17 clear right now?", or "how
+  > is the Bay Area?" and it answers from the same feeds Caltrans and CHP
+  > publish: real-time incidents, closures that are physically in place
+  > (with lane closures, ramp closures, and full roadway closures told
+  > apart), chain-control levels, and active wildfires near major highways.
+  > Route checks cover 17 major corridors; region reports cover the Bay
+  > Area, SoCal, the Sierra, and five more. Every answer carries per-source
+  > timestamps so the assistant can tell you how fresh the data is.
+  > Read-only public data, no account needed. Not affiliated with any
   > government agency; verify before you drive.
