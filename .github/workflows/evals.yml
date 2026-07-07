@@ -44,10 +44,12 @@ jobs:
           git stash --include-untracked || true
           git fetch origin main
           git checkout main
+          git reset --hard origin/main
           cp /tmp/evalout/EVALS.md EVALS.md
           cp /tmp/evalout/badge.json evals/results/badge.json
           cp /tmp/evalout/badge.svg evals/results/badge.svg
           [ -f /tmp/evalout/history.jsonl ] && cp /tmp/evalout/history.jsonl evals/results/history.jsonl
           git add EVALS.md evals/results/badge.json evals/results/badge.svg evals/results/history.jsonl
           git diff --cached --quiet || git commit -m "docs: update eval scorecard"
-          git push origin main
+          # main may have moved during the (long) eval run; rebase and retry.
+          git push origin main || (git pull --rebase origin main && git push origin main)
