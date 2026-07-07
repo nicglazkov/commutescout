@@ -143,6 +143,25 @@ async def check_route(
         short_name = ", ".join(to_geo[2].split(", ")[:3])
         resolved_notes.append(f"destination resolved to: {short_name}")
 
+    if from_point and to_point:
+        span_km = haversine_meters(*from_point, *to_point) / 1000
+        if span_km < 12:
+            mid = (
+                f"{(from_point[0] + to_point[0]) / 2:.4f},"
+                f"{(from_point[1] + to_point[1]) / 2:.4f}"
+            )
+            return {
+                "local_trip": True,
+                "error": (
+                    f"'{from_place}' to '{to_place}' is a short local trip "
+                    f"(~{span_km:.0f} km); corridor checks cover highway "
+                    "trips. Call get_incidents and get_lane_closures with "
+                    f"center='{mid}' and radius_km=10 instead - that covers "
+                    "every road between the two points."
+                ),
+                "suggested_center": mid,
+            }
+
     match = corr.resolve_corridor_ext(from_place, to_place, from_point, to_point)
     if match is None:
         return {

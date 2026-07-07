@@ -199,3 +199,13 @@ async def test_route_clips_to_landmark_destination(scenario):
     # The destination is the actual place, not the corridor snap point.
     assert result["destination"] == [37.417, -122.276]
     assert abs(result["origin"][0] - 37.33) < 0.1  # San Jose end
+
+
+@for_scenario("quiet-day")
+async def test_local_trip_gets_center_hint(scenario):
+    result = await tool_server.check_route(
+        "444 Castro St, Mountain View", "1 Infinite Loop, Cupertino",
+        from_coords="37.3894,-122.0819", to_coords="37.3318,-122.0302",
+    )
+    assert result.get("local_trip") is True
+    assert "suggested_center" in result

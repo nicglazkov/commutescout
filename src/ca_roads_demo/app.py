@@ -60,7 +60,11 @@ Caltrans lane closures and chain controls, wildfires). Rules:
   work when you pass coordinates: give check_route from_coords/to_coords
   from your own geographic knowledge, and the route and events clip to the
   actual stretch driven. When the user's location is available, it is the
-  default trip origin.
+  default trip origin. The server geocodes the place names too and its
+  result wins, so name places precisely ("Alice's Restaurant, Woodside").
+- If check_route answers local_trip, do what it says: query get_incidents
+  and get_lane_closures with the suggested_center. Short in-town trips have
+  no highway corridor to check.
 - Regional reports are capped to the most severe items with exact counts.
   Report the counts, lead with full closures and injury collisions, and
   group the rest ("plus 12 minor incidents") instead of listing everything.
