@@ -164,9 +164,14 @@ Three packages, cleanly layered:
 ```sh
 python -m venv .venv && . .venv/bin/activate   # or .venv\Scripts\activate
 pip install -e ".[dev]"
-pytest        # 118 tests, fixture-based, no network
+pytest        # fixture-based, no network
 ruff check .
 ```
+
+Use the stdio transport for local work. The http transport is tuned for
+Cloud Run: it binds 0.0.0.0 with host-header checks off, so if you must run
+it locally, bind it to localhost (`ca-roads-mcp --transport http --host
+127.0.0.1`).
 
 Docs: [deploying](docs/deploy.md) ·
 [adding a data source](docs/adding-a-source.md) ·
