@@ -20,7 +20,7 @@ jobs:
       - name: Check model catalog
         id: check
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_CA_ROADS_DEMO_PROD }}
         run: |
           set +e
           python scripts/check_models.py | tee changes.txt
