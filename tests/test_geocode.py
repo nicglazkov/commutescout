@@ -68,3 +68,31 @@ async def test_photon_fallback_when_nominatim_blocked():
         result = await geo.geocode(client, "17288 Skyline Blvd, Woodside")
     assert result[0] == 37.3866867
     assert "Alice's Restaurant" in result[2]
+
+
+async def test_gazetteer_resolves_known_places_offline():
+    # No respx mocks active: any network attempt would blow up the test.
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda req: (_ for _ in ()).throw(AssertionError("network hit"))
+    )) as client:
+        sj = await geo.geocode(client, "San Jose")
+        assert abs(sj[0] - 37.296) < 0.01
+        reno = await geo.geocode(client, "Reno")
+        assert "Nevada" in reno[2]
+        assert await geo.geocode(client, "truckee, CA") is not None
+        assert await geo.geocode(client, "Truckee downtown") is not None
+
+
+def test_gazetteer_refuses_poi_queries():
+    # "San Jose Airport" is not the San Jose city center; the gazetteer must
+    # miss so the network geocoders resolve the actual POI.
+    assert geo.gazetteer_lookup("San Jose Airport") is None
+    assert geo.gazetteer_lookup("Santa Cruz Beach Boardwalk") is None
+    assert geo.gazetteer_lookup("Sacramento Capitol") is None
+
+
+def test_cache_is_bounded():
+    geo._cache.clear()
+    for i in range(geo._CACHE_MAX + 50):
+        geo._cache_put(f"k{i}", None)
+    assert len(geo._cache) == geo._CACHE_MAX
