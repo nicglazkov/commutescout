@@ -57,6 +57,10 @@ def get_road() -> RoadData:
 MILES_PER_METER = 1 / 1609.344
 
 
+async def _noop() -> None:
+    return None
+
+
 def parse_center(center: str) -> tuple[float, float] | None:
     try:
         lat_s, lon_s = center.split(",")
@@ -128,17 +132,19 @@ async def check_route(
     if to_coords and to_point is None:
         return {"error": f"to_coords: {CENTER_FORMAT_ERROR}"}
 
-    # Place names resolve through a real geocoder; caller-supplied
-    # coordinates are the fallback. Recalled coordinates for landmarks can
-    # be miles off, and the geocoder pins the actual building.
+    # Caller-supplied coordinates are authoritative; only missing sides get
+    # geocoded (offline gazetteer first, network geocoders for addresses and
+    # landmarks). This keeps warm calls with coordinates at zero geocoding
+    # latency.
     road = get_road()
     resolved_notes: list[str] = []
     from_geo, to_geo = await asyncio.gather(
-        geocode(road.client, from_place), geocode(road.client, to_place)
+        geocode(road.client, from_place) if from_point is None else _noop(),
+        geocode(road.client, to_place) if to_point is None else _noop(),
     )
-    if from_geo:
+    if from_point is None and from_geo:
         from_point = (from_geo[0], from_geo[1])
-    if to_geo:
+    if to_point is None and to_geo:
         to_point = (to_geo[0], to_geo[1])
         short_name = ", ".join(to_geo[2].split(", ")[:3])
         resolved_notes.append(f"destination resolved to: {short_name}")
