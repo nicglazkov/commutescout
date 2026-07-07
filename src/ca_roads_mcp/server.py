@@ -251,10 +251,20 @@ async def check_route(
         + "."
     )
 
+    origin = list(from_point) if from_point else list(
+        corr.point_at(corridor, along_from)
+    )
+    destination = list(to_point) if to_point else list(
+        corr.point_at(corridor, along_to)
+    )
     result = {
         "corridor": corridor.name,
         "direction": f"{from_place} -> {to_place}",
-        "trip_miles": round(abs(along_to - along_from) * MILES_PER_METER, 1),
+        "origin": origin,
+        "destination": destination,
+        # Straight-line along the corridor skeleton; actual road miles run
+        # longer. Present it as an approximation.
+        "trip_miles_approx": round(abs(along_to - along_from) * MILES_PER_METER, 1),
         "summary": summary,
         "events": items,
         "route_geometry": corr.clip_geometry(corridor, along_from, along_to),

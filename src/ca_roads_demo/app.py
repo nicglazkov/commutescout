@@ -324,6 +324,10 @@ def extract_geo(tool: str, result: dict) -> dict | None:
         payload["markers"] = markers
     if result.get("route_geometry"):
         payload["route"] = result["route_geometry"]
+        if result.get("origin"):
+            payload["origin"] = result["origin"]
+        if result.get("destination"):
+            payload["destination"] = result["destination"]
     return payload or None
 
 

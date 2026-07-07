@@ -223,6 +223,11 @@
   }
   .map-card.active { display: block; }
   #map { height: 420px; }
+  .roadinfo {
+    padding: 8px 14px 0; font-size: 0.82rem; font-weight: 600;
+    color: var(--pine);
+  }
+  .roadinfo:empty { display: none; }
   .legend {
     display: flex; flex-wrap: wrap; gap: 12px;
     padding: 10px 14px; font-size: 0.78rem; color: var(--ink-soft);
@@ -294,6 +299,7 @@
     </div>
     <div class="map-card" id="mapcard">
       <div id="map"></div>
+      <div class="roadinfo" id="roadinfo"></div>
       <div class="legend">
         <span style="--dot:#7f1d1d">road fully closed</span>
         <span style="--dot:#a02c2c">lanes closed</span>
@@ -475,6 +481,38 @@ function resetMap() {
   mapcard.classList.remove('active');
   chipCounts = {};
   renderChips();
+  document.getElementById('roadinfo').textContent = '';
+}
+
+// Fetch road-following geometry from OSRM so the drawn route hugs the
+// actual highway and ends at the true destination. The corridor skeleton
+// draws immediately as a fallback and is replaced when OSRM answers.
+async function roadSnap(geo, fallbackLine) {
+  const start = geo.origin || geo.route[0];
+  const end = geo.destination || geo.route[geo.route.length - 1];
+  // Vias keep OSRM on our corridor; thin to keep the URL reasonable.
+  const inner = geo.route.slice(1, -1);
+  const step = Math.max(1, Math.ceil(inner.length / 7));
+  const vias = inner.filter((_, i) => i % step === 0);
+  const pts = [start, ...vias, end]
+    .map(([lat, lon]) => `${lon.toFixed(5)},${lat.toFixed(5)}`).join(';');
+  try {
+    const res = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${pts}` +
+      '?overview=full&geometries=geojson', { signal: AbortSignal.timeout(8000) }
+    );
+    const data = await res.json();
+    if (data.code !== 'Ok' || !data.routes?.length) return;
+    const road = data.routes[0];
+    layerPrimary.removeLayer(fallbackLine);
+    L.polyline(road.geometry.coordinates.map(([lon, lat]) => [lat, lon]), {
+      color: '#1c3a2e', weight: 4, opacity: 0.75,
+    }).addTo(layerPrimary);
+    const miles = road.distance / 1609.344;
+    const mins = road.duration / 60;
+    document.getElementById('roadinfo').textContent =
+      `~${miles.toFixed(0)} mi by road, ~${mins.toFixed(0)} min without delays`;
+  } catch (e) { /* corridor fallback line stays */ }
 }
 
 function drawGeo(geo) {
@@ -487,11 +525,13 @@ function drawGeo(geo) {
     }).addTo(layerPrimary);
   }
   if (geo.route) {
-    L.polyline(geo.route, { color: '#1c3a2e', weight: 3, opacity: 0.7, dashArray: '6 6' })
-      .addTo(layerPrimary);
+    const fallbackLine = L.polyline(geo.route, {
+      color: '#1c3a2e', weight: 3, opacity: 0.55, dashArray: '6 6',
+    }).addTo(layerPrimary);
+    roadSnap(geo, fallbackLine);
     const ends = [
-      [geo.route[0], 'A', 'Start of route'],
-      [geo.route[geo.route.length - 1], 'B', 'End of route'],
+      [geo.origin || geo.route[0], 'A', 'Start'],
+      [geo.destination || geo.route[geo.route.length - 1], 'B', 'Destination'],
     ];
     for (const [pt, letter, label] of ends) {
       L.marker(pt, {

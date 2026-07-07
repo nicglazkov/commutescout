@@ -195,4 +195,7 @@ async def test_route_clips_to_landmark_destination(scenario):
     lats = [lat for lat, lon in result["route_geometry"]]
     # The drawn route stops near Woodside instead of running up to SF.
     assert max(lats) < 37.6
-    assert result["trip_miles"] < 45
+    assert result["trip_miles_approx"] < 45
+    # The destination is the actual place, not the corridor snap point.
+    assert result["destination"] == [37.417, -122.276]
+    assert abs(result["origin"][0] - 37.33) < 0.1  # San Jose end
