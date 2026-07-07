@@ -184,3 +184,15 @@ async def test_region_socal_report(scenario):
 async def test_region_unknown_lists_options(scenario):
     result = await tool_server.check_region("the moon")
     assert "supported_regions" in result
+
+
+@for_scenario("quiet-day")
+async def test_route_clips_to_landmark_destination(scenario):
+    result = await tool_server.check_route(
+        "San Jose", "Alice's Restaurant", to_coords="37.417,-122.276"
+    )
+    assert result["corridor"].startswith("I-280")
+    lats = [lat for lat, lon in result["route_geometry"]]
+    # The drawn route stops near Woodside instead of running up to SF.
+    assert max(lats) < 37.6
+    assert result["trip_miles"] < 45

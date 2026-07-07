@@ -89,37 +89,85 @@ REGION_FIRE_CAP = 10
 
 
 @mcp.tool()
-async def check_route(from_place: str, to_place: str) -> dict:
+async def check_route(
+    from_place: str,
+    to_place: str,
+    from_coords: str | None = None,
+    to_coords: str | None = None,
+) -> dict:
     """Check current conditions along a major California highway corridor.
 
-    The flagship trip-check tool: give it a start and end place (city, town,
-    or landmark, e.g. "Sacramento" -> "Reno") and it returns everything
-    active along that corridor right now - CHP incidents, lane closures
-    physically in place, chain controls, and wildfires within ~10 miles -
-    ordered by position along the route, plus a plain-language summary.
+    The flagship trip-check tool: give it a start and end place and it
+    returns everything active along that stretch right now - CHP incidents,
+    lane closures physically in place, chain controls, and wildfires within
+    ~10 miles - ordered by miles from the start, plus a summary.
 
-    Covers a curated set of major corridors (I-80 Sacramento-Reno, US-50 to
-    South Lake Tahoe, I-5, US-101, SR-17, SR-99, SR-1, I-15 to Vegas, Bay
-    Area freeways, Tahoe-area routes). It is NOT a general router: if the
-    places don't match a known corridor, the response lists the corridors it
-    does cover; fall back to get_incidents / get_lane_closures /
-    get_chain_controls with route filters for anything else.
+    ALWAYS pass from_coords and to_coords ("lat,lon") when you know where
+    the places are - for landmarks, small towns, or anything not a major
+    city they are required for a good answer. Coordinates do two things:
+    they let unlisted places resolve to the nearest corridor (e.g. "Alice's
+    Restaurant" snaps to I-280 on the Peninsula), and they CLIP the route to
+    the span actually being driven, so a trip to a mid-corridor destination
+    doesn't report events beyond it.
+
+    Corridors covered: I-80 Sacramento-Reno, US-50 to South Lake Tahoe, I-5,
+    US-101, SR-17, SR-99, SR-1, I-15 to Vegas, Bay Area freeways, Tahoe-area
+    routes. This is NOT a general router: if nothing matches (even with
+    coordinates), the response lists the covered corridors; fall back to the
+    filtered tools with center= for anything else.
 
     Freshness: CHP incidents refresh about once a minute; closures, chain
     controls, and fires are on a 5-minute cache. Current conditions only -
     this cannot forecast tomorrow's weather or closures.
     """
-    match = corr.resolve_corridor(from_place, to_place)
+    from_point = parse_center(from_coords) if from_coords else None
+    if from_coords and from_point is None:
+        return {"error": f"from_coords: {CENTER_FORMAT_ERROR}"}
+    to_point = parse_center(to_coords) if to_coords else None
+    if to_coords and to_point is None:
+        return {"error": f"to_coords: {CENTER_FORMAT_ERROR}"}
+
+    match = corr.resolve_corridor_ext(from_place, to_place, from_point, to_point)
     if match is None:
         return {
             "error": (
                 f"No corridor found covering '{from_place}' to '{to_place}'. "
-                "This tool covers a curated set of major California corridors."
+                "This tool covers a curated set of major California "
+                "corridors. Pass from_coords/to_coords to snap nearby places "
+                "onto a corridor, or use the filtered tools with center=."
             ),
             "supported_corridors": corr.corridor_names(),
         }
     corridor = match.corridor
     districts = corr.corridor_districts(corridor)
+
+    # Clip the corridor to the span actually being driven. Ends without
+    # coordinates anchor to the corridor endpoint on their side.
+    total = corr.total_length(corridor)
+    clip_notes: list[str] = []
+    along_from = total if match.reversed else 0.0
+    along_to = 0.0 if match.reversed else total
+    if from_point:
+        snap_dist, snapped = corr.distance_to_corridor(corridor, *from_point)
+        if snap_dist <= corr.SNAP_MAX_METERS:
+            along_from = snapped
+        else:
+            clip_notes.append(
+                f"'{from_place}' is {snap_dist / 1609:.0f} miles off this "
+                "corridor; using the corridor end instead"
+            )
+    if to_point:
+        snap_dist, snapped = corr.distance_to_corridor(corridor, *to_point)
+        if snap_dist <= corr.SNAP_MAX_METERS:
+            along_to = snapped
+        else:
+            clip_notes.append(
+                f"'{to_place}' is {snap_dist / 1609:.0f} miles off this "
+                "corridor; using the corridor end instead"
+            )
+    heading_back = along_from > along_to
+    window_lo = max(0.0, min(along_from, along_to) - 3_000)
+    window_hi = min(total, max(along_from, along_to) + 3_000)
 
     road = get_road()
     chp_r, lcs_r, cc_r, fire_r = await asyncio.gather(
@@ -135,7 +183,12 @@ async def check_route(from_place: str, to_place: str) -> dict:
         + [chains_feed.to_event(c) for c in cc_r.records]
         + [wildfire_feed.to_event(f) for f in fire_r.records]
     )
-    placed = corr.events_on_corridor(corridor, events, match.reversed)
+    placed = [
+        p
+        for p in corr.events_on_corridor(corridor, events)
+        if window_lo <= p.along_m <= window_hi
+    ]
+    placed.sort(key=lambda p: p.along_m, reverse=heading_back)
 
     items = []
     counts = {"incidents": 0, "closures": 0, "chain_controls": 0, "wildfires": 0}
@@ -166,7 +219,9 @@ async def check_route(from_place: str, to_place: str) -> dict:
         items.append(
             {
                 "kind": kind,
-                "mile_along_route": round(p.along_m * MILES_PER_METER, 1),
+                "mile_along_route": round(
+                    abs(p.along_m - along_from) * MILES_PER_METER, 1
+                ),
                 "summary": e.summary,
                 "detail": detail,
             }
@@ -196,17 +251,18 @@ async def check_route(from_place: str, to_place: str) -> dict:
         + "."
     )
 
-    waypoints = list(corridor.waypoints)
-    if match.reversed:
-        waypoints.reverse()
-    return {
+    result = {
         "corridor": corridor.name,
         "direction": f"{from_place} -> {to_place}",
+        "trip_miles": round(abs(along_to - along_from) * MILES_PER_METER, 1),
         "summary": summary,
         "events": items,
-        "route_geometry": [[lat, lon] for lat, lon in waypoints],
+        "route_geometry": corr.clip_geometry(corridor, along_from, along_to),
         "sources": [source_status(r) for r in (chp_r, lcs_r, cc_r, fire_r)],
     }
+    if clip_notes:
+        result["notes"] = clip_notes
+    return result
 
 
 @mcp.tool()

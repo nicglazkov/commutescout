@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import anthropic
@@ -22,6 +23,11 @@ from starlette.routing import Route
 
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.ratelimit import RateLimiter, RateLimitMiddleware
+
+try:
+    VERSION = version("ca-roads-mcp")
+except PackageNotFoundError:  # running from a bare checkout
+    VERSION = "dev"
 
 MODEL = os.environ.get("DEMO_MODEL", "claude-sonnet-5")
 MAX_QUESTION_CHARS = 300
@@ -50,6 +56,11 @@ Caltrans lane closures and chain controls, wildfires). Rules:
 - Use check_route for trip questions between two places; check_region for
   area-scale questions (the Bay Area, SoCal, the Sierra); the filtered
   tools for single-road or single-place questions.
+- Trips to landmarks or small places ("up to Alice's", "out to Pescadero")
+  work when you pass coordinates: give check_route from_coords/to_coords
+  from your own geographic knowledge, and the route and events clip to the
+  actual stretch driven. When the user's location is available, it is the
+  default trip origin.
 - Regional reports are capped to the most severe items with exact counts.
   Report the counts, lead with full closures and injury collisions, and
   group the rest ("plus 12 minor incidents") instead of listing everything.
@@ -91,14 +102,20 @@ TOOL_DEFS = [
         "name": "check_route",
         "description": (
             "Current conditions along a major California corridor between two "
-            "places: incidents, lane closures in place, chain controls, and "
-            "wildfires near the route, ordered along the route with a summary."
+            "places: incidents, closures, chain controls, and wildfires near "
+            "the route, ordered by miles from the start. ALWAYS pass "
+            "from_coords and to_coords ('lat,lon' from your own knowledge of "
+            "where the places are): they snap landmarks and small places onto "
+            "the right corridor AND clip the route/events to the stretch "
+            "actually driven, instead of the whole corridor."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "from_place": {"type": "string"},
                 "to_place": {"type": "string"},
+                "from_coords": {"type": "string"},
+                "to_coords": {"type": "string"},
             },
             "required": ["from_place", "to_place"],
         },
@@ -433,7 +450,7 @@ async def logo(_: Request):
 
 
 async def health(_: Request):
-    return JSONResponse({"ok": True})
+    return JSONResponse({"ok": True, "version": VERSION, "model": MODEL})
 
 
 app = Starlette(
