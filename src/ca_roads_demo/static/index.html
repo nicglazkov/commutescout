@@ -182,6 +182,15 @@
     padding: 9px 18px;
   }
   .more-btn.active { display: inline-block; }
+  .feedback { display: none; gap: 8px; margin-top: 14px; align-items: center; }
+  .feedback.active { display: flex; }
+  .feedback span { font-size: 0.8rem; color: var(--ink-soft); }
+  .feedback button {
+    font-size: 1rem; background: none; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px;
+  }
+  .feedback button:hover { border-color: var(--pine-soft); }
+  .feedback .thanks { font-weight: 600; color: var(--pine); }
   .more-btn:hover { background: #ebe4d2; }
   .more-rule {
     border: 0; border-top: 1px solid var(--line); margin: 18px 0 4px;
@@ -296,6 +305,11 @@
       <div class="chips" id="chips"></div>
       <div class="text" id="answer"></div>
       <button type="button" class="more-btn" id="morebtn">Tell me more</button>
+      <div class="feedback" id="feedback">
+        <span>Was this right?</span>
+        <button type="button" data-fb="feedback_up" aria-label="Yes">&#128077;</button>
+        <button type="button" data-fb="feedback_down" aria-label="No">&#128078;</button>
+      </div>
     </div>
     <div class="map-card" id="mapcard">
       <div id="map"></div>
@@ -318,6 +332,7 @@
   Data: CHP, Caltrans, WFIGS. Not affiliated with any agency. Conditions
   change fast; verify before you drive (511 or
   <a href="https://quickmap.dot.ca.gov">quickmap.dot.ca.gov</a>).
+  Questions are logged anonymously to improve answers.
   &middot; <a href="https://github.com/nicglazkov/ca-roads-mcp">GitHub</a>
   <span id="ver"></span>
 </footer>
@@ -649,6 +664,7 @@ useloc.addEventListener('change', () => {
     return;
   }
   locstatus.textContent = 'Locating…';
+  beacon('location_on');
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       userLocation = {
@@ -670,12 +686,22 @@ useloc.addEventListener('change', () => {
   );
 });
 
+function beacon(event, extra) {
+  const payload = JSON.stringify(Object.assign({event}, extra || {}));
+  try { navigator.sendBeacon('/api/event', new Blob([payload], {type: 'application/json'})); }
+  catch (e) { fetch('/api/event', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: payload}).catch(() => {}); }
+}
+beacon('pageview');
+
 fetch('/health').then(r => r.json()).then(d => {
   if (d.version) document.getElementById('ver').textContent = ' · v' + d.version;
 }).catch(() => {});
 
 document.querySelectorAll('.examples button').forEach(b => {
-  b.addEventListener('click', () => { input.value = b.textContent; form.requestSubmit(); });
+  b.addEventListener('click', () => {
+    beacon('example_click');
+    input.value = b.textContent; form.requestSubmit();
+  });
 });
 
 const morebtn = document.getElementById('morebtn');
@@ -685,6 +711,7 @@ async function runQuery(question, prior) {
   go.disabled = true;
   morebtn.classList.remove('active');
   morebtn.disabled = true;
+  document.getElementById('feedback').classList.remove('active');
   result.classList.add('active');
   let target = answer;
   if (prior) {
@@ -754,6 +781,16 @@ async function runQuery(question, prior) {
         morebtn.disabled = false;
         morebtn.classList.add('active');
       }
+      feedbackEl.innerHTML = '<span>Was this right?</span>' +
+        '<button type="button" data-fb="feedback_up" aria-label="Yes">&#128077;</button>' +
+        '<button type="button" data-fb="feedback_down" aria-label="No">&#128078;</button>';
+      feedbackEl.querySelectorAll('button').forEach(b => {
+        b.addEventListener('click', () => {
+          beacon(b.dataset.fb, {question: lastQuestion});
+          feedbackEl.innerHTML = '<span class="thanks">Thanks, noted.</span>';
+        });
+      });
+      feedbackEl.classList.add('active');
     }
   } catch (err) {
     statusEl.textContent = 'Connection error. Try again.';
@@ -770,8 +807,17 @@ form.addEventListener('submit', (e) => {
   if (question) runQuery(question, null);
 });
 
+const feedbackEl = document.getElementById('feedback');
+feedbackEl.querySelectorAll('button').forEach(b => {
+  b.addEventListener('click', () => {
+    beacon(b.dataset.fb, {question: lastQuestion});
+    feedbackEl.innerHTML = '<span class="thanks">Thanks, noted.</span>';
+  });
+});
+
 morebtn.addEventListener('click', () => {
   if (!lastQuestion || !lastAnswerRaw) return;
+  beacon('tell_more');
   runQuery(
     'Tell me more. Go through everything you found in detail.',
     {question: lastQuestion, answer: lastAnswerRaw}

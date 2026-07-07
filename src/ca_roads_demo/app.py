@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -23,6 +24,7 @@ from starlette.routing import Route
 
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.ratelimit import RateLimiter, RateLimitMiddleware
+from ca_roads_mcp.telemetry import log_event, visitor_hash
 
 try:
     VERSION = version("ca-roads-mcp")
@@ -340,8 +342,13 @@ async def answer_stream(
     question: str,
     location: tuple[float, float] | None = None,
     prior: dict | None = None,
+    visitor: str = "",
 ):
     client = get_client()
+    started = time.monotonic()
+    tool_calls: list[dict] = []
+    tokens = {"in": 0, "out": 0}
+    answer_chars = 0
     content = question
     if location:
         content += (
@@ -368,9 +375,16 @@ async def answer_stream(
                 yield _sse({"text": text})
             response = await stream.get_final_message()
         guards.add_usage(response.usage.input_tokens, response.usage.output_tokens)
+        tokens["in"] += response.usage.input_tokens
+        tokens["out"] += response.usage.output_tokens
+        answer_chars += sum(
+            len(b.text) for b in response.content if b.type == "text"
+        )
 
         tool_uses = [b for b in response.content if b.type == "tool_use"]
         if not tool_uses:
+            _log_question(visitor, question, location, prior, tool_calls,
+                          tokens, answer_chars, started, True)
             yield _sse({"done": True})
             return
         messages.append({"role": "assistant", "content": response.content})
@@ -378,6 +392,7 @@ async def answer_stream(
         for block in tool_uses:
             func = TOOL_FUNCS.get(block.name)
             geo = None
+            tool_started = time.monotonic()
             try:
                 result = await func(**block.input) if func else {"error": "unknown tool"}
                 content = json.dumps(result, default=str)
@@ -387,6 +402,12 @@ async def answer_stream(
             except Exception as exc:  # noqa: BLE001 - surface tool failure to the model
                 content = f"tool failed: {type(exc).__name__}: {exc}"
                 is_error = True
+            tool_calls.append({
+                "tool": block.name,
+                "args": block.input,
+                "ms": round((time.monotonic() - tool_started) * 1000),
+                "error": is_error,
+            })
             results.append(
                 {
                     "type": "tool_result",
@@ -399,8 +420,32 @@ async def answer_stream(
             if geo:
                 yield _sse({"map": geo})
         messages.append({"role": "user", "content": results})
+    _log_question(visitor, question, location, prior, tool_calls, tokens,
+                  answer_chars, started, False)
     yield _sse({"text": "\n(Stopped: too many lookups for one question.)"})
     yield _sse({"done": True})
+
+
+def _log_question(visitor, question, location, prior, tool_calls, tokens,
+                  answer_chars, started, completed):
+    log_event(
+        "question",
+        visitor=visitor,
+        question=question,
+        followup=bool(prior),
+        location_shared=bool(location),
+        tools=tool_calls,
+        input_tokens=tokens["in"],
+        output_tokens=tokens["out"],
+        est_cost_usd=round(
+            (tokens["in"] * INPUT_PER_MTOK + tokens["out"] * OUTPUT_PER_MTOK)
+            / 1_000_000, 5,
+        ),
+        answer_chars=answer_chars,
+        duration_ms=round((time.monotonic() - started) * 1000),
+        completed=completed,
+        model=MODEL,
+    )
 
 
 async def ask(request: Request):
@@ -441,10 +486,33 @@ async def ask(request: Request):
     if blocked:
         return JSONResponse({"error": blocked}, status_code=429)
     return StreamingResponse(
-        answer_stream(question, location, prior),
+        answer_stream(question, location, prior, visitor_hash(client_ip(request))),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+EVENT_ALLOWLIST = {
+    "pageview", "example_click", "location_on", "tell_more",
+    "feedback_up", "feedback_down",
+}
+
+
+async def track(request: Request):
+    """No-cookie interaction beacon from the page. Logs an event name and a
+    daily-rotating visitor hash; nothing else."""
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    event = body.get("event")
+    if event not in EVENT_ALLOWLIST:
+        return JSONResponse({"error": "unknown event"}, status_code=400)
+    fields = {"visitor": visitor_hash(client_ip(request))}
+    if event.startswith("feedback"):
+        fields["question"] = str(body.get("question") or "")[:MAX_QUESTION_CHARS]
+    log_event(event, **fields)
+    return JSONResponse({"ok": True})
 
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -470,6 +538,7 @@ app = Starlette(
         # reaches the container; /health gets through.
         Route("/health", health),
         Route("/api/ask", ask, methods=["POST"]),
+        Route("/api/event", track, methods=["POST"]),
     ]
 )
 # Request-level limiter on top of the daily caps (burst 5, ~6/min sustained).
