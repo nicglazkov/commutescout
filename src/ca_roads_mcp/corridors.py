@@ -12,6 +12,7 @@ the imprecision.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from ca_roads.geo import districts_for, haversine_meters
@@ -126,7 +127,7 @@ CORRIDORS: tuple[Corridor, ...] = (
         ),
         aliases_a=("san jose", "campbell", "los gatos"),
         aliases_b=("santa cruz", "scotts valley"),
-        aliases_mid=("summit", "the summit", "17"),
+        aliases_mid=("summit", "the summit", "highway 17"),
         buffer_meters=5_000.0,
     ),
     Corridor(
@@ -280,8 +281,15 @@ class CorridorMatch:
 
 
 def _matches(place: str, aliases: tuple[str, ...]) -> bool:
-    p = place.lower().strip().strip(".,")
-    return any(a in p or p in a for a in aliases if a)
+    """Whole-phrase alias matching.
+
+    Substring matching burned us: the street number in "17288 Skyline Blvd"
+    contained "17" and hijacked the SR-17 corridor, and "Palo Alto" contains
+    "la". Aliases now only match as whole space-bounded phrases.
+    """
+    normalized = re.sub(r"[^a-z0-9 ]", " ", place.lower())
+    haystack = f" {' '.join(normalized.split())} "
+    return any(f" {a} " in haystack for a in aliases if a)
 
 
 def resolve_corridor(from_place: str, to_place: str) -> CorridorMatch | None:
@@ -317,7 +325,10 @@ def corridor_names() -> list[str]:
 
 
 # A place counts as "on" a corridor when it snaps within this distance.
-SNAP_MAX_METERS = 30_000.0
+# Wide enough that valley towns a half-hour off the trunk (Bakersfield to
+# the Grapevine) still resolve; the clip and the destination pin keep the
+# drawn route honest.
+SNAP_MAX_METERS = 45_000.0
 
 
 def resolve_corridor_ext(

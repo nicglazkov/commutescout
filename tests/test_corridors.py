@@ -147,3 +147,15 @@ def test_point_at_endpoints():
     i280 = find("i280")
     assert corr.point_at(i280, 0) == i280.waypoints[0]
     assert corr.point_at(i280, corr.total_length(i280) + 999) == i280.waypoints[-1]
+
+
+def test_alias_matching_is_whole_phrase():
+    # "17288 Skyline Blvd, Woodside" must resolve via the word "woodside"
+    # (I-280), never via the digits "17" hijacking SR-17.
+    match = corr.resolve_corridor("San Jose", "17288 Skyline Blvd, Woodside")
+    assert match.corridor.id == "i280"
+    # "Palo Alto" must not match the "la" alias of the US-101 corridor.
+    match = corr.resolve_corridor("Palo Alto", "Los Angeles")
+    assert match is None or "la" not in match.corridor.aliases_a
+    # Whole words still work.
+    assert corr.resolve_corridor("SF", "LA").corridor.id == "us101-sf-la"
