@@ -506,14 +506,20 @@ async function roadSnap(geo, fallbackLine) {
   const inner = geo.route.slice(1, -1);
   const step = Math.max(1, Math.ceil(inner.length / 7));
   const vias = inner.filter((_, i) => i % step === 0);
+  const attempt = async (points) => {
+    // The public OSRM server rate-limits; space requests out and retry once.
+    try { return await osrmRoute(points); } catch (e) { /* retry below */ }
+    await new Promise(r => setTimeout(r, 1500));
+    try { return await osrmRoute(points); } catch (e) { return null; }
+  };
   try {
     // Ask for the corridor-following route AND the unconstrained fastest
-    // route; take the fastest unless the corridor route is close (it's the
-    // one the reported events sit on).
-    const [viaRoute, direct] = await Promise.all([
-      osrmRoute([start, ...vias, end]).catch(() => null),
-      osrmRoute([start, end]).catch(() => null),
-    ]);
+    // route (sequentially, to stay under the public server's rate limit);
+    // take the fastest unless the corridor route is close (it's the one
+    // the reported events sit on).
+    const viaRoute = await attempt([start, ...vias, end]);
+    await new Promise(r => setTimeout(r, 600));
+    const direct = await attempt([start, end]);
     let road = viaRoute || direct;
     if (viaRoute && direct && viaRoute.duration > direct.duration * 1.15) {
       road = direct;
