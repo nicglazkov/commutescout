@@ -24,6 +24,11 @@ model's memory. One connector URL, no account, no key.
 No AI assistant? The [web demo](https://ca-roads-demo-15002631928.us-west1.run.app)
 answers the same questions in a browser and plots everything on a map.
 
+<div align="center">
+  <img src="docs/screenshots/demo-bay-area.png" width="850"
+       alt="Web demo answering 'How is the Bay Area right now?' with a verdict, event chips, and a map of classified closure and incident markers">
+</div>
+
 ## Add to Claude
 
 Hosted (recommended): add a custom connector with this URL:

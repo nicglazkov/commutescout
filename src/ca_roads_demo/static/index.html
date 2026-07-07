@@ -313,6 +313,7 @@
   change fast; verify before you drive (511 or
   <a href="https://quickmap.dot.ca.gov">quickmap.dot.ca.gov</a>).
   &middot; <a href="https://github.com/nicglazkov/ca-roads-mcp">GitHub</a>
+  <span id="ver"></span>
 </footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -564,6 +565,10 @@ useloc.addEventListener('change', () => {
     { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
   );
 });
+
+fetch('/health').then(r => r.json()).then(d => {
+  if (d.version) document.getElementById('ver').textContent = ' · v' + d.version;
+}).catch(() => {});
 
 document.querySelectorAll('.examples button').forEach(b => {
   b.addEventListener('click', () => { input.value = b.textContent; form.requestSubmit(); });

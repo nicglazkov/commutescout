@@ -118,3 +118,32 @@ def test_fires_use_wide_buffer_and_no_route_test():
     )
     placed = corr.events_on_corridor(i80, [fire])
     assert len(placed) == 1
+
+
+def test_resolve_ext_snaps_landmark_to_corridor():
+    # Alice's Restaurant (SR-84/Skyline, Woodside) is on no alias list, but
+    # its coordinates snap to the I-280 Peninsula corridor.
+    match = corr.resolve_corridor_ext(
+        "San Jose", "Alice's Restaurant", None, (37.417, -122.276)
+    )
+    assert match is not None
+    assert match.corridor.id == "i280"
+
+
+def test_clip_geometry_spans_only_the_window():
+    i280 = find("i280")
+    total = corr.total_length(i280)
+    # From the San Jose end back toward Woodside (mid-corridor).
+    _, along_woodside = corr.distance_to_corridor(i280, 37.417, -122.276)
+    pts = corr.clip_geometry(i280, total, along_woodside)
+    # Travel order: starts near San Jose, ends near Woodside; SF (37.77)
+    # never appears.
+    assert pts[0][0] < 37.45
+    assert abs(pts[-1][0] - 37.40) < 0.12
+    assert max(lat for lat, lon in pts) < 37.6
+
+
+def test_point_at_endpoints():
+    i280 = find("i280")
+    assert corr.point_at(i280, 0) == i280.waypoints[0]
+    assert corr.point_at(i280, corr.total_length(i280) + 999) == i280.waypoints[-1]

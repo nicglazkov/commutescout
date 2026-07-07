@@ -316,6 +316,85 @@ def corridor_names() -> list[str]:
     return [c.name for c in CORRIDORS]
 
 
+# A place counts as "on" a corridor when it snaps within this distance.
+SNAP_MAX_METERS = 30_000.0
+
+
+def resolve_corridor_ext(
+    from_place: str,
+    to_place: str,
+    from_coords: tuple[float, float] | None,
+    to_coords: tuple[float, float] | None,
+) -> CorridorMatch | None:
+    """Alias resolution first; fall back to coordinate proximity.
+
+    The fallback makes landmarks work ("Alice's Restaurant" is on nobody's
+    alias list, but its coordinates snap to the I-280 corridor): a side
+    qualifies by alias match or by snapping within SNAP_MAX_METERS.
+    """
+    match = resolve_corridor(from_place, to_place)
+    if match is not None:
+        return match
+    best = None
+    best_key: tuple | None = None
+    for c in CORRIDORS:
+        from_alias = _matches(from_place, c.all_aliases())
+        to_alias = _matches(to_place, c.all_aliases())
+        from_snap = (
+            distance_to_corridor(c, *from_coords)[0] if from_coords else None
+        )
+        to_snap = distance_to_corridor(c, *to_coords)[0] if to_coords else None
+        from_ok = from_alias or (from_snap is not None and from_snap <= SNAP_MAX_METERS)
+        to_ok = to_alias or (to_snap is not None and to_snap <= SNAP_MAX_METERS)
+        if not (from_ok and to_ok):
+            continue
+        score = (2 if from_alias else 1) + (2 if to_alias else 1)
+        snap_sum = (from_snap or 0.0) + (to_snap or 0.0)
+        key = (score, -snap_sum)
+        if best_key is None or key > best_key:
+            best, best_key = c, key
+    if best is None:
+        return None
+    return CorridorMatch(corridor=best, reversed=_matches(from_place, best.aliases_b))
+
+
+def total_length(corridor: Corridor) -> float:
+    return sum(_segment_lengths(corridor.waypoints))
+
+
+def point_at(corridor: Corridor, along_target: float) -> tuple[float, float]:
+    """Interpolated point at a distance along the polyline (clamped)."""
+    wps = corridor.waypoints
+    remaining = max(0.0, along_target)
+    for i in range(len(wps) - 1):
+        (lat1, lon1), (lat2, lon2) = wps[i], wps[i + 1]
+        seg = haversine_meters(lat1, lon1, lat2, lon2)
+        if remaining <= seg:
+            t = remaining / seg if seg else 0.0
+            return lat1 + (lat2 - lat1) * t, lon1 + (lon2 - lon1) * t
+        remaining -= seg
+    return wps[-1]
+
+
+def clip_geometry(
+    corridor: Corridor, along_a: float, along_b: float
+) -> list[list[float]]:
+    """Polyline from along_a to along_b (travel order preserved, so the line
+    is reversed when along_a > along_b)."""
+    lo, hi = sorted((along_a, along_b))
+    points: list[list[float]] = [list(point_at(corridor, lo))]
+    cumulative = 0.0
+    wps = corridor.waypoints
+    for i in range(len(wps) - 1):
+        cumulative += haversine_meters(*wps[i], *wps[i + 1])
+        if lo < cumulative < hi:
+            points.append(list(wps[i + 1]))
+    points.append(list(point_at(corridor, hi)))
+    if along_a > along_b:
+        points.reverse()
+    return points
+
+
 # ── Geometry along the polyline ──────────────────────────────────────────────
 
 
