@@ -10,6 +10,10 @@ COPY src ./src
 # with ca-roads-demo.
 RUN pip install --no-cache-dir ".[demo]"
 
+# Run as a non-root user; nothing in the image needs write access.
+RUN useradd --create-home --uid 1001 app
+USER app
+
 ENV PORT=8080
 EXPOSE 8080
 
