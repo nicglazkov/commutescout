@@ -5,11 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CA Roads. Live California road conditions</title>
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="/static/fonts/fonts.css">
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
 <style>
   :root {
     --pine: #1c3a2e;
@@ -333,12 +330,14 @@
   change fast; verify before you drive (511 or
   <a href="https://quickmap.dot.ca.gov">quickmap.dot.ca.gov</a>).
   Questions are logged anonymously to improve answers.
+  Map tiles come from CARTO; the route preview and place lookup use the
+  OSRM, Valhalla, Nominatim, and Photon public OpenStreetMap services,
+  which see the coordinates involved.
   &middot; <a href="https://github.com/nicglazkov/ca-roads-mcp">GitHub</a>
   <span id="ver"></span>
 </footer>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="/static/vendor/leaflet.js"></script>
 <script>
 const form = document.getElementById('form');
 const input = document.getElementById('q');
