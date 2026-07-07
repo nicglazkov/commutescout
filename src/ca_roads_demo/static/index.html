@@ -232,6 +232,10 @@
     content: ""; display: inline-block; width: 9px; height: 9px;
     border-radius: 50%; margin-right: 5px; background: var(--dot);
   }
+  .legend span.ring::before {
+    background: transparent; border: 2px solid var(--dot);
+    width: 7px; height: 7px;
+  }
   footer {
     border-top: 1px solid var(--line);
     padding: 18px 20px; text-align: center;
@@ -291,8 +295,11 @@
     <div class="map-card" id="mapcard">
       <div id="map"></div>
       <div class="legend">
+        <span style="--dot:#7f1d1d">road fully closed</span>
+        <span style="--dot:#a02c2c">lanes closed</span>
+        <span class="ring" style="--dot:#a02c2c">one-way / rolling work</span>
+        <span style="--dot:#d9a0a0">ramp closed</span>
         <span style="--dot:#c9611a">incident</span>
-        <span style="--dot:#a02c2c">closure</span>
         <span style="--dot:#2b6cb0">chain control</span>
         <span style="--dot:#d97706">wildfire</span>
         <span style="--dot:#1c3a2e">route</span>
@@ -324,9 +331,31 @@ const loadmsg = document.getElementById('loadmsg');
 const KIND_COLORS = {
   incident: '#c9611a',
   lane_closure: '#a02c2c',
+  full_closure: '#7f1d1d',
+  ramp_closure: '#d9a0a0',
   chain_control: '#2b6cb0',
   wildfire: '#d97706',
 };
+// Marker style per closure_class: severity should be readable at a glance.
+const CLOSURE_STYLES = {
+  'full-roadway':      { radius: 10, fillColor: '#7f1d1d', fillOpacity: 1 },
+  'lane':              { radius: 7,  fillColor: '#a02c2c', fillOpacity: 0.95 },
+  'one-way-traffic':   { radius: 7,  fillColor: '#a02c2c', fillOpacity: 0.15,
+                         color: '#a02c2c', weight: 2.5 },
+  'alternating-lanes': { radius: 7,  fillColor: '#a02c2c', fillOpacity: 0.15,
+                         color: '#a02c2c', weight: 2.5 },
+  'moving':            { radius: 6,  fillColor: '#a02c2c', fillOpacity: 0.15,
+                         color: '#a02c2c', weight: 2 },
+  'traffic-break':     { radius: 6,  fillColor: '#a02c2c', fillOpacity: 0.15,
+                         color: '#a02c2c', weight: 2 },
+  'ramp':              { radius: 5,  fillColor: '#d9a0a0', fillOpacity: 0.9 },
+  'other':             { radius: 5,  fillColor: '#d9a0a0', fillOpacity: 0.9 },
+};
+function closureChipKind(cls) {
+  if (cls === 'full-roadway') return 'full_closure';
+  if (cls === 'ramp' || cls === 'other') return 'ramp_closure';
+  return 'lane_closure';
+}
 
 // ── Loading animation ────────────────────────────────────────────────
 const LOAD_MSGS = [
@@ -413,6 +442,7 @@ let layerFires = null;   // fires: shown, but never widen the view alone
 const chipsEl = document.getElementById('chips');
 const KIND_LABELS = {
   incident: 'incident', lane_closure: 'closure',
+  full_closure: 'road fully closed', ramp_closure: 'ramp closed',
   chain_control: 'chain control', wildfire: 'wildfire',
 };
 let chipCounts = {};
@@ -471,14 +501,21 @@ function drawGeo(geo) {
   }
   for (const m of geo.markers || []) {
     const target = m.kind === 'wildfire' ? layerFires : layerPrimary;
-    chipCounts[m.kind] = (chipCounts[m.kind] || 0) + 1;
-    L.circleMarker([m.lat, m.lon], {
-      radius: 7,
-      color: '#fffdf7',
-      weight: 1.5,
-      fillColor: KIND_COLORS[m.kind] || '#26261f',
-      fillOpacity: 0.95,
-    }).bindPopup(m.label ? String(m.label) : m.kind).addTo(target);
+    let style = {
+      radius: 7, color: '#fffdf7', weight: 1.5,
+      fillColor: KIND_COLORS[m.kind] || '#26261f', fillOpacity: 0.95,
+    };
+    let chipKind = m.kind;
+    if (m.kind === 'lane_closure') {
+      chipKind = closureChipKind(m.cls);
+      style = Object.assign(
+        { color: '#fffdf7', weight: 1.5 },
+        CLOSURE_STYLES[m.cls] || CLOSURE_STYLES['lane']
+      );
+    }
+    chipCounts[chipKind] = (chipCounts[chipKind] || 0) + 1;
+    L.circleMarker([m.lat, m.lon], style)
+      .bindPopup(m.label ? String(m.label) : m.kind).addTo(target);
   }
   renderChips();
   // Zoom to the road-relevant layer; fall back to fires only when the

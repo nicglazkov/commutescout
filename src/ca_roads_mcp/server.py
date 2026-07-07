@@ -1,6 +1,6 @@
 """MCP server: live California road conditions.
 
-Five tools over the ca_roads feed layer, served over stdio (local dev) or
+Six tools over the ca_roads feed layer, served over stdio (local dev) or
 streamable HTTP (hosted). Docstrings are written for the LLM consuming the
 tools: they say what the data is, how fresh it is, and where it falls short.
 """

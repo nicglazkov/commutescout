@@ -1,7 +1,8 @@
 """Demo backend: a small Starlette app that answers road questions.
 
-POST /api/ask runs Claude Haiku in a tool loop against the same five tool
-functions the MCP server exposes, and streams the answer as SSE. Hard cost
+POST /api/ask runs Claude (claude-sonnet-5 by default, via DEMO_MODEL) in a
+tool loop against the same six tool functions the MCP server exposes, and
+streams the answer as SSE. Hard cost
 guards: per-IP rate limit, per-IP daily question cap, and a global daily
 dollar cap, all in process (single Cloud Run instance for v1).
 """
@@ -263,9 +264,12 @@ def extract_geo(tool: str, result: dict) -> dict | None:
     """Pull mappable geometry out of a tool result for the page's map panel."""
     markers: list[dict] = []
 
-    def add(kind: str, lat, lon, label: str) -> None:
+    def add(kind: str, lat, lon, label: str, cls: str | None = None) -> None:
         if isinstance(lat, int | float) and isinstance(lon, int | float) and lat:
-            markers.append({"kind": kind, "lat": lat, "lon": lon, "label": label})
+            marker = {"kind": kind, "lat": lat, "lon": lon, "label": label}
+            if cls:
+                marker["cls"] = cls
+            markers.append(marker)
 
     if tool == "check_route":
         for event in result.get("events", []):
@@ -274,7 +278,8 @@ def extract_geo(tool: str, result: dict) -> dict | None:
             label = event.get("summary", "")
             if kind == "lane_closure":
                 begin = d.get("begin", {})
-                add(kind, begin.get("lat"), begin.get("lon"), label)
+                add(kind, begin.get("lat"), begin.get("lon"), label,
+                    d.get("closure_class"))
             else:
                 add(kind, d.get("lat"), d.get("lon"), label)
     for item in result.get("incidents", []):
@@ -283,7 +288,7 @@ def extract_geo(tool: str, result: dict) -> dict | None:
     for item in result.get("closures", []):
         begin = item.get("begin", {})
         add("lane_closure", begin.get("lat"), begin.get("lon"),
-            item.get("summary", ""))
+            item.get("summary", ""), item.get("closure_class"))
     for item in result.get("chain_controls", []):
         add("chain_control", item.get("lat"), item.get("lon"),
             item.get("summary", ""))
