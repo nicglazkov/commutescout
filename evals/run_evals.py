@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import re
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
@@ -37,7 +38,9 @@ GOLDEN_DIR = Path(__file__).parent / "golden"
 RESULTS_DIR = Path(__file__).parent / "results"
 
 DEFAULT_MODELS = ["claude-haiku-4-5", "claude-sonnet-5"]
-JUDGE_MODEL = "claude-sonnet-5"
+# The judge must not be an evaluated model (self-grading bias); Opus is
+# a tier above both candidates and the call volume is small.
+JUDGE_MODEL = "claude-opus-4-8"
 MAX_TOOL_TURNS = 6
 CONCURRENCY = 4
 
@@ -252,10 +255,11 @@ def write_report(all_results: list[dict], models: list[str], path: Path) -> None
         "# Eval results",
         "",
         f"Generated {datetime.now(UTC).isoformat(timespec='seconds')} by "
-        "`evals/run_evals.py`. Models answer the golden questions using the "
-        "MCP tool surface served from recorded fixtures; grading is exact-fact "
-        "matching plus an LLM judge scored against ground truth. "
-        f"Judge: `{JUDGE_MODEL}`.",
+        f"`evals/run_evals.py` from `{os.environ.get('EVAL_SOURCE_REF', 'local')}`. "
+        "Models answer the golden questions using the MCP tool surface served "
+        "from recorded fixtures; grading is exact-fact matching plus an LLM "
+        f"judge scored against ground truth. Judge: `{JUDGE_MODEL}` "
+        "(not an evaluated model).",
         "",
         "## Scorecard",
         "",
@@ -300,11 +304,27 @@ def write_report(all_results: list[dict], models: list[str], path: Path) -> None
             by_category.items(), key=lambda kv: -len(kv[1])
         ):
             example = rs[0]
-            note = (example.get("judge_note") or "").replace("|", "/")[:100]
+            note = (example.get("judge_note") or "").replace("|", "/")
+            if len(note) > 100:
+                note = note[:100].rsplit(" ", 1)[0] + "..."
             lines.append(
                 f"| {category} | {len(rs)} | {example['model']} / "
                 f"{example['id']}: {note} |"
             )
+
+    lines += ["", "## Tool selection", ""]
+    routed = [r for r in all_results if r.get("tools_called")]
+    if routed:
+        wrong = [
+            r for r in routed if r["tools_called"][0] != r["tool"]
+        ]
+        lines.append(
+            f"{len(wrong)}/{len(routed)} answers led with a different tool "
+            "than the golden question targets (declared vs first observed "
+            "call). Not always an error - check_region can legitimately "
+            "answer a get_incidents question - but a rising rate means the "
+            "tool descriptions are drifting."
+        )
 
     qualities = [r["quality"] for r in all_results if r.get("quality")]
     if qualities:
@@ -386,6 +406,17 @@ async def main() -> None:
 
     write_report(all_results, models, Path(args.report))
     write_badge(all_results, RESULTS_DIR / "badge.json")
+    with open(RESULTS_DIR / "history.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps({
+            "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+            "source_ref": os.environ.get("EVAL_SOURCE_REF", "local"),
+            "judge": JUDGE_MODEL,
+            "questions": len(questions),
+            "results": {
+                m: rate([r for r in all_results if r["model"] == m])
+                for m in models
+            },
+        }) + "\n")
     for model in models:
         print(model, rate([r for r in all_results if r["model"] == model]))
 

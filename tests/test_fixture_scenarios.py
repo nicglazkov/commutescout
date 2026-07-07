@@ -209,3 +209,18 @@ async def test_local_trip_gets_center_hint(scenario):
     )
     assert result.get("local_trip") is True
     assert "suggested_center" in result
+
+
+def test_synthetic_fixtures_have_not_rotted():
+    """The synthetic closures use a fixed far-future end epoch so 'in place
+    now' stays true. When that horizon nears, regenerate the fixtures."""
+    import datetime
+
+    from evals.build_fixtures import FAR_FUTURE_EPOCH
+
+    horizon = datetime.datetime.fromtimestamp(FAR_FUTURE_EPOCH, datetime.UTC)
+    remaining = horizon - datetime.datetime.now(datetime.UTC)
+    assert remaining.days > 365, (
+        "Synthetic fixture closures expire within a year (FAR_FUTURE_EPOCH). "
+        "Bump it in evals/build_fixtures.py and rerun the builder."
+    )
