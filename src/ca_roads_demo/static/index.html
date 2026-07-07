@@ -492,41 +492,84 @@ async function osrmRoute(points) {
     .map(([lat, lon]) => `${lon.toFixed(5)},${lat.toFixed(5)}`).join(';');
   const res = await fetch(
     `https://router.project-osrm.org/route/v1/driving/${pts}` +
-    '?overview=full&geometries=geojson', { signal: AbortSignal.timeout(8000) }
+    '?overview=full&geometries=geojson', { signal: AbortSignal.timeout(6000) }
   );
   const data = await res.json();
   if (data.code !== 'Ok' || !data.routes?.length) return null;
-  return data.routes[0];
+  const r = data.routes[0];
+  return {
+    latlngs: r.geometry.coordinates.map(([lon, lat]) => [lat, lon]),
+    distance: r.distance,
+    duration: r.duration,
+  };
+}
+
+// Valhalla encodes geometry as a precision-6 polyline.
+function decodePolyline6(str) {
+  let index = 0, lat = 0, lon = 0;
+  const out = [];
+  while (index < str.length) {
+    for (const which of [0, 1]) {
+      let shift = 0, result = 0, byte;
+      do {
+        byte = str.charCodeAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      const delta = (result & 1) ? ~(result >> 1) : (result >> 1);
+      if (which === 0) lat += delta; else lon += delta;
+    }
+    out.push([lat / 1e6, lon / 1e6]);
+  }
+  return out;
+}
+
+async function valhallaRoute(points) {
+  const locations = points.map(([lat, lon], i) => ({
+    lat, lon,
+    type: (i === 0 || i === points.length - 1) ? 'break' : 'through',
+  }));
+  const res = await fetch(
+    'https://valhalla1.openstreetmap.de/route?json=' +
+    encodeURIComponent(JSON.stringify({ locations, costing: 'auto' })),
+    { signal: AbortSignal.timeout(6000) }
+  );
+  const data = await res.json();
+  if (!data.trip?.legs?.length) return null;
+  return {
+    latlngs: data.trip.legs.flatMap(l => decodePolyline6(l.shape)),
+    distance: data.trip.summary.length * 1000,
+    duration: data.trip.summary.time,
+  };
+}
+
+// Public routers come and go; try OSRM, fall back to Valhalla.
+async function anyRoute(points) {
+  try { return await osrmRoute(points); } catch (e) { /* next provider */ }
+  try { return await valhallaRoute(points); } catch (e) { return null; }
 }
 
 async function roadSnap(geo, fallbackLine) {
   const start = geo.origin || geo.route[0];
   const end = geo.destination || geo.route[geo.route.length - 1];
-  // Vias keep OSRM on our corridor; thin to keep the URL reasonable.
+  // Vias keep the router on our corridor; thin to keep the URL reasonable.
   const inner = geo.route.slice(1, -1);
   const step = Math.max(1, Math.ceil(inner.length / 7));
   const vias = inner.filter((_, i) => i % step === 0);
-  const attempt = async (points) => {
-    // The public OSRM server rate-limits; space requests out and retry once.
-    try { return await osrmRoute(points); } catch (e) { /* retry below */ }
-    await new Promise(r => setTimeout(r, 1500));
-    try { return await osrmRoute(points); } catch (e) { return null; }
-  };
   try {
-    // Ask for the corridor-following route AND the unconstrained fastest
-    // route (sequentially, to stay under the public server's rate limit);
-    // take the fastest unless the corridor route is close (it's the one
-    // the reported events sit on).
-    const viaRoute = await attempt([start, ...vias, end]);
-    await new Promise(r => setTimeout(r, 600));
-    const direct = await attempt([start, end]);
+    // The corridor-following route AND the unconstrained fastest route
+    // (sequentially, gently on the public servers); the faster wins unless
+    // the corridor route is close - the reported events sit on it.
+    const viaRoute = await anyRoute([start, ...vias, end]);
+    await new Promise(r => setTimeout(r, 500));
+    const direct = await anyRoute([start, end]);
     let road = viaRoute || direct;
     if (viaRoute && direct && viaRoute.duration > direct.duration * 1.15) {
       road = direct;
     }
     if (!road) return;
     layerPrimary.removeLayer(fallbackLine);
-    L.polyline(road.geometry.coordinates.map(([lon, lat]) => [lat, lon]), {
+    L.polyline(road.latlngs, {
       color: '#1c3a2e', weight: 4, opacity: 0.75,
     }).addTo(layerPrimary);
     const miles = road.distance / 1609.344;
