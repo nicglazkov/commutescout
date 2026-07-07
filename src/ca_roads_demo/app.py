@@ -23,7 +23,11 @@ from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Route
 
 from ca_roads_mcp import server as tools
-from ca_roads_mcp.ratelimit import RateLimiter, RateLimitMiddleware
+from ca_roads_mcp.ratelimit import (
+    RateLimiter,
+    RateLimitMiddleware,
+    trusted_client_ip,
+)
 from ca_roads_mcp.telemetry import log_event, visitor_hash
 
 try:
@@ -274,10 +278,10 @@ guards = DailyGuards()
 
 
 def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return trusted_client_ip(
+        request.headers.get("x-forwarded-for"),
+        request.client.host if request.client else None,
+    )
 
 
 def _sse(payload: dict) -> str:
