@@ -1,0 +1,50 @@
+# Real recorded day: 2026-07-07, early July fire season. Recorded live from
+# all 26 feeds by evals/record.py (committed gzipped). The day's shape: 197
+# CHP incidents, 293 active lane closures statewide (none full-roadway in
+# the Bay Area), 232 active wildfires including the LOST fire (7,834 acres,
+# 100 percent contained), zero chain controls (summer), and Caltrans D12's
+# chain feed answering 500 (replayed as recorded).
+scenario: real-2026-07-07
+questions:
+  - id: real-chains-statewide
+    tool: get_chain_controls
+    question: "Any chain controls anywhere in California right now?"
+    ground_truth: "No, none anywhere in the state. It is July; no chain controls are active."
+    expect:
+      not_contains: ["R-1", "R-2", "R-3"]
+
+  - id: real-fires-near-i5
+    tool: get_wildfires
+    question: "Any wildfires I should know about along I-5?"
+    ground_truth: "Yes, dozens of active fires sit within range of the I-5 corridor, including the BIG and WILDWOOD fires. The answer should name at least one specific fire."
+    expect:
+      contains_any: ["BIG", "WILDWOOD", "BROAD"]
+
+  - id: real-lost-fire
+    tool: get_wildfires
+    question: "How big is the LOST fire and is it contained?"
+    ground_truth: "The LOST fire is about 7,834 acres and 100 percent contained."
+    expect:
+      contains: ["LOST"]
+      contains_any: ["7,834", "7834", "7,800", "100"]
+
+  - id: real-i80-closures
+    tool: get_lane_closures
+    question: "Any closures on I-80 right now?"
+    ground_truth: "Yes, 9 closures on I-80: mostly ramp closures plus lane work. None are full roadway closures."
+    expect:
+      contains_any: ["ramp", "lane"]
+
+  - id: real-sac-reno
+    tool: check_route
+    question: "How does Sacramento to Reno look right now?"
+    ground_truth: "Driveable. About 8 lane closures along I-80 and 4 active CHP incidents on the corridor; no chain controls, no full closures."
+    expect:
+      not_contains: ["R-2", "chains required"]
+
+  - id: real-bay-area
+    tool: check_region
+    question: "How is the bay area right now?"
+    ground_truth: "Normal summer conditions: 29 CHP incidents (5 with injuries), 37 lane closures of which 4 are ramp closures and none are full roadway closures, no chain controls, no wildfires inside the region."
+    expect:
+      not_contains: ["road fully closed", "chain controls active"]

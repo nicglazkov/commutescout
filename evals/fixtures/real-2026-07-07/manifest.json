@@ -1,0 +1,136 @@
+{
+  "scenario": "real-2026-07-07",
+  "recorded_at": "2026-07-07T22:58:02+00:00",
+  "files": {
+    "chp.xml": {
+      "url": "https://media.chp.ca.gov/sa_xml/sa.xml",
+      "status": 200,
+      "bytes": 302197
+    },
+    "lcs_d01.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d1/lcs/lcsStatusD01.xml",
+      "status": 200,
+      "bytes": 1509933
+    },
+    "cc_d01.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d1/cc/ccStatusD01.xml",
+      "status": 200,
+      "bytes": 93285
+    },
+    "lcs_d02.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d2/lcs/lcsStatusD02.xml",
+      "status": 200,
+      "bytes": 652791
+    },
+    "cc_d02.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d2/cc/ccStatusD02.xml",
+      "status": 200,
+      "bytes": 198394
+    },
+    "lcs_d03.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d3/lcs/lcsStatusD03.xml",
+      "status": 200,
+      "bytes": 2701528
+    },
+    "cc_d03.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d3/cc/ccStatusD03.xml",
+      "status": 200,
+      "bytes": 218092
+    },
+    "lcs_d04.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d4/lcs/lcsStatusD04.xml",
+      "status": 200,
+      "bytes": 5721999
+    },
+    "cc_d04.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d4/cc/ccStatusD04.xml",
+      "status": 500,
+      "bytes": 193
+    },
+    "lcs_d05.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d5/lcs/lcsStatusD05.xml",
+      "status": 200,
+      "bytes": 1569281
+    },
+    "cc_d05.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d5/cc/ccStatusD05.xml",
+      "status": 500,
+      "bytes": 193
+    },
+    "lcs_d06.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d6/lcs/lcsStatusD06.xml",
+      "status": 200,
+      "bytes": 1290166
+    },
+    "cc_d06.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d6/cc/ccStatusD06.xml",
+      "status": 200,
+      "bytes": 64173
+    },
+    "lcs_d07.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d7/lcs/lcsStatusD07.xml",
+      "status": 200,
+      "bytes": 12386013
+    },
+    "cc_d07.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d7/cc/ccStatusD07.xml",
+      "status": 200,
+      "bytes": 40822
+    },
+    "lcs_d08.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d8/lcs/lcsStatusD08.xml",
+      "status": 200,
+      "bytes": 3796394
+    },
+    "cc_d08.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d8/cc/ccStatusD08.xml",
+      "status": 200,
+      "bytes": 76765
+    },
+    "lcs_d09.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d9/lcs/lcsStatusD09.xml",
+      "status": 200,
+      "bytes": 227943
+    },
+    "cc_d09.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d9/cc/ccStatusD09.xml",
+      "status": 200,
+      "bytes": 125513
+    },
+    "lcs_d10.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d10/lcs/lcsStatusD10.xml",
+      "status": 200,
+      "bytes": 1465963
+    },
+    "cc_d10.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d10/cc/ccStatusD10.xml",
+      "status": 200,
+      "bytes": 141089
+    },
+    "lcs_d11.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d11/lcs/lcsStatusD11.xml",
+      "status": 200,
+      "bytes": 1453266
+    },
+    "cc_d11.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d11/cc/ccStatusD11.xml",
+      "status": 200,
+      "bytes": 10443
+    },
+    "lcs_d12.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d12/lcs/lcsStatusD12.xml",
+      "status": 200,
+      "bytes": 3470078
+    },
+    "cc_d12.xml": {
+      "url": "https://cwwp2.dot.ca.gov/data/d12/cc/ccStatusD12.xml",
+      "status": 500,
+      "bytes": 193
+    },
+    "wfigs.json": {
+      "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query?where=POOState%3D%27US-CA%27+AND+IncidentTypeCategory%3D%27WF%27+AND+ActiveFireCandidate%3D1&outFields=IncidentName%2CIncidentSize%2CPercentContained%2CFireDiscoveryDateTime%2CUniqueFireIdentifier%2CIncidentTypeCategory&returnGeometry=true&outSR=4326&f=json",
+      "status": 200,
+      "bytes": 60728
+    }
+  }
+}
