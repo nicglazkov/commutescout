@@ -177,3 +177,9 @@ Docs: [deploying](docs/deploy.md) ·
 Data: CHP, Caltrans, WFIGS. Not affiliated with any agency. Conditions
 change faster than any feed; verify before you drive (511 or
 [quickmap.dot.ca.gov](https://quickmap.dot.ca.gov)).
+
+The server resolves place names through the Nominatim and Photon
+OpenStreetMap geocoders. The web demo additionally loads map tiles from
+CARTO and fetches its route preview from the public OSRM and Valhalla
+routers, so those services see the coordinates involved. Fonts and map
+libraries are served locally.
