@@ -1,0 +1,25 @@
+# Controls what `gcloud run deploy --source .` uploads to Cloud Build.
+# Without this file gcloud falls back to .gitignore, but be explicit:
+# the private planning docs must never leave the machine.
+.gcloudignore
+.git
+.gitignore
+docs-private/
+.env
+.env.*
+*.local.json
+credentials*.json
+service-account*.json
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+tests/
+evals/fixtures/
+evals/results/
+docs/screenshots/

@@ -44,3 +44,16 @@ def test_limiter_prunes_at_max_keys():
         limiter.allow(f"ip{i}", now + i)
     limiter.allow("overflow", now + 10)
     assert len(limiter._buckets) <= 4
+
+
+def test_trusted_client_ip_ignores_spoofed_first_hop():
+    from ca_roads_mcp.ratelimit import trusted_client_ip
+
+    # A client sets a fake XFF; Cloud Run appends the address it saw.
+    assert trusted_client_ip("6.6.6.6, 203.0.113.9", "10.0.0.1") == "203.0.113.9"
+    assert trusted_client_ip("a, b, 198.51.100.2", "10.0.0.1") == "198.51.100.2"
+    # No spoofing: single platform-appended entry.
+    assert trusted_client_ip("203.0.113.9", "10.0.0.1") == "203.0.113.9"
+    # No header at all (local dev): transport peer.
+    assert trusted_client_ip(None, "127.0.0.1") == "127.0.0.1"
+    assert trusted_client_ip("  ,  ", None) == "unknown"

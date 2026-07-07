@@ -19,7 +19,21 @@ import re
 import sys
 from datetime import UTC, datetime
 
-_SALT = os.environ.get("TELEMETRY_SALT", "ca-roads")
+_SALT = os.environ.get("TELEMETRY_SALT", "")
+if not _SALT:
+    _SALT = "ca-roads-dev"
+    if os.environ.get("PORT"):
+        # Deployed without a real salt: visitor hashes become brute-forceable
+        # back to IPv4 addresses. Shout about it in the logs.
+        print(
+            json.dumps({
+                "severity": "WARNING",
+                "message": "TELEMETRY_SALT is not set; visitor hashes are "
+                           "built from a public default. Set a random "
+                           "32+ char TELEMETRY_SALT on this service.",
+            }),
+            flush=True,
+        )
 
 
 def visitor_hash(ip: str) -> str:

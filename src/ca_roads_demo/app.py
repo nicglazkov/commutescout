@@ -20,10 +20,15 @@ import anthropic
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, StreamingResponse
-from starlette.routing import Route
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 
 from ca_roads_mcp import server as tools
-from ca_roads_mcp.ratelimit import RateLimiter, RateLimitMiddleware
+from ca_roads_mcp.ratelimit import (
+    RateLimiter,
+    RateLimitMiddleware,
+    trusted_client_ip,
+)
 from ca_roads_mcp.telemetry import log_event, redact_coords, visitor_hash
 
 try:
@@ -274,10 +279,10 @@ guards = DailyGuards()
 
 
 def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return trusted_client_ip(
+        request.headers.get("x-forwarded-for"),
+        request.client.host if request.client else None,
+    )
 
 
 def _sse(payload: dict) -> str:
@@ -539,6 +544,7 @@ app = Starlette(
         Route("/health", health),
         Route("/api/ask", ask, methods=["POST"]),
         Route("/api/event", track, methods=["POST"]),
+        Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
     ]
 )
 # Request-level limiter on top of the daily caps (burst 5, ~6/min sustained).

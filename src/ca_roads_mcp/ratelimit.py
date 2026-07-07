@@ -11,6 +11,23 @@ from __future__ import annotations
 import time
 
 
+def trusted_client_ip(forwarded_for: str | None, peer: str | None) -> str:
+    """The client IP that Google's frontend vouches for.
+
+    X-Forwarded-For arrives as "<whatever the client sent>, <real client>"
+    on Cloud Run: the platform APPENDS the IP it actually saw. Trusting the
+    first entry (the old behavior) let a client spoof its identity with one
+    header and bypass per-IP limits; the last entry is the only one added
+    by infrastructure we trust. Off Cloud Run there is usually no header
+    and the transport peer is the answer.
+    """
+    if forwarded_for:
+        entries = [e.strip() for e in forwarded_for.split(",") if e.strip()]
+        if entries:
+            return entries[-1]
+    return peer or "unknown"
+
+
 class TokenBucket:
     """Classic token bucket: ``capacity`` burst, ``refill_per_second`` sustained."""
 
@@ -78,13 +95,12 @@ class RateLimitMiddleware:
 
     @staticmethod
     def _client_key(scope) -> str:
+        forwarded = None
         for name, value in scope.get("headers") or []:
             if name == b"x-forwarded-for":
-                first = value.decode("latin-1").split(",")[0].strip()
-                if first:
-                    return first
+                forwarded = value.decode("latin-1")
         client = scope.get("client")
-        return client[0] if client else "unknown"
+        return trusted_client_ip(forwarded, client[0] if client else None)
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] != "http":
