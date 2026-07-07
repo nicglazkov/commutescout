@@ -1,5 +1,9 @@
 """Recording mode: capture all raw feed responses into a scenario directory.
 
+Raw captures run ~36 MB; gzip the .xml/.json files before committing
+(fixture_mode serves name.gz transparently and replays each feed's recorded
+HTTP status from the manifest).
+
 Usage:
     python evals/record.py <scenario-name>
 
