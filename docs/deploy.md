@@ -23,18 +23,39 @@ gcloud run deploy ca-roads-mcp \
   --allow-unauthenticated \
   --memory 512Mi \
   --cpu 1 \
-  --max-instances 2 \
+  --min-instances 0 \
+  --max-instances 1 \
   --concurrency 40
 ```
 
 The MCP endpoint is `https://<service-url>/mcp`.
 
+## Demo service
+
+Same image, different command. Every rate and cost guard is in-process,
+so the demo MUST run with `--max-instances 1`: a second instance would
+silently double the per-IP and daily-dollar caps.
+
+```sh
+gcloud run deploy ca-roads-demo \
+  --source . \
+  --command ca-roads-demo \
+  --region us-west1 \
+  --allow-unauthenticated \
+  --memory 512Mi \
+  --cpu 1 \
+  --min-instances 0 \
+  --max-instances 1 \
+  --concurrency 20 \
+  --set-secrets ANTHROPIC_API_KEY=anthropic-api-key:latest \
+  --set-env-vars DEMO_MODEL=claude-sonnet-5,TELEMETRY_SALT=<random 32 chars>
+```
+
 ## Notes
 
-- No secrets are needed: all upstream feeds are free and public.
+- The MCP service needs no secrets: all upstream feeds are free and public.
 - Rate limiting is per-IP in process (token bucket, 20 burst / 30 per
-  minute sustained). `--max-instances 2` caps worst-case fan-out to the
-  Caltrans feeds.
+  minute sustained), which is also why `--max-instances 1` matters.
 - Costs: requests are tiny and infrequent; with scale-to-zero this should
   stay pennies per day.
 

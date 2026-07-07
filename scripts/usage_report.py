@@ -10,6 +10,7 @@ spend. No analytics service involved; the logs are the database.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from collections import Counter, defaultdict
@@ -18,14 +19,15 @@ DAYS = int(sys.argv[1]) if len(sys.argv) > 1 else 7
 
 
 def fetch() -> list[dict]:
+    gcloud = shutil.which("gcloud") or "gcloud"
     cmd = [
-        "gcloud", "logging", "read",
+        gcloud, "logging", "read",
         'jsonPayload.log_type="ca_roads_event"',
         "--project", "ca-roads-mcp",
         f"--freshness={DAYS}d",
         "--format=json", "--limit=5000",
     ]
-    out = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+    out = subprocess.run(cmd, capture_output=True, text=True)
     if out.returncode != 0:
         sys.exit(f"gcloud logging read failed: {out.stderr[:300]}")
     return json.loads(out.stdout or "[]")
