@@ -23,6 +23,7 @@ jobs:
       - name: Run evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PYTHONPATH: .
         run: python evals/run_evals.py --report EVALS.md
       - name: Upload raw results
         uses: actions/upload-artifact@v4
