@@ -1,4 +1,8 @@
 .git
+docs-private
+.env
+.env.*
+*.local.json
 .github
 .venv
 venv
