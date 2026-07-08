@@ -149,3 +149,65 @@ class WildfireSource:
             error=outcome.error,
             notes=notes,
         )
+
+
+PERIMETER_URL = (
+    "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
+    "WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query"
+)
+
+
+async def perimeters_in_bbox(
+    client: httpx.AsyncClient,
+    lat_min: float,
+    lon_min: float,
+    lat_max: float,
+    lon_max: float,
+) -> list[dict]:
+    """Simplified fire perimeter rings intersecting a bounding box.
+
+    Geometry is server-simplified (maxAllowableOffset ~500m) since the use
+    is distance-to-edge estimation, not cartography. Failures return empty:
+    perimeter data refines fire distances, it never gates a report.
+    """
+    try:
+        resp = await client.get(
+            PERIMETER_URL,
+            params={
+                "where": "attr_POOState='US-CA'",
+                "geometry": f"{lon_min},{lat_min},{lon_max},{lat_max}",
+                "geometryType": "esriGeometryEnvelope",
+                "spatialRel": "esriSpatialRelIntersects",
+                "inSR": 4326,
+                "outSR": 4326,
+                "outFields": "poly_IncidentName,poly_GISAcres",
+                "maxAllowableOffset": 0.005,
+                "returnGeometry": "true",
+                "f": "json",
+            },
+            headers={"User-Agent": USER_AGENT},
+            timeout=20.0,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        if "error" in payload:
+            return []
+        out = []
+        for feature in payload.get("features", []):
+            attrs = feature.get("attributes") or {}
+            rings = (feature.get("geometry") or {}).get("rings") or []
+            points = [
+                (pt[1], pt[0])
+                for ring in rings
+                for pt in ring
+                if isinstance(pt, list) and len(pt) >= 2
+            ]
+            if points:
+                out.append({
+                    "name": (attrs.get("poly_IncidentName") or "").strip().upper(),
+                    "acres": attrs.get("poly_GISAcres"),
+                    "points": points,
+                })
+        return out
+    except Exception:  # noqa: BLE001
+        return []

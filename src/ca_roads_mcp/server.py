@@ -17,6 +17,8 @@ from ca_roads.dedupe import dedupe
 from ca_roads.feeds import chains as chains_feed
 from ca_roads.feeds import chp as chp_feed
 from ca_roads.feeds import lcs as lcs_feed
+from ca_roads.feeds import nws as nws_feed
+from ca_roads.feeds import quakes as quakes_feed
 from ca_roads.feeds import wildfire as wildfire_feed
 from ca_roads.geo import haversine_meters
 from ca_roads.roaddata import RoadData
@@ -29,6 +31,7 @@ from ca_roads_mcp.serialize import (
     chain_control_dict,
     closure_dict,
     incident_dict,
+    rwis_dict,
     sign_dict,
     source_status,
     wildfire_dict,
@@ -61,6 +64,63 @@ MILES_PER_METER = 1 / 1609.344
 
 async def _noop() -> None:
     return None
+
+
+async def _route_context(
+    road, sample_points: list[tuple[float, float]]
+) -> tuple[list[dict], list[dict], list[str]]:
+    """Weather alerts, notable road-weather stations, and quake notes for
+    a set of points along a route or region. All context sources fail to
+    empty; they enrich a report but never break one."""
+    alerts, rwis_r, quakes = await asyncio.gather(
+        nws_feed.alerts_at_points(road.client, sample_points),
+        road.road_weather(),
+        quakes_feed.recent_significant(road.client),
+    )
+    notable_wx: list[dict] = []
+    for station in rwis_r.records:
+        if station.lat is None or station.lon is None:
+            continue
+        near = min(
+            haversine_meters(station.lat, station.lon, p[0], p[1])
+            for p in sample_points
+        )
+        if near > 12_000:
+            continue
+        flags = []
+        # A freezing-pavement flag needs a cold air reading to back it up:
+        # some stations report 0.0 for surface temp when the sensor has no
+        # data, which would otherwise cry ice in July.
+        cold_air = station.air_temp_c is not None and station.air_temp_c <= 6
+        if (
+            station.surface_temp_c is not None
+            and station.surface_temp_c <= 1
+            and cold_air
+        ):
+            flags.append(f"pavement {station.surface_temp_c} C")
+        if station.air_temp_c is not None and station.air_temp_c <= 0:
+            flags.append(f"air {station.air_temp_c} C")
+        if station.wind_gust_mph is not None and station.wind_gust_mph >= 35:
+            flags.append(f"gusts {station.wind_gust_mph} mph")
+        if station.visibility_m is not None and station.visibility_m < 800:
+            flags.append(f"visibility {int(station.visibility_m)} m")
+        if flags:
+            entry = rwis_dict(station)
+            entry["notable"] = ", ".join(flags)
+            notable_wx.append(entry)
+    quake_notes = []
+    for q in quakes:
+        near = min(
+            haversine_meters(q["lat"], q["lon"], p[0], p[1])
+            for p in sample_points
+        )
+        if near <= 80_000 and q.get("magnitude"):
+            quake_notes.append(
+                f"M{q['magnitude']} earthquake in the last 24h "
+                f"({q.get('place', 'nearby')}); check for pavement damage "
+                "reports on mountain and canyon roads"
+            )
+    return alerts, notable_wx[:3], quake_notes
 
 
 def parse_center(center: str) -> tuple[float, float] | None:
@@ -331,6 +391,14 @@ async def check_route(
     destination = list(to_point) if to_point else list(
         corr.point_at(corridor, along_to)
     )
+    sample_points = [
+        corr.point_at(corridor, along_from + frac * (along_to - along_from))
+        for frac in (0.0, 0.5, 1.0)
+    ]
+    weather_alerts, road_weather, quake_notes = await _route_context(
+        road, sample_points
+    )
+
     result = {
         "corridor": corridor.name,
         "direction": f"{from_place} -> {to_place}",
@@ -344,7 +412,11 @@ async def check_route(
         "route_geometry": corr.clip_geometry(corridor, along_from, along_to),
         "sources": [source_status(r) for r in (chp_r, lcs_r, cc_r, fire_r)],
     }
-    all_notes = resolved_notes + clip_notes
+    if weather_alerts:
+        result["weather_alerts"] = weather_alerts
+    if road_weather:
+        result["road_weather"] = road_weather
+    all_notes = resolved_notes + clip_notes + quake_notes
     if all_notes:
         result["notes"] = all_notes
     return result
@@ -429,6 +501,16 @@ async def check_region(region: str) -> dict:
         bits.append(f"{len(chains)} chain control(s) active, strictest {max_chain}")
     if fires:
         bits.append(f"{len(fires)} active wildfire(s) in the region")
+    lat_min, lat_max, lon_min, lon_max = resolved.bbox
+    region_points = [
+        ((lat_min + lat_max) / 2, (lon_min + lon_max) / 2),
+        (lat_min, lon_min),
+        (lat_max, lon_max),
+    ]
+    weather_alerts, road_weather, quake_notes = await _route_context(
+        get_road(), region_points
+    )
+
     summary = f"{resolved.name}: " + (
         "; ".join(bits) if bits else "no active incidents, closures, chain "
         "controls, or wildfires reported"
@@ -444,7 +526,7 @@ async def check_region(region: str) -> dict:
         })
         fire_dicts.append(d)
 
-    return {
+    payload = {
         "region": resolved.name,
         "summary": summary,
         "counts": {
@@ -461,9 +543,14 @@ async def check_region(region: str) -> dict:
         "closures": [closure_dict(c) for c in closures[:REGION_CLOSURE_CAP]],
         "chain_controls": [chain_control_dict(c) for c in chains],
         "wildfires": fire_dicts,
-        "notes": notes,
+        "notes": notes + quake_notes,
         "sources": [source_status(r) for r in (chp_r, lcs_r, cc_r, fire_r)],
     }
+    if weather_alerts:
+        payload["weather_alerts"] = weather_alerts
+    if road_weather:
+        payload["road_weather"] = road_weather
+    return payload
 
 
 @mcp.tool()
@@ -711,12 +798,42 @@ async def get_wildfires(
         d = wildfire_dict(f)
         d["near_highways"] = sorted(set(near))
         fires.append(d)
-    return {
+
+    # Refine with actual perimeters: for a big fire, the origin point can
+    # sit miles inside the burn area, so distance-to-origin understates how
+    # close the fire's edge is to a road or to the asked-about place.
+    notes = []
+    if point and fires:
+        lat, lon = point
+        pad = max(radius_km, 30) / 111.0
+        perimeters = await wildfire_feed.perimeters_in_bbox(
+            get_road().client, lat - pad, lon - pad, lat + pad, lon + pad
+        )
+        by_name = {p["name"]: p for p in perimeters if p["name"]}
+        for d in fires:
+            perim = by_name.get((d.get("name") or "").upper())
+            if not perim:
+                continue
+            edge_m = min(
+                haversine_meters(lat, lon, plat, plon)
+                for plat, plon in perim["points"]
+            )
+            d["perimeter_edge_km"] = round(edge_m / 1000, 1)
+        if by_name:
+            notes.append(
+                "perimeter_edge_km is the distance from the queried point "
+                "to the mapped fire edge; prefer it over the origin-point "
+                "distance for large fires"
+            )
+    payload = {
         "count": len(fires),
         "filters": {"near_route": canonical, "center": center},
         "wildfires": fires,
         "sources": [source_status(result)],
     }
+    if notes:
+        payload["notes"] = notes
+    return payload
 
 
 
