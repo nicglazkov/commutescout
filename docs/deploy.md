@@ -86,3 +86,30 @@ EOF
 | `DEMO_MODEL` | Answering model | `claude-sonnet-5` |
 | `DEMO_DAILY_DOLLARS` | Global daily model-spend cap | `3.0` |
 | `DEMO_PER_IP_DAILY` | Questions per visitor per day | `20` |
+
+## Optional data-source keys (both services)
+
+Three sources activate only when their key is present; everything else
+works without them. Store keys in Secret Manager and mount them as env
+vars so they never touch code or shell history:
+
+```sh
+# one time per key: paste the key when prompted, then Ctrl-D
+gcloud secrets create tomtom-api-key --data-file=-
+gcloud secrets create bay511-api-key --data-file=-
+gcloud secrets create nvroads-api-key --data-file=-
+
+# grant Cloud Run access (once per secret)
+gcloud secrets add-iam-policy-binding tomtom-api-key   --member="serviceAccount:15002631928-compute@developer.gserviceaccount.com"   --role="roles/secretmanager.secretAccessor"
+
+# attach to a service (repeat --set-secrets values you already use)
+gcloud run services update ca-roads-mcp --region us-west1   --set-secrets TOMTOM_API_KEY=tomtom-api-key:latest,BAY511_API_KEY=bay511-api-key:latest,NVROADS_API_KEY=nvroads-api-key:latest
+gcloud run services update ca-roads-demo --region us-west1   --set-secrets ANTHROPIC_API_KEY=anthropic-api-key:latest,TOMTOM_API_KEY=tomtom-api-key:latest,BAY511_API_KEY=bay511-api-key:latest,NVROADS_API_KEY=nvroads-api-key:latest
+```
+
+| Variable | Source | Get a key at | Enables |
+|---|---|---|---|
+| `TOMTOM_API_KEY` | TomTom Traffic | developer.tomtom.com (free, 2,500 req/day) | Live speeds vs free-flow in check_route |
+| `BAY511_API_KEY` | 511 SF Bay | 511.org/open-data/token (free) | Bay Area events in check_region |
+| `NVROADS_API_KEY` | Nevada DOT | nvroads.com developer signup (free) | I-80/US-50/I-15 continuations past the state line |
+
