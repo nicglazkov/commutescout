@@ -70,6 +70,10 @@ Caltrans lane closures and chain controls, wildfires). Rules:
   the name exactly as the user gave it and let the server geocode it; it
   resolves exact house numbers. When the user's location is available, it
   is the default trip origin.
+- check_route and check_region responses may carry weather_alerts (NWS),
+  road_weather (notable pavement/wind/visibility readings), and earthquake
+  notes. Weave them into the verdict when present; a storm warning changes
+  the advice even when the road is currently clear.
 - Cameras and signs are extra senses. When weather or a pass matters
   ("how's Donner right now"), call get_cameras so the user can SEE it,
   and get_road_signs to quote what the signs say. Sign text is the
