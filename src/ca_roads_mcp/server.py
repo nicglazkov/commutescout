@@ -14,11 +14,14 @@ import os
 from mcp.server.fastmcp import FastMCP
 
 from ca_roads.dedupe import dedupe
+from ca_roads.feeds import bay511 as bay511_feed
 from ca_roads.feeds import chains as chains_feed
 from ca_roads.feeds import chp as chp_feed
 from ca_roads.feeds import lcs as lcs_feed
+from ca_roads.feeds import nvroads as nvroads_feed
 from ca_roads.feeds import nws as nws_feed
 from ca_roads.feeds import quakes as quakes_feed
+from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
 from ca_roads.geo import haversine_meters
 from ca_roads.roaddata import RoadData
@@ -399,6 +402,28 @@ async def check_route(
         road, sample_points
     )
 
+    traffic = None
+    if tomtom_feed.api_key():
+        flow_points = [
+            corr.point_at(corridor, along_from + frac * (along_to - along_from))
+            for frac in (0.1, 0.3, 0.5, 0.7, 0.9)
+        ]
+        samples = await asyncio.gather(
+            *(tomtom_feed.flow_at_point(road.client, p[0], p[1])
+              for p in flow_points)
+        )
+        traffic = tomtom_feed.summarize(list(samples))
+
+    nevada = []
+    if corridor.id in ("i80-sac-reno", "us50-sac-tahoe", "i15-barstow-vegas"):
+        nv_events = await nvroads_feed.events(road.client)
+        route_names = {r.replace("-", "").lower() for r in corridor.routes}
+        for event in nv_events:
+            road_name = (event.get("road") or "").replace("-", "").lower()
+            if any(r in road_name or road_name in r for r in route_names if r):
+                nevada.append(event)
+        nevada = nevada[:6]
+
     result = {
         "corridor": corridor.name,
         "direction": f"{from_place} -> {to_place}",
@@ -416,6 +441,10 @@ async def check_route(
         result["weather_alerts"] = weather_alerts
     if road_weather:
         result["road_weather"] = road_weather
+    if traffic:
+        result["traffic"] = traffic
+    if nevada:
+        result["nevada_continuation"] = nevada
     all_notes = resolved_notes + clip_notes + quake_notes
     if all_notes:
         result["notes"] = all_notes
@@ -550,6 +579,10 @@ async def check_region(region: str) -> dict:
         payload["weather_alerts"] = weather_alerts
     if road_weather:
         payload["road_weather"] = road_weather
+    if resolved.id == "bay-area" and bay511_feed.api_key():
+        events_511 = await bay511_feed.events(get_road().client)
+        if events_511:
+            payload["events_511"] = events_511[:8]
     return payload
 
 
