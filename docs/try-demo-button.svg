@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="56" viewBox="0 0 260 56" role="img" aria-label="Try the live demo">
+  <rect x="1.5" y="1.5" width="257" height="53" rx="12" fill="#c65d21" stroke="#a84d18" stroke-width="1.5"/>
+  <text x="118" y="35" font-family="Georgia, 'Times New Roman', serif" font-size="21" font-weight="bold" fill="#fdf7ec" text-anchor="middle">Try the live demo</text>
+  <path d="M225 20 L237 28 L225 36 Z" fill="#fdf7ec"/>
+</svg>

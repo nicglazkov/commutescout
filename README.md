@@ -20,6 +20,16 @@
     <img src="docs/demo.gif" width="880"
          alt="Demo: typing 'How's the drive from Sacramento to Tahoe right now?' and getting a live verdict with closures plotted along US-50 on a map">
   </a>
+
+  <p>
+    <a href="https://ca-roads-demo-15002631928.us-west1.run.app">
+      <img src="docs/try-demo-button.svg" width="230" alt="Try the live demo">
+    </a>
+  </p>
+  <p>
+    No install, no account:
+    <a href="https://ca-roads-demo-15002631928.us-west1.run.app"><b>ca-roads-demo-15002631928.us-west1.run.app</b></a>
+  </p>
 </div>
 
 Ask "do I need chains to get to Tahoe?" or "is 17 clear right now?" and the
