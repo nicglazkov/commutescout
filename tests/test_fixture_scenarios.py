@@ -274,3 +274,16 @@ async def test_check_route_asks_when_destination_is_ambiguous(scenario, monkeypa
         "San Jose", "175 Kestrel Rd, Los Altos", from_coords="37.3382,-121.8863"
     )
     assert "needs_clarification" not in out2
+
+
+@for_scenario("quiet-day")
+async def test_alias_destinations_never_ask_for_clarification(scenario, monkeypatch):
+    from ca_roads_mcp import server as srv
+
+    async def explode(*a, **k):
+        raise AssertionError("candidate lookup must not run for alias trips")
+
+    monkeypatch.setattr(srv, "geocode_candidates", explode)
+    out = await srv.check_route("Sacramento", "Tahoe")
+    assert "needs_clarification" not in out
+    assert "corridor" in out

@@ -143,7 +143,12 @@ async def check_route(
         if from_geo:
             from_point = (from_geo[0], from_geo[1])
     if to_point is None:
-        to_cands = await geocode_candidates(
+        # Corridor aliases ("Tahoe", "the coast") are their own resolution:
+        # when both trip ends match a corridor by name, anchoring to the
+        # corridor is right and asking "which Tahoe?" is nonsense. Only
+        # non-alias destinations go through candidate disambiguation.
+        alias_match = corr.resolve_corridor(from_place, to_place)
+        to_cands = [] if alias_match else await geocode_candidates(
             road.client, to_place, near=from_point
         )
         # Multiple far-apart matches: the wrong guess sends someone across
