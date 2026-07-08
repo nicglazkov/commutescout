@@ -101,7 +101,8 @@ def test_cache_is_bounded():
 
 @respx.mock
 async def test_photon_rejects_token_mismatched_fuzzy_hits():
-    # Photon once "matched" 175 Giffin Rd to South 23rd Street, San Jose.
+    # Photon fuzzy-matches: a house-number query once returned an
+    # entirely unrelated street in another town.
     respx.get(geo.NOMINATIM_URL).mock(return_value=httpx.Response(200, json=[]))
     respx.get(geo.PHOTON_URL).mock(
         return_value=httpx.Response(200, json={"features": [{
@@ -111,19 +112,19 @@ async def test_photon_rejects_token_mismatched_fuzzy_hits():
         }]})
     )
     async with httpx.AsyncClient() as client:
-        assert await geo.geocode(client, "175 Giffin Rd") is None
+        assert await geo.geocode(client, "175 Kestrel Rd") is None
 
 
 @respx.mock
 async def test_candidates_surface_ambiguity():
     respx.get(geo.NOMINATIM_URL).mock(return_value=httpx.Response(200, json=[
         {"lat": "37.3720944", "lon": "-122.1103216",
-         "display_name": "175, Giffin Road, Los Altos, Santa Clara County"},
+         "display_name": "175, Kestrel Road, Los Altos, Santa Clara County"},
         {"lat": "37.1259", "lon": "-122.1222",
-         "display_name": "Giffin Road, Boulder Creek, Santa Cruz County"},
+         "display_name": "Kestrel Road, Boulder Creek, Santa Cruz County"},
     ]))
     async with httpx.AsyncClient() as client:
-        cands = await geo.geocode_candidates(client, "175 Giffin Rd")
+        cands = await geo.geocode_candidates(client, "175 Kestrel Rd")
     assert len(cands) == 2
     assert "Los Altos" in cands[0][2]
 

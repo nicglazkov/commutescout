@@ -186,11 +186,11 @@ async def _photon_hits(
             )
         resp.raise_for_status()
         features = resp.json().get("features", [])
-        # Photon fuzzy-matches aggressively: "175 Giffin Rd" once returned
-        # "South 23rd Street, San Jose", and a locality qualifier can match
-        # by itself ("Riverside Drive, San Jose" matched "San Jose Drive,
-        # San Jacinto"). Require the FIRST significant token - the street
-        # or place name itself - to appear in the hit.
+        # Photon fuzzy-matches aggressively: a house-number query once
+        # returned an entirely unrelated street, and a locality qualifier
+        # can match by itself ("Riverside Drive, San Jose" matched "San
+        # Jose Drive, San Jacinto"). Require the FIRST significant token -
+        # the street or place name itself - to appear in the hit.
         significant = [
             t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()
         ]
