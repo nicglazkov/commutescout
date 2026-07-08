@@ -71,7 +71,15 @@ Or from a checkout: `pip install .` then `ca-roads-mcp` (stdio) or
 | **CHP live feed** | Statewide incidents (collisions, hazards, closures) as dispatchers log them, with travel direction parsed from the location text | Fetched per request; feed updates ~1/min |
 | **Caltrans LCS** | Lane and road closures physically in place right now (CHP code 1097), classified by what they mean for through traffic | 5-minute cache |
 | **Caltrans chain controls** | R-1/R-2/R-3 requirements at mountain checkpoints | 5-minute cache |
-| **WFIGS** | Active wildfires (name, size, containment), flagged within ~10 miles of major highways | 5-minute cache |
+| **WFIGS** | Active wildfires (name, size, containment), flagged within ~10 miles of major highways; perimeter edges refine distances for big fires | 5-minute cache |
+| **Caltrans CMS** | What changeable message signs display right now (blank signs filtered) | 2-minute cache |
+| **Caltrans CCTV** | Roadside camera snapshots, image-verified live before return | per query |
+| **Caltrans RWIS** | Road-weather stations: pavement temperature, gusts, visibility on the passes | 5-minute cache |
+| **NWS alerts** | Winter storm, wind, flood, fog, and fire-weather warnings along the route | 5-minute cache |
+| **USGS quakes** | M4.5+ earthquakes near a corridor in the last 24 hours | 5-minute cache |
+| **TomTom** (optional key) | Actual current speeds vs free-flow along the route | 1-minute cache |
+| **511 SF Bay** (optional key) | Bay Area traffic events | 3-minute cache |
+| **Nevada DOT** (optional key) | I-80, US-50, I-15 continuations past the state line | 3-minute cache |
 
 Every closure record carries a `closure_class` derived from the Caltrans
 facility and closure type. The raw feed marks an on-ramp repair "Full", and
