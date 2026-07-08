@@ -154,10 +154,23 @@ async def _search(
 async def _search_photon(
     client: httpx.AsyncClient, q: str
 ) -> tuple[float, float, str] | None:
-    """Second provider: Photon (Komoot's OSM geocoder). Different infra and
-    a fuzzier matcher, so it both survives Nominatim outages and catches
-    phrasings Nominatim misses."""
+    """Second provider, best single hit. See _photon_hits."""
+    hits = await _photon_hits(client, q)
+    return hits[0] if hits else None
+
+
+async def _photon_hits(
+    client: httpx.AsyncClient,
+    q: str,
+    near: tuple[float, float] | None = None,
+    limit: int = 3,
+) -> list[tuple[float, float, str]]:
+    """Photon (Komoot's OSM geocoder). Different infra and a fuzzier
+    matcher than Nominatim, so it survives Nominatim outages, catches
+    phrasings Nominatim misses, and its lat/lon bias surfaces the match
+    NEAR the user that Nominatim's importance ranking buries."""
     global _last_request
+    bias_lat, bias_lon = near or (37.5, -120.5)
     try:
         async with _throttle:
             wait = THROTTLE_SECONDS - (time.monotonic() - _last_request)
@@ -166,7 +179,8 @@ async def _search_photon(
             _last_request = time.monotonic()
             resp = await client.get(
                 PHOTON_URL,
-                params={"q": q, "limit": 3, "lat": 37.5, "lon": -120.5},
+                params={"q": q, "limit": limit,
+                        "lat": bias_lat, "lon": bias_lon},
                 headers={"User-Agent": USER_AGENT},
                 timeout=TIMEOUT_SECONDS,
             )
@@ -178,6 +192,7 @@ async def _search_photon(
         tokens = {t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()}
         # Two passes: an explicit California match beats a merely-plausible
         # one ("Grapevine" exists in several states and canyons).
+        out: list[tuple[float, float, str]] = []
         for require_ca in (True, False):
             for feature in features:
                 lon, lat = feature["geometry"]["coordinates"][:2]
@@ -193,12 +208,16 @@ async def _search_photon(
                 if tokens and not any(t in hit_text for t in tokens):
                     continue
                 name = ", ".join(
-                    str(props[k]) for k in ("name", "city", "state") if props.get(k)
+                    str(props[k])
+                    for k in ("name", "street", "city", "state")
+                    if props.get(k)
                 )
-                return float(lat), float(lon), name
-        return None
+                out.append((float(lat), float(lon), name))
+            if out:
+                return out
+        return out
     except Exception:  # noqa: BLE001
-        return None
+        return []
 
 
 async def geocode(
@@ -267,13 +286,18 @@ async def geocode(
 
 
 async def geocode_candidates(
-    client: httpx.AsyncClient, place: str, limit: int = 4
+    client: httpx.AsyncClient,
+    place: str,
+    limit: int = 4,
+    near: tuple[float, float] | None = None,
 ) -> list[tuple[float, float, str]]:
     """Like geocode(), but returns the distinct plausible matches so the
     caller can detect ambiguity ("Main St" exists in half the state).
 
-    Gazetteer hits are single-answer by construction. Network results
-    dedupe within 2 km; distinct survivors are real alternatives.
+    Gazetteer hits are single-answer by construction. Nominatim supplies
+    the importance-ranked matches; Photon, biased toward `near` (the trip
+    origin), supplies the match by the user that importance ranking buries
+    under a big city's street. Results dedupe within 2 km, nearest first.
     """
     query = place.strip()
     if not query:
@@ -294,10 +318,7 @@ async def geocode_candidates(
                 float(hit["lat"]), float(hit["lon"]),
                 hit.get("display_name", ""),
             ))
-    if not raw:
-        single = await _search_photon(client, query)
-        if single:
-            raw.append(single)
+    raw.extend(await _photon_hits(client, query, near=near))
 
     distinct: list[tuple[float, float, str]] = []
     for cand in raw:
@@ -305,6 +326,8 @@ async def geocode_candidates(
             _rough_km(cand[0], cand[1], d[0], d[1]) > 2 for d in distinct
         ):
             distinct.append(cand)
+    if near:
+        distinct.sort(key=lambda c: _rough_km(c[0], c[1], near[0], near[1]))
     return distinct[:limit]
 
 

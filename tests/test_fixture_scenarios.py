@@ -251,7 +251,7 @@ async def test_real_recording_plays_back(scenario):
 async def test_check_route_asks_when_destination_is_ambiguous(scenario, monkeypatch):
     from ca_roads_mcp import server as srv
 
-    async def two_towns(client, place, limit=4):
+    async def two_towns(client, place, limit=4, near=None):
         return [
             (37.3721, -122.1103, "175, Giffin Road, Los Altos, Santa Clara County"),
             (37.1259, -122.1222, "Giffin Road, Boulder Creek, Santa Cruz County"),
