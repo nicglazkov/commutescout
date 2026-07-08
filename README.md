@@ -15,6 +15,11 @@
     <a href="#evals">Evals</a> ·
     <a href="#how-it-works">How it works</a>
   </p>
+
+  <a href="https://ca-roads-demo-15002631928.us-west1.run.app">
+    <img src="docs/demo.gif" width="880"
+         alt="Demo: typing 'How's the drive from Sacramento to Tahoe right now?' and getting a live verdict with closures plotted along US-50 on a map">
+  </a>
 </div>
 
 Ask "do I need chains to get to Tahoe?" or "is 17 clear right now?" and the
