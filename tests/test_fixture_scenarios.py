@@ -227,20 +227,33 @@ def test_synthetic_fixtures_have_not_rotted():
 
 
 @for_scenario("real-2026-07-07")
-async def test_real_recording_plays_back(scenario):
+async def test_real_recording_plays_back(scenario, monkeypatch):
     """The first real (non-synthetic) recording: 2026-07-07, fire season.
     Pins the day's headline numbers so fixture serving (gzip + recorded
-    status replay) stays honest end to end."""
+    status replay) stays honest end to end. The closure active-filter
+    compares end times to the wall clock, so the clock is frozen to the
+    moment of recording; otherwise nightly work windows expire out of the
+    count within hours and the number rots forever."""
+    import datetime
+    import json
+    from pathlib import Path
+
+    from ca_roads.feeds import lcs as lcs_module
+
+    manifest = json.loads(
+        (Path("evals/fixtures/real-2026-07-07") / "manifest.json").read_text()
+    )
+    recorded_at = datetime.datetime.fromisoformat(
+        manifest["recorded_at"]
+    ).timestamp()
+    monkeypatch.setattr(lcs_module.time, "time", lambda: recorded_at)
     road = tool_server.get_road()
     chp = await road.incidents()
     lcs = await road.lane_closures()
     chains = await road.chain_controls()
     fires = await road.wildfires()
     assert len(chp.records) == 197
-    # Closure records filter on end time against the real clock, so the
-    # active count sags as recorded closures expire; assert scale, not
-    # the exact day-of-recording number.
-    assert len(lcs.records) >= 200
+    assert len(lcs.records) == 293
     assert len(chains.records) == 0  # July; D12's 500 replays as recorded
     assert len(fires.records) == 232
 
