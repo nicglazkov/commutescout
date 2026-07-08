@@ -101,7 +101,8 @@ def test_cache_is_bounded():
 
 @respx.mock
 async def test_photon_rejects_token_mismatched_fuzzy_hits():
-    # Photon once "matched" 175 Kestrel Rd to South 23rd Street, San Jose.
+    # Photon fuzzy-matches: a house-number query once returned an
+    # entirely unrelated street in another town.
     respx.get(geo.NOMINATIM_URL).mock(return_value=httpx.Response(200, json=[]))
     respx.get(geo.PHOTON_URL).mock(
         return_value=httpx.Response(200, json={"features": [{
