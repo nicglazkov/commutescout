@@ -143,7 +143,9 @@ async def check_route(
         if from_geo:
             from_point = (from_geo[0], from_geo[1])
     if to_point is None:
-        to_cands = await geocode_candidates(road.client, to_place)
+        to_cands = await geocode_candidates(
+            road.client, to_place, near=from_point
+        )
         # Multiple far-apart matches: the wrong guess sends someone across
         # the hills. Refuse and make the caller ask which one was meant.
         spread = [
