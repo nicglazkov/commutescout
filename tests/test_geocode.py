@@ -61,7 +61,8 @@ async def test_photon_fallback_when_nominatim_blocked():
     respx.get(geo.PHOTON_URL).mock(
         return_value=httpx.Response(200, json={"features": [{
             "geometry": {"coordinates": [-122.2653984, 37.3866867]},
-            "properties": {"name": "Alice's Restaurant", "state": "CA"},
+            "properties": {"name": "Alice's Restaurant", "state": "CA",
+                           "street": "Skyline Boulevard", "city": "Woodside"},
         }]})
     )
     async with httpx.AsyncClient() as client:
@@ -96,3 +97,32 @@ def test_cache_is_bounded():
     for i in range(geo._CACHE_MAX + 50):
         geo._cache_put(f"k{i}", None)
     assert len(geo._cache) == geo._CACHE_MAX
+
+
+@respx.mock
+async def test_photon_rejects_token_mismatched_fuzzy_hits():
+    # Photon once "matched" 175 Giffin Rd to South 23rd Street, San Jose.
+    respx.get(geo.NOMINATIM_URL).mock(return_value=httpx.Response(200, json=[]))
+    respx.get(geo.PHOTON_URL).mock(
+        return_value=httpx.Response(200, json={"features": [{
+            "geometry": {"coordinates": [-121.8663, 37.3437]},
+            "properties": {"name": "South 23rd Street", "city": "San Jose",
+                           "state": "California"},
+        }]})
+    )
+    async with httpx.AsyncClient() as client:
+        assert await geo.geocode(client, "175 Giffin Rd") is None
+
+
+@respx.mock
+async def test_candidates_surface_ambiguity():
+    respx.get(geo.NOMINATIM_URL).mock(return_value=httpx.Response(200, json=[
+        {"lat": "37.3720944", "lon": "-122.1103216",
+         "display_name": "175, Giffin Road, Los Altos, Santa Clara County"},
+        {"lat": "37.1259", "lon": "-122.1222",
+         "display_name": "Giffin Road, Boulder Creek, Santa Cruz County"},
+    ]))
+    async with httpx.AsyncClient() as client:
+        cands = await geo.geocode_candidates(client, "175 Giffin Rd")
+    assert len(cands) == 2
+    assert "Los Altos" in cands[0][2]

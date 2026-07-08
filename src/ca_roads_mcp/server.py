@@ -22,7 +22,7 @@ from ca_roads.geo import haversine_meters
 from ca_roads.roaddata import RoadData
 from ca_roads_mcp import corridors as corr
 from ca_roads_mcp import regions as reg
-from ca_roads_mcp.geocode import geocode
+from ca_roads_mcp.geocode import geocode, geocode_candidates
 from ca_roads_mcp.routes import matches_route, normalize_route
 from ca_roads_mcp.serialize import (
     chain_control_dict,
@@ -138,16 +138,38 @@ async def check_route(
     # latency.
     road = get_road()
     resolved_notes: list[str] = []
-    from_geo, to_geo = await asyncio.gather(
-        geocode(road.client, from_place) if from_point is None else _noop(),
-        geocode(road.client, to_place) if to_point is None else _noop(),
-    )
-    if from_point is None and from_geo:
-        from_point = (from_geo[0], from_geo[1])
-    if to_point is None and to_geo:
-        to_point = (to_geo[0], to_geo[1])
-        short_name = ", ".join(to_geo[2].split(", ")[:3])
-        resolved_notes.append(f"destination resolved to: {short_name}")
+    if from_point is None:
+        from_geo = await geocode(road.client, from_place)
+        if from_geo:
+            from_point = (from_geo[0], from_geo[1])
+    if to_point is None:
+        to_cands = await geocode_candidates(road.client, to_place)
+        # Multiple far-apart matches: the wrong guess sends someone across
+        # the hills. Refuse and make the caller ask which one was meant.
+        spread = [
+            c for c in to_cands
+            if haversine_meters(c[0], c[1], to_cands[0][0], to_cands[0][1])
+            > 15_000
+        ]
+        if to_cands and spread:
+            options = [
+                ", ".join(c[2].split(", ")[:4]) for c in to_cands[:3]
+            ]
+            return {
+                "needs_clarification": True,
+                "which": "destination",
+                "options": options,
+                "error": (
+                    f"'{to_place}' matches multiple places. Do not guess. "
+                    "Ask the user which one they meant, offering these "
+                    "options."
+                ),
+            }
+        if to_cands:
+            to_geo = to_cands[0]
+            to_point = (to_geo[0], to_geo[1])
+            short_name = ", ".join(to_geo[2].split(", ")[:3])
+            resolved_notes.append(f"destination resolved to: {short_name}")
 
     if from_point and to_point:
         span_km = haversine_meters(*from_point, *to_point) / 1000

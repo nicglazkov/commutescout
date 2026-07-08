@@ -25,7 +25,12 @@ import httpx
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 PHOTON_URL = "https://photon.komoot.io/api/"
-USER_AGENT = "ca-roads-mcp/1.1 (github.com/nicglazkov/ca-roads-mcp)"
+try:
+    from importlib.metadata import version as _pkg_version
+    _VERSION = _pkg_version("ca-roads-mcp")
+except Exception:  # noqa: BLE001 - not installed (e.g. source checkout)
+    _VERSION = "dev"
+USER_AGENT = f"ca-roads-mcp/{_VERSION} (github.com/nicglazkov/ca-roads-mcp)"
 # lon_min, lat_max, lon_max, lat_min (Nominatim viewbox order)
 CALIFORNIA_VIEWBOX = "-124.6,42.1,-114.0,32.4"
 TIMEOUT_SECONDS = 6.0
@@ -117,7 +122,9 @@ def _plausible(hit: dict) -> bool:
     return 32.0 <= lat <= 42.5 and -125.0 <= lon <= -113.5
 
 
-async def _search(client: httpx.AsyncClient, q: str, bounded: int) -> list | None:
+async def _search(
+    client: httpx.AsyncClient, q: str, bounded: int, limit: int = 1
+) -> list | None:
     global _last_request
     try:
         async with _throttle:
@@ -130,7 +137,7 @@ async def _search(client: httpx.AsyncClient, q: str, bounded: int) -> list | Non
                 params={
                     "q": q,
                     "format": "json",
-                    "limit": 1,
+                    "limit": limit,
                     "countrycodes": "us",
                     "viewbox": CALIFORNIA_VIEWBOX,
                     "bounded": bounded,
@@ -165,6 +172,10 @@ async def _search_photon(
             )
         resp.raise_for_status()
         features = resp.json().get("features", [])
+        # Photon fuzzy-matches aggressively: "175 Giffin Rd" once returned
+        # "South 23rd Street, San Jose". Require the hit to share a real
+        # token with the query before believing it.
+        tokens = {t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()}
         # Two passes: an explicit California match beats a merely-plausible
         # one ("Grapevine" exists in several states and canyons).
         for require_ca in (True, False):
@@ -174,6 +185,12 @@ async def _search_photon(
                     continue
                 props = feature.get("properties", {})
                 if require_ca and props.get("state") not in ("California", "CA"):
+                    continue
+                hit_text = _norm(" ".join(
+                    str(props.get(k) or "")
+                    for k in ("name", "street", "city", "district")
+                ))
+                if tokens and not any(t in hit_text for t in tokens):
                     continue
                 name = ", ".join(
                     str(props[k]) for k in ("name", "city", "state") if props.get(k)
@@ -247,3 +264,53 @@ async def geocode(
     if not saw_network_failure:
         _cache_put(key, None)  # definitive miss; network trouble retries later
     return None
+
+
+async def geocode_candidates(
+    client: httpx.AsyncClient, place: str, limit: int = 4
+) -> list[tuple[float, float, str]]:
+    """Like geocode(), but returns the distinct plausible matches so the
+    caller can detect ambiguity ("Main St" exists in half the state).
+
+    Gazetteer hits are single-answer by construction. Network results
+    dedupe within 2 km; distinct survivors are real alternatives.
+    """
+    query = place.strip()
+    if not query:
+        return []
+    offline = gazetteer_lookup(query)
+    if offline:
+        return [offline]
+
+    key = query.lower()
+    is_border = any(t in key for t in _BORDER_TOWNS)
+    ca_ok = "california" not in key and not key.endswith(" ca") and not is_border
+    q = f"{query}, California" if ca_ok else query
+    raw: list[tuple[float, float, str]] = []
+    got = await _search(client, q, bounded=0, limit=limit)
+    for hit in got or []:
+        if _plausible(hit):
+            raw.append((
+                float(hit["lat"]), float(hit["lon"]),
+                hit.get("display_name", ""),
+            ))
+    if not raw:
+        single = await _search_photon(client, query)
+        if single:
+            raw.append(single)
+
+    distinct: list[tuple[float, float, str]] = []
+    for cand in raw:
+        if all(
+            _rough_km(cand[0], cand[1], d[0], d[1]) > 2 for d in distinct
+        ):
+            distinct.append(cand)
+    return distinct[:limit]
+
+
+def _rough_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Equirectangular approximation; fine at disambiguation scales."""
+    import math
+
+    x = (lon2 - lon1) * math.cos(math.radians((lat1 + lat2) / 2))
+    return 111.32 * math.hypot(lat2 - lat1, x)
