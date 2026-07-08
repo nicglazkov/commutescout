@@ -148,12 +148,15 @@ async def check_route(
         )
         # Multiple far-apart matches: the wrong guess sends someone across
         # the hills. Refuse and make the caller ask which one was meant.
+        # A comma-qualified place ("Riverside Dr, San Jose") means the
+        # caller already disambiguated: take the nearest match, never
+        # re-ask - that way clarification converges in one round.
         spread = [
             c for c in to_cands
             if haversine_meters(c[0], c[1], to_cands[0][0], to_cands[0][1])
             > 15_000
         ]
-        if to_cands and spread:
+        if to_cands and spread and "," not in to_place:
             options = [
                 ", ".join(c[2].split(", ")[:4]) for c in to_cands[:3]
             ]

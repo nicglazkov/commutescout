@@ -264,3 +264,10 @@ async def test_check_route_asks_when_destination_is_ambiguous(scenario, monkeypa
     assert out.get("needs_clarification") is True
     assert any("Los Altos" in o for o in out["options"])
     assert any("Boulder Creek" in o for o in out["options"])
+
+    # A comma-qualified destination means the user already chose: even with
+    # far-apart candidates, take the nearest instead of re-asking.
+    out2 = await srv.check_route(
+        "San Jose", "175 Kestrel Rd, Los Altos", from_coords="37.3382,-121.8863"
+    )
+    assert "needs_clarification" not in out2

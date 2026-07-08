@@ -126,3 +126,19 @@ async def test_candidates_surface_ambiguity():
         cands = await geo.geocode_candidates(client, "175 Kestrel Rd")
     assert len(cands) == 2
     assert "Los Altos" in cands[0][2]
+
+
+@respx.mock
+async def test_photon_guard_ignores_locality_qualifier_matches():
+    # "Riverside Drive, San Jose" must not accept "San Jose Drive, San
+    # Jacinto" just because the locality word matches.
+    respx.get(geo.PHOTON_URL).mock(
+        return_value=httpx.Response(200, json={"features": [{
+            "geometry": {"coordinates": [-116.9586, 33.7839]},
+            "properties": {"name": "San Jose Drive", "city": "San Jacinto",
+                           "state": "California"},
+        }]})
+    )
+    hits = await geo._photon_hits(None or __import__("httpx").AsyncClient(),
+                                  "Riverside Drive, San Jose")
+    assert hits == []

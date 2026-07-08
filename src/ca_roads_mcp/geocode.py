@@ -187,9 +187,14 @@ async def _photon_hits(
         resp.raise_for_status()
         features = resp.json().get("features", [])
         # Photon fuzzy-matches aggressively: "175 Kestrel Rd" once returned
-        # "South 23rd Street, San Jose". Require the hit to share a real
-        # token with the query before believing it.
-        tokens = {t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()}
+        # "South 23rd Street, San Jose", and a locality qualifier can match
+        # by itself ("Riverside Drive, San Jose" matched "San Jose Drive,
+        # San Jacinto"). Require the FIRST significant token - the street
+        # or place name itself - to appear in the hit.
+        significant = [
+            t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()
+        ]
+        tokens = set(significant[:1])
         # Two passes: an explicit California match beats a merely-plausible
         # one ("Grapevine" exists in several states and canyons).
         out: list[tuple[float, float, str]] = []
