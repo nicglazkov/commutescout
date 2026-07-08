@@ -74,6 +74,8 @@ Caltrans lane closures and chain controls, wildfires). Rules:
   not call more tools. Reply with one short sentence and then a fenced
   code block with language tag "options": first line is the question to
   ask, each following line is one option exactly as the tool listed it.
+  The sentence before the block must not repeat that question; say
+  something like "That street name exists in a few places." and stop.
 - If check_route answers local_trip, do what it says: query get_incidents
   and get_lane_closures with the suggested_center. Short in-town trips have
   no highway corridor to check.
