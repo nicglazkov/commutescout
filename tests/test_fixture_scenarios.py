@@ -245,3 +245,22 @@ async def test_real_recording_plays_back(scenario):
     assert fires_i5["count"] > 40
     names = {f["name"] for f in fires_i5["wildfires"]}
     assert "BIG" in names
+
+
+@for_scenario("quiet-day")
+async def test_check_route_asks_when_destination_is_ambiguous(scenario, monkeypatch):
+    from ca_roads_mcp import server as srv
+
+    async def two_towns(client, place, limit=4):
+        return [
+            (37.3721, -122.1103, "175, Kestrel Road, Los Altos, Santa Clara County"),
+            (37.1259, -122.1222, "Kestrel Road, Boulder Creek, Santa Cruz County"),
+        ]
+
+    monkeypatch.setattr(srv, "geocode_candidates", two_towns)
+    out = await srv.check_route(
+        "San Jose", "175 Kestrel Rd", from_coords="37.3382,-121.8863"
+    )
+    assert out.get("needs_clarification") is True
+    assert any("Los Altos" in o for o in out["options"])
+    assert any("Boulder Creek" in o for o in out["options"])

@@ -188,6 +188,17 @@
   }
   .feedback button:hover { border-color: var(--pine-soft); }
   .feedback .thanks { font-weight: 600; color: var(--pine); }
+  .clarify {
+    border: 1.5px solid var(--pine-soft); border-radius: 12px;
+    padding: 14px 16px; margin: 12px 0; background: var(--card, #fffdf7);
+  }
+  .clarify p { margin: 0 0 10px; font-weight: 600; }
+  .clarify .optbtn {
+    display: block; width: 100%; text-align: left; cursor: pointer;
+    font: inherit; font-size: 0.92rem; margin: 6px 0; padding: 9px 12px;
+    border: 1px solid var(--line); border-radius: 9px; background: none;
+  }
+  .clarify .optbtn:hover { border-color: var(--pine); background: rgba(28,58,46,0.05); }
   .more-btn:hover { background: #ebe4d2; }
   .more-rule {
     border: 0; border-top: 1px solid var(--line); margin: 18px 0 4px;
@@ -421,6 +432,12 @@ function inline(s) {
     .replace(/\*([^*\s][^*]*)\*/g, '<em>$1</em>');
 }
 function renderMd(md) {
+  // "options" fenced blocks become clarify boxes with clickable choices.
+  const optBlocks = [];
+  md = md.replace(/```options\n([\s\S]*?)(?:```|$)/g, (_, body) => {
+    optBlocks.push(body.trim());
+    return '\n@@OPTIONS' + (optBlocks.length - 1) + '@@\n';
+  });
   const lines = esc(md).split('\n');
   let html = '', list = null, para = [];
   const flushPara = () => {
@@ -452,6 +469,16 @@ function renderMd(md) {
     else { flushList(); para.push(line); }
   }
   flushPara(); flushList();
+  html = html.replace(/@@OPTIONS(\d+)@@/g, (_, i) => {
+    const rows = (optBlocks[+i] || '').split('\n').filter(l => l.trim());
+    if (!rows.length) return '';
+    const q = esc(rows[0]);
+    const buttons = rows.slice(1).map(o =>
+      '<button type="button" class="optbtn" data-opt="' +
+      esc(o.trim()).replaceAll('"', '&quot;') + '">' + esc(o.trim()) + '</button>'
+    ).join('');
+    return '<div class="clarify"><p>' + q + '</p>' + buttons + '</div>';
+  });
   return html;
 }
 
@@ -812,6 +839,13 @@ feedbackEl.querySelectorAll('button').forEach(b => {
     beacon(b.dataset.fb, {question: lastQuestion});
     feedbackEl.innerHTML = '<span class="thanks">Thanks, noted.</span>';
   });
+});
+
+answer.addEventListener('click', (e) => {
+  const btn = e.target.closest('.optbtn');
+  if (!btn) return;
+  input.value = lastQuestion + ' (I mean ' + btn.dataset.opt + ')';
+  form.requestSubmit();
 });
 
 morebtn.addEventListener('click', () => {
