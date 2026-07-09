@@ -128,6 +128,71 @@ async def _route_context(
     return alerts, notable_wx[:3], quake_notes
 
 
+def _downsample(points: list, max_points: int = 120) -> list:
+    if len(points) <= max_points:
+        return [[round(lat, 4), round(lon, 4)] for lat, lon in points]
+    step = len(points) / max_points
+    return [
+        [round(points[int(i * step)][0], 4), round(points[int(i * step)][1], 4)]
+        for i in range(max_points)
+    ]
+
+
+async def _attach_perimeters(fire_dicts: list[dict], bbox: tuple) -> None:
+    """Attach simplified perimeter rings to fires that have one mapped.
+
+    A perimeter turns a fire from a dot into its actual footprint on the
+    map, and the edge is what matters for a road. Name-matched; failures
+    leave the dicts untouched."""
+    if not fire_dicts:
+        return
+    perimeters = await wildfire_feed.perimeters_in_bbox(
+        get_road().client, *bbox
+    )
+    by_name = {p["name"]: p for p in perimeters if p["name"]}
+    for d in fire_dicts:
+        perim = by_name.get((d.get("name") or "").upper())
+        if perim:
+            d["perimeter"] = _downsample(perim["points"])
+
+
+def _fires_bbox(fire_dicts: list[dict], pad: float = 0.4) -> tuple | None:
+    lats = [d["lat"] for d in fire_dicts if isinstance(d.get("lat"), int | float)]
+    lons = [d["lon"] for d in fire_dicts if isinstance(d.get("lon"), int | float)]
+    if not lats:
+        return None
+    return (min(lats) - pad, min(lons) - pad, max(lats) + pad, max(lons) + pad)
+
+
+async def _signs_near(points: list[tuple[float, float]], within_km: float = 8,
+                      cap: int = 8) -> list[dict]:
+    result = await get_road().message_signs()
+    hits = []
+    for s in result.records:
+        if s.lat is None or s.lon is None:
+            continue
+        dist = min(
+            haversine_meters(s.lat, s.lon, p[0], p[1]) for p in points
+        )
+        if dist <= within_km * 1000:
+            hits.append((dist, s))
+    hits.sort(key=lambda t: t[0])
+    return [sign_dict(s) for _, s in hits[:cap]]
+
+
+async def _cameras_near(point: tuple[float, float], limit: int = 3,
+                        radius_km: float = 35) -> list[dict]:
+    result = await get_road().cameras()
+    nearby = [
+        c for c in result.records
+        if c.lat and c.lon
+        and haversine_meters(*point, c.lat, c.lon) <= radius_km * 1000
+    ]
+    nearby.sort(key=lambda c: haversine_meters(*point, c.lat, c.lon))
+    live, _ = await _live_cameras(nearby, limit)
+    return [camera_dict(c) for c in live]
+
+
 def parse_center(center: str) -> tuple[float, float] | None:
     try:
         lat_s, lon_s = center.split(",")
@@ -404,6 +469,26 @@ async def check_route(
         road, sample_points
     )
 
+    dense_points = [
+        corr.point_at(corridor, along_from + frac * (along_to - along_from))
+        for frac in (0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0)
+    ]
+    fire_details = [
+        item["detail"] for item in items if item.get("kind") == "wildfire"
+    ]
+    lat_pad = 0.4
+    route_bbox = (
+        min(p[0] for p in dense_points) - lat_pad,
+        min(p[1] for p in dense_points) - lat_pad,
+        max(p[0] for p in dense_points) + lat_pad,
+        max(p[1] for p in dense_points) + lat_pad,
+    )
+    route_signs, route_cameras, _ = await asyncio.gather(
+        _signs_near(dense_points),
+        _cameras_near(sample_points[1]),
+        _attach_perimeters(fire_details, route_bbox),
+    )
+
     traffic = None
     if tomtom_feed.api_key():
         flow_points = [
@@ -447,6 +532,10 @@ async def check_route(
         result["traffic"] = traffic
     if nevada:
         result["nevada_continuation"] = nevada
+    if route_signs:
+        result["signs"] = route_signs
+    if route_cameras:
+        result["cameras"] = route_cameras
     all_notes = resolved_notes + clip_notes + quake_notes
     if all_notes:
         result["notes"] = all_notes
@@ -581,6 +670,14 @@ async def check_region(region: str) -> dict:
         payload["weather_alerts"] = weather_alerts
     if road_weather:
         payload["road_weather"] = road_weather
+    region_signs = await _signs_near(
+        region_points, within_km=140, cap=10
+    )
+    if region_signs:
+        payload["signs"] = region_signs
+    await _attach_perimeters(
+        fire_dicts, (lat_min - 0.2, lon_min - 0.2, lat_max + 0.2, lon_max + 0.2)
+    )
     if resolved.id == "bay-area" and bay511_feed.api_key():
         events_511 = await bay511_feed.events(get_road().client)
         if events_511:
@@ -836,28 +933,27 @@ async def get_wildfires(
 
     # Refine with actual perimeters: for a big fire, the origin point can
     # sit miles inside the burn area, so distance-to-origin understates how
-    # close the fire's edge is to a road or to the asked-about place.
+    # close the fire's edge is to a road or to the asked-about place. The
+    # simplified ring also ships so the fire draws as its footprint.
     notes = []
-    if point and fires:
-        lat, lon = point
-        pad = max(radius_km, 30) / 111.0
-        perimeters = await wildfire_feed.perimeters_in_bbox(
-            get_road().client, lat - pad, lon - pad, lat + pad, lon + pad
-        )
-        by_name = {p["name"]: p for p in perimeters if p["name"]}
-        for d in fires:
-            perim = by_name.get((d.get("name") or "").upper())
-            if not perim:
-                continue
-            edge_m = min(
-                haversine_meters(lat, lon, plat, plon)
-                for plat, plon in perim["points"]
-            )
-            d["perimeter_edge_km"] = round(edge_m / 1000, 1)
-        if by_name:
+    if fires and len(fires) <= 12:
+        bbox = _fires_bbox(fires)
+        if bbox:
+            await _attach_perimeters(fires, bbox)
+        if point:
+            lat, lon = point
+            for d in fires:
+                if d.get("perimeter"):
+                    edge_m = min(
+                        haversine_meters(lat, lon, plat, plon)
+                        for plat, plon in d["perimeter"]
+                    )
+                    d["perimeter_edge_km"] = round(edge_m / 1000, 1)
+        if any(d.get("perimeter") for d in fires):
             notes.append(
-                "perimeter_edge_km is the distance from the queried point "
-                "to the mapped fire edge; prefer it over the origin-point "
+                "perimeter is the mapped fire edge (simplified); "
+                "perimeter_edge_km, when present, is measured from the "
+                "queried point to that edge - prefer it over origin-point "
                 "distance for large fires"
             )
     payload = {

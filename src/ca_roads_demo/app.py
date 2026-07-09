@@ -364,6 +364,8 @@ def extract_geo(tool: str, result: dict) -> dict | None:
                     d.get("closure_class"))
             else:
                 add(kind, d.get("lat"), d.get("lon"), label)
+                if kind == "wildfire" and d.get("perimeter") and markers:
+                    markers[-1]["poly"] = d["perimeter"]
     for item in result.get("incidents", []):
         add("incident", item.get("lat"), item.get("lon"),
             f"{item.get('type', '')} @ {item.get('location', '')}")
@@ -383,6 +385,8 @@ def extract_geo(tool: str, result: dict) -> dict | None:
         wildfires = [f for f in wildfires if f.get("near_highways")]
     for item in wildfires:
         add("wildfire", item.get("lat"), item.get("lon"), item.get("summary", ""))
+        if item.get("perimeter") and markers:
+            markers[-1]["poly"] = item["perimeter"]
 
     for item in result.get("cameras", []):
         if isinstance(item.get("lat"), int | float) and item.get("lat"):
