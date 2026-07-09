@@ -9,6 +9,7 @@ dollar cap, all in process (single Cloud Run instance for v1).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -589,6 +590,23 @@ async def ask(request: Request):
     )
 
 
+async def stats(request: Request):
+    """Statewide counts for the header KPI strip. Every feed involved is
+    TTL-cached, so this is cheap after the first hit."""
+    road = tools.get_road()
+    chp, lcs, cc, wf, cams = await asyncio.gather(
+        road.incidents(), road.lane_closures(), road.chain_controls(),
+        road.wildfires(), road.cameras(),
+    )
+    return JSONResponse({
+        "incidents": len(chp.records),
+        "closures": len(lcs.records),
+        "chain_controls": len(cc.records),
+        "wildfires": len(wf.records),
+        "cameras": len(cams.records),
+    })
+
+
 EVENT_ALLOWLIST = {
     "pageview", "example_click", "location_on", "tell_more",
     "feedback_up", "feedback_down",
@@ -636,6 +654,7 @@ app = Starlette(
         Route("/health", health),
         Route("/api/ask", ask, methods=["POST"]),
         Route("/api/event", track, methods=["POST"]),
+        Route("/api/stats", stats, methods=["GET"]),
         Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
     ]
 )
