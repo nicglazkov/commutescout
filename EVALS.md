@@ -1,41 +1,41 @@
 # Eval results
 
-Generated 2026-07-09T23:12:20+00:00 by `evals/run_evals.py` from `v1.9.0`. Models answer the golden questions using the MCP tool surface served from recorded fixtures; grading is exact-fact matching plus an LLM judge scored against ground truth. Judge: `claude-opus-4-8` (not an evaluated model).
+Generated 2026-07-09T23:40:10+00:00 by `evals/run_evals.py` from `v1.9.1`. Models answer the golden questions using the MCP tool surface served from recorded fixtures; grading is exact-fact matching plus an LLM judge scored against ground truth. Judge: `claude-opus-4-8` (not an evaluated model).
 
 ## Scorecard
 
 | Scenario | `claude-haiku-4-5` | `claude-sonnet-5` |
 |---|---|---|
-| fire-day | 16/28 (57%) | 20/28 (71%) |
-| quiet-day | 20/30 (67%) | 20/30 (67%) |
-| real-2026-07-07 | 3/6 (50%) | 4/6 (67%) |
-| storm-day | 13/27 (48%) | 17/27 (63%) |
-| **all** | 52/91 (57%) | 61/91 (67%) |
+| fire-day | 15/28 (54%) | 19/28 (68%) |
+| quiet-day | 21/30 (70%) | 20/30 (67%) |
+| real-2026-07-07 | 2/6 (33%) | 3/6 (50%) |
+| storm-day | 16/27 (59%) | 16/27 (59%) |
+| **all** | 54/91 (59%) | 58/91 (64%) |
 
 ## Pass rate by tool
 
 | Tool | `claude-haiku-4-5` | `claude-sonnet-5` |
 |---|---|---|
-| `check_region` | 1/4 (25%) | 1/4 (25%) |
-| `check_route` | 12/18 (67%) | 10/18 (56%) |
+| `check_region` | 2/4 (50%) | 1/4 (25%) |
+| `check_route` | 11/18 (61%) | 12/18 (67%) |
 | `get_chain_controls` | 15/20 (75%) | 15/20 (75%) |
-| `get_incidents` | 9/15 (60%) | 10/15 (67%) |
-| `get_lane_closures` | 7/19 (37%) | 11/19 (58%) |
-| `get_wildfires` | 8/15 (53%) | 14/15 (93%) |
+| `get_incidents` | 8/15 (53%) | 11/15 (73%) |
+| `get_lane_closures` | 10/19 (53%) | 6/19 (32%) |
+| `get_wildfires` | 8/15 (53%) | 13/15 (87%) |
 
 ## Failure taxonomy
 
 | Category | Count | Example |
 |---|---|---|
-| missed-active-condition | 32 | claude-haiku-4-5 / fire-i5-why: The assistant claims I-5 is not closed, contradicting the active VULCAN fire closure. |
-| hallucinated-event | 20 | claude-haiku-4-5 / fire-i5-open: Captures both closure locations but invents a VULCAN wildfire cause and understates the southbound... |
-| other | 7 | claude-haiku-4-5 / storm-sr89-closure: The answer wrongly limits the full closure to southbound only, whereas the ground truth indicates a... |
-| bad-refusal | 6 | claude-haiku-4-5 / fire-sr17: The assistant asked for clarification instead of reporting that SR-17 is clear. |
-| stale-data-trust | 2 | claude-haiku-4-5 / quiet-place-davis: Claims lane-closure feed unavailable when ground truth shows a shoulder-only closure record exists... |
-| wrong-location | 2 | claude-sonnet-5 / real-bay-area: States 14 total closures but ground truth says 37 lane closures with 4 ramp closures, a significant... |
+| missed-active-condition | 30 | claude-haiku-4-5 / fire-i5-why: Ground truth states both directions fully closed, but the answer only reports northbound as closed... |
+| hallucinated-event | 25 | claude-haiku-4-5 / fire-creek: Correctly conveys the fire details but invents unverified discovery date (July 2nd) and specific... |
+| other | 8 | claude-haiku-4-5 / real-i80-closures: States 8 closures instead of 9 and doesn't clearly convey none are full roadway closures, though... |
+| bad-refusal | 5 | claude-haiku-4-5 / fire-99-alternative: The assistant asked for more information instead of reporting the SR-99 lane closure at 7th... |
+| wrong-location | 1 | claude-haiku-4-5 / storm-lowest-elevation-control: Answer claims no controls and cites Kyburz instead of the expected R-1 at Pollock Pines and R-2 at... |
+| wrong-tool-or-no-tool | 1 | claude-sonnet-5 / quiet-i80-closures: The assistant claimed data was unavailable rather than reporting the shoulder-only litter removal... |
 
 ## Tool selection
 
-21/168 answers led with a different tool than the golden question targets (declared vs first observed call). Not always an error - check_region can legitimately answer a get_incidents question - but a rising rate means the tool descriptions are drifting.
+26/171 answers led with a different tool than the golden question targets (declared vs first observed call). Not always an error - check_region can legitimately answer a get_incidents question - but a rising rate means the tool descriptions are drifting.
 
-Mean answer quality (judge, 1-5): **3.89**
+Mean answer quality (judge, 1-5): **3.96**
