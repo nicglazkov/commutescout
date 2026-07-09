@@ -431,7 +431,8 @@ async def photon_suggest(
                 "kind": props.get("osm_value") or "place",
             })
         # Rank rows that actually contain the typed street/place word above
-        # Photon's fuzzy fallbacks ("a house-number query" once led with Roslea Rd);
+        # Photon's fuzzy fallbacks (a house-number query once led with an
+        # unrelated street);
         # the fallbacks stay visible but sink to the bottom of the list.
         tokens = [t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()]
         if tokens:
