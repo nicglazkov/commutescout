@@ -151,9 +151,13 @@ class WildfireSource:
         )
 
 
+# YearToDate, not Current: the Current layer holds only the last couple of
+# days of uploads, so an active fire whose perimeter was mapped last week
+# has no footprint there. Stale entries are harmless because callers
+# name-match perimeters against the active incident list.
 PERIMETER_URL = (
     "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
-    "WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query"
+    "WFIGS_Interagency_Perimeters_YearToDate/FeatureServer/0/query"
 )
 
 

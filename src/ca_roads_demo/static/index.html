@@ -681,6 +681,13 @@ function drawGeo(geo) {
       }
       continue;
     }
+    if (m.kind === 'wildfire' && Array.isArray(m.poly) && m.poly.length > 2) {
+      chipCounts.wildfire = (chipCounts.wildfire || 0) + 1;
+      L.polygon(m.poly, {
+        color: '#d97706', weight: 1.5, fillColor: '#d97706', fillOpacity: 0.22,
+      }).bindPopup(m.label ? String(m.label) : 'wildfire').addTo(layerFires);
+      continue;
+    }
     const target = m.kind === 'wildfire' ? layerFires : layerPrimary;
     let style = {
       radius: 7, color: '#fffdf7', weight: 1.5,
