@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 
 from mcp.server.fastmcp import FastMCP
 
@@ -875,8 +877,11 @@ async def _live_cameras(candidates, limit: int):
 
     The feed's in-service flag is not enough: plenty of "in service"
     cameras return a placeholder frame with some variant of "camera
-    offline" burned in. Real roadside JPEGs run tens of KB; placeholders
-    compress to a few. Fetch each candidate and keep real images only.
+    offline" burned in. The reliable discriminator is freshness: live
+    cameras rewrite their snapshot every minute or so, placeholders are
+    files frozen at the moment the camera died. Byte size alone does
+    not work - a nearly black night frame compresses under 12 KB and
+    once got every live Donner camera dropped at 1 AM.
     """
     client = get_road().client
     sem = asyncio.Semaphore(6)
@@ -893,12 +898,23 @@ async def _live_cameras(candidates, limit: int):
                 return None
         content_type = resp.headers.get("content-type", "")
         if (
-            resp.status_code == 200
-            and content_type.startswith("image")
-            and len(resp.content) >= 12_000
+            resp.status_code != 200
+            or not content_type.startswith("image")
+            or len(resp.content) < 2_000
         ):
-            return cam
-        return None
+            return None
+        modified = resp.headers.get("last-modified")
+        if modified:
+            try:
+                age = (
+                    datetime.now(UTC)
+                    - parsedate_to_datetime(modified)
+                ).total_seconds()
+                return cam if age <= 1800 else None
+            except (TypeError, ValueError):
+                pass
+        # No usable freshness header: fall back to the size heuristic.
+        return cam if len(resp.content) >= 12_000 else None
 
     checked = await asyncio.gather(*(check(c) for c in candidates[: limit * 3]))
     live = [c for c in checked if c is not None][:limit]
