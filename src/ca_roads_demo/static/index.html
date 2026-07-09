@@ -3,357 +3,240 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CA Roads. Live California road conditions</title>
-<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<title>CA Roads - live California road conditions</title>
+<meta name="description" content="Ask about any California road in plain words. Live answers from CHP, Caltrans, weather, and traffic feeds, plotted on a map.">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
 <style>
-  :root {
-    --pine: #1c3a2e;
-    --pine-soft: #2d5c46;
-    --cream: #f6f1e6;
-    --card: #fffdf7;
-    --ink: #26261f;
-    --ink-soft: #6d6a5e;
-    --terracotta: #c9611a;
-    --amber: #e08a3c;
-    --line: #e2dbc9;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body {
-    font-family: "Public Sans", system-ui, sans-serif;
-    background: var(--cream);
-    color: var(--ink);
-    line-height: 1.55;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-  header {
-    background: var(--pine);
-    color: var(--cream);
-    padding: 14px 20px;
-    /* Faint contour lines: a nod to topo maps, not a template gradient. */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='90' viewBox='0 0 260 90'%3E%3Cg fill='none' stroke='%23f6f1e6' stroke-opacity='0.07' stroke-width='1.2'%3E%3Cpath d='M-10 62 C 40 38 90 82 140 56 S 240 30 270 58'/%3E%3Cpath d='M-10 44 C 45 22 95 64 145 40 S 235 14 270 40'/%3E%3Cpath d='M-10 80 C 50 58 100 96 150 74 S 245 50 270 78'/%3E%3C/g%3E%3C/svg%3E");
-  }
-  .header-inner {
-    max-width: 1060px; margin: 0 auto;
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  }
-  .header-inner img { width: 40px; height: 40px; border-radius: 9px; }
-  .wordmark {
-    font-family: "Fraunces", serif;
-    font-size: 1.35rem; font-weight: 600; letter-spacing: 0.01em;
-  }
-  .sources-chip {
-    margin-left: auto; font-size: 0.78rem; color: #cfc9b4;
-    border: 1px solid #3f5d4e; border-radius: 999px; padding: 4px 12px;
-    white-space: nowrap;
-  }
-  main {
-    max-width: 1060px; width: 100%; margin: 0 auto; padding: 28px 20px 40px;
-    flex: 1;
-  }
-  h1 {
-    font-family: "Fraunces", serif;
-    font-weight: 600; font-size: clamp(1.6rem, 4vw, 2.3rem);
-    margin: 0 0 6px; letter-spacing: -0.01em;
-  }
-  h1 em { font-style: italic; color: var(--terracotta); }
-  .lede { margin: 0 0 22px; color: var(--ink-soft); max-width: 46ch; }
-  form { display: flex; gap: 10px; max-width: 640px; }
-  input[type="text"] {
-    flex: 1; font: inherit; padding: 13px 16px;
-    border: 1.5px solid var(--line); border-radius: 10px;
-    background: var(--card); color: var(--ink);
-    transition: border-color 0.15s;
-  }
-  input[type="text"]:focus { outline: none; border-color: var(--pine-soft); }
-  button.ask {
-    font: inherit; font-weight: 600; padding: 13px 22px;
-    border: 0; border-radius: 10px; cursor: pointer;
-    background: var(--terracotta); color: #fff;
-  }
-  button.ask:hover { background: #b4550f; }
-  button.ask:disabled { opacity: 0.55; cursor: default; }
-  .examples { margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
-  .examples button {
-    font: inherit; font-size: 0.83rem; cursor: pointer;
-    background: transparent; color: var(--ink-soft);
-    border: 1px solid var(--line); border-radius: 999px; padding: 6px 13px;
-  }
-  .examples button:hover { border-color: var(--pine-soft); color: var(--pine); }
-  .locrow {
-    margin-top: 14px; display: flex; align-items: center; gap: 10px;
-    font-size: 0.86rem; color: var(--ink-soft);
-  }
-  .switch { position: relative; display: inline-block; width: 42px; height: 24px; flex: none; }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .track {
-    position: absolute; inset: 0; cursor: pointer; border-radius: 999px;
-    background: #d8d0bc; transition: background 0.2s;
-  }
-  .track::before {
-    content: ""; position: absolute; height: 18px; width: 18px;
-    left: 3px; top: 3px; border-radius: 50%; background: #fffdf7;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.25); transition: transform 0.2s;
-  }
-  .switch input:checked + .track { background: var(--pine-soft); }
-  .switch input:checked + .track::before { transform: translateX(18px); }
-  .locstatus { min-height: 1.2em; }
-  .locstatus.on { color: var(--pine); font-weight: 500; }
-  .chips {
-    display: none; flex-wrap: wrap; gap: 8px; margin: 0 0 12px;
-  }
-  .chips.active { display: flex; }
-  .chip {
-    font-size: 0.78rem; font-weight: 600; color: var(--ink);
-    background: var(--cream); border: 1px solid var(--line);
-    border-radius: 999px; padding: 4px 11px;
-  }
-  .chip::before {
-    content: ""; display: inline-block; width: 8px; height: 8px;
-    border-radius: 50%; margin-right: 6px; background: var(--dot, #26261f);
-  }
-  .youarehere {
-    width: 16px; height: 16px; border-radius: 50%;
-    background: #2563eb; border: 2.5px solid #fff;
-    box-shadow: 0 0 0 rgba(37, 99, 235, 0.45);
-    animation: pulseblue 2s infinite;
-  }
-  @keyframes pulseblue {
-    0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); }
-    70% { box-shadow: 0 0 0 14px rgba(37, 99, 235, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
-  }
-  .route-end {
-    width: 22px; height: 22px; border-radius: 50%; text-align: center;
-    background: var(--pine); color: #fffdf7; font: 700 11px/22px "Public Sans", sans-serif;
-    border: 2px solid #fffdf7; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  }
-  .leaflet-popup-content-wrapper {
-    border-radius: 10px; font-family: "Public Sans", system-ui, sans-serif;
-  }
-  .leaflet-popup-content { margin: 10px 14px; font-size: 0.84rem; line-height: 1.45; }
-  .result {
-    margin-top: 26px; display: none;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 18px; align-items: start;
-  }
-  .result.active { display: grid; }
-  @media (max-width: 840px) { .result.active { grid-template-columns: 1fr; } }
-  .answer-card {
-    background: var(--card); border: 1px solid var(--line);
-    border-radius: 14px; padding: 20px 22px;
-  }
-  .answer-card .status {
-    font-size: 0.82rem; color: var(--terracotta); min-height: 1.3em;
-    margin-bottom: 8px; font-weight: 500;
-  }
-  .loader { display: none; padding: 10px 0 16px; }
-  .loader.active { display: block; }
-  .roadbar {
-    position: relative; height: 6px; border-radius: 3px; overflow: hidden;
-    background: repeating-linear-gradient(90deg,
-      var(--pine) 0 16px, #cfc7ae 16px 28px);
-    animation: roll 0.7s linear infinite;
-  }
-  @keyframes roll { from { background-position: 0 0; } to { background-position: -28px 0; } }
-  .car {
-    position: absolute; top: -6px; width: 26px; height: 12px;
-    border-radius: 3px 8px 2px 2px; background: var(--terracotta);
-    box-shadow: 0 8px 0 -5px rgba(38,38,31,0.25);
-    animation: cruise 3.4s ease-in-out infinite;
-  }
-  @keyframes cruise {
-    0% { left: 2%; } 46% { left: 86%; } 54% { left: 86%; } 100% { left: 2%; }
-  }
-  .loadmsg { margin-top: 12px; font-size: 0.84rem; color: var(--ink-soft); }
-  .loadtime { margin-top: 4px; font-size: 0.76rem; color: #9a9585; }
-  .more-btn {
-    display: none; margin: 16px 0 2px;
-    font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer;
-    color: var(--pine); background: var(--cream);
-    border: 1.5px solid var(--pine-soft); border-radius: 999px;
-    padding: 9px 18px;
-  }
-  .more-btn.active { display: inline-block; }
-  .feedback { display: none; gap: 8px; margin-top: 14px; align-items: center; }
-  .feedback.active { display: flex; }
-  .feedback span { font-size: 0.8rem; color: var(--ink-soft); }
-  .feedback button {
-    font-size: 1rem; background: none; cursor: pointer;
-    border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px;
-  }
-  .feedback button:hover { border-color: var(--pine-soft); }
-  .feedback .thanks { font-weight: 600; color: var(--pine); }
-  .clarify {
-    border: 1.5px solid var(--pine-soft); border-radius: 12px;
-    padding: 14px 16px; margin: 12px 0; background: var(--card, #fffdf7);
-  }
-  .clarify p { margin: 0 0 10px; font-weight: 600; }
-  .clarify .optbtn {
-    display: block; width: 100%; text-align: left; cursor: pointer;
-    font: inherit; font-size: 0.92rem; margin: 6px 0; padding: 9px 12px;
-    border: 1px solid var(--line); border-radius: 9px; background: none;
-  }
-  .clarify .optbtn:hover { border-color: var(--pine); background: rgba(28,58,46,0.05); }
-  .cam-icon {
-    color: #1c3a2e; font-size: 18px; line-height: 20px; text-align: center;
-    text-shadow: 0 0 3px #fffdf7, 0 0 3px #fffdf7;
-  }
-  .campopup img { border-radius: 8px; margin-top: 6px; display: block; }
-  .more-btn:hover { background: #ebe4d2; }
-  .more-rule {
-    border: 0; border-top: 1px solid var(--line); margin: 18px 0 4px;
-  }
-  .more-heading {
-    font-size: 0.74rem; font-weight: 600; letter-spacing: 0.09em;
-    text-transform: uppercase; color: var(--ink-soft); margin: 0 0 10px;
-  }
-  /* The first paragraph is the verdict; give it weight. */
-  .text > p:first-child {
-    font-size: 1.06rem; padding-left: 12px;
-    border-left: 3px solid var(--terracotta);
-  }
-  .loadmsg::after {
-    content: ""; display: inline-block; width: 1.2em; text-align: left;
-    animation: dots 1.4s steps(4) infinite;
-  }
-  @keyframes dots {
-    0% { content: ""; } 25% { content: "."; } 50% { content: ".."; }
-    75% { content: "..."; } 100% { content: ""; }
-  }
-  .answer-card .text { word-wrap: break-word; }
-  .text p { margin: 0 0 10px; }
-  .text p:last-child { margin-bottom: 0; }
-  .text h4 {
-    font-family: "Fraunces", serif; font-size: 1.02rem;
-    margin: 14px 0 6px; letter-spacing: 0;
-  }
-  .text ol, .text ul { margin: 4px 0 12px; padding-left: 22px; }
-  .text li { margin: 4px 0; }
-  .text code {
-    font-size: 0.88em; background: var(--cream);
-    border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
-  }
-  .text strong { color: var(--pine); }
-  .map-card {
-    background: var(--card); border: 1px solid var(--line);
-    border-radius: 14px; overflow: hidden; display: none;
-  }
-  .map-card.active { display: block; }
-  #map { height: 420px; }
-  .roadinfo {
-    padding: 8px 14px 0; font-size: 0.82rem; font-weight: 600;
-    color: var(--pine);
-  }
-  .roadinfo:empty { display: none; }
-  .legend {
-    display: flex; flex-wrap: wrap; gap: 12px;
-    padding: 10px 14px; font-size: 0.78rem; color: var(--ink-soft);
-    border-top: 1px solid var(--line);
-  }
-  .legend span::before {
-    content: ""; display: inline-block; width: 9px; height: 9px;
-    border-radius: 50%; margin-right: 5px; background: var(--dot);
-  }
-  .legend span.ring::before {
-    background: transparent; border: 2px solid var(--dot);
-    width: 7px; height: 7px;
-  }
-  footer {
-    border-top: 1px solid var(--line);
-    padding: 18px 20px; text-align: center;
-    font-size: 0.8rem; color: var(--ink-soft);
-  }
-  footer a { color: inherit; }
+:root {
+  --navy:#0b1f33; --navy2:#122c47; --ink:#0f1c2b; --dim:#5b6b7d;
+  --line:#dbe3ec; --bg:#eef2f6; --card:#ffffff;
+  --sky:#2f81f7; --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
+  --green:#2f9e6e; --green-soft:#e2f5ec;
+}
+* { box-sizing:border-box; margin:0 }
+html, body { height:100% }
+body { background:var(--bg); color:var(--ink);
+  font:14.5px/1.55 Inter, system-ui, sans-serif;
+  display:flex; flex-direction:column; min-height:100vh }
+
+/* ── App chrome ─────────────────────────────────────────────── */
+.topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
+  gap:14px; padding:0 20px; height:56px; flex:none }
+.topbar img.mark { width:30px; height:30px; border-radius:7px }
+.topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
+.topbar nav { display:flex; gap:4px; margin-left:14px }
+.topbar nav a { color:#b7c4d4; font-size:.85rem; padding:7px 12px; border-radius:8px;
+  text-decoration:none }
+.topbar nav a.on { background:var(--navy2); color:#fff }
+.topbar nav a:hover { color:#fff }
+.sysok { margin-left:auto; display:flex; align-items:center; gap:7px;
+  font-size:.78rem; color:#9fd8b7; white-space:nowrap }
+.sysok i { width:7px; height:7px; border-radius:99px; background:#3fcf8a; font-style:normal }
+#ver { color:#8fa2b8; font-size:.75rem }
+
+.kpis { background:var(--navy2); color:#c8d5e4; display:flex; overflow-x:auto;
+  padding:0 20px; flex:none; font-size:.78rem }
+.kpis div { padding:8px 18px 8px 0; margin-right:18px;
+  border-right:1px solid rgba(255,255,255,.08); white-space:nowrap }
+.kpis div:last-child { border-right:0 }
+.kpis b { color:#fff; font-size:.95rem; margin-right:5px }
+
+/* ── Shell ──────────────────────────────────────────────────── */
+.shell { flex:1; display:grid; grid-template-columns:440px 1fr; min-height:0 }
+aside { background:var(--card); border-right:1px solid var(--line);
+  overflow-y:auto; padding:18px; display:flex; flex-direction:column }
+.searchrow { display:flex; border:1.5px solid var(--line); border-radius:10px;
+  overflow:hidden; background:var(--card) }
+.searchrow:focus-within { border-color:var(--sky) }
+.searchrow input { flex:1; border:0; outline:0; font:inherit; padding:11px 14px;
+  min-width:0 }
+.searchrow button.ask { border:0; background:var(--sky); color:#fff;
+  font:600 .85rem Inter; padding:0 18px; cursor:pointer }
+.searchrow button.ask:disabled { opacity:.55; cursor:wait }
+.examples { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px }
+.examples button { font:500 .76rem Inter; color:var(--dim); background:var(--bg);
+  border:1px solid var(--line); border-radius:99px; padding:5px 11px; cursor:pointer }
+.examples button:hover { color:var(--ink); border-color:#b9c6d6 }
+.locrow { display:flex; align-items:center; gap:9px; margin-top:12px;
+  font-size:.8rem; color:var(--dim) }
+.switch { position:relative; display:inline-block; width:34px; height:19px }
+.switch input { opacity:0; width:0; height:0 }
+.switch .track { position:absolute; inset:0; border-radius:99px; background:#c4cfdb;
+  transition:.15s; cursor:pointer }
+.switch .track::after { content:""; position:absolute; top:2.5px; left:3px;
+  width:14px; height:14px; border-radius:99px; background:#fff; transition:.15s }
+.switch input:checked + .track { background:var(--green) }
+.switch input:checked + .track::after { transform:translateX(14px) }
+.locstatus.on { color:var(--green); font-weight:600 }
+
+/* ── Result panel ───────────────────────────────────────────── */
+.result { display:none; margin-top:16px }
+.result.active { display:block }
+.answer-card { border-top:1px solid var(--line); padding-top:14px }
+.loader { display:none; padding:6px 0 12px }
+.loader.active { display:block }
+.roadbar { position:relative; height:6px; border-radius:99px; background:var(--bg);
+  overflow:hidden; margin-bottom:9px }
+.roadbar .car { position:absolute; top:0; left:-18%; width:18%; height:100%;
+  border-radius:99px; background:var(--sky); animation:drive 1.4s ease-in-out infinite }
+@keyframes drive { 0%{left:-18%} 100%{left:100%} }
+.loadmsg { font-weight:600; font-size:.88rem }
+.loadtime { color:var(--dim); font-size:.76rem; margin-top:2px }
+.status { color:var(--dim); font-size:.8rem; margin-bottom:6px }
+.chips { display:none; flex-wrap:wrap; gap:6px; margin-bottom:12px }
+.chips.active { display:flex }
+.chip { font:600 .72rem Inter; color:var(--ink); background:var(--bg);
+  border:1px solid var(--line); border-radius:99px; padding:4px 10px 4px 8px;
+  display:inline-flex; align-items:center; gap:6px }
+.chip::before { content:""; width:8px; height:8px; border-radius:99px;
+  background:var(--dot, var(--dim)) }
+.text { font-size:.92rem }
+.text p { margin:9px 0 }
+.text h4 { margin:14px 0 6px; font-size:.95rem }
+.text ul, .text ol { padding-left:20px; margin:8px 0 }
+.text li { margin:5px 0 }
+.text b { font-weight:600 }
+.more-btn { display:none; margin-top:12px; font:600 .82rem Inter; color:var(--sky);
+  background:var(--sky-soft); border:1px solid #cfe2fd; border-radius:9px;
+  padding:8px 14px; cursor:pointer }
+.more-btn.active { display:inline-block }
+.feedback { display:none; gap:8px; margin-top:12px; align-items:center }
+.feedback.active { display:flex }
+.feedback span { font-size:.78rem; color:var(--dim) }
+.feedback button { font-size:.95rem; background:none; cursor:pointer;
+  border:1px solid var(--line); border-radius:8px; padding:3px 9px }
+.feedback button:hover { border-color:var(--sky) }
+.feedback .thanks { font-weight:600; color:var(--green) }
+.clarify { border:1.5px solid #cfe2fd; border-radius:12px; padding:13px 15px;
+  margin:12px 0; background:var(--sky-soft) }
+.clarify p { margin:0 0 9px; font-weight:600 }
+.clarify .optbtn { display:block; width:100%; text-align:left; cursor:pointer;
+  font:inherit; font-size:.88rem; margin:6px 0; padding:9px 12px;
+  border:1px solid #cfe2fd; border-radius:9px; background:var(--card) }
+.clarify .optbtn:hover { border-color:var(--sky) }
+.legalfoot { margin-top:auto; padding-top:18px; font-size:.72rem; color:var(--dim) }
+.legalfoot a { color:var(--dim) }
+
+/* ── Map area ───────────────────────────────────────────────── */
+.map-card { position:relative; min-height:0 }
+#map { position:absolute; inset:0 }
+.roadinfo { position:absolute; z-index:800; left:14px; bottom:14px;
+  background:rgba(255,255,255,.94); border:1px solid var(--line); border-radius:10px;
+  padding:7px 13px; font-size:.78rem; color:var(--ink);
+  box-shadow:0 2px 8px rgba(15,28,43,.1) }
+.roadinfo:empty { display:none }
+.legend { position:absolute; z-index:800; right:14px; bottom:14px; max-width:340px;
+  background:rgba(255,255,255,.94); border:1px solid var(--line); border-radius:10px;
+  padding:8px 12px; display:flex; flex-wrap:wrap; gap:5px 12px; font-size:.7rem;
+  color:var(--dim); box-shadow:0 2px 8px rgba(15,28,43,.1) }
+.legend span { display:inline-flex; align-items:center; gap:5px }
+.legend span::before { content:""; width:8px; height:8px; border-radius:99px;
+  background:var(--dot, var(--dim)) }
+.legend span.ring::before { background:transparent; border:2px solid var(--dot) }
+.cam-icon { color:var(--sky); font-size:18px; line-height:20px; text-align:center;
+  text-shadow:0 0 3px #fff, 0 0 3px #fff }
+.campopup img { border-radius:8px; margin-top:6px; display:block; max-width:100% }
+
+@media (max-width: 960px) {
+  .shell { grid-template-columns:1fr; grid-template-rows:auto 55vh }
+  aside { border-right:0; border-bottom:1px solid var(--line) }
+  .topbar nav { display:none }
+  .legend { display:none }
+}
 </style>
 </head>
 <body>
-<header>
-  <div class="header-inner">
-    <img src="/logo.svg" alt="">
-    <span class="wordmark">CA Roads</span>
-    <span class="sources-chip">live from CHP &middot; Caltrans &middot; WFIGS</span>
-  </div>
-</header>
-
-<main>
-  <h1>What's the road <em>actually</em> doing?</h1>
-  <p class="lede">Ask in plain words, like you'd ask a friend who works
-  dispatch. The answer comes straight from the live CHP and Caltrans feeds,
-  with everything plotted on a map.</p>
-
-  <form id="form">
-    <input type="text" id="q" maxlength="300" required autocomplete="off"
-           placeholder="Do I need chains to get to Tahoe?">
-    <button class="ask" id="go" type="submit">Check roads</button>
-  </form>
-  <div class="examples">
-    <button type="button">Is 17 clear right now?</button>
-    <button type="button">How is northbound 101 up to SF?</button>
-    <button type="button">Anything on I-80 between Sacramento and Reno?</button>
-    <button type="button">Any fires near I-5?</button>
-    <button type="button">Lane closures on 101 in the Bay Area?</button>
-  </div>
-  <div class="locrow">
-    <label class="switch">
-      <input type="checkbox" id="useloc">
-      <span class="track"></span>
-    </label>
-    <span>Use my location</span>
-    <span class="locstatus" id="locstatus"></span>
-  </div>
-
-  <div class="result" id="result">
-    <div class="answer-card">
-      <div class="loader" id="loader">
-        <div class="roadbar"><span class="car"></span></div>
-        <div class="loadmsg" id="loadmsg">Waking up the dispatcher</div>
-        <div class="loadtime" id="loadtime">usually 5 to 15 seconds</div>
-      </div>
-      <div class="status" id="status"></div>
-      <div class="chips" id="chips"></div>
-      <div class="text" id="answer"></div>
-      <button type="button" class="more-btn" id="morebtn">Tell me more</button>
-      <div class="feedback" id="feedback">
-        <span>Was this right?</span>
-        <button type="button" data-fb="feedback_up" aria-label="Yes">&#128077;</button>
-        <button type="button" data-fb="feedback_down" aria-label="No">&#128078;</button>
-      </div>
-    </div>
-    <div class="map-card" id="mapcard">
-      <div id="map"></div>
-      <div class="roadinfo" id="roadinfo"></div>
-      <div class="legend">
-        <span style="--dot:#7f1d1d">road fully closed</span>
-        <span style="--dot:#a02c2c">lanes closed</span>
-        <span class="ring" style="--dot:#a02c2c">one-way / rolling work</span>
-        <span style="--dot:#d9a0a0">ramp closed</span>
-        <span style="--dot:#c9611a">incident</span>
-        <span style="--dot:#2b6cb0">chain control</span>
-        <span style="--dot:#d97706">wildfire</span>
-        <span style="--dot:#1c3a2e">camera</span>
-        <span style="--dot:#6b5b1e">sign</span>
-        <span style="--dot:#1c3a2e">route</span>
-      </div>
-    </div>
-  </div>
-</main>
-
-<footer>
-  Data: CHP, Caltrans, WFIGS. Not affiliated with any agency. Conditions
-  change fast; verify before you drive (511 or
-  <a href="https://quickmap.dot.ca.gov">quickmap.dot.ca.gov</a>).
-  Questions are logged anonymously to improve answers.
-  Map tiles come from CARTO; the route preview and place lookup use the
-  OSRM, Valhalla, Nominatim, and Photon public OpenStreetMap services,
-  which see the coordinates involved.
-  &middot; <a href="https://github.com/nicglazkov/ca-roads-mcp">GitHub</a>
+<header class="topbar">
+  <img class="mark" src="/logo.svg" alt="">
+  <span class="wordmark">CA Roads</span>
+  <nav>
+    <a class="on" href="/">Live map</a>
+    <a href="https://github.com/nicglazkov/ca-roads-mcp#add-to-claude" target="_blank" rel="noopener">Add to Claude</a>
+    <a href="https://github.com/nicglazkov/ca-roads-mcp" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+  <span class="sysok"><i></i><span id="feedsok">live from CHP · Caltrans · WFIGS + 10 more</span></span>
   <span id="ver"></span>
-</footer>
+</header>
+<div class="kpis" id="kpis">
+  <div><b id="k-inc">–</b>active incidents</div>
+  <div><b id="k-clo">–</b>closures in place</div>
+  <div><b id="k-cc">–</b>chain controls</div>
+  <div><b id="k-wf">–</b>wildfires tracked</div>
+  <div><b id="k-cam">–</b>cameras online</div>
+</div>
+<div class="shell">
+  <aside>
+    <form id="form">
+      <div class="searchrow">
+        <input type="text" id="q" maxlength="300" required autocomplete="off"
+               placeholder="How's the drive from Sacramento to Tahoe?">
+        <button class="ask" id="go" type="submit">Check</button>
+      </div>
+    </form>
+    <div class="examples">
+      <button type="button">Is 17 clear right now?</button>
+      <button type="button">How is northbound 101 up to SF?</button>
+      <button type="button">Anything on I-80 between Sacramento and Reno?</button>
+      <button type="button">Any fires near I-5?</button>
+      <button type="button">Lane closures on 101 in the Bay Area?</button>
+    </div>
+    <div class="locrow">
+      <label class="switch">
+        <input type="checkbox" id="useloc">
+        <span class="track"></span>
+      </label>
+      <span>Use my location</span>
+      <span class="locstatus" id="locstatus"></span>
+    </div>
+    <div class="result" id="result">
+      <div class="answer-card">
+        <div class="loader" id="loader">
+          <div class="roadbar"><span class="car"></span></div>
+          <div class="loadmsg" id="loadmsg">Waking up the dispatcher</div>
+          <div class="loadtime" id="loadtime">usually 5 to 15 seconds</div>
+        </div>
+        <div class="status" id="status"></div>
+        <div class="chips" id="chips"></div>
+        <div class="text" id="answer"></div>
+        <button type="button" class="more-btn" id="morebtn">Tell me more</button>
+        <div class="feedback" id="feedback">
+          <span>Was this right?</span>
+          <button type="button" data-fb="feedback_up" aria-label="Yes">&#128077;</button>
+          <button type="button" data-fb="feedback_down" aria-label="No">&#128078;</button>
+        </div>
+      </div>
+    </div>
+    <p class="legalfoot">
+      Data: CHP, Caltrans, WFIGS, NWS, USGS, TomTom, 511 SF Bay. Independent
+      service, not affiliated with any agency. Conditions change fast; verify
+      before you drive (511 or
+      <a href="https://quickmap.dot.ca.gov">quickmap.dot.ca.gov</a>).
+      Questions are logged anonymously to improve answers.
+      Map tiles come from CARTO; the route preview and place lookup use the
+      OSRM, Valhalla, Nominatim, and Photon public OpenStreetMap services,
+      which see the coordinates involved. ·
+      <a href="https://github.com/nicglazkov/ca-roads-mcp">GitHub</a>
+    </p>
+  </aside>
+  <div class="map-card active" id="mapcard">
+    <div id="map"></div>
+    <div class="roadinfo" id="roadinfo"></div>
+    <div class="legend">
+      <span style="--dot:#7f1d1d">road fully closed</span>
+      <span style="--dot:#a02c2c">lanes closed</span>
+      <span class="ring" style="--dot:#a02c2c">one-way / rolling work</span>
+      <span style="--dot:#d9a0a0">ramp closed</span>
+      <span style="--dot:#c9611a">incident</span>
+      <span style="--dot:#2b6cb0">chain control</span>
+      <span style="--dot:#d97706">wildfire</span>
+      <span style="--dot:#2f81f7">camera</span>
+      <span style="--dot:#a16207">sign</span>
+      <span style="--dot:#1c3a2e">route</span>
+    </div>
+  </div>
+</div>
 
 <script src="/static/vendor/leaflet.js"></script>
 <script>
@@ -520,7 +403,7 @@ function renderChips() {
 function ensureMap() {
   mapcard.classList.add('active');
   if (map) return;
-  map = L.map('map', { scrollWheelZoom: true }).setView([37.5, -120.5], 6);
+  map = L.map('map', { scrollWheelZoom: true }).setView([37.4, -121.2], 6);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 17,
     subdomains: 'abcd',
@@ -760,6 +643,17 @@ function beacon(event, extra) {
   catch (e) { fetch('/api/event', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: payload}).catch(() => {}); }
 }
 beacon('pageview');
+
+ensureMap();
+fetch('/api/stats').then(r => r.json()).then(s => {
+  const put = (id, v) => {
+    const el = document.getElementById(id);
+    if (el && typeof v === 'number') el.textContent = v.toLocaleString();
+  };
+  put('k-inc', s.incidents); put('k-clo', s.closures);
+  put('k-cc', s.chain_controls); put('k-wf', s.wildfires);
+  put('k-cam', s.cameras);
+}).catch(() => {});
 
 fetch('/health').then(r => r.json()).then(d => {
   if (d.version) document.getElementById('ver').textContent = ' · v' + d.version;
