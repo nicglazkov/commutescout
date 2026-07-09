@@ -594,9 +594,7 @@ async def stats(request: Request):
     """Statewide counts for the header KPI strip. Every feed involved is
     TTL-cached, so this is cheap after the first hit."""
     road = tools.get_road()
-    import asyncio as _aio
-
-    chp, lcs, cc, wf, cams = await _aio.gather(
+    chp, lcs, cc, wf, cams = await asyncio.gather(
         road.incidents(), road.lane_closures(), road.chain_controls(),
         road.wildfires(), road.cameras(),
     )
