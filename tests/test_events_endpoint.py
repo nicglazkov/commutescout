@@ -32,3 +32,12 @@ def test_feedback_carries_question(client, capsys):
     logged = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert logged["event"] == "feedback_down"
     assert len(logged["question"]) <= 300  # capped
+
+
+def test_safe_zone_falls_back_to_pacific():
+    from ca_roads_demo.app import _safe_zone
+
+    assert _safe_zone("America/New_York").key == "America/New_York"
+    assert _safe_zone("Not/AZone").key == "America/Los_Angeles"
+    assert _safe_zone(None).key == "America/Los_Angeles"
+    assert _safe_zone("x" * 500).key == "America/Los_Angeles"

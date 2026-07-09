@@ -15,6 +15,7 @@ import time
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import anthropic
 from starlette.applications import Starlette
@@ -412,11 +413,22 @@ def extract_geo(tool: str, result: dict) -> dict | None:
     return payload or None
 
 
+def _safe_zone(name) -> ZoneInfo:
+    """The browser-reported IANA zone, or Pacific: this is a California
+    road service, so PT is the right default when the header is absent or
+    garbage."""
+    try:
+        return ZoneInfo(str(name)[:64])
+    except Exception:  # noqa: BLE001
+        return ZoneInfo("America/Los_Angeles")
+
+
 async def answer_stream(
     question: str,
     location: tuple[float, float] | None = None,
     prior: dict | None = None,
     visitor: str = "",
+    tz: str | None = None,
 ):
     client = get_client()
     started = time.monotonic()
@@ -437,11 +449,20 @@ async def answer_stream(
         messages.append({"role": "user", "content": prior["question"]})
         messages.append({"role": "assistant", "content": prior["answer"]})
     messages.append({"role": "user", "content": content})
+    zone = _safe_zone(tz or "America/Los_Angeles")
+    now_local = datetime.now(zone)
+    system = SYSTEM + (
+        f"\n\nThe user's local time zone is {zone.key} and it is "
+        f"{now_local:%A, %B %d at %I:%M %p} there right now. Express every "
+        "time in the user's zone in plain 12-hour form ('4:55 AM'); never "
+        "show UTC or raw ISO timestamps. Tool data_as_of values are UTC - "
+        "convert them."
+    )
     for _ in range(MAX_TOOL_TURNS):
         async with client.messages.stream(
             model=MODEL,
             max_tokens=MAX_TOKENS_PER_TURN,
-            system=SYSTEM,
+            system=system,
             tools=TOOL_DEFS,
             messages=messages,
         ) as stream:
@@ -559,8 +580,10 @@ async def ask(request: Request):
     blocked = guards.try_start_question(client_ip(request))
     if blocked:
         return JSONResponse({"error": blocked}, status_code=429)
+    tz = body.get("tz")
     return StreamingResponse(
-        answer_stream(question, location, prior, visitor_hash(client_ip(request))),
+        answer_stream(question, location, prior,
+                      visitor_hash(client_ip(request)), tz=tz),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
