@@ -139,6 +139,75 @@ aside { background:var(--card); border-right:1px solid var(--line);
   text-shadow:0 0 3px #fff, 0 0 3px #fff }
 .campopup img { border-radius:8px; margin-top:6px; display:block; max-width:100% }
 
+
+/* ── Planner & tabs ─────────────────────────────────────────── */
+.tabs { display:flex; gap:2px; background:var(--bg); border-radius:9px;
+  padding:3px; margin-bottom:14px }
+.tabs span { flex:1; text-align:center; font:600 .8rem Inter; padding:7px;
+  border-radius:7px; color:var(--dim); cursor:pointer; user-select:none }
+.tabs span.on { background:var(--card); color:var(--ink);
+  box-shadow:0 1px 2px rgba(15,28,43,.08) }
+.fld { margin-bottom:10px }
+.fld label { display:block; font:600 .72rem Inter; color:var(--dim);
+  text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px }
+.fld input { width:100%; font:inherit; padding:10px 12px;
+  border:1.5px solid var(--line); border-radius:9px; outline:0 }
+.fld input:focus { border-color:var(--sky) }
+.val { font-size:.75rem; margin-top:3px; min-height:1.1em }
+.val.ok { color:var(--green) } .val.err { color:var(--red) }
+.val select { font:inherit; font-size:.8rem; width:100%; margin-top:3px;
+  padding:6px; border:1px solid var(--line); border-radius:7px }
+.planbtn { width:100%; font:600 .9rem Inter; background:var(--sky); color:#fff;
+  border:0; border-radius:9px; padding:11px; cursor:pointer; margin-top:2px }
+.planbtn:disabled { opacity:.55; cursor:wait }
+.routesum { font:600 .95rem Inter; margin:14px 0 4px }
+.routebtns { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 12px }
+.routebtns button { font:600 .76rem Inter; border-radius:8px; padding:8px 12px;
+  cursor:pointer; border:1px solid var(--line); background:var(--card) }
+.routebtns button.pri { background:var(--navy); border-color:var(--navy); color:#fff }
+.steps { padding-left:20px; font-size:.85rem }
+.steps li { margin:6px 0 } .steps small { color:var(--dim) }
+.routecond { margin-top:12px; border-top:1px solid var(--line); padding-top:10px }
+.routecond h4 { font-size:.82rem; margin-bottom:6px }
+.routecond div { font-size:.8rem; color:#3c4a5a; padding:4px 0;
+  display:flex; gap:7px; align-items:baseline }
+.routecond i { font-style:normal; width:8px; height:8px; border-radius:99px;
+  flex:none; position:relative; top:0 }
+.filters { position:absolute; z-index:800; top:14px; right:14px;
+  background:rgba(255,255,255,.96); border:1px solid var(--line);
+  border-radius:12px; padding:10px 14px; font-size:.78rem;
+  box-shadow:0 2px 8px rgba(15,28,43,.12); user-select:none }
+.filters b { display:block; font:700 .68rem Inter; letter-spacing:.8px;
+  text-transform:uppercase; color:var(--dim); margin-bottom:6px }
+.filters label { display:flex; align-items:center; gap:7px; padding:3px 0;
+  cursor:pointer }
+.filters label i { width:9px; height:9px; border-radius:99px;
+  background:var(--dot); font-style:normal }
+.filters label em { font-style:normal; color:var(--dim); font-size:.7rem;
+  margin-left:auto; padding-left:10px }
+.pop { font:13px/1.45 Inter, sans-serif; min-width:200px }
+.pop .k { display:flex; align-items:center; gap:6px; font:700 .68rem Inter;
+  letter-spacing:.8px; text-transform:uppercase; color:var(--dim);
+  margin-bottom:4px }
+.pop .k i { width:8px; height:8px; border-radius:99px; background:var(--dot);
+  font-style:normal }
+.pop .t { font-weight:600; margin-bottom:3px }
+.pop .d { color:#3c4a5a; font-size:.8rem }
+.pop img { border-radius:8px; margin-top:7px; display:block; max-width:100% }
+.pop a { color:var(--sky); font-size:.78rem }
+.youarehere { width:16px; height:16px; border-radius:99px; background:#2f81f7;
+  border:3px solid #fff; box-shadow:0 0 0 3px rgba(47,129,247,.3) }
+.route-end { width:22px; height:22px; border-radius:99px; background:#0b1f33;
+  color:#fff; font:700 12px/22px Inter; text-align:center; border:2px solid #fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.35) }
+
+@media print {
+  body > * { display:none !important }
+  #printwrap { display:block !important; position:absolute; inset:0;
+    padding:20px; background:#fff; font:12pt/1.5 Georgia, serif }
+  #printwrap .routebtns { display:none !important }
+}
+
 @media (max-width: 960px) {
   .shell { grid-template-columns:1fr; grid-template-rows:auto 55vh }
   aside { border-right:0; border-bottom:1px solid var(--line) }
@@ -168,6 +237,30 @@ aside { background:var(--card); border-right:1px solid var(--line);
 </div>
 <div class="shell">
   <aside>
+    <div class="tabs">
+      <span id="tab-plan" class="on">Plan a route</span>
+      <span id="tab-ask">Ask AI</span>
+    </div>
+    <section id="pane-plan">
+      <div class="fld"><label>From</label>
+        <input id="from" maxlength="200" placeholder="e.g. San Jose or 123 Main St, Davis" autocomplete="off">
+        <div class="val" id="fromval"></div></div>
+      <div class="fld"><label>To</label>
+        <input id="to" maxlength="200" placeholder="e.g. South Lake Tahoe" autocomplete="off">
+        <div class="val" id="toval"></div></div>
+      <button type="button" class="planbtn" id="planbtn">Plan route</button>
+      <div id="printwrap" style="display:none">
+        <div class="routesum" id="routesum"></div>
+        <div class="routebtns">
+          <button type="button" class="pri" id="askaibtn">Ask AI about this route</button>
+          <button type="button" id="printbtn">Print</button>
+          <button type="button" id="exportbtn">Export .txt</button>
+        </div>
+        <ol class="steps" id="steps"></ol>
+        <div class="routecond" id="routecond"></div>
+      </div>
+    </section>
+    <section id="pane-ask" hidden>
     <form id="form">
       <div class="searchrow">
         <input type="text" id="q" maxlength="300" required autocomplete="off"
@@ -208,6 +301,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
         </div>
       </div>
     </div>
+    </section>
     <p class="legalfoot">
       Data: CHP, Caltrans, WFIGS, NWS, USGS, TomTom, 511 SF Bay. Independent
       service, not affiliated with any agency. Conditions change fast; verify
@@ -223,6 +317,15 @@ aside { background:var(--card); border-right:1px solid var(--line);
   <div class="map-card active" id="mapcard">
     <div id="map"></div>
     <div class="roadinfo" id="roadinfo"></div>
+    <div class="filters" id="filters">
+      <b>Show on map</b>
+      <label><input type="checkbox" data-kind="incident" checked><i style="--dot:#c9611a"></i>Incidents <em id="n-incident"></em></label>
+      <label><input type="checkbox" data-kind="closure" checked><i style="--dot:#a02c2c"></i>Closures <em id="n-closure"></em></label>
+      <label><input type="checkbox" data-kind="chain" checked><i style="--dot:#2b6cb0"></i>Chain controls <em id="n-chain"></em></label>
+      <label><input type="checkbox" data-kind="fire" checked><i style="--dot:#d97706"></i>Wildfires <em id="n-fire"></em></label>
+      <label><input type="checkbox" data-kind="camera" checked><i style="--dot:#2f81f7"></i>Cameras <em id="n-camera"></em></label>
+      <label><input type="checkbox" data-kind="sign" checked><i style="--dot:#a16207"></i>Signs <em id="n-sign"></em></label>
+    </div>
     <div class="legend">
       <span style="--dot:#7f1d1d">road fully closed</span>
       <span style="--dot:#a02c2c">lanes closed</span>
@@ -792,6 +895,359 @@ morebtn.addEventListener('click', () => {
     {question: lastQuestion, answer: lastAnswerRaw}
   );
 });
+</script>
+<script>
+// ── Standalone map: everything visible, no AI required ──────────────
+const canvasR = L.canvas({ padding: 0.4 });
+const KIND2GROUP = { incident: 'incident', lane_closure: 'closure',
+  chain_control: 'chain', wildfire: 'fire', camera: 'camera', sign: 'sign' };
+const GROUP_LABEL = { incident: 'INCIDENT', closure: 'CLOSURE',
+  chain: 'CHAIN CONTROL', fire: 'WILDFIRE', camera: 'LIVE CAMERA', sign: 'MESSAGE SIGN' };
+const GROUP_DOT = { incident: '#c9611a', closure: '#a02c2c', chain: '#2b6cb0',
+  fire: '#d97706', camera: '#2f81f7', sign: '#a16207' };
+const ambient = {};
+Object.keys(GROUP_DOT).forEach(g => { ambient[g] = L.layerGroup().addTo(map); });
+
+function popHead(group, title) {
+  return '<div class="pop"><div class="k"><i style="--dot:' + GROUP_DOT[group] +
+    '"></i>' + GROUP_LABEL[group] + '</div><div class="t">' + esc(title) + '</div>';
+}
+function popupFor(m) {
+  const g = KIND2GROUP[m.kind];
+  if (g === 'camera') {
+    let h = popHead(g, m.name || 'Roadside camera') +
+      '<div class="d">' + esc([m.route, m.direction, m.near].filter(Boolean).join(' · ')) + '</div>' +
+      '<img src="' + encodeURI(m.image) + '?t=' + Date.now() + '" width="300" ' +
+      'alt="" onerror="this.replaceWith(document.createTextNode(\'snapshot unavailable right now\'))">';
+    if (m.stream) h += '<a href="' + encodeURI(m.stream) + '" target="_blank" rel="noopener">Open live video stream</a>';
+    return h + '</div>';
+  }
+  if (g === 'sign') {
+    return popHead(g, [m.route, m.direction].filter(Boolean).join(' ') || 'Changeable sign') +
+      '<div class="d">' + esc(m.near || '') + '</div>' +
+      '<div class="d" style="font-weight:600;margin-top:5px">&ldquo;' + esc(m.message || '') + '&rdquo;</div></div>';
+  }
+  if (g === 'incident') {
+    return popHead(g, m.type || 'Incident') +
+      '<div class="d">' + esc(m.location || '') + '</div>' +
+      '<div class="d">' + esc(m.area ? 'CHP ' + m.area + ' dispatch' : '') + '</div></div>';
+  }
+  if (g === 'closure') {
+    return popHead(g, (m.cls || 'lane').replace(/-/g, ' ') + ' closure') +
+      '<div class="d">' + esc([m.route, m.county].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="d">' + esc(m.lanes || '') + '</div>' +
+      '<div class="d">' + esc(m.label || '') + '</div></div>';
+  }
+  if (g === 'chain') {
+    return popHead(g, m.status || 'Chain control') +
+      '<div class="d">' + esc([m.route, m.label].filter(Boolean).join(' · ')) + '</div></div>';
+  }
+  if (g === 'fire') {
+    const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : 'size unknown';
+    const cont = (m.contained || m.contained === 0) ? m.contained + '% contained' : '';
+    return popHead(g, (m.name || 'Wildfire') + ' fire') +
+      '<div class="d">' + [size, cont].filter(Boolean).join(' · ') + '</div></div>';
+  }
+  return popHead(g || 'incident', m.label || '');
+}
+
+function ambientMarker(m) {
+  const g = KIND2GROUP[m.kind];
+  if (g === 'fire' && Array.isArray(m.poly) && m.poly.length > 2) {
+    return L.polygon(m.poly, { color: '#d97706', weight: 1.5,
+      fillColor: '#d97706', fillOpacity: 0.22 }).bindPopup(popupFor(m), { maxWidth: 320 });
+  }
+  let style = { renderer: canvasR, radius: 6, color: '#fff', weight: 1.2,
+    fillColor: GROUP_DOT[g], fillOpacity: 0.9 };
+  if (m.kind === 'lane_closure' && CLOSURE_STYLES[m.cls]) {
+    style = Object.assign({ renderer: canvasR, color: '#fff', weight: 1.2 },
+      CLOSURE_STYLES[m.cls]);
+  }
+  return L.circleMarker([m.lat, m.lon], style).bindPopup(popupFor(m), { maxWidth: 320 });
+}
+
+let ambientBounds = null, ambientTimer = null, ambientBusy = false;
+async function refreshAmbient(force) {
+  if (ambientBusy) return;
+  const view = map.getBounds();
+  if (!force && ambientBounds && ambientBounds.contains(view)) return;
+  ambientBusy = true;
+  const fetchBounds = view.pad(0.35);
+  const sw = fetchBounds.getSouthWest(), ne = fetchBounds.getNorthEast();
+  const bbox = [sw.lat, sw.lng, ne.lat, ne.lng].map(v => v.toFixed(3)).join(',');
+  try {
+    const res = await fetch('/api/mapdata?bbox=' + bbox +
+      '&kinds=incident,closure,chain,fire,camera,sign');
+    if (!res.ok) return;
+    const data = await res.json();
+    const counts = {};
+    Object.values(ambient).forEach(l => l.clearLayers());
+    for (const m of data.markers || []) {
+      const g = KIND2GROUP[m.kind];
+      if (!g || !m.lat) continue;
+      ambient[g].addLayer(ambientMarker(m));
+      counts[g] = (counts[g] || 0) + 1;
+    }
+    for (const g of Object.keys(GROUP_DOT)) {
+      const el = document.getElementById('n-' + g);
+      if (el) el.textContent = counts[g] || 0;
+    }
+    ambientBounds = fetchBounds;
+  } catch (e) { /* transient; next pan retries */ }
+  finally { ambientBusy = false; }
+}
+map.on('moveend zoomend', () => {
+  clearTimeout(ambientTimer);
+  ambientTimer = setTimeout(() => refreshAmbient(false), 450);
+});
+refreshAmbient(true);
+setInterval(() => refreshAmbient(true), 180000); // keep it fresh
+
+document.querySelectorAll('#filters input').forEach(box => {
+  box.addEventListener('change', () => {
+    const layer = ambient[box.dataset.kind];
+    if (box.checked) map.addLayer(layer); else map.removeLayer(layer);
+  });
+});
+
+// ── Tabs ─────────────────────────────────────────────────────────────
+const tabPlan = document.getElementById('tab-plan');
+const tabAsk = document.getElementById('tab-ask');
+const panePlan = document.getElementById('pane-plan');
+const paneAsk = document.getElementById('pane-ask');
+function showTab(which) {
+  const plan = which === 'plan';
+  tabPlan.classList.toggle('on', plan);
+  tabAsk.classList.toggle('on', !plan);
+  panePlan.hidden = !plan;
+  paneAsk.hidden = plan;
+}
+tabPlan.addEventListener('click', () => showTab('plan'));
+tabAsk.addEventListener('click', () => showTab('ask'));
+showTab('plan');
+
+// ── Address validation ───────────────────────────────────────────────
+function wireAddress(inputId, valId) {
+  const input = document.getElementById(inputId);
+  const val = document.getElementById(valId);
+  let seq = 0;
+  async function validate() {
+    const q = input.value.trim();
+    delete input.dataset.lat;
+    if (!q) { val.textContent = ''; val.className = 'val'; return; }
+    const mine = ++seq;
+    val.className = 'val'; val.textContent = 'Checking address…';
+    try {
+      const res = await fetch('/api/geocode?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      if (mine !== seq) return;
+      const cands = data.candidates || [];
+      if (!cands.length) {
+        val.className = 'val err';
+        val.textContent = "Couldn't find that place - try adding a city.";
+        return;
+      }
+      const pick = (c) => {
+        input.dataset.lat = c.lat; input.dataset.lon = c.lon;
+        input.dataset.name = c.name;
+        val.className = 'val ok'; val.textContent = '✓ ' + c.name;
+      };
+      if (cands.length === 1) { pick(cands[0]); return; }
+      val.className = 'val'; val.innerHTML = '';
+      const sel = document.createElement('select');
+      sel.append(new Option('Which one did you mean?', '', true, true));
+      sel.options[0].disabled = true;
+      cands.forEach((c, i) => sel.append(new Option(c.name, String(i))));
+      sel.addEventListener('change', () => pick(cands[+sel.value]));
+      val.append(sel);
+    } catch (e) {
+      if (mine !== seq) return;
+      val.className = 'val err'; val.textContent = 'Address check failed - try again.';
+    }
+  }
+  input.addEventListener('change', validate);
+  return { input, val, validate };
+}
+const fromF = wireAddress('from', 'fromval');
+const toF = wireAddress('to', 'toval');
+
+// ── Routing with turn-by-turn directions ─────────────────────────────
+function fmtOsrmStep(s) {
+  const name = s.name || (s.ref || '');
+  const mod = (s.maneuver.modifier || '').replace('slight ', 'slightly ');
+  const t = s.maneuver.type;
+  if (t === 'depart') return 'Head out' + (name ? ' on ' + name : '');
+  if (t === 'arrive') return 'Arrive at your destination';
+  if (t === 'turn' || t === 'end of road') return 'Turn ' + mod + (name ? ' onto ' + name : '');
+  if (t === 'new name' || t === 'continue') return 'Continue' + (name ? ' on ' + name : '');
+  if (t === 'merge') return 'Merge' + (name ? ' onto ' + name : '');
+  if (t === 'on ramp') return 'Take the ramp' + (name ? ' onto ' + name : '');
+  if (t === 'off ramp') return 'Take the exit' + (name ? ' toward ' + name : '');
+  if (t === 'fork') return 'Keep ' + (mod || 'ahead') + (name ? ' toward ' + name : '');
+  if (t === 'roundabout' || t === 'rotary') return 'Take the roundabout' + (name ? ' onto ' + name : '');
+  return (t.charAt(0).toUpperCase() + t.slice(1)) + (name ? ' - ' + name : '');
+}
+async function osrmDirections(a, b) {
+  const pts = [a, b].map(p => p[1].toFixed(5) + ',' + p[0].toFixed(5)).join(';');
+  const res = await fetch('https://router.project-osrm.org/route/v1/driving/' + pts +
+    '?overview=full&geometries=geojson&steps=true', { signal: AbortSignal.timeout(7000) });
+  const data = await res.json();
+  if (data.code !== 'Ok' || !data.routes?.length) return null;
+  const r = data.routes[0];
+  return {
+    latlngs: r.geometry.coordinates.map(c => [c[1], c[0]]),
+    distance: r.distance, duration: r.duration,
+    steps: r.legs.flatMap(l => l.steps).map(s => ({
+      text: fmtOsrmStep(s), miles: s.distance / 1609.344,
+    })).filter(s => s.miles > 0.005 || /Arrive|Head/.test(s.text)),
+  };
+}
+async function valhallaDirections(a, b) {
+  const req = { locations: [{ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] }],
+    costing: 'auto', directions_options: { units: 'miles' } };
+  const res = await fetch('https://valhalla1.openstreetmap.de/route?json=' +
+    encodeURIComponent(JSON.stringify(req)), { signal: AbortSignal.timeout(7000) });
+  const data = await res.json();
+  if (!data.trip?.legs?.length) return null;
+  return {
+    latlngs: data.trip.legs.flatMap(l => decodePolyline6(l.shape)),
+    distance: data.trip.summary.length * 1609.344,
+    duration: data.trip.summary.time,
+    steps: data.trip.legs.flatMap(l => l.maneuvers || []).map(s => ({
+      text: s.instruction.replace(/\.$/, ''), miles: s.length,
+    })),
+  };
+}
+async function anyDirections(a, b) {
+  try { const r = await osrmDirections(a, b); if (r) return r; } catch (e) {}
+  try { return await valhallaDirections(a, b); } catch (e) { return null; }
+}
+
+// ── Plan, render, print, export ──────────────────────────────────────
+const layerRoute = L.layerGroup().addTo(map);
+let plannedRoute = null;
+const planbtn = document.getElementById('planbtn');
+planbtn.addEventListener('click', async () => {
+  if (!fromF.input.dataset.lat) await fromF.validate();
+  if (!toF.input.dataset.lat) await toF.validate();
+  if (!fromF.input.dataset.lat || !toF.input.dataset.lat) return;
+  const a = [+fromF.input.dataset.lat, +fromF.input.dataset.lon];
+  const b = [+toF.input.dataset.lat, +toF.input.dataset.lon];
+  planbtn.disabled = true; planbtn.textContent = 'Planning…';
+  try {
+    const route = await anyDirections(a, b);
+    if (!route) {
+      document.getElementById('routesum').textContent =
+        'Route servers are busy - try again in a moment.';
+      document.getElementById('printwrap').style.display = 'block';
+      return;
+    }
+    plannedRoute = { route, a, b,
+      fromName: fromF.input.dataset.name, toName: toF.input.dataset.name };
+    layerRoute.clearLayers();
+    L.polyline(route.latlngs, { color: '#0b1f33', weight: 4.5, opacity: 0.85 })
+      .addTo(layerRoute);
+    [[a, 'A', plannedRoute.fromName], [b, 'B', plannedRoute.toName]].forEach(([p, letter, name]) => {
+      L.marker(p, { icon: L.divIcon({ className: 'route-end', html: letter, iconSize: [22, 22] }),
+        zIndexOffset: 400 }).bindPopup(esc(name)).addTo(layerRoute);
+    });
+    map.fitBounds(L.latLngBounds(route.latlngs).pad(0.15));
+    const mi = route.distance / 1609.344, min = route.duration / 60;
+    document.getElementById('routesum').textContent =
+      plannedRoute.fromName.split(',')[0] + ' → ' + plannedRoute.toName.split(',')[0] +
+      ' · ' + mi.toFixed(0) + ' mi · ~' + Math.round(min) + ' min';
+    const ol = document.getElementById('steps');
+    ol.innerHTML = '';
+    route.steps.forEach(s => {
+      const li = document.createElement('li');
+      li.textContent = s.text + ' ';
+      if (s.miles >= 0.05) {
+        const sm = document.createElement('small');
+        sm.textContent = '— ' + (s.miles >= 9.5 ? Math.round(s.miles) : s.miles.toFixed(1)) + ' mi';
+        li.append(sm);
+      }
+      ol.append(li);
+    });
+    renderRouteConditions(route.latlngs);
+    document.getElementById('printwrap').style.display = 'block';
+    beacon('example_click');
+  } finally {
+    planbtn.disabled = false; planbtn.textContent = 'Plan route';
+  }
+});
+
+function nearRoute(m, latlngs, km) {
+  const step = Math.max(1, Math.floor(latlngs.length / 60));
+  for (let i = 0; i < latlngs.length; i += step) {
+    const dlat = (m.lat - latlngs[i][0]) * 111.32;
+    const dlon = (m.lon - latlngs[i][1]) * 111.32 *
+      Math.cos(latlngs[i][0] * Math.PI / 180);
+    if (dlat * dlat + dlon * dlon < km * km) return true;
+  }
+  return false;
+}
+function renderRouteConditions(latlngs) {
+  const box = document.getElementById('routecond');
+  box.innerHTML = '<h4>Conditions along this route</h4>';
+  let shown = 0;
+  for (const g of ['closure', 'incident', 'chain', 'fire', 'sign']) {
+    ambient[g].eachLayer(l => {
+      if (shown >= 12 || !l.getLatLng) return;
+      const p = l.getLatLng();
+      const m = { lat: p.lat, lon: p.lng };
+      if (nearRoute(m, latlngs, 4)) {
+        const row = document.createElement('div');
+        const dot = document.createElement('i');
+        dot.style.background = GROUP_DOT[g];
+        const txt = document.createElement('span');
+        const popEl = document.createElement('div');
+        popEl.innerHTML = l.getPopup() ? l.getPopup().getContent() : '';
+        txt.textContent = (popEl.querySelector('.t')?.textContent || GROUP_LABEL[g]) +
+          (popEl.querySelector('.d')?.textContent ? ' - ' + popEl.querySelector('.d').textContent : '');
+        row.append(dot, txt);
+        box.append(row);
+        shown++;
+      }
+    });
+  }
+  if (!shown) {
+    const row = document.createElement('div');
+    row.textContent = 'Nothing notable reported along this route right now.';
+    box.append(row);
+  }
+}
+
+document.getElementById('askaibtn').addEventListener('click', () => {
+  if (!plannedRoute) return;
+  showTab('ask');
+  input.value = "How's the drive from " + plannedRoute.fromName.split(',')[0] +
+    ' to ' + plannedRoute.toName.split(',')[0] + ' right now?';
+  form.requestSubmit();
+});
+document.getElementById('printbtn').addEventListener('click', () => window.print());
+document.getElementById('exportbtn').addEventListener('click', () => {
+  if (!plannedRoute) return;
+  const r = plannedRoute.route;
+  const lines = [
+    'CA Roads - driving directions',
+    plannedRoute.fromName + '  ->  ' + plannedRoute.toName,
+    (r.distance / 1609.344).toFixed(0) + ' miles, about ' +
+      Math.round(r.duration / 60) + ' minutes without delays',
+    'Generated ' + new Date().toLocaleString() + ' - verify before you drive (511)',
+    '',
+    ...r.steps.map((s, i) => (i + 1) + '. ' + s.text +
+      (s.miles >= 0.05 ? '  (' + s.miles.toFixed(1) + ' mi)' : '')),
+    '',
+    'Live conditions: https://ca-roads-demo-15002631928.us-west1.run.app',
+  ];
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/plain' });
+  const aEl = document.createElement('a');
+  aEl.href = URL.createObjectURL(blob);
+  aEl.download = 'directions.txt';
+  aEl.click();
+  URL.revokeObjectURL(aEl.href);
+});
+
 </script>
 </body>
 </html>
