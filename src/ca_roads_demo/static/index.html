@@ -147,6 +147,17 @@ aside { background:var(--card); border-right:1px solid var(--line);
   border-radius:7px; color:var(--dim); cursor:pointer; user-select:none }
 .tabs span.on { background:var(--card); color:var(--ink);
   box-shadow:0 1px 2px rgba(15,28,43,.08) }
+.askhead { border-top:1px solid var(--line); margin-top:18px; padding-top:14px }
+.askhead h3 { font:600 .95rem Inter; margin-bottom:3px }
+.askhead p { font-size:.8rem; color:var(--dim); margin-bottom:10px }
+.routeasks-wrap { margin:4px 0 10px }
+.routeasks-wrap b { display:block; font:700 .68rem Inter; letter-spacing:.7px;
+  text-transform:uppercase; color:var(--dim); margin-bottom:6px }
+.routeasks { display:flex; flex-wrap:wrap; gap:6px }
+.routeasks button { font:500 .8rem Inter; color:var(--sky); text-align:left;
+  background:var(--sky-soft); border:1px solid #cfe2fd; border-radius:99px;
+  padding:7px 13px; cursor:pointer }
+.routeasks button:hover { border-color:var(--sky) }
 .fld { margin-bottom:10px }
 .fld label { display:block; font:600 .72rem Inter; color:var(--dim);
   text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px }
@@ -185,6 +196,13 @@ aside { background:var(--card); border-right:1px solid var(--line);
   background:var(--dot); font-style:normal }
 .filters label em { font-style:normal; color:var(--dim); font-size:.7rem;
   margin-left:auto; padding-left:10px }
+.filters u { display:block; text-decoration:none; font:700 .62rem Inter;
+  letter-spacing:.8px; text-transform:uppercase; color:#9aa8b6;
+  margin:7px 0 2px }
+.filters label i.ring { background:transparent; border:2px solid var(--dot) }
+.filters label.subopt { padding-left:16px; font-size:.73rem; color:var(--dim) }
+.filters label.subopt i { width:0; height:0 }
+.filters { max-height:calc(100% - 28px); overflow-y:auto }
 .pop { font:13px/1.45 Inter, sans-serif; min-width:200px }
 .pop .k { display:flex; align-items:center; gap:6px; font:700 .68rem Inter;
   letter-spacing:.8px; text-transform:uppercase; color:var(--dim);
@@ -237,10 +255,6 @@ aside { background:var(--card); border-right:1px solid var(--line);
 </div>
 <div class="shell">
   <aside>
-    <div class="tabs">
-      <span id="tab-plan" class="on">Plan a route</span>
-      <span id="tab-ask">Ask AI</span>
-    </div>
     <section id="pane-plan">
       <div class="fld"><label>From</label>
         <input id="from" maxlength="200" placeholder="e.g. San Jose or 123 Main St, Davis" autocomplete="off">
@@ -252,15 +266,24 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <div id="printwrap" style="display:none">
         <div class="routesum" id="routesum"></div>
         <div class="routebtns">
-          <button type="button" class="pri" id="askaibtn">Ask AI about this route</button>
           <button type="button" id="printbtn">Print</button>
           <button type="button" id="exportbtn">Export .txt</button>
+        </div>
+        <div class="routeasks-wrap" id="routeasks-wrap">
+          <b>Questions people ask about this drive</b>
+          <div class="routeasks" id="routeasks"></div>
         </div>
         <ol class="steps" id="steps"></ol>
         <div class="routecond" id="routecond"></div>
       </div>
     </section>
-    <section id="pane-ask" hidden>
+    <section id="pane-ask">
+      <div class="askhead">
+        <h3>Ask about your drive</h3>
+        <p>Type a question the way you'd say it out loud. An assistant reads
+        the live feeds above and answers in a few seconds - nothing to
+        install or sign up for.</p>
+      </div>
     <form id="form">
       <div class="searchrow">
         <input type="text" id="q" maxlength="300" required autocomplete="off"
@@ -319,12 +342,26 @@ aside { background:var(--card); border-right:1px solid var(--line);
     <div class="roadinfo" id="roadinfo"></div>
     <div class="filters" id="filters">
       <b>Show on map</b>
-      <label><input type="checkbox" data-kind="incident" checked><i style="--dot:#c9611a"></i>Incidents <em id="n-incident"></em></label>
-      <label><input type="checkbox" data-kind="closure" checked><i style="--dot:#a02c2c"></i>Closures <em id="n-closure"></em></label>
-      <label><input type="checkbox" data-kind="chain" checked><i style="--dot:#2b6cb0"></i>Chain controls <em id="n-chain"></em></label>
-      <label><input type="checkbox" data-kind="fire" checked><i style="--dot:#d97706"></i>Wildfires <em id="n-fire"></em></label>
-      <label><input type="checkbox" data-kind="camera" checked><i style="--dot:#2f81f7"></i>Cameras <em id="n-camera"></em></label>
-      <label><input type="checkbox" data-kind="sign" checked><i style="--dot:#a16207"></i>Signs <em id="n-sign"></em></label>
+      <u>Incidents</u>
+      <label><input type="checkbox" data-group="inc_collision" checked><i style="--dot:#c9611a"></i>Collisions <em id="n-inc_collision"></em></label>
+      <label><input type="checkbox" data-group="inc_fire" checked><i style="--dot:#c9611a"></i>Fire reports <em id="n-inc_fire"></em></label>
+      <label><input type="checkbox" data-group="inc_hazard" checked><i style="--dot:#c9611a"></i>Hazards &amp; debris <em id="n-inc_hazard"></em></label>
+      <label><input type="checkbox" data-group="inc_other" checked><i style="--dot:#c9611a"></i>Other incidents <em id="n-inc_other"></em></label>
+      <u>Closures</u>
+      <label><input type="checkbox" data-group="clo_full" checked><i style="--dot:#7f1d1d"></i>Road fully closed <em id="n-clo_full"></em></label>
+      <label><input type="checkbox" data-group="clo_lane" checked><i style="--dot:#a02c2c"></i>Lanes closed <em id="n-clo_lane"></em></label>
+      <label><input type="checkbox" data-group="clo_oneway" checked><i class="ring" style="--dot:#a02c2c"></i>One-way / rolling work <em id="n-clo_oneway"></em></label>
+      <label><input type="checkbox" data-group="clo_ramp" checked><i style="--dot:#d9a0a0"></i>Ramps closed <em id="n-clo_ramp"></em></label>
+      <u>Winter &amp; weather</u>
+      <label><input type="checkbox" data-group="chain" checked><i style="--dot:#2b6cb0"></i>Chain controls <em id="n-chain"></em></label>
+      <label><input type="checkbox" data-group="rwis" checked><i style="--dot:#2f9e6e"></i>Weather stations <em id="n-rwis"></em></label>
+      <u>Wildfire</u>
+      <label><input type="checkbox" data-group="fire_pt" checked><i style="--dot:#d97706"></i>Fire locations <em id="n-fire_pt"></em></label>
+      <label><input type="checkbox" data-group="fire_poly" checked><i class="ring" style="--dot:#d97706"></i>Burn footprints <em id="n-fire_poly"></em></label>
+      <u>Roadside</u>
+      <label><input type="checkbox" data-group="camera" checked><i style="--dot:#2f81f7"></i>Cameras <em id="n-camera"></em></label>
+      <label class="subopt"><input type="checkbox" id="camvideo"><i></i>only with live video <em id="n-camvideo"></em></label>
+      <label><input type="checkbox" data-group="sign" checked><i style="--dot:#a16207"></i>Message signs <em id="n-sign"></em></label>
     </div>
     <div class="legend">
       <span style="--dot:#7f1d1d">road fully closed</span>
@@ -899,21 +936,51 @@ morebtn.addEventListener('click', () => {
 <script>
 // ── Standalone map: everything visible, no AI required ──────────────
 const canvasR = L.canvas({ padding: 0.4 });
-const KIND2GROUP = { incident: 'incident', lane_closure: 'closure',
-  chain_control: 'chain', wildfire: 'fire', camera: 'camera', sign: 'sign' };
-const GROUP_LABEL = { incident: 'INCIDENT', closure: 'CLOSURE',
-  chain: 'CHAIN CONTROL', fire: 'WILDFIRE', camera: 'LIVE CAMERA', sign: 'MESSAGE SIGN' };
-const GROUP_DOT = { incident: '#c9611a', closure: '#a02c2c', chain: '#2b6cb0',
-  fire: '#d97706', camera: '#2f81f7', sign: '#a16207' };
+const GROUP_DOT = {
+  inc_collision: '#c9611a', inc_fire: '#c9611a', inc_hazard: '#c9611a',
+  inc_other: '#c9611a', clo_full: '#7f1d1d', clo_lane: '#a02c2c',
+  clo_oneway: '#a02c2c', clo_ramp: '#d9a0a0', chain: '#2b6cb0',
+  rwis: '#2f9e6e', fire_pt: '#d97706', fire_poly: '#d97706',
+  camera: '#2f81f7', sign: '#a16207',
+};
+const POP_LABEL = {
+  inc_collision: 'COLLISION', inc_fire: 'FIRE REPORT', inc_hazard: 'HAZARD',
+  inc_other: 'INCIDENT', clo_full: 'FULL CLOSURE', clo_lane: 'LANE CLOSURE',
+  clo_oneway: 'ONE-WAY / ROLLING WORK', clo_ramp: 'RAMP CLOSED',
+  chain: 'CHAIN CONTROL', rwis: 'ROAD WEATHER', fire_pt: 'WILDFIRE',
+  fire_poly: 'BURN FOOTPRINT', camera: 'LIVE CAMERA', sign: 'MESSAGE SIGN',
+};
 const ambient = {};
 Object.keys(GROUP_DOT).forEach(g => { ambient[g] = L.layerGroup().addTo(map); });
+let cameraCache = [];
+
+function classify(m) {
+  if (m.kind === 'incident') {
+    const t = (m.type || '').toLowerCase();
+    if (/collision|crash|hit and run|hit & run/.test(t)) return 'inc_collision';
+    if (/fire/.test(t)) return 'inc_fire';
+    if (/hazard|debris|animal|object|ped|road rage/.test(t)) return 'inc_hazard';
+    return 'inc_other';
+  }
+  if (m.kind === 'lane_closure') {
+    if (m.cls === 'full-roadway') return 'clo_full';
+    if (m.cls === 'ramp') return 'clo_ramp';
+    if (/one-way|alternating|moving|traffic-break/.test(m.cls || '')) return 'clo_oneway';
+    return 'clo_lane';
+  }
+  if (m.kind === 'chain_control') return 'chain';
+  if (m.kind === 'rwis') return 'rwis';
+  if (m.kind === 'wildfire') return 'fire_pt';
+  if (m.kind === 'camera') return 'camera';
+  if (m.kind === 'sign') return 'sign';
+  return null;
+}
 
 function popHead(group, title) {
   return '<div class="pop"><div class="k"><i style="--dot:' + GROUP_DOT[group] +
-    '"></i>' + GROUP_LABEL[group] + '</div><div class="t">' + esc(title) + '</div>';
+    '"></i>' + POP_LABEL[group] + '</div><div class="t">' + esc(title) + '</div>';
 }
-function popupFor(m) {
-  const g = KIND2GROUP[m.kind];
+function popupFor(m, g) {
   if (g === 'camera') {
     let h = popHead(g, m.name || 'Roadside camera') +
       '<div class="d">' + esc([m.route, m.direction, m.near].filter(Boolean).join(' · ')) + '</div>' +
@@ -927,14 +994,24 @@ function popupFor(m) {
       '<div class="d">' + esc(m.near || '') + '</div>' +
       '<div class="d" style="font-weight:600;margin-top:5px">&ldquo;' + esc(m.message || '') + '&rdquo;</div></div>';
   }
-  if (g === 'incident') {
+  if (g === 'rwis') {
+    const bits = [];
+    if (m.air_c != null) bits.push('air ' + Math.round(m.air_c * 9 / 5 + 32) + '&deg;F');
+    if (m.pave_c != null) bits.push('pavement ' + Math.round(m.pave_c * 9 / 5 + 32) + '&deg;F');
+    if (m.wind != null) bits.push('wind ' + Math.round(m.wind) + ' mph');
+    if (m.gust != null) bits.push('gusts ' + Math.round(m.gust) + ' mph');
+    if (m.vis_m != null && m.vis_m < 5000) bits.push('visibility ' + Math.round(m.vis_m) + ' m');
+    return popHead(g, m.station || 'Weather station') +
+      '<div class="d">' + esc(m.route || '') + '</div>' +
+      '<div class="d">' + (bits.join(' · ') || 'no current readings') + '</div></div>';
+  }
+  if (g && g.startsWith('inc_')) {
     return popHead(g, m.type || 'Incident') +
       '<div class="d">' + esc(m.location || '') + '</div>' +
       '<div class="d">' + esc(m.area ? 'CHP ' + m.area + ' dispatch' : '') + '</div></div>';
   }
-  if (g === 'closure') {
-    return popHead(g, (m.cls || 'lane').replace(/-/g, ' ') + ' closure') +
-      '<div class="d">' + esc([m.route, m.county].filter(Boolean).join(' · ')) + '</div>' +
+  if (g && g.startsWith('clo_')) {
+    return popHead(g, [m.route, m.county].filter(Boolean).join(' · ') || 'Closure') +
       '<div class="d">' + esc(m.lanes || '') + '</div>' +
       '<div class="d">' + esc(m.label || '') + '</div></div>';
   }
@@ -942,28 +1019,36 @@ function popupFor(m) {
     return popHead(g, m.status || 'Chain control') +
       '<div class="d">' + esc([m.route, m.label].filter(Boolean).join(' · ')) + '</div></div>';
   }
-  if (g === 'fire') {
-    const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : 'size unknown';
-    const cont = (m.contained || m.contained === 0) ? m.contained + '% contained' : '';
-    return popHead(g, (m.name || 'Wildfire') + ' fire') +
-      '<div class="d">' + [size, cont].filter(Boolean).join(' · ') + '</div></div>';
-  }
-  return popHead(g || 'incident', m.label || '');
+  const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : 'size unknown';
+  const cont = (m.contained || m.contained === 0) ? m.contained + '% contained' : '';
+  return popHead(g || 'fire_pt', (m.name || 'Wildfire') + ' fire') +
+    '<div class="d">' + [size, cont].filter(Boolean).join(' · ') + '</div></div>';
 }
 
-function ambientMarker(m) {
-  const g = KIND2GROUP[m.kind];
-  if (g === 'fire' && Array.isArray(m.poly) && m.poly.length > 2) {
-    return L.polygon(m.poly, { color: '#d97706', weight: 1.5,
-      fillColor: '#d97706', fillOpacity: 0.22 }).bindPopup(popupFor(m), { maxWidth: 320 });
-  }
+function pointMarker(m, g) {
   let style = { renderer: canvasR, radius: 6, color: '#fff', weight: 1.2,
     fillColor: GROUP_DOT[g], fillOpacity: 0.9 };
-  if (m.kind === 'lane_closure' && CLOSURE_STYLES[m.cls]) {
+  if (g.startsWith('clo_') && CLOSURE_STYLES[m.cls]) {
     style = Object.assign({ renderer: canvasR, color: '#fff', weight: 1.2 },
       CLOSURE_STYLES[m.cls]);
   }
-  return L.circleMarker([m.lat, m.lon], style).bindPopup(popupFor(m), { maxWidth: 320 });
+  return L.circleMarker([m.lat, m.lon], style)
+    .bindPopup(popupFor(m, g), { maxWidth: 320 });
+}
+
+function rebuildCameras() {
+  ambient.camera.clearLayers();
+  const videoOnly = document.getElementById('camvideo').checked;
+  let n = 0;
+  for (const m of cameraCache) {
+    if (videoOnly && !m.stream) continue;
+    ambient.camera.addLayer(pointMarker(m, 'camera'));
+    n++;
+  }
+  const el = document.getElementById('n-camera');
+  if (el) el.textContent = n;
+  const nv = document.getElementById('n-camvideo');
+  if (nv) nv.textContent = cameraCache.filter(c => c.stream).length;
 }
 
 let ambientBounds = null, ambientTimer = null, ambientBusy = false;
@@ -977,18 +1062,34 @@ async function refreshAmbient(force) {
   const bbox = [sw.lat, sw.lng, ne.lat, ne.lng].map(v => v.toFixed(3)).join(',');
   try {
     const res = await fetch('/api/mapdata?bbox=' + bbox +
-      '&kinds=incident,closure,chain,fire,camera,sign');
+      '&kinds=incident,closure,chain,fire,camera,sign,rwis');
     if (!res.ok) return;
     const data = await res.json();
     const counts = {};
     Object.values(ambient).forEach(l => l.clearLayers());
+    cameraCache = [];
     for (const m of data.markers || []) {
-      const g = KIND2GROUP[m.kind];
+      const g = classify(m);
       if (!g || !m.lat) continue;
-      ambient[g].addLayer(ambientMarker(m));
+      if (g === 'camera') { cameraCache.push(m); continue; }
+      if (g === 'fire_pt') {
+        ambient.fire_pt.addLayer(pointMarker(m, 'fire_pt'));
+        counts.fire_pt = (counts.fire_pt || 0) + 1;
+        if (Array.isArray(m.poly) && m.poly.length > 2) {
+          ambient.fire_poly.addLayer(
+            L.polygon(m.poly, { color: '#d97706', weight: 1.5,
+              fillColor: '#d97706', fillOpacity: 0.22 })
+              .bindPopup(popupFor(m, 'fire_poly'), { maxWidth: 320 }));
+          counts.fire_poly = (counts.fire_poly || 0) + 1;
+        }
+        continue;
+      }
+      ambient[g].addLayer(pointMarker(m, g));
       counts[g] = (counts[g] || 0) + 1;
     }
+    rebuildCameras();
     for (const g of Object.keys(GROUP_DOT)) {
+      if (g === 'camera') continue;
       const el = document.getElementById('n-' + g);
       if (el) el.textContent = counts[g] || 0;
     }
@@ -1001,30 +1102,15 @@ map.on('moveend zoomend', () => {
   ambientTimer = setTimeout(() => refreshAmbient(false), 450);
 });
 refreshAmbient(true);
-setInterval(() => refreshAmbient(true), 180000); // keep it fresh
+setInterval(() => refreshAmbient(true), 180000);
 
-document.querySelectorAll('#filters input').forEach(box => {
+document.querySelectorAll('#filters input[data-group]').forEach(box => {
   box.addEventListener('change', () => {
-    const layer = ambient[box.dataset.kind];
+    const layer = ambient[box.dataset.group];
     if (box.checked) map.addLayer(layer); else map.removeLayer(layer);
   });
 });
-
-// ── Tabs ─────────────────────────────────────────────────────────────
-const tabPlan = document.getElementById('tab-plan');
-const tabAsk = document.getElementById('tab-ask');
-const panePlan = document.getElementById('pane-plan');
-const paneAsk = document.getElementById('pane-ask');
-function showTab(which) {
-  const plan = which === 'plan';
-  tabPlan.classList.toggle('on', plan);
-  tabAsk.classList.toggle('on', !plan);
-  panePlan.hidden = !plan;
-  paneAsk.hidden = plan;
-}
-tabPlan.addEventListener('click', () => showTab('plan'));
-tabAsk.addEventListener('click', () => showTab('ask'));
-showTab('plan');
+document.getElementById('camvideo').addEventListener('change', rebuildCameras);
 
 // ── Address validation ───────────────────────────────────────────────
 function wireAddress(inputId, valId) {
@@ -1169,6 +1255,7 @@ planbtn.addEventListener('click', async () => {
       ol.append(li);
     });
     renderRouteConditions(route.latlngs);
+    buildRouteAsks();
     document.getElementById('printwrap').style.display = 'block';
     beacon('example_click');
   } finally {
@@ -1190,7 +1277,10 @@ function renderRouteConditions(latlngs) {
   const box = document.getElementById('routecond');
   box.innerHTML = '<h4>Conditions along this route</h4>';
   let shown = 0;
-  for (const g of ['closure', 'incident', 'chain', 'fire', 'sign']) {
+  const condGroups = ['clo_full', 'clo_lane', 'clo_oneway', 'clo_ramp',
+    'inc_collision', 'inc_fire', 'inc_hazard', 'inc_other',
+    'chain', 'fire_pt', 'sign'];
+  for (const g of condGroups) {
     ambient[g].eachLayer(l => {
       if (shown >= 12 || !l.getLatLng) return;
       const p = l.getLatLng();
@@ -1202,7 +1292,7 @@ function renderRouteConditions(latlngs) {
         const txt = document.createElement('span');
         const popEl = document.createElement('div');
         popEl.innerHTML = l.getPopup() ? l.getPopup().getContent() : '';
-        txt.textContent = (popEl.querySelector('.t')?.textContent || GROUP_LABEL[g]) +
+        txt.textContent = (popEl.querySelector('.t')?.textContent || POP_LABEL[g]) +
           (popEl.querySelector('.d')?.textContent ? ' - ' + popEl.querySelector('.d').textContent : '');
         row.append(dot, txt);
         box.append(row);
@@ -1217,13 +1307,30 @@ function renderRouteConditions(latlngs) {
   }
 }
 
-document.getElementById('askaibtn').addEventListener('click', () => {
-  if (!plannedRoute) return;
-  showTab('ask');
-  input.value = "How's the drive from " + plannedRoute.fromName.split(',')[0] +
-    ' to ' + plannedRoute.toName.split(',')[0] + ' right now?';
-  form.requestSubmit();
-});
+function buildRouteAsks() {
+  const wrap = document.getElementById('routeasks');
+  wrap.innerHTML = '';
+  const a = plannedRoute.fromName.split(',')[0];
+  const b = plannedRoute.toName.split(',')[0];
+  const questions = [
+    'Will I hit traffic driving from ' + a + ' to ' + b + ' right now?',
+    'Is there roadwork between ' + a + ' and ' + b + '?',
+    'What do the road signs say between ' + a + ' and ' + b + '?',
+    'Anything to worry about driving from ' + a + ' to ' + b + ' today?',
+  ];
+  for (const q of questions) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = q;
+    btn.addEventListener('click', () => {
+      input.value = q;
+      form.requestSubmit();
+      beacon('tell_more');
+      document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+    });
+    wrap.append(btn);
+  }
+}
 document.getElementById('printbtn').addEventListener('click', () => window.print());
 document.getElementById('exportbtn').addEventListener('click', () => {
   if (!plannedRoute) return;
