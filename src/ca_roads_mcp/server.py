@@ -193,6 +193,37 @@ async def _cameras_near(point: tuple[float, float], limit: int = 3,
     return [camera_dict(c) for c in live]
 
 
+async def _attach_scenery(payload: dict, points: list[tuple[float, float]],
+                          cam_limit: int = 2) -> None:
+    """Attach nearby signs and verified cameras to a tool payload.
+
+    Every tool that reports events should also show what the road itself
+    is saying (signs) and looking like (cameras); users read the map as
+    the product, and a bare dot layer looks broken next to the legend.
+    Anchors on the returned records' own coordinates."""
+    if not points:
+        return
+    usable = [
+        p for p in points
+        if isinstance(p[0], int | float) and isinstance(p[1], int | float)
+        and p[0]
+    ][:40]
+    if not usable:
+        return
+    centroid = (
+        sum(p[0] for p in usable) / len(usable),
+        sum(p[1] for p in usable) / len(usable),
+    )
+    signs, cameras = await asyncio.gather(
+        _signs_near(usable, within_km=8, cap=6),
+        _cameras_near(centroid, limit=cam_limit),
+    )
+    if signs:
+        payload["signs"] = signs
+    if cameras:
+        payload["cameras"] = cameras
+
+
 def parse_center(center: str) -> tuple[float, float] | None:
     try:
         lat_s, lon_s = center.split(",")
@@ -755,6 +786,8 @@ async def get_incidents(
     }
     if warning:
         payload["warning"] = warning
+    if canonical or center:
+        await _attach_scenery(payload, [(i.lat, i.lon) for i in records])
     return payload
 
 
@@ -813,12 +846,17 @@ async def get_lane_closures(
                 and haversine_meters(*point, c.end_lat, c.end_lon) <= limit
             )
         ]
-    return {
+    payload = {
         "count": len(records),
         "filters": {"route": canonical, "district": district, "center": center},
         "closures": [closure_dict(c) for c in records],
         "sources": [source_status(result)],
     }
+    if canonical or center:
+        await _attach_scenery(
+            payload, [(c.begin_lat, c.begin_lon) for c in records]
+        )
+    return payload
 
 
 @mcp.tool()
@@ -869,6 +907,10 @@ async def get_chain_controls(
             "near that point" if center else "anywhere in California"
         )
         payload["message"] = f"No chain controls active {where} right now."
+    if records and (canonical or center):
+        await _attach_scenery(
+            payload, [(c.lat, c.lon) for c in records], cam_limit=3
+        )
     return payload
 
 

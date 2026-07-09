@@ -520,7 +520,7 @@ function renderChips() {
 function ensureMap() {
   mapcard.classList.add('active');
   if (map) return;
-  map = L.map('map', { scrollWheelZoom: false }).setView([37.5, -120.5], 6);
+  map = L.map('map', { scrollWheelZoom: true }).setView([37.5, -120.5], 6);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 17,
     subdomains: 'abcd',
