@@ -41,3 +41,19 @@ def test_safe_zone_falls_back_to_pacific():
     assert _safe_zone("Not/AZone").key == "America/Los_Angeles"
     assert _safe_zone(None).key == "America/Los_Angeles"
     assert _safe_zone("x" * 500).key == "America/Los_Angeles"
+
+
+def test_geocode_endpoint_validates_and_resolves(client):
+    assert client.get("/api/geocode").status_code == 400
+    assert client.get("/api/geocode?q=" + "x" * 300).status_code == 400
+    # Gazetteer hit: resolves offline, no network involved.
+    r = client.get("/api/geocode?q=Sacramento")
+    assert r.status_code == 200
+    cands = r.json()["candidates"]
+    assert cands and "Sacramento" in cands[0]["name"]
+
+
+def test_mapdata_rejects_bad_bbox(client):
+    assert client.get("/api/mapdata").status_code == 400
+    assert client.get("/api/mapdata?bbox=1,2,3").status_code == 400
+    assert client.get("/api/mapdata?bbox=40,-120,39,-121").status_code == 400
