@@ -21,11 +21,19 @@ from zoneinfo import ZoneInfo
 import anthropic
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, StreamingResponse
+from starlette.responses import (
+    FileResponse,
+    JSONResponse,
+    Response,
+    StreamingResponse,
+)
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
+from ca_roads.feeds import lcs as lcs_feed
+from ca_roads.feeds import wildfire as wildfire_feed
 from ca_roads_mcp import server as tools
+from ca_roads_mcp.geocode import geocode_candidates
 from ca_roads_mcp.ratelimit import (
     RateLimiter,
     RateLimitMiddleware,
@@ -590,6 +598,159 @@ async def ask(request: Request):
     )
 
 
+_PERIM_CACHE: dict[tuple, tuple[float, list]] = {}
+
+
+async def api_geocode(request: Request):
+    """Address validation for the route planner. Returns the resolved
+    candidates so the page can confirm one address or offer a choice when
+    the name exists in several places."""
+    q = (request.query_params.get("q") or "").strip()
+    if not q or len(q) > 200:
+        return JSONResponse({"error": "provide q (max 200 chars)"}, status_code=400)
+    road = tools.get_road()
+    cands = await geocode_candidates(road.client, q)
+    return JSONResponse({
+        "query": q,
+        "candidates": [
+            {"lat": lat, "lon": lon, "name": ", ".join(name.split(", ")[:4])}
+            for lat, lon, name in cands[:4]
+        ],
+    })
+
+
+def _bbox_params(request: Request):
+    try:
+        parts = [float(x) for x in (request.query_params.get("bbox") or "").split(",")]
+        if len(parts) != 4:
+            return None
+        lat_min, lon_min, lat_max, lon_max = parts
+        if lat_min >= lat_max or lon_min >= lon_max:
+            return None
+        return lat_min, lon_min, lat_max, lon_max
+    except ValueError:
+        return None
+
+
+async def api_mapdata(request: Request):
+    """Everything in the viewport, no AI involved: the map is a product
+    on its own. Dense layers (cameras, signs) only ship when the client
+    asks for them (it gates them by zoom)."""
+    box = _bbox_params(request)
+    if box is None:
+        return JSONResponse(
+            {"error": "bbox=lat_min,lon_min,lat_max,lon_max required"},
+            status_code=400,
+        )
+    lat_min, lon_min, lat_max, lon_max = box
+    want = set((request.query_params.get("kinds") or
+                "incident,closure,chain,fire").split(","))
+    road = tools.get_road()
+
+    def inside(lat, lon):
+        return (lat and lon and lat_min <= lat <= lat_max
+                and lon_min <= lon <= lon_max)
+
+    markers = []
+    chp, lcs, cc, wf = await asyncio.gather(
+        road.incidents(), road.lane_closures(), road.chain_controls(),
+        road.wildfires(),
+    )
+    if "incident" in want:
+        for i in chp.records:
+            if inside(i.lat, i.lon):
+                markers.append({
+                    "kind": "incident", "lat": i.lat, "lon": i.lon,
+                    "type": i.log_type, "location": i.location,
+                    "area": i.area,
+                })
+    if "closure" in want:
+        for c in lcs.records:
+            if inside(c.begin_lat, c.begin_lon):
+                markers.append({
+                    "kind": "lane_closure", "lat": c.begin_lat,
+                    "lon": c.begin_lon,
+                    "label": lcs_feed.describe(c),
+                    "cls": lcs_feed.closure_class(c),
+                    "route": c.route, "county": c.county,
+                    "lanes": lcs_feed.lanes_summary(c),
+                })
+    if "chain" in want:
+        for c in cc.records:
+            if inside(c.lat, c.lon):
+                markers.append({
+                    "kind": "chain_control", "lat": c.lat, "lon": c.lon,
+                    "status": c.status, "route": c.route,
+                    "label": c.description,
+                })
+    fire_markers = []
+    if "fire" in want:
+        for f in wf.records:
+            if inside(f.lat, f.lon):
+                fire_markers.append({
+                    "kind": "wildfire", "lat": f.lat, "lon": f.lon,
+                    "name": f.name, "acres": f.size_acres,
+                    "contained": f.percent_contained,
+                })
+        # Footprints for a modest number of fires; cached per bbox tile.
+        if 0 < len(fire_markers) <= 12:
+            key = (round(lat_min, 1), round(lon_min, 1),
+                   round(lat_max, 1), round(lon_max, 1))
+            cached = _PERIM_CACHE.get(key)
+            if cached and time.monotonic() - cached[0] < 600:
+                perims = cached[1]
+            else:
+                perims = await wildfire_feed.perimeters_in_bbox(
+                    road.client, lat_min - 0.2, lon_min - 0.2,
+                    lat_max + 0.2, lon_max + 0.2)
+                _PERIM_CACHE[key] = (time.monotonic(), perims)
+            by_name = {p["name"]: p for p in perims if p["name"]}
+            for m in fire_markers:
+                perim = by_name.get((m["name"] or "").upper())
+                if perim:
+                    pts = perim["points"]
+                    step = max(1, len(pts) // 120)
+                    m["poly"] = [[round(a, 4), round(b, 4)]
+                                 for a, b in pts[::step]]
+    markers.extend(fire_markers)
+
+    if "camera" in want:
+        cams = await road.cameras()
+        for c in cams.records:
+            if inside(c.lat, c.lon):
+                markers.append({
+                    "kind": "camera", "lat": c.lat, "lon": c.lon,
+                    "name": c.location_name or c.nearby_place,
+                    "route": c.route, "direction": c.direction,
+                    "near": c.nearby_place,
+                    "image": c.image_url,
+                    "stream": c.stream_url or None,
+                })
+    if "sign" in want:
+        signs = await road.message_signs()
+        for s in signs.records:
+            if inside(s.lat, s.lon):
+                markers.append({
+                    "kind": "sign", "lat": s.lat, "lon": s.lon,
+                    "route": s.route, "direction": s.direction,
+                    "near": s.nearby_place or s.county,
+                    "message": s.text,
+                })
+
+    # Everything, gzipped: the whole state is ~4k markers and compresses
+    # roughly 10:1. No caps - the map IS the product.
+    body = json.dumps({"markers": markers}).encode()
+    if "gzip" in (request.headers.get("accept-encoding") or ""):
+        import gzip as _gzip
+
+        return Response(
+            _gzip.compress(body, 6),
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
+    return Response(body, media_type="application/json")
+
+
 async def stats(request: Request):
     """Statewide counts for the header KPI strip. Every feed involved is
     TTL-cached, so this is cheap after the first hit."""
@@ -655,6 +816,8 @@ app = Starlette(
         Route("/api/ask", ask, methods=["POST"]),
         Route("/api/event", track, methods=["POST"]),
         Route("/api/stats", stats, methods=["GET"]),
+        Route("/api/geocode", api_geocode, methods=["GET"]),
+        Route("/api/mapdata", api_mapdata, methods=["GET"]),
         Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
     ]
 )
@@ -662,7 +825,12 @@ app = Starlette(
 app = RateLimitMiddleware(
     app,
     RateLimiter(capacity=5, refill_per_second=0.1),
-    exempt_prefixes=("/static/", "/logo.svg", "/health", "/favicon"),
+    # The bucket protects the model-spending path (/api/ask) and event
+    # spam. Data-plane GETs are cheap, feed-cached, and the standalone map
+    # legitimately calls them on every pan - throttling them starves
+    # address validation behind map browsing.
+    exempt_prefixes=("/static/", "/logo.svg", "/health", "/favicon",
+                     "/api/mapdata", "/api/stats", "/api/geocode"),
 )
 
 
