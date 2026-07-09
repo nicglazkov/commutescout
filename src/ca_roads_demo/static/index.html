@@ -1150,8 +1150,9 @@ function wireAddress(inputId, valId, suggId, withMyLocation) {
         .then(d => {
           const hit = (d.candidates || [])[0];
           if (hit && input.dataset.name === c.name) {
+            // Upgrade the position only; the label keeps the address the
+            // user picked (the geocoder's display name may drop the number).
             input.dataset.lat = hit.lat; input.dataset.lon = hit.lon;
-            val.textContent = '\u2713 ' + hit.name;
           }
         }).catch(() => {});
     }
