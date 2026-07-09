@@ -33,7 +33,7 @@ from starlette.staticfiles import StaticFiles
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import wildfire as wildfire_feed
 from ca_roads_mcp import server as tools
-from ca_roads_mcp.geocode import geocode_candidates
+from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_suggest
 from ca_roads_mcp.ratelimit import (
     RateLimiter,
     RateLimitMiddleware,
@@ -601,6 +601,41 @@ async def ask(request: Request):
 _PERIM_CACHE: dict[tuple, tuple[float, list]] = {}
 
 
+async def api_suggest(request: Request):
+    """Search-as-you-type suggestions for the route planner.
+
+    The Google-style recipe: instant offline matches from the CA place
+    gazetteer, merged with Photon (built for autocomplete: typo-tolerant,
+    biased toward the caller's position, restricted to a California
+    bounding box). Nominatim never sees keystrokes - its policy forbids
+    autocomplete - and stays the precision backstop when a freeform entry
+    is validated on selection."""
+    q = (request.query_params.get("q") or "").strip()
+    if len(q) < 2 or len(q) > 120:
+        return JSONResponse({"suggestions": []})
+    try:
+        bias_lat = float(request.query_params.get("lat", 37.4))
+        bias_lon = float(request.query_params.get("lon", -120.9))
+    except ValueError:
+        bias_lat, bias_lon = 37.4, -120.9
+
+    local = gazetteer_suggest(q, limit=3)
+    remote = await photon_suggest(
+        tools.get_road().client, q, bias_lat, bias_lon, limit=6
+    )
+    merged: list[dict] = []
+    for cand in local + remote:
+        dup = any(
+            abs(cand["lat"] - m["lat"]) < 0.02
+            and abs(cand["lon"] - m["lon"]) < 0.02
+            and cand["name"].split(",")[0].lower() == m["name"].split(",")[0].lower()
+            for m in merged
+        )
+        if not dup:
+            merged.append(cand)
+    return JSONResponse({"suggestions": merged[:7]})
+
+
 async def api_geocode(request: Request):
     """Address validation for the route planner. Returns the resolved
     candidates so the page can confirm one address or offer a choice when
@@ -829,6 +864,7 @@ app = Starlette(
         Route("/api/event", track, methods=["POST"]),
         Route("/api/stats", stats, methods=["GET"]),
         Route("/api/geocode", api_geocode, methods=["GET"]),
+        Route("/api/suggest", api_suggest, methods=["GET"]),
         Route("/api/mapdata", api_mapdata, methods=["GET"]),
         Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
     ]
@@ -842,7 +878,8 @@ app = RateLimitMiddleware(
     # legitimately calls them on every pan - throttling them starves
     # address validation behind map browsing.
     exempt_prefixes=("/static/", "/logo.svg", "/health", "/favicon",
-                     "/api/mapdata", "/api/stats", "/api/geocode"),
+                     "/api/mapdata", "/api/stats", "/api/geocode",
+                     "/api/suggest"),
 )
 
 

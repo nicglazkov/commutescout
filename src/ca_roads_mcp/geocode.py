@@ -342,3 +342,100 @@ def _rough_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
     x = (lon2 - lon1) * math.cos(math.radians((lat1 + lat2) / 2))
     return 111.32 * math.hypot(lat2 - lat1, x)
+
+
+# ── Autocomplete (search-as-you-type) ───────────────────────────────────────
+# Per-keystroke lookups have their own rules: Nominatim's usage policy
+# forbids autocomplete, and the 1.1s politeness throttle above would make
+# typing feel broken. Photon is built for exactly this use (typo-tolerant
+# prefix search with location bias), so suggestions go gazetteer + Photon
+# only, with a small concurrency cap instead of a fixed delay. The precise
+# Nominatim ladder still validates whatever the user finally picks or types.
+
+_suggest_sem = asyncio.Semaphore(4)
+_CA_BBOX_PARAM = "-124.6,32.4,-114.0,42.1"  # minLon,minLat,maxLon,maxLat
+
+
+def gazetteer_suggest(q: str, limit: int = 3) -> list[dict]:
+    """Instant offline prefix matches against the CA place table."""
+    table = _load_gazetteer()
+    nq = _norm(q)
+    if not nq:
+        return []
+    starts, contains = [], []
+    for key, (lat, lon, display) in table.items():
+        if key.startswith(nq):
+            starts.append({"name": display, "lat": lat, "lon": lon,
+                           "kind": "city"})
+        elif any(w.startswith(nq) for w in key.split()):
+            contains.append({"name": display, "lat": lat, "lon": lon,
+                             "kind": "city"})
+        if len(starts) >= limit:
+            break
+    return (starts + contains)[:limit]
+
+
+# Photon prefix-matches literally, so "kestrel rd" misses "Kestrel Road".
+_ABBREV = {
+    "rd": "road", "st": "street", "ave": "avenue", "av": "avenue",
+    "blvd": "boulevard", "dr": "drive", "hwy": "highway", "ln": "lane",
+    "ct": "court", "pkwy": "parkway", "expy": "expressway",
+}
+
+
+def _expand_abbrev(q: str) -> str:
+    words = q.split()
+    return " ".join(_ABBREV.get(w.lower().rstrip("."), w) for w in words)
+
+
+async def photon_suggest(
+    client: httpx.AsyncClient,
+    q: str,
+    bias_lat: float,
+    bias_lon: float,
+    limit: int = 6,
+) -> list[dict]:
+    q = _expand_abbrev(q)
+    try:
+        async with _suggest_sem:
+            resp = await client.get(
+                PHOTON_URL,
+                params={
+                    "q": q, "limit": limit,
+                    "lat": bias_lat, "lon": bias_lon,
+                    "bbox": _CA_BBOX_PARAM,
+                    "zoom": 10,
+                },
+                headers={"User-Agent": USER_AGENT},
+                timeout=4.0,
+            )
+        resp.raise_for_status()
+        out = []
+        for feature in resp.json().get("features", []):
+            lon, lat = feature["geometry"]["coordinates"][:2]
+            if not _plausible({"lat": lat, "lon": lon}):
+                continue
+            props = feature.get("properties", {})
+            primary = props.get("name") or " ".join(
+                str(x) for x in (props.get("housenumber"), props.get("street"))
+                if x
+            )
+            if not primary:
+                continue
+            secondary = ", ".join(
+                str(props[k]) for k in ("city", "state") if props.get(k)
+            )
+            out.append({
+                "name": primary + (", " + secondary if secondary else ""),
+                "lat": float(lat), "lon": float(lon),
+                "kind": props.get("osm_value") or "place",
+            })
+        # Rank rows that actually contain the typed street/place word above
+        # Photon's fuzzy fallbacks ("a house-number query" once led with Roslea Rd);
+        # the fallbacks stay visible but sink to the bottom of the list.
+        tokens = [t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()]
+        if tokens:
+            out.sort(key=lambda s: 0 if tokens[0] in _norm(s["name"]) else 1)
+        return out
+    except Exception:  # noqa: BLE001 - suggestions degrade to gazetteer only
+        return []

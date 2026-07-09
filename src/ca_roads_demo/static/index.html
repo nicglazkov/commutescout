@@ -158,7 +158,19 @@ aside { background:var(--card); border-right:1px solid var(--line);
   background:var(--sky-soft); border:1px solid #cfe2fd; border-radius:99px;
   padding:7px 13px; cursor:pointer }
 .routeasks button:hover { border-color:var(--sky) }
-.fld { margin-bottom:10px }
+.fld { margin-bottom:10px; position:relative }
+.sugg { position:absolute; left:0; right:0; top:100%; z-index:1200;
+  background:var(--card); border:1px solid var(--line); border-radius:10px;
+  margin-top:3px; box-shadow:0 6px 18px rgba(15,28,43,.14); overflow:hidden;
+  display:none }
+.sugg.open { display:block }
+.sugg .row { padding:8px 12px; cursor:pointer; display:flex; gap:8px;
+  align-items:baseline }
+.sugg .row:hover, .sugg .row.active { background:var(--sky-soft) }
+.sugg .row b { font-weight:600; font-size:.86rem }
+.sugg .row small { color:var(--dim); font-size:.74rem }
+.sugg .row.myloc { border-bottom:1px solid var(--line); color:var(--sky);
+  font-weight:600; font-size:.85rem }
 .fld label { display:block; font:600 .72rem Inter; color:var(--dim);
   text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px }
 .fld input { width:100%; font:inherit; padding:10px 12px;
@@ -258,9 +270,11 @@ aside { background:var(--card); border-right:1px solid var(--line);
     <section id="pane-plan">
       <div class="fld"><label>From</label>
         <input id="from" maxlength="200" placeholder="e.g. San Jose or 123 Main St, Davis" autocomplete="off">
+        <div class="sugg" id="fromsugg"></div>
         <div class="val" id="fromval"></div></div>
       <div class="fld"><label>To</label>
         <input id="to" maxlength="200" placeholder="e.g. South Lake Tahoe" autocomplete="off">
+        <div class="sugg" id="tosugg"></div>
         <div class="val" id="toval"></div></div>
       <button type="button" class="planbtn" id="planbtn">Plan route</button>
       <div id="printwrap" style="display:none">
@@ -1112,32 +1126,121 @@ document.querySelectorAll('#filters input[data-group]').forEach(box => {
 });
 document.getElementById('camvideo').addEventListener('change', rebuildCameras);
 
-// ── Address validation ───────────────────────────────────────────────
-function wireAddress(inputId, valId) {
+// ── Address fields: autocomplete + validation ────────────────────────
+function wireAddress(inputId, valId, suggId, withMyLocation) {
   const input = document.getElementById(inputId);
   const val = document.getElementById(valId);
-  let seq = 0;
+  const sugg = document.getElementById(suggId);
+  let seq = 0, items = [], active = -1, aborter = null, debounce = null;
+
+  function close() { sugg.classList.remove('open'); active = -1; }
+  function pick(c) {
+    input.value = c.name;
+    input.dataset.lat = c.lat; input.dataset.lon = c.lon;
+    input.dataset.name = c.name;
+    val.className = 'val ok'; val.textContent = '\u2713 ' + c.name;
+    close();
+  }
+  function useMyLocation() {
+    close();
+    val.className = 'val'; val.textContent = 'Finding you\u2026';
+    if (!navigator.geolocation) {
+      val.className = 'val err'; val.textContent = 'Location not available in this browser.';
+      return;
+    }
+    navigator.geolocation.getCurrentPosition((pos) => {
+      input.value = 'My location';
+      input.dataset.lat = pos.coords.latitude;
+      input.dataset.lon = pos.coords.longitude;
+      input.dataset.name = 'My location';
+      val.className = 'val ok';
+      val.textContent = '\u2713 Using your location (\u00b1' +
+        Math.round(pos.coords.accuracy) + ' m)';
+    }, () => {
+      val.className = 'val err';
+      val.textContent = 'Location was blocked - type an address instead.';
+    }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 });
+  }
+  function render() {
+    sugg.innerHTML = '';
+    if (withMyLocation) {
+      const row = document.createElement('div');
+      row.className = 'row myloc';
+      row.textContent = '\u25CE Use my location';
+      row.addEventListener('mousedown', (e) => { e.preventDefault(); useMyLocation(); });
+      sugg.append(row);
+    }
+    items.forEach((c, i) => {
+      const row = document.createElement('div');
+      row.className = 'row' + (i === active ? ' active' : '');
+      const parts = c.name.split(', ');
+      const b = document.createElement('b'); b.textContent = parts[0];
+      const small = document.createElement('small');
+      small.textContent = parts.slice(1).join(', ');
+      row.append(b, small);
+      row.addEventListener('mousedown', (e) => { e.preventDefault(); pick(c); });
+      sugg.append(row);
+    });
+    if (sugg.children.length) sugg.classList.add('open'); else close();
+  }
+  async function fetchSuggestions() {
+    const q = input.value.trim();
+    if (q.length < 2 || q === input.dataset.name) { items = []; render(); return; }
+    const mine = ++seq;
+    if (aborter) aborter.abort();
+    aborter = new AbortController();
+    try {
+      const c = map.getCenter();
+      const res = await fetch('/api/suggest?q=' + encodeURIComponent(q) +
+        '&lat=' + c.lat.toFixed(2) + '&lon=' + c.lng.toFixed(2),
+        { signal: aborter.signal });
+      const data = await res.json();
+      if (mine !== seq) return;
+      items = data.suggestions || [];
+      active = -1;
+      render();
+    } catch (e) { /* aborted or offline; keep whatever is shown */ }
+  }
+  input.addEventListener('input', () => {
+    delete input.dataset.lat; delete input.dataset.name;
+    val.textContent = ''; val.className = 'val';
+    clearTimeout(debounce);
+    debounce = setTimeout(fetchSuggestions, 250);
+  });
+  input.addEventListener('focus', () => {
+    if (withMyLocation || items.length) render();
+  });
+  input.addEventListener('blur', () => setTimeout(close, 150));
+  input.addEventListener('keydown', (e) => {
+    if (!sugg.classList.contains('open')) return;
+    const max = items.length - 1;
+    if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, max); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, -1); render(); }
+    else if (e.key === 'Enter') {
+      if (active >= 0) { e.preventDefault(); pick(items[active]); }
+      else close();
+    }
+    else if (e.key === 'Escape') close();
+  });
+
+  let vseq = 0;
   async function validate() {
     const q = input.value.trim();
+    if (input.dataset.name === q && input.dataset.lat) return;  // picked
     delete input.dataset.lat;
     if (!q) { val.textContent = ''; val.className = 'val'; return; }
-    const mine = ++seq;
-    val.className = 'val'; val.textContent = 'Checking address…';
+    const mine = ++vseq;
+    val.className = 'val'; val.textContent = 'Checking address\u2026';
     try {
       const res = await fetch('/api/geocode?q=' + encodeURIComponent(q));
       const data = await res.json();
-      if (mine !== seq) return;
+      if (mine !== vseq) return;
       const cands = data.candidates || [];
       if (!cands.length) {
         val.className = 'val err';
         val.textContent = "Couldn't find that place - try adding a city.";
         return;
       }
-      const pick = (c) => {
-        input.dataset.lat = c.lat; input.dataset.lon = c.lon;
-        input.dataset.name = c.name;
-        val.className = 'val ok'; val.textContent = '✓ ' + c.name;
-      };
       if (cands.length === 1) { pick(cands[0]); return; }
       val.className = 'val'; val.innerHTML = '';
       const sel = document.createElement('select');
@@ -1147,15 +1250,15 @@ function wireAddress(inputId, valId) {
       sel.addEventListener('change', () => pick(cands[+sel.value]));
       val.append(sel);
     } catch (e) {
-      if (mine !== seq) return;
+      if (mine !== vseq) return;
       val.className = 'val err'; val.textContent = 'Address check failed - try again.';
     }
   }
-  input.addEventListener('change', validate);
+  input.addEventListener('change', () => setTimeout(validate, 200));
   return { input, val, validate };
 }
-const fromF = wireAddress('from', 'fromval');
-const toF = wireAddress('to', 'toval');
+const fromF = wireAddress('from', 'fromval', 'fromsugg', true);
+const toF = wireAddress('to', 'toval', 'tosugg', false);
 
 // ── Routing with turn-by-turn directions ─────────────────────────────
 function fmtOsrmStep(s) {
@@ -1312,7 +1415,13 @@ function buildRouteAsks() {
   wrap.innerHTML = '';
   const a = plannedRoute.fromName.split(',')[0];
   const b = plannedRoute.toName.split(',')[0];
-  const questions = [
+  const fromMe = a === 'My location';
+  const questions = fromMe ? [
+    'Will I hit traffic driving to ' + b + ' right now?',
+    'Is there roadwork on my way to ' + b + '?',
+    'What do the road signs say on the way to ' + b + '?',
+    'Anything to worry about driving to ' + b + ' today?',
+  ] : [
     'Will I hit traffic driving from ' + a + ' to ' + b + ' right now?',
     'Is there roadwork between ' + a + ' and ' + b + '?',
     'What do the road signs say between ' + a + ' and ' + b + '?',
