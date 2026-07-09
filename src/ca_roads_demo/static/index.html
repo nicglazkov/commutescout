@@ -799,7 +799,7 @@ async function runQuery(question, prior) {
   startLoader();
   let raw = '';
   try {
-    const payload = {question};
+    const payload = {question, tz: Intl.DateTimeFormat().resolvedOptions().timeZone};
     if (useloc.checked && userLocation) payload.location = userLocation;
     if (prior) payload.prior = prior;
     const res = await fetch('/api/ask', {
