@@ -109,16 +109,25 @@ async def test_camera_liveness_filter():
         def __init__(self, url):
             self.image_url = url
 
-    real = b"\xff\xd8" + b"x" * 20_000
-    placeholder = b"\xff\xd8" + b"x" * 3_000
+    from datetime import UTC, datetime, timedelta
+    from email.utils import format_datetime
+
+    now = format_datetime(datetime.now(UTC))
+    old_stamp = format_datetime(datetime.now(UTC) - timedelta(hours=6))
+    # A small night frame with a fresh timestamp is live; a stale file is
+    # a placeholder no matter its size.
+    night_frame = b"\xff\xd8" + b"x" * 6_000
+    stale_big = b"\xff\xd8" + b"x" * 30_000
 
     def handler(request):
         if "live" in str(request.url):
-            return httpx.Response(200, content=real,
-                                  headers={"content-type": "image/jpeg"})
+            return httpx.Response(200, content=night_frame,
+                                  headers={"content-type": "image/jpeg",
+                                           "last-modified": now})
         if "dead" in str(request.url):
-            return httpx.Response(200, content=placeholder,
-                                  headers={"content-type": "image/jpeg"})
+            return httpx.Response(200, content=stale_big,
+                                  headers={"content-type": "image/jpeg",
+                                           "last-modified": old_stamp})
         return httpx.Response(404)
 
     transport = httpx.MockTransport(handler)
