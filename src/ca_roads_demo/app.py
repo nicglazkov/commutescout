@@ -726,6 +726,18 @@ async def api_mapdata(request: Request):
                     "image": c.image_url,
                     "stream": c.stream_url or None,
                 })
+    if "rwis" in want:
+        wx = await road.road_weather()
+        for w in wx.records:
+            if inside(w.lat, w.lon):
+                markers.append({
+                    "kind": "rwis", "lat": w.lat, "lon": w.lon,
+                    "station": w.location_name, "route": w.route,
+                    "air_c": w.air_temp_c, "pave_c": w.surface_temp_c,
+                    "wind": w.wind_avg_mph, "gust": w.wind_gust_mph,
+                    "vis_m": w.visibility_m,
+                })
+
     if "sign" in want:
         signs = await road.message_signs()
         for s in signs.records:
