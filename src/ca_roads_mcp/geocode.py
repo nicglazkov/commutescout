@@ -375,7 +375,7 @@ def gazetteer_suggest(q: str, limit: int = 3) -> list[dict]:
     return (starts + contains)[:limit]
 
 
-# Photon prefix-matches literally, so "giffin rd" misses "Giffin Road".
+# Photon prefix-matches literally, so "kestrel rd" misses "Kestrel Road".
 _ABBREV = {
     "rd": "road", "st": "street", "ave": "avenue", "av": "avenue",
     "blvd": "boulevard", "dr": "drive", "hwy": "highway", "ln": "lane",
@@ -431,7 +431,8 @@ async def photon_suggest(
                 "kind": props.get("osm_value") or "place",
             })
         # Rank rows that actually contain the typed street/place word above
-        # Photon's fuzzy fallbacks ("175 giffin" once led with Roslea Rd);
+        # Photon's fuzzy fallbacks (a house-number query once led with an
+        # unrelated street);
         # the fallbacks stay visible but sink to the bottom of the list.
         tokens = [t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()]
         if tokens:
