@@ -63,6 +63,12 @@ What is on it:
 - The assistant. After you plan a route, a few ready-made questions
   about that drive show up. Tap one and the answer streams in, built
   from the same live feeds, with times in your time zone.
+- Watch areas (invite-only trial). Sign in, draw a circle or polygon
+  anywhere in California, and get a push notification when an incident,
+  closure, chain control, or wildfire appears inside it. Access needs
+  an invite code while I gauge the hosting cost; the code and the
+  whole feature are free. Self-hosters get all of it (see
+  [deploy.md](docs/deploy.md) for the extra setup it needs).
 
 <table>
   <tr>
