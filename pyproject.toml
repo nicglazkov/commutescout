@@ -21,7 +21,12 @@ ca-roads-mcp = "ca_roads_mcp.server:main"
 ca-roads-demo = "ca_roads_demo.app:main"
 
 [project.optional-dependencies]
-demo = ["anthropic>=0.40"]
+demo = [
+    "anthropic>=0.40",
+    "google-auth>=2.30",
+    "google-cloud-firestore>=2.16",
+    "pywebpush>=2.0",
+]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
