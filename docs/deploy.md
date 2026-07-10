@@ -51,6 +51,17 @@ gcloud run deploy ca-roads-demo \
   --set-env-vars DEMO_MODEL=claude-sonnet-5,TELEMETRY_SALT=<random 32 chars>
 ```
 
+## Cold starts
+
+Both services run with `--min-instances 0`, so an idle service costs
+nothing and the first visitor after ~15 idle minutes pays a cold start.
+Two mitigations ship by default: `--cpu-boost` (faster container boot,
+free) and a startup prewarm in the demo that fills all feed caches in
+the background while the page is still loading. If the remaining first
+load bothers you, `--min-instances 1` on the demo removes cold starts
+entirely at roughly ten to fifteen dollars a month of idle instance
+time.
+
 ## Notes
 
 - The MCP service needs no secrets: all upstream feeds are free and public.
