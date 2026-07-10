@@ -1,0 +1,14 @@
+{
+  "name": "CA Roads",
+  "short_name": "CA Roads",
+  "description": "Live California road conditions: incidents, closures, chain controls, and wildfire impacts.",
+  "start_url": "/watch",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f2ea",
+  "theme_color": "#0b1f33",
+  "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

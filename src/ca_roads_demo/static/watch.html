@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watch areas - CA Roads</title>
+<meta name="description" content="Get alerted when incidents, closures, chain controls, or wildfires appear in an area you care about.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/static/fonts/fonts.css">
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<style>
+:root {
+  --navy:#0b1f33; --navy2:#122c47; --ink:#0f1c2b; --dim:#5b6b7d;
+  --bg:#f5f2ea; --card:#fffdf7; --line:#e3ddd0;
+  --sky:#2f81f7; --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
+  --green:#2f9e6e;
+}
+* { box-sizing:border-box; margin:0 }
+html, body { height:100% }
+body { background:var(--bg); color:var(--ink);
+  font:400 .92rem/1.5 Inter, system-ui, sans-serif }
+header { background:var(--navy); color:#e8eef5; display:flex; gap:14px;
+  align-items:center; padding:9px 16px }
+header img { width:30px; height:30px }
+header b { font-size:1rem; letter-spacing:.2px }
+header nav { display:flex; gap:4px; margin-left:6px }
+header nav a { color:#bcd0e4; text-decoration:none; font-size:.82rem;
+  padding:5px 11px; border-radius:8px }
+header nav a.on, header nav a:hover { background:var(--navy2); color:#fff }
+header .who { margin-left:auto; font-size:.78rem; color:#9fb4c9;
+  display:flex; gap:10px; align-items:center }
+header .who button { background:none; border:1px solid #33506e;
+  color:#bcd0e4; border-radius:7px; padding:3px 10px; font:500 .76rem Inter;
+  cursor:pointer }
+main { max-width:1180px; margin:0 auto; padding:18px 16px 50px }
+h1 { font-size:1.25rem; margin:6px 0 2px }
+.sub { color:var(--dim); font-size:.86rem; margin-bottom:16px }
+.card { background:var(--card); border:1px solid var(--line);
+  border-radius:14px; padding:18px; margin-bottom:14px }
+.card h2 { font-size:.95rem; margin-bottom:8px }
+.center { max-width:430px; margin:8vh auto 0; text-align:center }
+.center p { color:var(--dim); font-size:.85rem; margin:8px 0 16px }
+button.primary { background:var(--sky); color:#fff; border:0;
+  border-radius:9px; padding:10px 18px; font:600 .88rem Inter;
+  cursor:pointer; width:100% }
+button.primary:disabled { opacity:.55; cursor:default }
+button.ghost { background:none; border:1px solid var(--line);
+  color:var(--ink); border-radius:9px; padding:9px 14px;
+  font:500 .84rem Inter; cursor:pointer }
+button.ghost:hover { border-color:var(--sky); color:var(--sky) }
+.or { color:var(--dim); font-size:.76rem; margin:12px 0; display:flex;
+  gap:10px; align-items:center }
+.or::before, .or::after { content:""; flex:1; height:1px;
+  background:var(--line) }
+input[type=text], input[type=email] { width:100%; border:1.5px solid
+  var(--line); border-radius:9px; padding:9px 12px; font:400 .88rem Inter;
+  background:#fff; outline:none }
+input:focus { border-color:var(--sky) }
+.msg { font-size:.8rem; margin-top:9px; min-height:1.2em }
+.msg.err { color:var(--red) } .msg.ok { color:var(--green) }
+.split { display:grid; grid-template-columns:390px 1fr; gap:14px }
+@media (max-width: 900px) { .split { grid-template-columns:1fr } }
+#wmap { height:520px; border-radius:14px; border:1px solid var(--line) }
+.field { margin-bottom:12px }
+.field label { display:block; font:600 .72rem Inter; letter-spacing:.6px;
+  text-transform:uppercase; color:var(--dim); margin-bottom:5px }
+.modes { display:flex; gap:6px }
+.modes button { flex:1; border:1.5px solid var(--line); background:#fff;
+  border-radius:9px; padding:7px; font:500 .82rem Inter; cursor:pointer;
+  color:var(--dim) }
+.modes button.on { border-color:var(--sky); color:var(--sky);
+  background:var(--sky-soft) }
+.kinds label, .chans label { display:inline-flex; gap:6px;
+  align-items:center; font:400 .84rem Inter; text-transform:none;
+  letter-spacing:0; color:var(--ink); margin:0 12px 6px 0 }
+.radius { display:flex; gap:10px; align-items:center }
+.radius input { flex:1 }
+.radius b { font-size:.82rem; min-width:52px; text-align:right }
+.hint { color:var(--dim); font-size:.76rem; margin-top:4px }
+.wlist { display:flex; flex-direction:column; gap:8px }
+.witem { display:flex; gap:10px; align-items:center; border:1px solid
+  var(--line); border-radius:10px; padding:9px 12px; background:#fff;
+  cursor:pointer }
+.witem:hover { border-color:var(--sky) }
+.witem i { width:10px; height:10px; border-radius:99px;
+  background:var(--sky); flex:none }
+.witem .wname { font-weight:600; font-size:.86rem }
+.witem .wmeta { color:var(--dim); font-size:.76rem }
+.witem button { margin-left:auto; background:none; border:0;
+  color:var(--dim); cursor:pointer; font-size:1rem; padding:4px }
+.witem button:hover { color:var(--red) }
+.devrow { display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+.footer-note { color:var(--dim); font-size:.74rem; margin-top:22px;
+  border-top:1px solid var(--line); padding-top:12px }
+.badge { display:inline-block; background:var(--amber); color:#fff;
+  font:700 .62rem Inter; letter-spacing:.7px; padding:2px 8px;
+  border-radius:99px; vertical-align:2px }
+.hidden { display:none !important }
+</style>
+</head>
+<body>
+<header>
+  <img src="/logo.svg" alt="">
+  <b>CA Roads</b>
+  <nav>
+    <a href="/">Live map</a>
+    <a href="/watch" class="on">Watch areas</a>
+  </nav>
+  <span class="who" id="who"></span>
+</header>
+<main>
+
+  <!-- signed out -->
+  <section id="signin" class="center hidden">
+    <h1>Watch areas <span class="badge">TRIAL</span></h1>
+    <p>Pick an area of California and get an alert the moment an
+      incident, closure, chain control, or wildfire shows up in it.
+      Sign in to get started.</p>
+    <div class="card" style="text-align:left">
+      <button class="primary" id="googlebtn">Continue with Google</button>
+      <div class="or">or use an email link</div>
+      <input type="email" id="email" placeholder="you@example.com"
+             autocomplete="email">
+      <div style="height:8px"></div>
+      <button class="ghost" id="emailbtn" style="width:100%">
+        Email me a sign-in link</button>
+      <div class="msg" id="signinmsg"></div>
+    </div>
+  </section>
+
+  <!-- signed in, not approved -->
+  <section id="gate" class="center hidden">
+    <h1>Almost there</h1>
+    <p id="gatetext">Watch areas are in a limited trial. Enter an access
+      code to unlock them, or check back once your account is approved.</p>
+    <div class="card" style="text-align:left">
+      <input type="text" id="code" placeholder="Access code"
+             autocomplete="off" style="text-transform:uppercase">
+      <div style="height:8px"></div>
+      <button class="primary" id="redeembtn">Unlock watch areas</button>
+      <div class="msg" id="gatemsg"></div>
+    </div>
+  </section>
+
+  <!-- approved -->
+  <section id="appzone" class="hidden">
+    <h1>Watch areas <span class="badge">TRIAL</span></h1>
+    <div class="sub">Alerts are checked every few minutes.
+      Informational only - verify with 511 before you drive.</div>
+    <div class="split">
+      <div>
+        <div class="card">
+          <h2>New watch</h2>
+          <div class="field">
+            <label>Name</label>
+            <input type="text" id="wname" maxlength="60"
+                   placeholder="e.g. Commute over 17">
+          </div>
+          <div class="field">
+            <label>Shape</label>
+            <div class="modes">
+              <button id="mode-circle" class="on">Circle</button>
+              <button id="mode-polygon">Polygon</button>
+            </div>
+            <div class="hint" id="shapehint">Click the map to place the
+              center, then set the radius.</div>
+          </div>
+          <div class="field" id="radiusrow">
+            <label>Radius</label>
+            <div class="radius">
+              <input type="range" id="radius" min="1" max="65" value="15">
+              <b id="radiuslabel">15 km</b>
+            </div>
+          </div>
+          <div class="field">
+            <label>Alert me about</label>
+            <div class="kinds">
+              <label><input type="checkbox" data-kind="incident" checked>Incidents</label>
+              <label><input type="checkbox" data-kind="closure" checked>Closures</label>
+              <label><input type="checkbox" data-kind="chain">Chain controls</label>
+              <label><input type="checkbox" data-kind="fire" checked>Wildfires</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>Deliver via</label>
+            <div class="chans">
+              <label><input type="checkbox" id="ch-push" checked>Push notification</label>
+              <label id="emailchan" class="hidden">
+                <input type="checkbox" id="ch-email">Email</label>
+            </div>
+          </div>
+          <button class="primary" id="createbtn">Create watch</button>
+          <div class="msg" id="createmsg"></div>
+        </div>
+        <div class="card">
+          <h2>Your watches <span id="wcount" style="color:var(--dim);font-weight:400"></span></h2>
+          <div class="wlist" id="wlist"></div>
+          <div class="msg" id="listmsg"></div>
+        </div>
+        <div class="card">
+          <h2>This device</h2>
+          <div class="devrow">
+            <button class="ghost" id="notifbtn">Enable notifications</button>
+            <button class="ghost" id="testbtn">Send test alert</button>
+          </div>
+          <div class="msg" id="devmsg"></div>
+          <div class="hint">On iPhone or iPad, first add this page to
+            your home screen (Share &rarr; Add to Home Screen), then open
+            it from there and enable notifications.</div>
+        </div>
+      </div>
+      <div id="wmap"></div>
+    </div>
+    <div class="footer-note">
+      Alerts are informational only and may be delayed, incomplete, or
+      wrong. Always verify with <a href="tel:511">511</a> or
+      quickmap.dot.ca.gov before you drive, and never rely on this
+      service for evacuation or emergency decisions. Your account email
+      and the areas you draw are stored to run your alerts; delete a
+      watch to remove its data, or contact nic@glazkov.com to delete
+      your account entirely.
+    </div>
+  </section>
+</main>
+
+<script src="/static/vendor/leaflet.js"></script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut,
+  sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
+  onAuthStateChanged,
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const $ = (id) => document.getElementById(id);
+const show = (id) => ['signin', 'gate', 'appzone']
+  .forEach((s) => $(s).classList.toggle('hidden', s !== id));
+const msg = (id, text, cls) => {
+  const el = $(id); el.textContent = text || '';
+  el.className = 'msg' + (cls ? ' ' + cls : '');
+};
+
+const cfgRes = await fetch('/api/watch/config');
+const CFG = cfgRes.ok ? await cfgRes.json() : null;
+if (!CFG || !CFG.firebase) {
+  show('signin');
+  msg('signinmsg', 'Could not load sign-in configuration - refresh to try again.', 'err');
+  throw new Error('watch config unavailable');
+}
+const fb = initializeApp(CFG.firebase);
+const auth = getAuth(fb);
+let user = null;
+
+async function api(path, options = {}) {
+  const token = await user.getIdToken();
+  const res = await fetch(path, {
+    ...options,
+    headers: { Authorization: 'Bearer ' + token,
+               'Content-Type': 'application/json',
+               ...(options.headers || {}) },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('request failed (' + res.status + ')'));
+  return data;
+}
+
+// ------------------------------------------------------------- sign-in
+
+$('googlebtn').addEventListener('click', async () => {
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch (e) { msg('signinmsg', e.message, 'err'); }
+});
+
+$('emailbtn').addEventListener('click', async () => {
+  const email = $('email').value.trim();
+  if (!email) { msg('signinmsg', 'Enter your email first.', 'err'); return; }
+  try {
+    await sendSignInLinkToEmail(auth, email, {
+      url: location.origin + '/watch', handleCodeInApp: true });
+    localStorage.setItem('watchEmail', email);
+    msg('signinmsg', 'Link sent - check your inbox.', 'ok');
+  } catch (e) { msg('signinmsg', e.message, 'err'); }
+});
+
+if (isSignInWithEmailLink(auth, location.href)) {
+  const email = localStorage.getItem('watchEmail')
+    || prompt('Confirm your email to finish signing in');
+  if (email) {
+    try {
+      await signInWithEmailLink(auth, email, location.href);
+      history.replaceState(null, '', '/watch');
+    } catch (e) { msg('signinmsg', e.message, 'err'); }
+  }
+}
+
+// --------------------------------------------------------------- state
+
+let me = null;
+
+async function refresh() {
+  me = await api('/api/watch/me');
+  $('who').innerHTML = '';
+  const label = document.createElement('span');
+  label.textContent = me.email || 'signed in';
+  const out = document.createElement('button');
+  out.textContent = 'Sign out';
+  out.addEventListener('click', () => signOut(auth));
+  $('who').append(label, out);
+  if (me.admin) {
+    const a = document.createElement('a');
+    a.href = '/admin'; a.textContent = 'Admin';
+    a.style.cssText = 'color:#e8a13c;font-size:.78rem';
+    $('who').prepend(a);
+  }
+  if (me.status === 'approved') {
+    show('appzone');
+    if (CFG.emailEnabled) $('emailchan').classList.remove('hidden');
+    renderWatches();
+    setTimeout(() => map.invalidateSize(), 60);
+  } else {
+    $('gatetext').textContent = me.status === 'revoked'
+      ? 'Access for this account has been turned off. Enter a new access code to re-enable it.'
+      : 'Watch areas are in a limited trial. Enter an access code to unlock them.';
+    show('gate');
+  }
+}
+
+onAuthStateChanged(auth, async (u) => {
+  user = u;
+  if (!u) { $('who').innerHTML = ''; show('signin'); return; }
+  try { await refresh(); }
+  catch (e) { show('signin'); msg('signinmsg', e.message, 'err'); }
+});
+
+$('redeembtn').addEventListener('click', async () => {
+  try {
+    await api('/api/watch/redeem', { method: 'POST',
+      body: JSON.stringify({ code: $('code').value.trim() }) });
+    await refresh();
+  } catch (e) { msg('gatemsg', e.message, 'err'); }
+});
+
+// ----------------------------------------------------------------- map
+
+const map = L.map('wmap', { zoomControl: true }).setView([37.5, -120.5], 6);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  maxZoom: 18,
+  attribution: '&copy; OpenStreetMap &copy; CARTO',
+}).addTo(map);
+const drawLayer = L.layerGroup().addTo(map);
+const savedLayer = L.layerGroup().addTo(map);
+
+let mode = 'circle';
+let center = null;
+let polyPoints = [];
+
+function redraw() {
+  drawLayer.clearLayers();
+  if (mode === 'circle' && center) {
+    L.circleMarker(center, { radius: 5, color: '#fff', weight: 1.5,
+      fillColor: '#2f81f7', fillOpacity: 1 }).addTo(drawLayer);
+    L.circle(center, { radius: Number($('radius').value) * 1000,
+      color: '#2f81f7', weight: 2, fillColor: '#2f81f7', fillOpacity: 0.12 })
+      .addTo(drawLayer);
+  }
+  if (mode === 'polygon' && polyPoints.length) {
+    for (const p of polyPoints) {
+      L.circleMarker(p, { radius: 4, color: '#fff', weight: 1.5,
+        fillColor: '#2f81f7', fillOpacity: 1 }).addTo(drawLayer);
+    }
+    if (polyPoints.length > 1) {
+      L.polygon(polyPoints, { color: '#2f81f7', weight: 2,
+        fillColor: '#2f81f7', fillOpacity: 0.12 }).addTo(drawLayer);
+    }
+  }
+}
+
+map.on('click', (e) => {
+  const p = [e.latlng.lat, e.latlng.lng];
+  if (mode === 'circle') center = p;
+  else if (polyPoints.length < 20) polyPoints.push(p);
+  redraw();
+});
+
+function setMode(m) {
+  mode = m;
+  $('mode-circle').classList.toggle('on', m === 'circle');
+  $('mode-polygon').classList.toggle('on', m === 'polygon');
+  $('radiusrow').classList.toggle('hidden', m !== 'circle');
+  $('shapehint').textContent = m === 'circle'
+    ? 'Click the map to place the center, then set the radius.'
+    : 'Click the map to add corners (3-20). Click Create when the shape looks right.';
+  center = null; polyPoints = []; redraw();
+}
+$('mode-circle').addEventListener('click', () => setMode('circle'));
+$('mode-polygon').addEventListener('click', () => setMode('polygon'));
+$('radius').addEventListener('input', () => {
+  $('radiuslabel').textContent = $('radius').value + ' km';
+  redraw();
+});
+
+// ------------------------------------------------------------- watches
+
+function renderWatches() {
+  const list = $('wlist');
+  list.innerHTML = '';
+  savedLayer.clearLayers();
+  $('wcount').textContent = '(' + me.watches.length + '/' +
+    CFG.limits.watches + ')';
+  if (!me.watches.length) {
+    list.innerHTML = '<div class="hint">Nothing yet - draw your first watch on the map.</div>';
+    return;
+  }
+  for (const w of me.watches) {
+    let shape;
+    if (w.type === 'circle') {
+      shape = L.circle([w.center.lat, w.center.lon], {
+        radius: w.radius_km * 1000, color: '#1c3a2e', weight: 1.5,
+        fillColor: '#1c3a2e', fillOpacity: 0.08 }).addTo(savedLayer);
+    } else {
+      shape = L.polygon(w.points, { color: '#1c3a2e', weight: 1.5,
+        fillColor: '#1c3a2e', fillOpacity: 0.08 }).addTo(savedLayer);
+    }
+    const row = document.createElement('div');
+    row.className = 'witem';
+    const dot = document.createElement('i');
+    dot.style.background = '#1c3a2e';
+    const text = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'wname'; name.textContent = w.name;
+    const meta = document.createElement('div');
+    meta.className = 'wmeta';
+    meta.textContent = (w.type === 'circle'
+      ? Math.round(w.radius_km) + ' km circle' : 'polygon') +
+      ' - ' + (w.kinds || []).join(', ');
+    text.append(name, meta);
+    const del = document.createElement('button');
+    del.textContent = '×';
+    del.title = 'Delete watch';
+    del.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api('/api/watch/' + w.id, { method: 'DELETE' });
+        me = await api('/api/watch/me');
+        renderWatches();
+      } catch (err) { msg('listmsg', err.message, 'err'); }
+    });
+    row.append(dot, text, del);
+    row.addEventListener('click', () => {
+      map.fitBounds(shape.getBounds().pad(0.3));
+    });
+    list.append(row);
+  }
+}
+
+$('createbtn').addEventListener('click', async () => {
+  const kinds = [...document.querySelectorAll('.kinds input:checked')]
+    .map((c) => c.dataset.kind);
+  const body = {
+    name: $('wname').value.trim(),
+    kinds,
+    channels: { push: $('ch-push').checked, email: $('ch-email').checked },
+  };
+  if (mode === 'circle') {
+    if (!center) { msg('createmsg', 'Click the map to place the center first.', 'err'); return; }
+    Object.assign(body, { type: 'circle',
+      center: { lat: center[0], lon: center[1] },
+      radius_km: Number($('radius').value) });
+  } else {
+    if (polyPoints.length < 3) { msg('createmsg', 'Add at least three corners on the map.', 'err'); return; }
+    Object.assign(body, { type: 'polygon', points: polyPoints });
+  }
+  try {
+    await api('/api/watch/create', { method: 'POST',
+      body: JSON.stringify(body) });
+    center = null; polyPoints = []; $('wname').value = ''; redraw();
+    me = await api('/api/watch/me');
+    renderWatches();
+    msg('createmsg', 'Watch created.', 'ok');
+  } catch (e) { msg('createmsg', e.message, 'err'); }
+});
+
+// ---------------------------------------------------------------- push
+
+function b64ToBytes(b64) {
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+$('notifbtn').addEventListener('click', async () => {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      msg('devmsg', 'This browser does not support push notifications.', 'err');
+      return;
+    }
+    if (!CFG.vapidPublicKey) {
+      msg('devmsg', 'Push is not configured on the server yet.', 'err');
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      msg('devmsg', 'Notifications were not allowed.', 'err'); return;
+    }
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: b64ToBytes(CFG.vapidPublicKey),
+    });
+    await api('/api/watch/push', { method: 'POST',
+      body: JSON.stringify({ subscription: sub.toJSON() }) });
+    msg('devmsg', 'This device will now receive alerts.', 'ok');
+  } catch (e) { msg('devmsg', e.message, 'err'); }
+});
+
+$('testbtn').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/watch/test', { method: 'POST' });
+    msg('devmsg', 'Test sent to ' + r.devices + ' device(s).', 'ok');
+  } catch (e) { msg('devmsg', e.message, 'err'); }
+});
+</script>
+</body>
+</html>

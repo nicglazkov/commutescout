@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin - CA Roads</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/fonts/fonts.css">
+<style>
+:root {
+  --navy:#0b1f33; --navy2:#122c47; --ink:#0f1c2b; --dim:#5b6b7d;
+  --bg:#f5f2ea; --card:#fffdf7; --line:#e3ddd0;
+  --sky:#2f81f7; --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
+  --green:#2f9e6e;
+}
+* { box-sizing:border-box; margin:0 }
+body { background:var(--bg); color:var(--ink);
+  font:400 .9rem/1.5 Inter, system-ui, sans-serif }
+header { background:var(--navy); color:#e8eef5; display:flex; gap:14px;
+  align-items:center; padding:9px 16px }
+header img { width:30px; height:30px }
+header b { font-size:1rem }
+header nav a { color:#bcd0e4; text-decoration:none; font-size:.82rem;
+  padding:5px 11px; border-radius:8px }
+header nav a:hover { background:var(--navy2); color:#fff }
+header .who { margin-left:auto; font-size:.78rem; color:#9fb4c9 }
+main { max-width:1000px; margin:0 auto; padding:18px 16px 50px }
+h1 { font-size:1.2rem; margin:6px 0 14px }
+.card { background:var(--card); border:1px solid var(--line);
+  border-radius:14px; padding:18px; margin-bottom:14px }
+.card h2 { font-size:.95rem; margin-bottom:10px }
+table { width:100%; border-collapse:collapse; font-size:.83rem }
+th { text-align:left; font:600 .7rem Inter; letter-spacing:.6px;
+  text-transform:uppercase; color:var(--dim); padding:6px 8px;
+  border-bottom:1px solid var(--line) }
+td { padding:7px 8px; border-bottom:1px solid #efeadf }
+.pill { display:inline-block; font:600 .68rem Inter; padding:2px 9px;
+  border-radius:99px }
+.pill.approved { background:#e3f4ec; color:var(--green) }
+.pill.pending { background:#fdf2df; color:#a86d1d }
+.pill.revoked { background:#fbe5e5; color:var(--red) }
+button { border:1px solid var(--line); background:#fff; border-radius:8px;
+  padding:5px 12px; font:500 .78rem Inter; cursor:pointer; color:var(--ink) }
+button:hover { border-color:var(--sky); color:var(--sky) }
+button.warn:hover { border-color:var(--red); color:var(--red) }
+button.primary { background:var(--sky); border-color:var(--sky);
+  color:#fff }
+.row { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+  margin-bottom:10px }
+input { border:1.5px solid var(--line); border-radius:8px;
+  padding:7px 10px; font:400 .84rem Inter; background:#fff; outline:none }
+input:focus { border-color:var(--sky) }
+.msg { font-size:.8rem; margin-top:8px; min-height:1.2em }
+.msg.err { color:var(--red) } .msg.ok { color:var(--green) }
+.center { max-width:380px; margin:12vh auto 0; text-align:center }
+code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
+  font-size:.82rem }
+.hidden { display:none !important }
+</style>
+</head>
+<body>
+<header>
+  <img src="/logo.svg" alt="">
+  <b>CA Roads admin</b>
+  <nav><a href="/watch">Watch areas</a><a href="/">Live map</a></nav>
+  <span class="who" id="who"></span>
+</header>
+<main>
+  <section id="signin" class="center hidden">
+    <h1>Admin sign-in</h1>
+    <button class="primary" id="googlebtn" style="width:100%;padding:10px">
+      Continue with Google</button>
+    <div class="msg" id="signinmsg"></div>
+  </section>
+
+  <section id="panel" class="hidden">
+    <h1>Premium trial management</h1>
+
+    <div class="card">
+      <h2>Access codes</h2>
+      <div class="row">
+        <input type="number" id="maxuses" min="1" max="100" value="5"
+               style="width:90px" title="max uses">
+        <input type="text" id="note" placeholder="note (who is this for?)"
+               style="flex:1;min-width:160px" maxlength="80">
+        <button class="primary" id="newcode">New code</button>
+      </div>
+      <table>
+        <thead><tr><th>Code</th><th>Uses</th><th>Note</th><th>Status</th>
+          <th></th></tr></thead>
+        <tbody id="codes"></tbody>
+      </table>
+      <div class="msg" id="codemsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Users</h2>
+      <table>
+        <thead><tr><th>Email</th><th>Status</th><th>Watches</th>
+          <th>Code used</th><th>Since</th><th></th></tr></thead>
+        <tbody id="users"></tbody>
+      </table>
+      <div class="msg" id="usermsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Checker</h2>
+      <div class="row">
+        <button id="runcheck">Run check cycle now</button>
+        <span class="msg" id="checkmsg" style="margin:0"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const $ = (id) => document.getElementById(id);
+const msg = (id, text, cls) => {
+  const el = $(id); el.textContent = text || '';
+  el.className = 'msg' + (cls ? ' ' + cls : '');
+};
+
+const cfgRes = await fetch('/api/watch/config');
+const CFG = cfgRes.ok ? await cfgRes.json() : null;
+if (!CFG || !CFG.firebase) {
+  $('signin').classList.remove('hidden');
+  msg('signinmsg', 'Could not load sign-in configuration - refresh to try again.', 'err');
+  throw new Error('watch config unavailable');
+}
+const auth = getAuth(initializeApp(CFG.firebase));
+let user = null;
+
+async function api(path, options = {}) {
+  const token = await user.getIdToken();
+  const res = await fetch(path, { ...options,
+    headers: { Authorization: 'Bearer ' + token,
+               'Content-Type': 'application/json' } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('failed (' + res.status + ')'));
+  return data;
+}
+
+$('googlebtn').addEventListener('click', async () => {
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch (e) { msg('signinmsg', e.message, 'err'); }
+});
+
+onAuthStateChanged(auth, async (u) => {
+  user = u;
+  if (!u) { $('signin').classList.remove('hidden'); return; }
+  $('who').textContent = u.email || '';
+  try {
+    await load();
+    $('signin').classList.add('hidden');
+    $('panel').classList.remove('hidden');
+  } catch (e) {
+    $('signin').classList.remove('hidden');
+    msg('signinmsg', e.message, 'err');
+  }
+});
+
+async function load() {
+  const data = await api('/api/admin/overview');
+  const users = $('users');
+  users.innerHTML = '';
+  for (const u of data.users.sort((a, b) =>
+      (a.created_at || '').localeCompare(b.created_at || ''))) {
+    const tr = document.createElement('tr');
+    const status = u.status || 'pending';
+    const since = (u.created_at || '').slice(0, 10);
+    tr.innerHTML =
+      '<td></td><td><span class="pill ' + status + '">' + status +
+      '</span></td><td>' + (u.watch_count || 0) + '</td><td></td><td>' +
+      since + '</td><td></td>';
+    tr.children[0].textContent = u.email || u.uid;
+    tr.children[3].textContent = u.code_used || '';
+    const btn = document.createElement('button');
+    if (status === 'approved') {
+      btn.textContent = 'Revoke'; btn.className = 'warn';
+      btn.addEventListener('click', () => act(u.uid, 'revoke'));
+    } else {
+      btn.textContent = 'Approve';
+      btn.addEventListener('click', () => act(u.uid, 'approve'));
+    }
+    tr.children[5].append(btn);
+    users.append(tr);
+  }
+  if (!data.users.length) {
+    users.innerHTML = '<tr><td colspan="6" style="color:var(--dim)">Nobody has signed in yet.</td></tr>';
+  }
+
+  const codes = $('codes');
+  codes.innerHTML = '';
+  for (const c of data.codes.sort((a, b) =>
+      (b.created_at || '').localeCompare(a.created_at || ''))) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td><code></code></td><td>' + (c.uses || 0) + '/' +
+      (c.max_uses || 1) + '</td><td></td><td>' +
+      (c.active ? 'active' : 'disabled') + '</td><td></td>';
+    tr.querySelector('code').textContent = c.code;
+    tr.children[2].textContent = c.note || '';
+    if (c.active) {
+      const btn = document.createElement('button');
+      btn.textContent = 'Disable'; btn.className = 'warn';
+      btn.addEventListener('click', async () => {
+        try {
+          await api('/api/admin/code', { method: 'POST',
+            body: JSON.stringify({ action: 'disable', code: c.code }) });
+          await load();
+        } catch (e) { msg('codemsg', e.message, 'err'); }
+      });
+      tr.children[4].append(btn);
+    }
+    codes.append(tr);
+  }
+  if (!data.codes.length) {
+    codes.innerHTML = '<tr><td colspan="5" style="color:var(--dim)">No codes yet.</td></tr>';
+  }
+}
+
+async function act(uid, action) {
+  try {
+    await api('/api/admin/user', { method: 'POST',
+      body: JSON.stringify({ uid, action }) });
+    await load();
+  } catch (e) { msg('usermsg', e.message, 'err'); }
+}
+
+$('newcode').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/admin/code', { method: 'POST',
+      body: JSON.stringify({ max_uses: Number($('maxuses').value) || 1,
+                             note: $('note').value }) });
+    msg('codemsg', 'Created ' + r.code, 'ok');
+    $('note').value = '';
+    await load();
+  } catch (e) { msg('codemsg', e.message, 'err'); }
+});
+
+$('runcheck').addEventListener('click', async () => {
+  msg('checkmsg', 'Running…');
+  try {
+    const r = await api('/api/check-watches', { method: 'POST' });
+    msg('checkmsg', JSON.stringify(r), 'ok');
+  } catch (e) { msg('checkmsg', e.message, 'err'); }
+});
+</script>
+</body>
+</html>

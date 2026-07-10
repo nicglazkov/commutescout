@@ -1057,7 +1057,12 @@ app = RateLimitMiddleware(
     # address validation behind map browsing.
     exempt_prefixes=("/static/", "/logo.svg", "/health", "/favicon",
                      "/api/mapdata", "/api/stats", "/api/geocode",
-                     "/api/suggest", "/api/flow", "/api/traffictile"),
+                     "/api/suggest", "/api/flow", "/api/traffictile",
+                     # Watch pages + public bootstrap config are as cheap
+                     # as static files; the mutating watch APIs stay
+                     # inside the bucket (and are token-gated anyway).
+                     "/watch", "/admin", "/sw.js", "/manifest.webmanifest",
+                     "/api/watch/config"),
 )
 
 
