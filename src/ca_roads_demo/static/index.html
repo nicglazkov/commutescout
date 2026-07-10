@@ -188,6 +188,17 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .routebtns button { font:600 .76rem Inter; border-radius:8px; padding:8px 12px;
   cursor:pointer; border:1px solid var(--line); background:var(--card) }
 .routebtns button.pri { background:var(--navy); border-color:var(--navy); color:#fff }
+.stepsdrop { border:1px solid var(--line); border-radius:10px;
+  margin:4px 0 10px; background:var(--bg) }
+.stepsdrop summary { cursor:pointer; font:600 .82rem Inter; padding:9px 12px;
+  color:var(--ink); user-select:none; list-style:none;
+  display:flex; align-items:center; gap:7px }
+.stepsdrop summary::-webkit-details-marker { display:none }
+.stepsdrop summary::before { content:"\25B8"; color:var(--dim);
+  transition:transform .12s }
+.stepsdrop[open] summary::before { transform:rotate(90deg) }
+.stepsdrop .steps { background:var(--card); border-top:1px solid var(--line);
+  border-radius:0 0 10px 10px; margin:0; padding:10px 12px 10px 30px }
 .steps { padding-left:20px; font-size:.85rem }
 .steps li { margin:6px 0 } .steps small { color:var(--dim) }
 .routecond { margin-top:12px; border-top:1px solid var(--line); padding-top:10px }
@@ -287,7 +298,10 @@ aside { background:var(--card); border-right:1px solid var(--line);
           <b>Questions people ask about this drive</b>
           <div class="routeasks" id="routeasks"></div>
         </div>
-        <ol class="steps" id="steps"></ol>
+        <details class="stepsdrop" id="stepsdrop">
+          <summary id="stepssummary">Turn-by-turn directions</summary>
+          <ol class="steps" id="steps"></ol>
+        </details>
         <div class="routecond" id="routecond"></div>
       </div>
     </section>
@@ -1363,6 +1377,9 @@ planbtn.addEventListener('click', async () => {
       ' · ' + mi.toFixed(0) + ' mi · ~' + Math.round(min) + ' min';
     const ol = document.getElementById('steps');
     ol.innerHTML = '';
+    document.getElementById('stepsdrop').open = false;
+    document.getElementById('stepssummary').textContent =
+      'Turn-by-turn directions \u00b7 ' + route.steps.length + ' steps';
     route.steps.forEach(s => {
       const li = document.createElement('li');
       li.textContent = s.text + ' ';
@@ -1456,7 +1473,13 @@ function buildRouteAsks() {
     wrap.append(btn);
   }
 }
-document.getElementById('printbtn').addEventListener('click', () => window.print());
+document.getElementById('printbtn').addEventListener('click', () => {
+  const drop = document.getElementById('stepsdrop');
+  const wasOpen = drop.open;
+  drop.open = true;
+  window.print();
+  drop.open = wasOpen;
+});
 document.getElementById('exportbtn').addEventListener('click', () => {
   if (!plannedRoute) return;
   const r = plannedRoute.route;
