@@ -24,6 +24,8 @@
  "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
 </script>
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="preload" as="fetch" crossorigin="anonymous"
+      href="/api/mapdata?bbox=32.000,-125.000,42.500,-113.500&kinds=incident,closure,chain,fire">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
 <style>
@@ -78,7 +80,11 @@ aside { background:var(--card); border-right:1px solid var(--line);
   border:1px solid var(--line); border-radius:99px; padding:5px 11px; cursor:pointer }
 .examples button:hover { color:var(--ink); border-color:#b9c6d6 }
 .locrow { display:flex; align-items:center; gap:9px; margin-top:12px;
-  font-size:.8rem; color:var(--dim) }
+  font-size:.8rem; color:var(--dim); flex-wrap:wrap }
+.locrow .switch { flex:none }
+.locstatus { flex-basis:100%; padding-left:43px; font-size:.75rem;
+  line-height:1.4 }
+.locstatus:empty { display:none }
 .switch { position:relative; display:inline-block; width:34px; height:19px }
 .switch input { opacity:0; width:0; height:0 }
 .switch .track { position:absolute; inset:0; border-radius:99px; background:#c4cfdb;
@@ -230,6 +236,9 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .routecond h4 { font-size:.82rem; margin-bottom:6px }
 .routecond div { font-size:.8rem; color:#3c4a5a; padding:4px 0;
   display:flex; gap:7px; align-items:baseline }
+.routecond .condrow { cursor:pointer; border-radius:7px; padding:4px 6px;
+  margin:0 -6px }
+.routecond .condrow:hover { background:var(--sky-soft) }
 .routecond i { font-style:normal; width:8px; height:8px; border-radius:99px;
   flex:none; position:relative; top:0 }
 .filters { position:absolute; z-index:800; top:14px; right:14px;
@@ -745,23 +754,14 @@ function drawGeo(geo) {
   for (const m of geo.markers || []) {
     if (m.kind === 'camera') {
       chipCounts.camera = (chipCounts.camera || 0) + 1;
-      const cam = L.marker([m.lat, m.lon], {
-        icon: L.divIcon({ className: 'cam-icon', html: '&#9635;', iconSize: [20, 20] }),
-        zIndexOffset: 300,
-      }).addTo(layerPrimary);
-      const safeName = String(m.label || 'camera').replace(/[<>&"]/g, '');
-      if (m.image) {
-        cam.bindPopup(
-          '<div class="campopup"><b>' + safeName + '</b><br>' +
-          '<img src="' + encodeURI(m.image) + '?t=' + Date.now() +
-          '" alt="' + safeName + '" width="300" ' +
-          'onerror="this.closest(\'.campopup\').innerHTML=\'' + safeName +
-          ' - snapshot unavailable\'">' + '</div>',
-          { maxWidth: 320 }
-        );
-      } else {
-        cam.bindPopup(safeName);
-      }
+      const camHtml = (typeof popupFor === 'function')
+        ? popupFor({ name: m.label, image: m.image, route: '', direction: '',
+                     near: '', stream: null }, 'camera')
+        : esc(String(m.label || 'camera'));
+      L.circleMarker([m.lat, m.lon], {
+        radius: 7, color: '#fff', weight: 1.5,
+        fillColor: '#2f81f7', fillOpacity: 0.95,
+      }).bindPopup(camHtml, { maxWidth: 320 }).addTo(layerPrimary);
       continue;
     }
     if (m.kind === 'wildfire' && Array.isArray(m.poly) && m.poly.length > 2) {
@@ -1152,54 +1152,74 @@ function rebuildCameras() {
   if (nv) nv.textContent = cameraCache.filter(c => c.stream).length;
 }
 
-let ambientBounds = null, ambientTimer = null, ambientBusy = false;
+let ambientBounds = null, ambientTimer = null, ambientCycle = 0;
+const FAST_GROUPS = ['inc_collision', 'inc_fire', 'inc_hazard', 'inc_other',
+  'clo_full', 'clo_lane', 'clo_oneway', 'clo_ramp', 'chain',
+  'fire_pt', 'fire_poly'];
+const HEAVY_GROUPS = ['camera', 'sign', 'rwis'];
+
+function renderBatch(markers, groups) {
+  const counts = {};
+  for (const g of groups) ambient[g].clearLayers();
+  if (groups.includes('camera')) { cameraCache = []; signCache = []; }
+  for (const m of markers) {
+    const g = classify(m);
+    if (!g || !m.lat || !groups.includes(g === 'sign' || g === 'camera' ? g : g)) continue;
+    if (!groups.includes(g)) continue;
+    if (g === 'camera') { cameraCache.push(m); continue; }
+    if (g === 'sign') { signCache.push(m); continue; }
+    if (g === 'fire_pt') {
+      ambient.fire_pt.addLayer(pointMarker(m, 'fire_pt'));
+      counts.fire_pt = (counts.fire_pt || 0) + 1;
+      if (Array.isArray(m.poly) && m.poly.length > 2) {
+        ambient.fire_poly.addLayer(
+          L.polygon(m.poly, { color: '#d97706', weight: 1.5,
+            fillColor: '#d97706', fillOpacity: 0.22 })
+            .bindPopup(popupFor(m, 'fire_poly'), { maxWidth: 320 }));
+        counts.fire_poly = (counts.fire_poly || 0) + 1;
+      }
+      continue;
+    }
+    ambient[g].addLayer(pointMarker(m, g));
+    counts[g] = (counts[g] || 0) + 1;
+  }
+  if (groups.includes('camera')) { rebuildCameras(); rebuildSigns(); }
+  for (const g of groups) {
+    if (g === 'camera' || g === 'sign') continue;
+    const el = document.getElementById('n-' + g);
+    if (el) el.textContent = counts[g] || 0;
+  }
+}
+
 async function refreshAmbient(force) {
-  if (ambientBusy) return;
   const view = map.getBounds();
   if (!force && ambientBounds && ambientBounds.contains(view)) return;
-  ambientBusy = true;
-  const fetchBounds = view.pad(0.35);
+  const mine = ++ambientCycle;
+  // First load uses a fixed statewide box: it matches the <link rel=preload>
+  // in the head (the browser starts that request before Leaflet loads) and
+  // it means panning anywhere in California never needs a refetch.
+  const first = ambientBounds === null;
+  const fetchBounds = first
+    ? L.latLngBounds([[32.0, -125.0], [42.5, -113.5]])
+    : view.pad(0.35);
   const sw = fetchBounds.getSouthWest(), ne = fetchBounds.getNorthEast();
   const bbox = [sw.lat, sw.lng, ne.lat, ne.lng].map(v => v.toFixed(3)).join(',');
-  try {
-    const res = await fetch('/api/mapdata?bbox=' + bbox +
-      '&kinds=incident,closure,chain,fire,camera,sign,rwis');
-    if (!res.ok) return;
-    const data = await res.json();
-    const counts = {};
-    Object.values(ambient).forEach(l => l.clearLayers());
-    cameraCache = [];
-    signCache = [];
-    for (const m of data.markers || []) {
-      const g = classify(m);
-      if (!g || !m.lat) continue;
-      if (g === 'camera') { cameraCache.push(m); continue; }
-      if (g === 'sign') { signCache.push(m); continue; }
-      if (g === 'fire_pt') {
-        ambient.fire_pt.addLayer(pointMarker(m, 'fire_pt'));
-        counts.fire_pt = (counts.fire_pt || 0) + 1;
-        if (Array.isArray(m.poly) && m.poly.length > 2) {
-          ambient.fire_poly.addLayer(
-            L.polygon(m.poly, { color: '#d97706', weight: 1.5,
-              fillColor: '#d97706', fillOpacity: 0.22 })
-              .bindPopup(popupFor(m, 'fire_poly'), { maxWidth: 320 }));
-          counts.fire_poly = (counts.fire_poly || 0) + 1;
-        }
-        continue;
-      }
-      ambient[g].addLayer(pointMarker(m, g));
-      counts[g] = (counts[g] || 0) + 1;
-    }
-    rebuildCameras();
-    rebuildSigns();
-    for (const g of Object.keys(GROUP_DOT)) {
-      if (g === 'camera' || g === 'sign') continue;
-      const el = document.getElementById('n-' + g);
-      if (el) el.textContent = counts[g] || 0;
-    }
-    ambientBounds = fetchBounds;
-  } catch (e) { /* transient; next pan retries */ }
-  finally { ambientBusy = false; }
+  // Two phases: the fast feeds paint in ~a quarter second; the heavy ones
+  // (3,300 cameras, 970 signs) follow without holding them up.
+  const load = async (kinds, groups) => {
+    try {
+      const res = await fetch('/api/mapdata?bbox=' + bbox + '&kinds=' + kinds);
+      if (!res.ok || mine !== ambientCycle) return;
+      const data = await res.json();
+      if (mine !== ambientCycle) return;
+      renderBatch(data.markers || [], groups);
+    } catch (e) { /* transient; next pan retries */ }
+  };
+  await Promise.all([
+    load('incident,closure,chain,fire', FAST_GROUPS),
+    load('camera,sign,rwis', HEAVY_GROUPS),
+  ]);
+  if (mine === ambientCycle) ambientBounds = fetchBounds;
 }
 map.on('moveend zoomend', () => {
   clearTimeout(ambientTimer);
@@ -1597,6 +1617,7 @@ function nearRoute(m, latlngs, km) {
   }
   return false;
 }
+let condHighlight = null;
 function renderRouteConditions(latlngs) {
   const box = document.getElementById('routecond');
   box.innerHTML = '<h4>Conditions along this route</h4>';
@@ -1611,6 +1632,7 @@ function renderRouteConditions(latlngs) {
       const m = { lat: p.lat, lon: p.lng };
       if (nearRoute(m, latlngs, 4)) {
         const row = document.createElement('div');
+        row.className = 'condrow';
         const dot = document.createElement('i');
         dot.style.background = GROUP_DOT[g];
         const txt = document.createElement('span');
@@ -1619,6 +1641,20 @@ function renderRouteConditions(latlngs) {
         txt.textContent = (popEl.querySelector('.t')?.textContent || POP_LABEL[g]) +
           (popEl.querySelector('.d')?.textContent ? ' - ' + popEl.querySelector('.d').textContent : '');
         row.append(dot, txt);
+        const at = [p.lat, p.lng];
+        row.addEventListener('mouseenter', () => {
+          condHighlight = L.circleMarker(at, {
+            radius: 15, color: '#0b1f33', weight: 3, fill: false,
+          }).addTo(map);
+        });
+        row.addEventListener('mouseleave', () => {
+          if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
+        });
+        row.addEventListener('click', () => {
+          if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
+          map.flyTo(at, Math.max(map.getZoom(), 12), { duration: 0.7 });
+          setTimeout(() => l.openPopup(), 750);
+        });
         box.append(row);
         shown++;
       }
