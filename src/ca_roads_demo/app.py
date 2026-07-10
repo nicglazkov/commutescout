@@ -34,6 +34,7 @@ from starlette.staticfiles import StaticFiles
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
+from ca_roads_demo import watch
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_suggest
 from ca_roads_mcp.ratelimit import (
@@ -963,6 +964,25 @@ async def logo(_: Request):
     return FileResponse(STATIC_DIR / "logo.svg")
 
 
+async def watch_page(_: Request):
+    return FileResponse(STATIC_DIR / "watch.html")
+
+
+async def admin_page(_: Request):
+    return FileResponse(STATIC_DIR / "admin.html")
+
+
+async def sw_js(_: Request):
+    # Served from the root so the service worker scope covers /watch.
+    return FileResponse(STATIC_DIR / "sw.js",
+                        headers={"Service-Worker-Allowed": "/"})
+
+
+async def manifest_file(_: Request):
+    return FileResponse(STATIC_DIR / "manifest.webmanifest",
+                        media_type="application/manifest+json")
+
+
 async def health(_: Request):
     return JSONResponse({"ok": True, "version": VERSION, "model": MODEL})
 
@@ -1006,6 +1026,24 @@ app = Starlette(
         Route("/api/traffictile/{z:int}/{x:int}/{y:int}.png", api_traffic_tile,
               methods=["GET"]),
         Route("/api/mapdata", api_mapdata, methods=["GET"]),
+        Route("/watch", watch_page),
+        Route("/admin", admin_page),
+        Route("/sw.js", sw_js),
+        Route("/manifest.webmanifest", manifest_file),
+        Route("/api/watch/config", watch.api_watch_config, methods=["GET"]),
+        Route("/api/watch/me", watch.api_watch_me, methods=["GET"]),
+        Route("/api/watch/redeem", watch.api_watch_redeem, methods=["POST"]),
+        Route("/api/watch/create", watch.api_watch_create, methods=["POST"]),
+        Route("/api/watch/push", watch.api_push_subscribe, methods=["POST"]),
+        Route("/api/watch/test", watch.api_watch_test, methods=["POST"]),
+        Route("/api/watch/{watch_id}", watch.api_watch_delete,
+              methods=["DELETE"]),
+        Route("/api/admin/overview", watch.api_admin_overview,
+              methods=["GET"]),
+        Route("/api/admin/user", watch.api_admin_user, methods=["POST"]),
+        Route("/api/admin/code", watch.api_admin_code, methods=["POST"]),
+        Route("/api/check-watches", watch.api_check_watches,
+              methods=["POST"]),
         Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
     ]
 )
