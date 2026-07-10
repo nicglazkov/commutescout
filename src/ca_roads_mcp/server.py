@@ -311,9 +311,18 @@ async def check_route(
         # corridor is right and asking "which Tahoe?" is nonsense. Only
         # non-alias destinations go through candidate disambiguation.
         alias_match = corr.resolve_corridor(from_place, to_place)
-        to_cands = [] if alias_match else await geocode_candidates(
-            road.client, to_place, near=from_point
-        )
+        if alias_match:
+            # Alias trips skip disambiguation, but still geocode the
+            # destination plainly: the point anchors the clip and lets
+            # the alternatives check see which other corridors serve it.
+            to_geo = await geocode(road.client, to_place)
+            if to_geo:
+                to_point = (to_geo[0], to_geo[1])
+            to_cands = []
+        else:
+            to_cands = await geocode_candidates(
+                road.client, to_place, near=from_point
+            )
         # Multiple far-apart matches: the wrong guess sends someone across
         # the hills. Refuse and make the caller ask which one was meant.
         # A comma-qualified place ("Riverside Dr, San Jose") means the
@@ -542,6 +551,16 @@ async def check_route(
                 nevada.append(event)
         nevada = nevada[:6]
 
+    alternatives = []
+    if from_point and to_point:
+        for other in corr.CORRIDORS:
+            if other.id == corridor.id:
+                continue
+            d_from, _ = corr.distance_to_corridor(other, *from_point)
+            d_to, _ = corr.distance_to_corridor(other, *to_point)
+            if d_from <= corr.SNAP_MAX_METERS and d_to <= corr.SNAP_MAX_METERS:
+                alternatives.append(other.name)
+
     result = {
         "corridor": corridor.name,
         "direction": f"{from_place} -> {to_place}",
@@ -567,6 +586,13 @@ async def check_route(
         result["signs"] = route_signs
     if route_cameras:
         result["cameras"] = route_cameras
+    if alternatives:
+        result["alternative_corridors"] = alternatives[:3]
+        resolved_notes.append(
+            "other corridors also connect these places: "
+            + ", ".join(alternatives[:3])
+            + ". Offer to check one if this route looks bad."
+        )
     all_notes = resolved_notes + clip_notes + quake_notes
     if all_notes:
         result["notes"] = all_notes
@@ -1008,6 +1034,94 @@ async def get_wildfires(
         payload["notes"] = notes
     return payload
 
+
+
+
+@mcp.tool()
+async def rank_routes(by: str = "activity", limit: int = 5) -> dict:
+    """Which major corridors have the most going on right now.
+
+    Answers broad questions like "what are the busiest routes", "where is
+    traffic worst", or "which highways should I avoid today" across all 17
+    tracked corridors. by="activity" ranks on live events (full closures
+    weigh most, then incidents, lane closures, chain controls);
+    by="congestion" ranks on measured speed vs free-flow at each
+    corridor's midpoint and needs the traffic feed to be configured -
+    if it is not, the ranking silently falls back to activity.
+
+    Each entry carries the counts and a one-line reason, so the answer
+    can say WHY a corridor ranks where it does, not just list names.
+    """
+    road = get_road()
+    chp_r, lcs_r, cc_r = await asyncio.gather(
+        road.incidents(), road.lane_closures(), road.chain_controls(),
+    )
+    events = dedupe(
+        [chp_feed.to_event(i) for i in chp_r.records]
+        + [lcs_feed.to_event(c) for c in lcs_r.records]
+        + [chains_feed.to_event(c) for c in cc_r.records]
+    )
+
+    want_congestion = by == "congestion" and tomtom_feed.api_key() is not None
+    entries = []
+    for corridor in corr.CORRIDORS:
+        placed = corr.events_on_corridor(corridor, events)
+        incidents = sum(1 for p in placed if p.event.source == "chp")
+        closures = [p.event.record for p in placed if p.event.source == "lcs"]
+        fulls = sum(1 for c in closures if lcs_feed.is_full_roadway_closure(c))
+        chains = sum(1 for p in placed if p.event.source == "chains")
+        score = incidents + len(closures) + 3 * fulls + 2 * chains
+        entry = {
+            "corridor": corridor.name,
+            "routes": list(corridor.routes),
+            "counts": {
+                "incidents": incidents,
+                "closures": len(closures),
+                "full_closures": fulls,
+                "chain_controls": chains,
+            },
+            "midpoint": list(corr.point_at(corridor, corr.total_length(corridor) / 2)),
+        }
+        bits = []
+        if fulls:
+            bits.append(f"{fulls} FULL closure(s)")
+        if incidents:
+            bits.append(f"{incidents} incident(s)")
+        if len(closures) - fulls:
+            bits.append(f"{len(closures) - fulls} lane closure(s)")
+        if chains:
+            bits.append(f"{chains} chain control(s)")
+        entry["reason"] = "; ".join(bits) if bits else "quiet"
+        entry["activity_score"] = score
+        entries.append(entry)
+
+    if want_congestion:
+        samples = await asyncio.gather(*(
+            tomtom_feed.flow_at_point(road.client, e["midpoint"][0], e["midpoint"][1])
+            for e in entries
+        ))
+        for entry, sample in zip(entries, samples, strict=True):
+            if sample and sample.get("current_mph") and sample.get("freeflow_mph"):
+                ratio = sample["current_mph"] / sample["freeflow_mph"]
+                entry["current_mph"] = sample["current_mph"]
+                entry["freeflow_mph"] = sample["freeflow_mph"]
+                entry["congestion_score"] = round(1 - ratio, 3)
+        key = "congestion_score"
+        entries = [e for e in entries if key in e] or entries
+    else:
+        key = "activity_score"
+
+    entries.sort(key=lambda e: e.get(key, 0), reverse=True)
+    limit = max(1, min(limit, 17))
+    return {
+        "ranked_by": key.replace("_score", ""),
+        "routes": entries[:limit],
+        "sources": [source_status(r) for r in (chp_r, lcs_r, cc_r)],
+        "notes": [
+            "scores compare corridors to each other right now; a quiet day "
+            "ranks something first anyway - check the reason field"
+        ],
+    }
 
 
 async def _live_cameras(candidates, limit: int):

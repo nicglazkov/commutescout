@@ -84,6 +84,12 @@ Caltrans lane closures and chain controls, wildfires). Rules:
   road_weather (notable pavement/wind/visibility readings), and earthquake
   notes. Weave them into the verdict when present; a storm warning changes
   the advice even when the road is currently clear.
+- Broad or vague questions have a tool: "busiest routes", "worst traffic
+  right now", "what should I avoid" -> rank_routes. Never refuse a vague
+  question; rank_routes plus check_region can answer almost anything
+  statewide.
+- When check_route returns alternative_corridors, mention them in one
+  sentence and offer to check one, especially if the main route looks bad.
 - Cameras and signs are extra senses. When weather or a pass matters
   ("how's Donner right now"), call get_cameras so the user can SEE it,
   and get_road_signs to quote what the signs say. Sign text is the
@@ -263,6 +269,23 @@ TOOL_DEFS = [
         },
     },
     {
+        "name": "rank_routes",
+        "description": (
+            "Ranks all 17 tracked corridors by what is happening on them "
+            "right now. Use for broad questions: busiest routes, worst "
+            "traffic, which highways to avoid. by='activity' (events) or "
+            "by='congestion' (measured speeds). Each entry has counts and "
+            "a reason - explain WHY routes rank, not just list them."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "by": {"type": "string", "enum": ["activity", "congestion"]},
+                "limit": {"type": "number"},
+            },
+        },
+    },
+    {
         "name": "get_road_signs",
         "description": (
             "What Caltrans changeable message signs are displaying right "
@@ -290,6 +313,7 @@ TOOL_FUNCS = {
     "get_wildfires": tools.get_wildfires,
     "get_cameras": tools.get_cameras,
     "get_road_signs": tools.get_road_signs,
+    "rank_routes": tools.rank_routes,
 }
 
 _client: anthropic.AsyncAnthropic | None = None

@@ -143,3 +143,12 @@ async def test_photon_guard_ignores_locality_qualifier_matches():
     hits = await geo._photon_hits(None or __import__("httpx").AsyncClient(),
                                   "Riverside Drive, San Jose")
     assert hits == []
+
+
+def test_san_francisco_is_not_in_the_ocean():
+    # The Census centroid for San Francisco includes the Farallon Islands,
+    # which drags it ~30 miles offshore; the gazetteer overrides it to
+    # downtown. Guard against a regenerated CSV reintroducing the ocean.
+    lat, lon, _ = geo.gazetteer_lookup("San Francisco")
+    assert abs(lat - 37.779) < 0.05
+    assert abs(lon - -122.419) < 0.05

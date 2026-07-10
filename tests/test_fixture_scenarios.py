@@ -300,3 +300,15 @@ async def test_alias_destinations_never_ask_for_clarification(scenario, monkeypa
     out = await srv.check_route("Sacramento", "Tahoe")
     assert "needs_clarification" not in out
     assert "corridor" in out
+
+
+@for_scenario("storm-day")
+async def test_rank_routes_orders_by_activity(scenario):
+    out = await tool_server.rank_routes(by="activity", limit=5)
+    assert out["ranked_by"] == "activity"
+    assert len(out["routes"]) == 5
+    scores = [r["activity_score"] for r in out["routes"]]
+    assert scores == sorted(scores, reverse=True)
+    top = out["routes"][0]
+    assert top["activity_score"] > 0
+    assert top["reason"] != "quiet"

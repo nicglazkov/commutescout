@@ -183,6 +183,13 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .planbtn { width:100%; font:600 .9rem Inter; background:var(--sky); color:#fff;
   border:0; border-radius:9px; padding:11px; cursor:pointer; margin-top:2px }
 .planbtn:disabled { opacity:.55; cursor:wait }
+.routealts { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 4px }
+.routealts button { flex:1 1 30%; min-width:120px; text-align:left; cursor:pointer;
+  font:500 .76rem Inter; color:var(--ink); background:var(--card);
+  border:1.5px solid var(--line); border-radius:10px; padding:8px 10px }
+.routealts button b { display:block; font-size:.84rem }
+.routealts button small { color:var(--dim) }
+.routealts button.on { border-color:var(--sky); background:var(--sky-soft) }
 .routesum { font:600 .95rem Inter; margin:14px 0 4px }
 .routebtns { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 12px }
 .routebtns button { font:600 .76rem Inter; border-radius:8px; padding:8px 12px;
@@ -289,6 +296,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
         <div class="val" id="toval"></div></div>
       <button type="button" class="planbtn" id="planbtn">Plan route</button>
       <div id="printwrap" style="display:none">
+        <div class="routealts" id="routealts"></div>
         <div class="routesum" id="routesum"></div>
         <div class="routebtns">
           <button type="button" id="printbtn">Print</button>
@@ -323,6 +331,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <button type="button">Is 17 clear right now?</button>
       <button type="button">How is northbound 101 up to SF?</button>
       <button type="button">Anything on I-80 between Sacramento and Reno?</button>
+      <button type="button">What are the busiest routes right now?</button>
       <button type="button">Any fires near I-5?</button>
       <button type="button">Lane closures on 101 in the Bay Area?</button>
     </div>
@@ -1306,45 +1315,68 @@ function fmtOsrmStep(s) {
   if (t === 'roundabout' || t === 'rotary') return 'Take the roundabout' + (name ? ' onto ' + name : '');
   return (t.charAt(0).toUpperCase() + t.slice(1)) + (name ? ' - ' + name : '');
 }
-async function osrmDirections(a, b) {
-  const pts = [a, b].map(p => p[1].toFixed(5) + ',' + p[0].toFixed(5)).join(';');
-  const res = await fetch('https://router.project-osrm.org/route/v1/driving/' + pts +
-    '?overview=full&geometries=geojson&steps=true', { signal: AbortSignal.timeout(7000) });
-  const data = await res.json();
-  if (data.code !== 'Ok' || !data.routes?.length) return null;
-  const r = data.routes[0];
+function osrmToRoute(r) {
+  // The public server leaves legs[].summary empty, so name the route by
+  // the road you spend the longest stretch on.
+  let via = (r.legs[0] && r.legs[0].summary) || '';
+  if (!via) {
+    let best = null;
+    for (const s of r.legs.flatMap(l => l.steps)) {
+      if (!best || s.distance > best.distance) best = s;
+    }
+    via = best ? (best.ref || best.name || '').split(';')[0] : '';
+  }
   return {
     latlngs: r.geometry.coordinates.map(c => [c[1], c[0]]),
     distance: r.distance, duration: r.duration,
+    via: via,
     steps: r.legs.flatMap(l => l.steps).map(s => ({
       text: fmtOsrmStep(s), miles: s.distance / 1609.344,
     })).filter(s => s.miles > 0.005 || /Arrive|Head/.test(s.text)),
   };
 }
-async function valhallaDirections(a, b) {
-  const req = { locations: [{ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] }],
-    costing: 'auto', directions_options: { units: 'miles' } };
-  const res = await fetch('https://valhalla1.openstreetmap.de/route?json=' +
-    encodeURIComponent(JSON.stringify(req)), { signal: AbortSignal.timeout(7000) });
+async function osrmDirections(a, b) {
+  const pts = [a, b].map(p => p[1].toFixed(5) + ',' + p[0].toFixed(5)).join(';');
+  const res = await fetch('https://router.project-osrm.org/route/v1/driving/' + pts +
+    '?overview=full&geometries=geojson&steps=true&alternatives=2',
+    { signal: AbortSignal.timeout(8000) });
   const data = await res.json();
-  if (!data.trip?.legs?.length) return null;
+  if (data.code !== 'Ok' || !data.routes?.length) return null;
+  return data.routes.slice(0, 3).map(osrmToRoute);
+}
+function valhallaTripToRoute(trip) {
   return {
-    latlngs: data.trip.legs.flatMap(l => decodePolyline6(l.shape)),
-    distance: data.trip.summary.length * 1609.344,
-    duration: data.trip.summary.time,
-    steps: data.trip.legs.flatMap(l => l.maneuvers || []).map(s => ({
+    latlngs: trip.legs.flatMap(l => decodePolyline6(l.shape)),
+    distance: trip.summary.length * 1609.344,
+    duration: trip.summary.time,
+    via: '',
+    steps: trip.legs.flatMap(l => l.maneuvers || []).map(s => ({
       text: s.instruction.replace(/\.$/, ''), miles: s.length,
     })),
   };
 }
+async function valhallaDirections(a, b) {
+  const req = { locations: [{ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] }],
+    costing: 'auto', alternates: 2,
+    directions_options: { units: 'miles' } };
+  const res = await fetch('https://valhalla1.openstreetmap.de/route?json=' +
+    encodeURIComponent(JSON.stringify(req)), { signal: AbortSignal.timeout(8000) });
+  const data = await res.json();
+  if (!data.trip?.legs?.length) return null;
+  const routes = [valhallaTripToRoute(data.trip)];
+  for (const alt of data.alternates || []) {
+    if (alt.trip?.legs?.length) routes.push(valhallaTripToRoute(alt.trip));
+  }
+  return routes.slice(0, 3);
+}
 async function anyDirections(a, b) {
-  try { const r = await osrmDirections(a, b); if (r) return r; } catch (e) {}
+  try { const r = await osrmDirections(a, b); if (r && r.length) return r; } catch (e) {}
   try { return await valhallaDirections(a, b); } catch (e) { return null; }
 }
 
-// ── Plan, render, print, export ──────────────────────────────────────
 const layerRoute = L.layerGroup().addTo(map);
 let plannedRoute = null;
+let plannedRoutes = [];
 const planbtn = document.getElementById('planbtn');
 planbtn.addEventListener('click', async () => {
   if (!fromF.input.dataset.lat) await fromF.validate();
@@ -1354,50 +1386,83 @@ planbtn.addEventListener('click', async () => {
   const b = [+toF.input.dataset.lat, +toF.input.dataset.lon];
   planbtn.disabled = true; planbtn.textContent = 'Planning…';
   try {
-    const route = await anyDirections(a, b);
-    if (!route) {
+    const routes = await anyDirections(a, b);
+    if (!routes || !routes.length) {
       document.getElementById('routesum').textContent =
         'Route servers are busy - try again in a moment.';
+      document.getElementById('routealts').innerHTML = '';
       document.getElementById('printwrap').style.display = 'block';
       return;
     }
-    plannedRoute = { route, a, b,
-      fromName: fromF.input.dataset.name, toName: toF.input.dataset.name };
-    layerRoute.clearLayers();
-    L.polyline(route.latlngs, { color: '#0b1f33', weight: 4.5, opacity: 0.85 })
-      .addTo(layerRoute);
-    [[a, 'A', plannedRoute.fromName], [b, 'B', plannedRoute.toName]].forEach(([p, letter, name]) => {
-      L.marker(p, { icon: L.divIcon({ className: 'route-end', html: letter, iconSize: [22, 22] }),
-        zIndexOffset: 400 }).bindPopup(esc(name)).addTo(layerRoute);
-    });
-    map.fitBounds(L.latLngBounds(route.latlngs).pad(0.15));
-    const mi = route.distance / 1609.344, min = route.duration / 60;
-    document.getElementById('routesum').textContent =
-      plannedRoute.fromName.split(',')[0] + ' → ' + plannedRoute.toName.split(',')[0] +
-      ' · ' + mi.toFixed(0) + ' mi · ~' + Math.round(min) + ' min';
-    const ol = document.getElementById('steps');
-    ol.innerHTML = '';
-    document.getElementById('stepsdrop').open = false;
-    document.getElementById('stepssummary').textContent =
-      'Turn-by-turn directions \u00b7 ' + route.steps.length + ' steps';
-    route.steps.forEach(s => {
-      const li = document.createElement('li');
-      li.textContent = s.text + ' ';
-      if (s.miles >= 0.05) {
-        const sm = document.createElement('small');
-        sm.textContent = '— ' + (s.miles >= 9.5 ? Math.round(s.miles) : s.miles.toFixed(1)) + ' mi';
-        li.append(sm);
-      }
-      ol.append(li);
-    });
-    renderRouteConditions(route.latlngs);
-    buildRouteAsks();
-    document.getElementById('printwrap').style.display = 'block';
-    beacon('example_click');
+    plannedRoutes = routes;
+    renderRouteAlts(0, a, b);
   } finally {
     planbtn.disabled = false; planbtn.textContent = 'Plan route';
   }
 });
+
+function renderRouteAlts(chosen, a, b) {
+  const alts = document.getElementById('routealts');
+  alts.innerHTML = '';
+  if (plannedRoutes.length > 1) {
+    plannedRoutes.forEach((r, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = i === chosen ? 'on' : '';
+      const bEl = document.createElement('b');
+      bEl.textContent = r.via ? 'via ' + r.via.split(',')[0] : 'Route ' + (i + 1);
+      const sm = document.createElement('small');
+      sm.textContent = (r.distance / 1609.344).toFixed(0) + ' mi · ' +
+        Math.round(r.duration / 60) + ' min';
+      btn.append(bEl, sm);
+      btn.addEventListener('click', () => renderRouteAlts(i, a, b));
+      alts.append(btn);
+    });
+  }
+  showRoute(plannedRoutes[chosen],
+    plannedRoutes.filter((_, i) => i !== chosen), a, b);
+}
+
+function showRoute(route, others, a, b) {
+  plannedRoute = { route, a, b,
+    fromName: fromF.input.dataset.name, toName: toF.input.dataset.name };
+  layerRoute.clearLayers();
+  for (const alt of others) {
+    L.polyline(alt.latlngs, { color: '#7d93ab', weight: 3.5, opacity: 0.65,
+      dashArray: '7 7' }).addTo(layerRoute);
+  }
+  L.polyline(route.latlngs, { color: '#0b1f33', weight: 4.5, opacity: 0.85 })
+    .addTo(layerRoute);
+  [[a, 'A', plannedRoute.fromName], [b, 'B', plannedRoute.toName]].forEach(([pnt, letter, name]) => {
+    L.marker(pnt, { icon: L.divIcon({ className: 'route-end', html: letter, iconSize: [22, 22] }),
+      zIndexOffset: 400 }).bindPopup(esc(name)).addTo(layerRoute);
+  });
+  map.fitBounds(L.latLngBounds(route.latlngs).pad(0.15));
+  const mi = route.distance / 1609.344, min = route.duration / 60;
+  document.getElementById('routesum').textContent =
+    plannedRoute.fromName.split(',')[0] + ' → ' + plannedRoute.toName.split(',')[0] +
+    ' · ' + mi.toFixed(0) + ' mi · ~' + Math.round(min) + ' min' +
+    (route.via ? ' · via ' + route.via.split(',')[0] : '');
+  const ol = document.getElementById('steps');
+  ol.innerHTML = '';
+  document.getElementById('stepsdrop').open = false;
+  document.getElementById('stepssummary').textContent =
+    'Turn-by-turn directions · ' + route.steps.length + ' steps';
+  route.steps.forEach(s => {
+    const li = document.createElement('li');
+    li.textContent = s.text + ' ';
+    if (s.miles >= 0.05) {
+      const sm = document.createElement('small');
+      sm.textContent = '— ' + (s.miles >= 9.5 ? Math.round(s.miles) : s.miles.toFixed(1)) + ' mi';
+      li.append(sm);
+    }
+    ol.append(li);
+  });
+  renderRouteConditions(route.latlngs);
+  buildRouteAsks();
+  document.getElementById('printwrap').style.display = 'block';
+  beacon('example_click');
+}
 
 function nearRoute(m, latlngs, km) {
   const step = Math.max(1, Math.floor(latlngs.length / 60));
