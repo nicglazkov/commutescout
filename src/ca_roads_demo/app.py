@@ -877,7 +877,29 @@ async def health(_: Request):
     return JSONResponse({"ok": True, "version": VERSION, "model": MODEL})
 
 
+async def _prewarm() -> None:
+    """Fill the feed caches in the background the moment a cold instance
+    boots. The static page serves immediately either way; this makes the
+    first map-data request land on warm caches instead of paying for all
+    thirteen feeds itself. Failures are fine - the request path retries."""
+    road = tools.get_road()
+    try:
+        await asyncio.gather(
+            road.incidents(), road.lane_closures(), road.chain_controls(),
+            road.wildfires(), road.cameras(), road.message_signs(),
+            road.road_weather(),
+            return_exceptions=True,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _start_prewarm() -> None:
+    asyncio.get_event_loop().create_task(_prewarm())
+
+
 app = Starlette(
+    on_startup=[_start_prewarm],
     routes=[
         Route("/", index),
         Route("/logo.svg", logo),
