@@ -10,6 +10,7 @@ dollar cap, all in process (single Cloud Run instance for v1).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import time
@@ -883,23 +884,24 @@ async def _prewarm() -> None:
     first map-data request land on warm caches instead of paying for all
     thirteen feeds itself. Failures are fine - the request path retries."""
     road = tools.get_road()
-    try:
+    with contextlib.suppress(Exception):
         await asyncio.gather(
             road.incidents(), road.lane_closures(), road.chain_controls(),
             road.wildfires(), road.cameras(), road.message_signs(),
             road.road_weather(),
             return_exceptions=True,
         )
-    except Exception:  # noqa: BLE001
-        pass
 
 
-def _start_prewarm() -> None:
-    asyncio.get_event_loop().create_task(_prewarm())
+@contextlib.asynccontextmanager
+async def _lifespan(app_):
+    task = asyncio.create_task(_prewarm())
+    yield
+    task.cancel()
 
 
 app = Starlette(
-    on_startup=[_start_prewarm],
+    lifespan=_lifespan,
     routes=[
         Route("/", index),
         Route("/logo.svg", logo),
