@@ -364,15 +364,17 @@ def gazetteer_suggest(q: str, limit: int = 3) -> list[dict]:
         return []
     starts, contains = [], []
     for key, (lat, lon, display) in table.items():
+        entry = {"name": display, "lat": lat, "lon": lon, "kind": "city"}
         if key.startswith(nq):
-            starts.append({"name": display, "lat": lat, "lon": lon,
-                           "kind": "city"})
+            starts.append((len(key), key, entry))
         elif any(w.startswith(nq) for w in key.split()):
-            contains.append({"name": display, "lat": lat, "lon": lon,
-                             "kind": "city"})
-        if len(starts) >= limit:
-            break
-    return (starts + contains)[:limit]
+            contains.append((len(key), key, entry))
+    # Shorter names first: "san jo" should suggest San Jose before San
+    # Joaquin. Population data would be better; length is a decent proxy
+    # for the famous place and costs nothing.
+    starts.sort(key=lambda t: (t[0], t[1]))
+    contains.sort(key=lambda t: (t[0], t[1]))
+    return [e for _, _, e in (starts + contains)[:limit]]
 
 
 # Photon prefix-matches literally, so "kestrel rd" misses "Kestrel Road".

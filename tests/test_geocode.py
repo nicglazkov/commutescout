@@ -152,3 +152,10 @@ def test_san_francisco_is_not_in_the_ocean():
     lat, lon, _ = geo.gazetteer_lookup("San Francisco")
     assert abs(lat - 37.779) < 0.05
     assert abs(lon - -122.419) < 0.05
+
+
+def test_suggest_prefers_the_shorter_famous_place():
+    from ca_roads_mcp.geocode import gazetteer_suggest
+
+    names = [s["name"] for s in gazetteer_suggest("san jo")]
+    assert names[0].startswith("San Jose")
