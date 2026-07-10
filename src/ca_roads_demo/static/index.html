@@ -413,8 +413,10 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <u>Wildfire</u>
       <label><input type="checkbox" data-group="fire_pt" checked><i style="--dot:#d97706"></i>Fire locations <em id="n-fire_pt"></em></label>
       <label><input type="checkbox" data-group="fire_poly" checked><i class="ring" style="--dot:#d97706"></i>Burn footprints <em id="n-fire_poly"></em></label>
+      <u>Traffic</u>
+      <label><input type="checkbox" id="trafficlayer"><i style="--dot:#7a4bd6"></i>Live traffic overlay</label>
       <u>Roadside</u>
-      <label><input type="checkbox" data-group="camera" checked><i style="--dot:#2f81f7"></i>Cameras <em id="n-camera"></em></label>
+      <label><input type="checkbox" data-group="camera"><i style="--dot:#2f81f7"></i>Cameras <em id="n-camera"></em></label>
       <label class="subopt"><input type="checkbox" id="camvideo"><i></i>only with live video <em id="n-camvideo"></em></label>
       <label><input type="checkbox" data-group="sign" checked><i style="--dot:#a16207"></i>Message signs <em id="n-sign"></em></label>
       <label class="subopt"><input type="checkbox" id="signblank"><i></i>include blank signs <em id="n-signblank"></em></label>
@@ -429,7 +431,9 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <span style="--dot:#d97706">wildfire</span>
       <span style="--dot:#2f81f7">camera</span>
       <span style="--dot:#a16207">sign</span>
-      <span style="--dot:#1c3a2e">route</span>
+      <span style="--dot:#2f9e6e">flowing</span>
+      <span style="--dot:#e8a13c">slow</span>
+      <span style="--dot:#d64545">congested</span>
     </div>
   </div>
 </div>
@@ -1017,7 +1021,12 @@ const POP_LABEL = {
   fire_poly: 'BURN FOOTPRINT', camera: 'LIVE CAMERA', sign: 'MESSAGE SIGN',
 };
 const ambient = {};
-Object.keys(GROUP_DOT).forEach(g => { ambient[g] = L.layerGroup().addTo(map); });
+Object.keys(GROUP_DOT).forEach(g => {
+  ambient[g] = L.layerGroup();
+  // Cameras start hidden: ~3,300 markers dominate the map before anyone
+  // asks for them. The checkbox brings them back.
+  if (g !== 'camera') ambient[g].addTo(map);
+});
 let cameraCache = [];
 let signCache = [];
 
@@ -1206,6 +1215,15 @@ document.querySelectorAll('#filters input[data-group]').forEach(box => {
   });
 });
 document.getElementById('camvideo').addEventListener('change', rebuildCameras);
+
+// TomTom flow raster, proxied server-side; 404s harmlessly with no key.
+const trafficTiles = L.tileLayer('/api/traffictile/{z}/{x}/{y}.png', {
+  maxZoom: 16, minZoom: 3, opacity: 0.75,
+});
+document.getElementById('trafficlayer').addEventListener('change', (e) => {
+  if (e.target.checked) trafficTiles.addTo(map);
+  else map.removeLayer(trafficTiles);
+});
 document.getElementById('signblank').addEventListener('change', rebuildSigns);
 
 // ── Address fields: autocomplete + validation ────────────────────────
@@ -1482,6 +1500,51 @@ function renderRouteAlts(chosen, a, b) {
     plannedRoutes.filter((_, i) => i !== chosen), a, b);
 }
 
+function flowColor(ratio) {
+  if (ratio == null) return '#0b1f33';
+  if (ratio >= 0.8) return '#2f9e6e';
+  if (ratio >= 0.55) return '#e8a13c';
+  return '#d64545';
+}
+
+async function colorRouteByTraffic(route, baseLine) {
+  // Sample up to 10 midpoints along the route; color each stretch by
+  // measured speed vs free-flow. No key or no data leaves the navy line.
+  const pts = route.latlngs;
+  if (pts.length < 4) return;
+  const segs = Math.min(10, Math.max(4, Math.floor(pts.length / 30)));
+  const bounds = [];
+  for (let i = 0; i < segs; i++) {
+    bounds.push(Math.floor(pts.length * i / segs));
+  }
+  bounds.push(pts.length - 1);
+  const mids = [];
+  for (let i = 0; i < segs; i++) {
+    const m = pts[Math.floor((bounds[i] + bounds[i + 1]) / 2)];
+    mids.push(m[0].toFixed(4) + ',' + m[1].toFixed(4));
+  }
+  try {
+    const res = await fetch('/api/flow?pts=' + mids.join('|'));
+    if (!res.ok) return;
+    const data = await res.json();
+    const flow = data.flow || [];
+    if (!flow.some(f => f)) return;
+    layerRoute.removeLayer(baseLine);
+    for (let i = 0; i < segs; i++) {
+      const seg = pts.slice(bounds[i], bounds[i + 1] + 1);
+      const f = flow[i];
+      L.polyline(seg, {
+        color: flowColor(f ? f.ratio : null), weight: 5, opacity: 0.9,
+      }).bindPopup(f
+        ? '<div class="pop"><div class="k"><i style="--dot:' +
+          flowColor(f.ratio) + '"></i>TRAFFIC</div><div class="d">' +
+          Math.round(f.current) + ' mph now vs ' + Math.round(f.freeflow) +
+          ' mph free-flow</div></div>'
+        : 'No speed data here', { maxWidth: 280 }).addTo(layerRoute);
+    }
+  } catch (e) { /* keep the navy line */ }
+}
+
 function showRoute(route, others, a, b) {
   plannedRoute = { route, a, b,
     fromName: fromF.input.dataset.name, toName: toF.input.dataset.name };
@@ -1490,8 +1553,9 @@ function showRoute(route, others, a, b) {
     L.polyline(alt.latlngs, { color: '#7d93ab', weight: 3.5, opacity: 0.65,
       dashArray: '7 7' }).addTo(layerRoute);
   }
-  L.polyline(route.latlngs, { color: '#0b1f33', weight: 4.5, opacity: 0.85 })
-    .addTo(layerRoute);
+  const baseLine = L.polyline(route.latlngs,
+    { color: '#0b1f33', weight: 4.5, opacity: 0.85 }).addTo(layerRoute);
+  colorRouteByTraffic(route, baseLine);
   [[a, 'A', plannedRoute.fromName], [b, 'B', plannedRoute.toName]].forEach(([pnt, letter, name]) => {
     L.marker(pnt, { icon: L.divIcon({ className: 'route-end', html: letter, iconSize: [22, 22] }),
       zIndexOffset: 400 }).bindPopup(esc(name)).addTo(layerRoute);

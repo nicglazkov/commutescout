@@ -79,3 +79,16 @@ def test_suggest_keeps_typed_house_number(client, monkeypatch):
     s = r.json()["suggestions"][0]
     assert s["name"].startswith("2101 Skyline Boulevard")
     assert s["approx"] is True
+
+
+def test_flow_endpoint_without_key_returns_nulls(client, monkeypatch):
+    monkeypatch.delenv("TOMTOM_API_KEY", raising=False)
+    r = client.get("/api/flow?pts=37.5,-122.2|38.0,-121.5")
+    assert r.status_code == 200
+    assert r.json()["flow"] == [None, None]
+    assert client.get("/api/flow").status_code == 400
+
+
+def test_traffic_tile_404_without_key(client, monkeypatch):
+    monkeypatch.delenv("TOMTOM_API_KEY", raising=False)
+    assert client.get("/api/traffictile/10/163/395.png").status_code == 404

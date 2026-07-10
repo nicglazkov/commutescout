@@ -32,6 +32,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from ca_roads.feeds import lcs as lcs_feed
+from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_suggest
@@ -666,6 +667,86 @@ async def api_suggest(request: Request):
     return JSONResponse({"suggestions": merged[:7]})
 
 
+async def api_flow(request: Request):
+    """Per-point traffic flow for coloring a planned route. Returns one
+    entry per requested point: {ratio, current, freeflow} or null. Without
+    a traffic key every entry is null and the page keeps its default
+    route color."""
+    raw = (request.query_params.get("pts") or "").strip()
+    pairs = []
+    for chunk in raw.split("|")[:12]:
+        try:
+            lat, lon = (float(x) for x in chunk.split(","))
+            pairs.append((lat, lon))
+        except ValueError:
+            continue
+    if not pairs:
+        return JSONResponse({"error": "pts=lat,lon|lat,lon required"},
+                            status_code=400)
+    road = tools.get_road()
+    samples = await asyncio.gather(*(
+        tomtom_feed.flow_at_point(road.client, lat, lon) for lat, lon in pairs
+    ))
+    out = []
+    for s in samples:
+        if s and s.get("current_mph") and s.get("freeflow_mph"):
+            out.append({
+                "ratio": round(s["current_mph"] / s["freeflow_mph"], 3),
+                "current": s["current_mph"],
+                "freeflow": s["freeflow_mph"],
+            })
+        else:
+            out.append(None)
+    return JSONResponse({"flow": out})
+
+
+_TILE_CACHE: dict[str, tuple[float, bytes]] = {}
+_TILE_TTL = 90.0
+_TILE_MAX = 600
+
+
+async def api_traffic_tile(request: Request):
+    """Proxy TomTom's traffic-flow raster tiles so the key stays server
+    side. Cached briefly; the layer is off by default and 404s cleanly
+    when no key is configured."""
+    key = tomtom_feed.api_key()
+    if not key:
+        return Response(status_code=404)
+    try:
+        z = int(request.path_params["z"])
+        x = int(request.path_params["x"])
+        y = int(request.path_params["y"])
+    except (KeyError, ValueError):
+        return Response(status_code=400)
+    if not (3 <= z <= 16):
+        return Response(status_code=404)
+    cache_key = f"{z}/{x}/{y}"
+    now = time.monotonic()
+    hit = _TILE_CACHE.get(cache_key)
+    if hit and now - hit[0] < _TILE_TTL:
+        return Response(hit[1], media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=60"})
+    road = tools.get_road()
+    try:
+        resp = await road.client.get(
+            f"https://api.tomtom.com/traffic/map/4/tile/flow/relative0/"
+            f"{z}/{x}/{y}.png",
+            params={"key": key},
+            timeout=8,
+        )
+        if resp.status_code != 200:
+            return Response(status_code=404)
+    except Exception:  # noqa: BLE001
+        return Response(status_code=404)
+    if len(_TILE_CACHE) > _TILE_MAX:
+        oldest = sorted(_TILE_CACHE.items(), key=lambda kv: kv[1][0])
+        for k, _ in oldest[: _TILE_MAX // 3]:
+            _TILE_CACHE.pop(k, None)
+    _TILE_CACHE[cache_key] = (now, resp.content)
+    return Response(resp.content, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=60"})
+
+
 async def api_geocode(request: Request):
     """Address validation for the route planner. Returns the resolved
     candidates so the page can confirm one address or offer a choice when
@@ -921,6 +1002,9 @@ app = Starlette(
         Route("/api/stats", stats, methods=["GET"]),
         Route("/api/geocode", api_geocode, methods=["GET"]),
         Route("/api/suggest", api_suggest, methods=["GET"]),
+        Route("/api/flow", api_flow, methods=["GET"]),
+        Route("/api/traffictile/{z:int}/{x:int}/{y:int}.png", api_traffic_tile,
+              methods=["GET"]),
         Route("/api/mapdata", api_mapdata, methods=["GET"]),
         Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
     ]
@@ -935,7 +1019,7 @@ app = RateLimitMiddleware(
     # address validation behind map browsing.
     exempt_prefixes=("/static/", "/logo.svg", "/health", "/favicon",
                      "/api/mapdata", "/api/stats", "/api/geocode",
-                     "/api/suggest"),
+                     "/api/suggest", "/api/flow", "/api/traffictile"),
 )
 
 
