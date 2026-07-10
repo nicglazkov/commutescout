@@ -64,6 +64,14 @@ What is on it:
   about that drive show up. Tap one and the answer streams in, built
   from the same live feeds, with times in your time zone.
 
+<table>
+  <tr>
+    <td width="34%"><img src="docs/shots/planner.png" alt="Route planner with two route options, turn-by-turn directions, and suggested questions"><br><sub><b>Plan a trip.</b> Autocomplete, route options, directions, print or export.</sub></td>
+    <td width="34%"><img src="docs/shots/answer.png" alt="An AI answer about a drive, with live speeds and conditions"><br><sub><b>Ask about it.</b> One tap on a suggested question; the answer reads the live feeds.</sub></td>
+    <td width="32%"><img src="docs/shots/map.png" alt="The statewide map with per-layer filters and live counts"><br><sub><b>Or just look.</b> Every layer toggleable, from full closures to blank signs.</sub></td>
+  </tr>
+</table>
+
 Fair warning on the hosting: this runs on a small personal budget. The
 AI answers have daily caps, the service scales to zero so the first
 load of the day can take a few seconds, and there is no uptime promise.
@@ -153,6 +161,7 @@ flagged stale, with the error attached.
 | `get_wildfires(near_route?, center?)` | Active fires with size, containment, and mapped perimeter edges, flagged near major highways |
 | `get_cameras(center?, route?)` | Roadside camera snapshots, each verified live before it is returned (offline placeholder frames are filtered by image freshness) |
 | `get_road_signs(route?, center?)` | What changeable message signs are displaying right now, verbatim |
+| `rank_routes(by?, limit?)` | All 17 corridors ranked by live events or measured congestion, with reasons - answers "what are the busiest routes right now" |
 
 Route and region reports also carry context that changes the advice:
 weather alerts sampled along the trip, road-weather stations reporting
@@ -204,7 +213,7 @@ flowchart LR
         D["cross-source dedupe"]
     end
     subgraph srv["ca_roads_mcp"]
-        T["8 MCP tools<br/>corridors + regions<br/>closure taxonomy<br/>gazetteer geocoding"]
+        T["9 MCP tools<br/>corridors + regions<br/>closure taxonomy<br/>gazetteer geocoding"]
     end
     CHP & CT & WF & WX & OPT --> F --> D --> T
     T -->|"stdio / streamable HTTP"| MCP["Claude & MCP clients"]
