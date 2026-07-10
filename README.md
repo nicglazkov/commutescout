@@ -31,7 +31,7 @@
 
   <a href="https://ca-roads-demo-15002631928.us-west1.run.app">
     <img src="docs/demo.gif" width="880"
-         alt="Demo: picking Sacramento and South Lake Tahoe from the address autocomplete, planning the route, then tapping a suggested question and getting a live AI answer with speeds and closures on the map">
+         alt="Demo: autocompleting San Jose and San Francisco, planning a route with two options (Bayshore and Nimitz), switching between them, then tapping a suggested question for a live AI answer">
   </a>
 </div>
 
