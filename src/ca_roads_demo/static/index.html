@@ -399,6 +399,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <label><input type="checkbox" data-group="camera" checked><i style="--dot:#2f81f7"></i>Cameras <em id="n-camera"></em></label>
       <label class="subopt"><input type="checkbox" id="camvideo"><i></i>only with live video <em id="n-camvideo"></em></label>
       <label><input type="checkbox" data-group="sign" checked><i style="--dot:#a16207"></i>Message signs <em id="n-sign"></em></label>
+      <label class="subopt"><input type="checkbox" id="signblank"><i></i>include blank signs <em id="n-signblank"></em></label>
     </div>
     <div class="legend">
       <span style="--dot:#7f1d1d">road fully closed</span>
@@ -762,8 +763,18 @@ function drawGeo(geo) {
       );
     }
     chipCounts[chipKind] = (chipCounts[chipKind] || 0) + 1;
+    let html;
+    if (m.kind === 'sign' && typeof popupFor === 'function') {
+      html = popupFor(m, 'sign');
+    } else {
+      const kindLabel = (KIND_LABELS[chipKind] || [m.kind])[0] || m.kind;
+      html = '<div class="pop"><div class="k"><i style="--dot:' +
+        (KIND_COLORS[m.kind] || '#5b6b7d') + '"></i>' +
+        esc(String(kindLabel).toUpperCase()) + '</div><div class="d">' +
+        esc(m.label ? String(m.label) : '') + '</div></div>';
+    }
     L.circleMarker([m.lat, m.lon], style)
-      .bindPopup(m.label ? String(m.label) : m.kind).addTo(target);
+      .bindPopup(html, { maxWidth: 320 }).addTo(target);
   }
   renderChips();
   // Zoom to the road-relevant layer; fall back to fires only when the
@@ -990,6 +1001,7 @@ const POP_LABEL = {
 const ambient = {};
 Object.keys(GROUP_DOT).forEach(g => { ambient[g] = L.layerGroup().addTo(map); });
 let cameraCache = [];
+let signCache = [];
 
 function classify(m) {
   if (m.kind === 'incident') {
@@ -1027,9 +1039,11 @@ function popupFor(m, g) {
     return h + '</div>';
   }
   if (g === 'sign') {
+    const body = m.message
+      ? '<div class="d" style="font-weight:600;margin-top:5px">&ldquo;' + esc(m.message) + '&rdquo;</div>'
+      : '<div class="d" style="margin-top:5px">Blank right now - nothing displayed.</div>';
     return popHead(g, [m.route, m.direction].filter(Boolean).join(' ') || 'Changeable sign') +
-      '<div class="d">' + esc(m.near || '') + '</div>' +
-      '<div class="d" style="font-weight:600;margin-top:5px">&ldquo;' + esc(m.message || '') + '&rdquo;</div></div>';
+      '<div class="d">' + esc(m.near || '') + '</div>' + body + '</div>';
   }
   if (g === 'rwis') {
     const bits = [];
@@ -1073,6 +1087,29 @@ function pointMarker(m, g) {
     .bindPopup(popupFor(m, g), { maxWidth: 320 });
 }
 
+function rebuildSigns() {
+  ambient.sign.clearLayers();
+  const withBlank = document.getElementById('signblank').checked;
+  let shown = 0, blanks = 0;
+  for (const m of signCache) {
+    if (m.blank) {
+      blanks++;
+      if (!withBlank) continue;
+      ambient.sign.addLayer(L.circleMarker([m.lat, m.lon], {
+        renderer: canvasR, radius: 5, color: '#fff', weight: 1,
+        fillColor: '#b9b3a0', fillOpacity: 0.7,
+      }).bindPopup(popupFor(m, 'sign'), { maxWidth: 320 }));
+    } else {
+      ambient.sign.addLayer(pointMarker(m, 'sign'));
+    }
+    shown++;
+  }
+  const el = document.getElementById('n-sign');
+  if (el) el.textContent = signCache.length - blanks;
+  const bl = document.getElementById('n-signblank');
+  if (bl) bl.textContent = blanks;
+}
+
 function rebuildCameras() {
   ambient.camera.clearLayers();
   const videoOnly = document.getElementById('camvideo').checked;
@@ -1105,10 +1142,12 @@ async function refreshAmbient(force) {
     const counts = {};
     Object.values(ambient).forEach(l => l.clearLayers());
     cameraCache = [];
+    signCache = [];
     for (const m of data.markers || []) {
       const g = classify(m);
       if (!g || !m.lat) continue;
       if (g === 'camera') { cameraCache.push(m); continue; }
+      if (g === 'sign') { signCache.push(m); continue; }
       if (g === 'fire_pt') {
         ambient.fire_pt.addLayer(pointMarker(m, 'fire_pt'));
         counts.fire_pt = (counts.fire_pt || 0) + 1;
@@ -1125,8 +1164,9 @@ async function refreshAmbient(force) {
       counts[g] = (counts[g] || 0) + 1;
     }
     rebuildCameras();
+    rebuildSigns();
     for (const g of Object.keys(GROUP_DOT)) {
-      if (g === 'camera') continue;
+      if (g === 'camera' || g === 'sign') continue;
       const el = document.getElementById('n-' + g);
       if (el) el.textContent = counts[g] || 0;
     }
@@ -1148,6 +1188,7 @@ document.querySelectorAll('#filters input[data-group]').forEach(box => {
   });
 });
 document.getElementById('camvideo').addEventListener('change', rebuildCameras);
+document.getElementById('signblank').addEventListener('change', rebuildSigns);
 
 // ── Address fields: autocomplete + validation ────────────────────────
 function wireAddress(inputId, valId, suggId, withMyLocation) {

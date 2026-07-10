@@ -35,12 +35,15 @@ CMS_PAYLOAD = {
 }
 
 
-def test_cms_parses_displayed_signs_only():
+def test_cms_keeps_blank_signs_with_empty_text():
     signs = portal.parse_cms(json.dumps(CMS_PAYLOAD).encode(), 3)
-    assert len(signs) == 1
-    assert signs[0].text == "CHAINS REQUIRED / 10 MI AHEAD"
-    assert signs[0].route == "I-80"
-    assert signs[0].lat == 39.0
+    # displaying sign + blank sign; the out-of-service one stays filtered
+    assert len(signs) == 2
+    displaying = [s for s in signs if s.text]
+    blanks = [s for s in signs if not s.text]
+    assert displaying[0].text == "CHAINS REQUIRED / 10 MI AHEAD"
+    assert displaying[0].route == "I-80"
+    assert len(blanks) == 1
 
 
 def test_cctv_requires_service_and_image():
@@ -98,7 +101,7 @@ async def test_missing_district_is_empty_not_error():
         source = portal.PortalSource(client, "cms", portal.parse_cms, "cms")
         result = await source.get()
     assert result.ok
-    assert len(result.records) == 1
+    assert len(result.records) == 2  # displaying + blank from district 3
 
 
 @pytest.mark.anyio
