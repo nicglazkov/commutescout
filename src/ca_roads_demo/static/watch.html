@@ -21,20 +21,22 @@
 * { box-sizing:border-box; margin:0 }
 html, body { height:100% }
 body { background:var(--bg); color:var(--ink);
-  font:400 .92rem/1.5 Inter, system-ui, sans-serif }
-header { background:var(--navy); color:#e8eef5; display:flex; gap:14px;
-  align-items:center; padding:9px 16px }
-header img { width:30px; height:30px }
-header b { font-size:1rem; letter-spacing:.2px }
-header nav { display:flex; gap:4px; margin-left:6px }
-header nav a { color:#bcd0e4; text-decoration:none; font-size:.82rem;
-  padding:5px 11px; border-radius:8px }
-header nav a.on, header nav a:hover { background:var(--navy2); color:#fff }
-header .who { margin-left:auto; font-size:.78rem; color:#9fb4c9;
-  display:flex; gap:10px; align-items:center }
-header .who button { background:none; border:1px solid #33506e;
-  color:#bcd0e4; border-radius:7px; padding:3px 10px; font:500 .76rem Inter;
+  font:14.5px/1.55 Inter, system-ui, sans-serif }
+.topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
+  gap:14px; padding:0 20px; height:56px; flex:none }
+.topbar img.mark { width:30px; height:30px; border-radius:7px }
+.topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
+.topbar nav { display:flex; gap:4px; margin-left:14px }
+.topbar nav a { color:#b7c4d4; font-size:.85rem; padding:7px 12px; border-radius:8px;
+  text-decoration:none }
+.topbar nav a.on { background:var(--navy2); color:#fff }
+.topbar nav a:hover { color:#fff }
+.topbar .who { margin-left:auto; font-size:.78rem; color:#9fb4c9;
+  display:flex; gap:10px; align-items:center; white-space:nowrap }
+.topbar .who button { background:none; border:1px solid #33506e;
+  color:#b7c4d4; border-radius:7px; padding:3px 10px; font:500 .76rem Inter;
   cursor:pointer }
+.topbar .who button:hover { color:#fff; border-color:#5b7898 }
 main { max-width:1180px; margin:0 auto; padding:18px 16px 50px }
 h1 { font-size:1.25rem; margin:6px 0 2px }
 .sub { color:var(--dim); font-size:.86rem; margin-bottom:16px }
@@ -93,8 +95,9 @@ input:focus { border-color:var(--sky) }
   color:var(--dim); cursor:pointer; font-size:1rem; padding:4px }
 .witem button:hover { color:var(--red) }
 .devrow { display:flex; gap:8px; flex-wrap:wrap; align-items:center }
-.footer-note { color:var(--dim); font-size:.74rem; margin-top:22px;
+.footer-note { color:var(--dim); font-size:.72rem; margin-top:22px;
   border-top:1px solid var(--line); padding-top:12px }
+.footer-note a { color:var(--dim) }
 .badge { display:inline-block; background:var(--amber); color:#fff;
   font:700 .62rem Inter; letter-spacing:.7px; padding:2px 8px;
   border-radius:99px; vertical-align:2px }
@@ -102,12 +105,14 @@ input:focus { border-color:var(--sky) }
 </style>
 </head>
 <body>
-<header>
-  <img src="/logo.svg" alt="">
-  <b>CA Roads</b>
+<header class="topbar">
+  <img class="mark" src="/logo.svg" alt="">
+  <span class="wordmark">CA Roads</span>
   <nav>
     <a href="/">Live map</a>
     <a href="/watch" class="on">Watch areas</a>
+    <a href="https://github.com/nicglazkov/ca-roads-mcp#add-to-claude" target="_blank" rel="noopener">Add to Claude</a>
+    <a href="https://github.com/nicglazkov/ca-roads-mcp" target="_blank" rel="noopener">GitHub</a>
   </nav>
   <span class="who" id="who"></span>
 </header>

@@ -16,15 +16,18 @@
 }
 * { box-sizing:border-box; margin:0 }
 body { background:var(--bg); color:var(--ink);
-  font:400 .9rem/1.5 Inter, system-ui, sans-serif }
-header { background:var(--navy); color:#e8eef5; display:flex; gap:14px;
-  align-items:center; padding:9px 16px }
-header img { width:30px; height:30px }
-header b { font-size:1rem }
-header nav a { color:#bcd0e4; text-decoration:none; font-size:.82rem;
-  padding:5px 11px; border-radius:8px }
-header nav a:hover { background:var(--navy2); color:#fff }
-header .who { margin-left:auto; font-size:.78rem; color:#9fb4c9 }
+  font:14.5px/1.55 Inter, system-ui, sans-serif }
+.topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
+  gap:14px; padding:0 20px; height:56px; flex:none }
+.topbar img.mark { width:30px; height:30px; border-radius:7px }
+.topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
+.topbar nav { display:flex; gap:4px; margin-left:14px }
+.topbar nav a { color:#b7c4d4; font-size:.85rem; padding:7px 12px; border-radius:8px;
+  text-decoration:none }
+.topbar nav a.on { background:var(--navy2); color:#fff }
+.topbar nav a:hover { color:#fff }
+.topbar .who { margin-left:auto; font-size:.78rem; color:#9fb4c9;
+  white-space:nowrap }
 main { max-width:1000px; margin:0 auto; padding:18px 16px 50px }
 h1 { font-size:1.2rem; margin:6px 0 14px }
 .card { background:var(--card); border:1px solid var(--line);
@@ -60,10 +63,14 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
 </style>
 </head>
 <body>
-<header>
-  <img src="/logo.svg" alt="">
-  <b>CA Roads admin</b>
-  <nav><a href="/watch">Watch areas</a><a href="/">Live map</a></nav>
+<header class="topbar">
+  <img class="mark" src="/logo.svg" alt="">
+  <span class="wordmark">CA Roads</span>
+  <nav>
+    <a href="/">Live map</a>
+    <a href="/watch">Watch areas</a>
+    <a href="/admin" class="on">Admin</a>
+  </nav>
   <span class="who" id="who"></span>
 </header>
 <main>
