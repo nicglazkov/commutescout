@@ -98,6 +98,49 @@ EOF
 | `DEMO_DAILY_DOLLARS` | Global daily model-spend cap | `3.0` |
 | `DEMO_PER_IP_DAILY` | Questions per visitor per day | `20` |
 
+## Watch areas (optional, demo service)
+
+The /watch feature needs four things beyond the base demo: a Firebase
+Identity Platform project (sign-in), Firestore (storage), a VAPID key
+(web push), and Cloud Scheduler (the checker heartbeat). Without them
+the rest of the demo works fine and /watch shows sign-in but cannot
+authenticate.
+
+```sh
+# one-time: enable APIs, create the Firestore database
+gcloud services enable identitytoolkit.googleapis.com firestore.googleapis.com cloudscheduler.googleapis.com firebase.googleapis.com
+gcloud firestore databases create --location=us-west1 --type=firestore-native
+
+# add Firebase to the project and register a web app in the Firebase
+# console, then enable the Google and Email link sign-in providers and
+# add your service domain to the authorized domains. Put the web app's
+# apiKey/appId in FIREBASE_API_KEY / FIREBASE_APP_ID env vars.
+
+# VAPID keypair for web push
+python -c "from py_vapid import Vapid; v=Vapid(); v.generate_keys(); print(v.private_pem().decode())" | gcloud secrets create vapid-private-key --data-file=-
+
+# checker heartbeat every 5 minutes
+gcloud iam service-accounts create watch-checker
+gcloud scheduler jobs create http watch-checker --location us-west1 \
+  --schedule "*/5 * * * *" --http-method POST \
+  --uri https://<demo-url>/api/check-watches \
+  --oidc-service-account-email watch-checker@<project>.iam.gserviceaccount.com \
+  --oidc-token-audience https://<demo-url>/api/check-watches
+```
+
+| Variable | Purpose |
+|---|---|
+| `VAPID_PRIVATE_KEY` | Web-push signing key PEM; mount from Secret Manager |
+| `VAPID_SUBJECT` | `mailto:` contact sent to push services |
+| `ADMIN_EMAILS` | Comma-separated Google emails allowed into /admin |
+| `FIREBASE_API_KEY` / `FIREBASE_APP_ID` | Your Firebase web app's public client config |
+| `CHECKER_AUDIENCE` | The check-watches URL; must match the scheduler job's audience |
+| `CHECKER_SA` | The scheduler job's service-account email |
+| `RESEND_API_KEY` / `ALERT_FROM_EMAIL` | Optional; enables email alerts once a sending domain is verified |
+
+The demo's service account needs `roles/datastore.user` for Firestore
+and secretAccessor on the VAPID secret.
+
 ## Optional data-source keys (both services)
 
 Three sources activate only when their key is present; everything else
