@@ -31,7 +31,7 @@
 
   <a href="https://ca-roads-demo-15002631928.us-west1.run.app">
     <img src="docs/demo.gif" width="880"
-         alt="Demo: autocompleting San Jose and San Francisco, planning a route with two options (Bayshore and Nimitz), switching between them, then tapping a suggested question for a live AI answer">
+         alt="Demo: autocompleting San Jose and San Francisco, planning a route with two traffic-colored options (Bayshore and Nimitz), switching between them, tapping a suggested question for a live AI answer, then flashing the statewide live traffic overlay">
   </a>
 </div>
 
