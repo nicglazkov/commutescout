@@ -168,7 +168,7 @@ async def _signs_near(points: list[tuple[float, float]], within_km: float = 8,
                       cap: int = 8) -> list[dict]:
     result = await get_road().message_signs()
     hits = []
-    for s in result.records:
+    for s in (r for r in result.records if r.text):
         if s.lat is None or s.lon is None:
             continue
         dist = min(
@@ -1249,7 +1249,7 @@ async def get_road_signs(
     most local signal this server has.
     """
     result = await get_road().message_signs()
-    records = result.records
+    records = [s for s in result.records if s.text]
     canonical = normalize_route(route) if route else None
     if canonical:
         records = [s for s in records if normalize_route(s.route) == canonical]

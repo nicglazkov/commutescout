@@ -432,8 +432,13 @@ def extract_geo(tool: str, result: dict) -> dict | None:
             })
 
     for item in result.get("signs", []):
-        add("sign", item.get("lat"), item.get("lon"),
-            f"Sign: {item.get('message', '')}")
+        if isinstance(item.get("lat"), int | float) and item.get("lat"):
+            markers.append({
+                "kind": "sign", "lat": item["lat"], "lon": item["lon"],
+                "label": f"Sign: {item.get('message', '')}",
+                "route": item.get("route"), "direction": item.get("direction"),
+                "near": item.get("near"), "message": item.get("message"),
+            })
 
     payload: dict = {}
     if markers:
@@ -802,12 +807,15 @@ async def api_mapdata(request: Request):
         signs = await road.message_signs()
         for s in signs.records:
             if inside(s.lat, s.lon):
-                markers.append({
+                marker = {
                     "kind": "sign", "lat": s.lat, "lon": s.lon,
                     "route": s.route, "direction": s.direction,
                     "near": s.nearby_place or s.county,
                     "message": s.text,
-                })
+                }
+                if not s.text:
+                    marker["blank"] = True
+                markers.append(marker)
 
     # Everything, gzipped: the whole state is ~4k markers and compresses
     # roughly 10:1. No caps - the map IS the product.

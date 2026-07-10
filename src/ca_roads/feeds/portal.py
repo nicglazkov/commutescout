@@ -60,23 +60,22 @@ def _ntcip(value, scale: float, limit: float) -> float | None:
 
 
 def parse_cms(payload: bytes, district: int) -> list[CmsSign]:
+    # In-service signs, blank ones included with empty text: a blank sign
+    # still exists on the road, and the map offers showing them.
     signs: list[CmsSign] = []
     for row in json.loads(payload).get("data", []):
         cms = row.get("cms") or {}
         message = cms.get("message") or {}
         if str(cms.get("inService")).lower() != "true":
             continue
-        if message.get("display", "Blank") == "Blank":
-            continue
         lines: list[str] = []
-        for phase in ("phase1", "phase2"):
-            block = message.get(phase) or {}
-            for i in (1, 2, 3):
-                line = (block.get(f"{phase}Line{i}") or "").strip()
-                if line:
-                    lines.append(line)
-        if not lines:
-            continue
+        if message.get("display", "Blank") != "Blank":
+            for phase in ("phase1", "phase2"):
+                block = message.get(phase) or {}
+                for i in (1, 2, 3):
+                    line = (block.get(f"{phase}Line{i}") or "").strip()
+                    if line:
+                        lines.append(line)
         loc = cms.get("location") or {}
         signs.append(CmsSign(
             index=str(cms.get("index", "")),
