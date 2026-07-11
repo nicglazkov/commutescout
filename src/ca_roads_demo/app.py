@@ -814,14 +814,23 @@ async def api_mapdata(request: Request):
     if "closure" in want:
         for c in lcs.records:
             if inside(c.begin_lat, c.begin_lon):
-                markers.append({
+                marker = {
                     "kind": "lane_closure", "lat": c.begin_lat,
                     "lon": c.begin_lon,
                     "label": lcs_feed.describe(c),
                     "cls": lcs_feed.closure_class(c),
                     "route": c.route, "county": c.county,
                     "lanes": lcs_feed.lanes_summary(c),
-                })
+                }
+                # A closure with a distinct endpoint (> ~200 m away)
+                # ships both ends so the map can draw the stretch, not
+                # just a dot at the beginning.
+                if (c.end_lat and c.end_lon
+                        and (abs(c.end_lat - c.begin_lat) > 0.002
+                             or abs(c.end_lon - c.begin_lon) > 0.002)):
+                    marker["end"] = [round(c.end_lat, 5),
+                                     round(c.end_lon, 5)]
+                markers.append(marker)
     if "chain" in want:
         for c in cc.records:
             if inside(c.lat, c.lon):
@@ -839,8 +848,11 @@ async def api_mapdata(request: Request):
                     "name": f.name, "acres": f.size_acres,
                     "contained": f.percent_contained,
                 })
-        # Footprints for a modest number of fires; cached per bbox tile.
-        if 0 < len(fire_markers) <= 12:
+        # Footprints ride along whenever fires match: it is one bbox
+        # query with server-side simplification (~500m offset) however
+        # many fires there are, cached per bbox tile. Most small fires
+        # have no perimeter record; the ones that do get a polygon.
+        if fire_markers:
             key = (round(lat_min, 1), round(lon_min, 1),
                    round(lat_max, 1), round(lon_max, 1))
             cached = _PERIM_CACHE.get(key)
