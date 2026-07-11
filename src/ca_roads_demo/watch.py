@@ -415,6 +415,25 @@ async def api_watch_redeem(request: Request) -> JSONResponse:
     return JSONResponse({"status": "approved"})
 
 
+def _parse_polygon_points(raw) -> tuple[list | None, str | None]:
+    """Validated polygon points as Firestore-safe {lat, lon} maps
+    (nested arrays are rejected by Firestore), or an error string."""
+    raw = raw or []
+    if not (3 <= len(raw) <= MAX_POLY_POINTS):
+        return None, f"polygon needs 3-{MAX_POLY_POINTS} points"
+    points = []
+    try:
+        for p in raw:
+            lat, lon = float(p[0]), float(p[1])
+            if not (CA_LAT[0] <= lat <= CA_LAT[1]
+                    and CA_LON[0] <= lon <= CA_LON[1]):
+                return None, "all points must be in California"
+            points.append({"lat": lat, "lon": lon})
+    except (TypeError, ValueError, IndexError):
+        return None, "points must be [lat, lon] pairs"
+    return points, None
+
+
 async def api_watch_create(request: Request) -> JSONResponse:
     claims = await verify_user(request)
     if not claims:
@@ -455,21 +474,9 @@ async def api_watch_create(request: Request) -> JSONResponse:
         watch.update({"type": "circle", "center": {"lat": lat, "lon": lon},
                       "radius_km": radius})
     elif wtype == "polygon":
-        raw = body.get("points") or []
-        if not (3 <= len(raw) <= MAX_POLY_POINTS):
-            return _err(f"polygon needs 3-{MAX_POLY_POINTS} points")
-        points = []
-        try:
-            for p in raw:
-                lat, lon = float(p[0]), float(p[1])
-                if not (CA_LAT[0] <= lat <= CA_LAT[1]
-                        and CA_LON[0] <= lon <= CA_LON[1]):
-                    return _err("all points must be in California")
-                # Stored as maps, not pairs: Firestore rejects nested
-                # arrays ("400 Nested arrays are not allowed").
-                points.append({"lat": lat, "lon": lon})
-        except (TypeError, ValueError, IndexError):
-            return _err("points must be [lat, lon] pairs")
+        points, point_err = _parse_polygon_points(body.get("points"))
+        if point_err:
+            return _err(point_err)
         watch.update({"type": "polygon", "points": points})
     else:
         return _err("type must be circle or polygon")
@@ -497,9 +504,10 @@ async def api_watch_delete(request: Request) -> JSONResponse:
 
 
 async def api_watch_update(request: Request) -> JSONResponse:
-    """Edit the mutable parts of a watch: name, kinds, channels, and
-    the active flag (pause/resume). Geometry stays immutable; drawing
-    a replacement is clearer than editing coordinates."""
+    """Edit a watch: name, kinds, channels, the active flag
+    (pause/resume), and - for polygons - the shape itself, so corners
+    can be dragged around after creation. Circle geometry stays
+    create-only; redrawing a circle is two taps."""
     claims = await verify_user(request)
     if not claims:
         return _err("sign in required", 401)
@@ -527,6 +535,13 @@ async def api_watch_update(request: Request) -> JSONResponse:
                                "email": bool(channels.get("email", False))}
     if "active" in body:
         updates["active"] = bool(body.get("active"))
+    if "points" in body:
+        if watch.get("type") != "polygon":
+            return _err("only polygon watches have editable points")
+        points, point_err = _parse_polygon_points(body.get("points"))
+        if point_err:
+            return _err(point_err)
+        updates["points"] = points
     if not updates:
         return _err("nothing to update")
     await store.update_watch(watch_id, updates)

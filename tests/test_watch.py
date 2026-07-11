@@ -469,6 +469,44 @@ def test_update_is_owner_only_and_validates(approved_client, store):
                                  headers=auth()).status_code == 400
 
 
+def test_update_polygon_shape(approved_client, store):
+    body = {"type": "polygon", "name": "Tahoe", "kinds": ["fire"],
+            "points": [[38.9, -120.2], [39.2, -120.2], [39.2, -119.9]]}
+    wid = approved_client.post("/api/watch/create", json=body,
+                               headers=auth()).json()["id"]
+    r = approved_client.patch(
+        "/api/watch/" + wid,
+        json={"points": [[38.8, -120.3], [39.3, -120.3],
+                         [39.3, -119.8], [38.8, -119.8]]},
+        headers=auth())
+    assert r.status_code == 200
+    stored = store.watches[wid]["points"]
+    assert len(stored) == 4
+    assert stored[0] == {"lat": 38.8, "lon": -120.3}  # Firestore-safe maps
+
+
+def test_update_shape_validates(approved_client, store):
+    poly = {"type": "polygon", "name": "Tahoe", "kinds": ["fire"],
+            "points": [[38.9, -120.2], [39.2, -120.2], [39.2, -119.9]]}
+    wid = approved_client.post("/api/watch/create", json=poly,
+                               headers=auth()).json()["id"]
+    # Too few points, out-of-state points, and circles all refuse.
+    assert approved_client.patch("/api/watch/" + wid,
+                                 json={"points": [[38.9, -120.2]]},
+                                 headers=auth()).status_code == 400
+    assert approved_client.patch(
+        "/api/watch/" + wid,
+        json={"points": [[40.7, -74.0], [40.8, -74.0], [40.8, -73.9]]},
+        headers=auth()).status_code == 400
+    cid = approved_client.post("/api/watch/create", json=CIRCLE,
+                               headers=auth()).json()["id"]
+    r = approved_client.patch(
+        "/api/watch/" + cid,
+        json={"points": [[38.9, -120.2], [39.2, -120.2], [39.2, -119.9]]},
+        headers=auth())
+    assert r.status_code == 400
+
+
 async def test_paused_watches_get_no_alerts(checker):
     store, events, pushes = checker
     wid = await seed_watch(store)

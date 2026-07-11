@@ -417,7 +417,8 @@ aside { background:var(--card); border-right:1px solid var(--line);
       service, not affiliated with any agency. Conditions change fast; verify
       before you drive (511 or
       <a href="https://quickmap.dot.ca.gov">quickmap.dot.ca.gov</a>).
-      Questions are logged anonymously to improve answers.
+      Questions are logged anonymously to improve answers. Traffic is
+      measured with cookieless Cloudflare Web Analytics.
       Map tiles come from CARTO; the route preview and place lookup use the
       OSRM, Valhalla, Nominatim, and Photon public OpenStreetMap services,
       which see the coordinates involved. ·
@@ -1770,5 +1771,6 @@ document.getElementById('exportbtn').addEventListener('click', () => {
 });
 
 </script>
+<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "90f462e0b7844f5082304a1dce315ad2"}'></script>
 </body>
 </html>
