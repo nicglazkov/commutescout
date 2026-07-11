@@ -24,6 +24,7 @@ import os
 import secrets as pysecrets
 import time
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -693,19 +694,30 @@ async def _collect_events() -> list[dict]:
         road.wildfires(),
     )
     events: list[dict] = []
+    tz = ZoneInfo("America/Los_Angeles")
+
+    def clock(dt):
+        return (dt.astimezone(tz).strftime("%I:%M %p").lstrip("0")
+                if dt else None)
+
     for i in chp.records:
+        when = clock(i.reported_at)
         events.append({
             "id": f"chp:{i.id}", "kind": "incident",
             "lat": i.lat, "lon": i.lon,
             "title": i.log_type or "Incident",
             "body": f"{i.location} ({i.area})",
+            "meta": f"CHP call logged {when}" if when else "Live CHP call",
         })
     for c in lcs.records:
+        lanes = lcs_feed.lanes_summary(c)
         events.append({
             "id": f"lcs:{c.index}", "kind": "closure",
             "lat": c.begin_lat, "lon": c.begin_lon,
             "title": f"{c.route} {lcs_feed.closure_class(c)}",
             "body": lcs_feed.describe(c),
+            "meta": (f"{lanes} - {c.type_of_work}".strip(" -")
+                     if lanes or c.type_of_work else "Caltrans closure"),
         })
     for c in cc.records:
         if c.status and c.status != "R-0":
@@ -714,14 +726,18 @@ async def _collect_events() -> list[dict]:
                 "lat": c.lat, "lon": c.lon,
                 "title": f"Chain control {c.status} on {c.route}",
                 "body": c.status_description or c.location_name,
+                "meta": f"Checkpoint: {c.location_name}",
             })
     for f in wf.records:
+        contained = (f"{f.percent_contained:.0f}% contained"
+                     if f.percent_contained is not None else "containment unknown")
         events.append({
             "id": f"fire:{f.id}", "kind": "fire",
             "lat": f.lat, "lon": f.lon,
             "title": f"Wildfire: {f.name}",
             "body": (f"{f.size_acres:,.0f} acres"
                      if f.size_acres else "size unknown"),
+            "meta": contained,
         })
     return events
 
@@ -792,24 +808,52 @@ def render_alert_email(watch_name: str, events: list[dict],
 
     rows = []
     text_lines = []
-    for e in events:
+    for idx, e in enumerate(events):
         kind = e.get("kind", "incident")
         label = KIND_LABELS.get(kind, "Event")
         color = KIND_COLORS.get(kind, "#d64545")
         title = html_mod.escape(e.get("title") or label)
         body = html_mod.escape(e.get("body") or "")
+        meta = html_mod.escape(e.get("meta") or "")
+        lat, lon = e.get("lat"), e.get("lon")
+        focus = (f"{DEMO_URL}/?focus={lat:.5f},{lon:.5f}&amp;k={kind}"
+                 if lat and lon else f"{DEMO_URL}/")
+        map_html = ""
+        if lat and lon and idx < 4:
+            map_src = (f"{DEMO_URL}/api/staticmap?lat={lat:.4f}"
+                       f"&amp;lon={lon:.4f}&amp;z=11&amp;k={kind}")
+            map_html = (
+                f'<a href="{focus}" style="display:block;line-height:0">'
+                f'<img src="{map_src}" width="524" alt="Map of {title}" '
+                f'style="width:100%;border-radius:10px;border:1px solid '
+                f'#e3ddd0"></a>')
+        meta_html = (
+            f'<div style="font:400 12px/1.5 -apple-system,Segoe UI,Arial,'
+            f'sans-serif;color:#8a94a3;margin-top:3px">{meta}</div>'
+            if meta else "")
         rows.append(
-            f'<tr><td style="padding:14px 18px;border-bottom:1px solid '
+            f'<tr><td style="padding:16px 18px;border-bottom:1px solid '
             f'#e3ddd0">'
+            f'{map_html}'
             f'<div style="font:600 11px/1 -apple-system,Segoe UI,Arial,'
             f'sans-serif;letter-spacing:.8px;color:{color};'
-            f'text-transform:uppercase;margin-bottom:5px">{label}</div>'
+            f'text-transform:uppercase;margin:12px 0 5px">{label}</div>'
             f'<div style="font:600 15px/1.4 -apple-system,Segoe UI,Arial,'
             f'sans-serif;color:#0f1c2b">{title}</div>'
             f'<div style="font:400 13.5px/1.5 -apple-system,Segoe UI,Arial,'
             f'sans-serif;color:#5b6b7d;margin-top:3px">{body}</div>'
+            f'{meta_html}'
+            f'<div style="margin-top:8px"><a href="{focus}" '
+            f'style="font:600 13px -apple-system,Segoe UI,Arial,sans-serif;'
+            f'color:#2f81f7;text-decoration:none">View on the live map '
+            f'&rarr;</a></div>'
             f'</td></tr>')
-        text_lines.append(f"[{label}] {e.get('title')} - {e.get('body')}")
+        line = f"[{label}] {e.get('title')} - {e.get('body')}"
+        if e.get("meta"):
+            line += f" ({e['meta']})"
+        if lat and lon:
+            line += f"\n  map: {DEMO_URL}/?focus={lat:.5f},{lon:.5f}&k={kind}"
+        text_lines.append(line)
     if more > 0:
         rows.append(
             f'<tr><td style="padding:12px 18px;font:400 13px '
@@ -818,6 +862,10 @@ def render_alert_email(watch_name: str, events: list[dict],
             f'</td></tr>')
         text_lines.append(f"...and {more} more in this area.")
 
+    first = events[0] if events else {}
+    cta_url = (f"{DEMO_URL}/?focus={first['lat']:.5f},{first['lon']:.5f}"
+               f"&amp;k={first.get('kind', 'incident')}"
+               if first.get("lat") and first.get("lon") else f"{DEMO_URL}/")
     html = f"""\
 <body style="margin:0;padding:0;background:#f5f2ea">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
@@ -841,7 +889,7 @@ def render_alert_email(watch_name: str, events: list[dict],
            cellspacing="0">{''.join(rows)}</table>
   </td></tr>
   <tr><td style="background:#fffdf7;padding:18px;text-align:center">
-    <a href="{DEMO_URL}/" style="display:inline-block;background:#2f81f7;
+    <a href="{cta_url}" style="display:inline-block;background:#2f81f7;
       color:#fff;text-decoration:none;font:600 14px -apple-system,
       Segoe UI,Arial,sans-serif;padding:11px 26px;border-radius:9px">
       Open the live map</a>
@@ -856,6 +904,7 @@ def render_alert_email(watch_name: str, events: list[dict],
       You get these because your
       <a href="{DEMO_URL}/watch" style="color:#8a94a3">CA Roads watch
       area</a> matched new events. Delete the watch there to stop them.
+      Maps &copy; OpenStreetMap &copy; CARTO.
     </div>
   </td></tr>
 </table>

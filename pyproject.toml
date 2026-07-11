@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ca-roads-mcp"
-version = "2.8.0"
+version = "2.9.0"
 description = "Live California road conditions for AI assistants: CHP incidents, Caltrans lane closures, chain controls, and wildfire impacts over MCP."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -25,6 +25,7 @@ demo = [
     "anthropic>=0.40",
     "google-auth>=2.30",
     "google-cloud-firestore>=2.16",
+    "pillow>=10",
     "pywebpush>=2.0",
 ]
 dev = [
