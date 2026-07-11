@@ -29,6 +29,7 @@ jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 mcp==1.28.1
 packaging==26.2
+pillow==12.3.0
 pluggy==1.6.0
 proto-plus==1.28.1
 protobuf==7.35.1

@@ -749,6 +749,112 @@ async def api_traffic_tile(request: Request):
                     headers={"Cache-Control": "public, max-age=60"})
 
 
+_STATICMAP_CACHE: dict[tuple, tuple[float, bytes]] = {}
+_STATICMAP_TTL = 6 * 3600.0
+_STATICMAP_MAX = 200
+_STATICMAP_W, _STATICMAP_H = 560, 300
+_STATICMAP_COLORS = {
+    "incident": (201, 97, 26), "closure": (160, 44, 44),
+    "chain": (43, 108, 176), "fire": (217, 119, 6),
+}
+
+
+async def api_staticmap(request: Request):
+    """Small server-composed map image for alert emails: the same CARTO
+    raster tiles the site uses, with the event marked. Email clients
+    cannot run Leaflet, so the server does the compositing; results are
+    cached because Gmail's image proxy refetches per open."""
+    try:
+        z = int(request.query_params.get("z", "11"))
+        lat = float(request.query_params["lat"])
+        lon = float(request.query_params["lon"])
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "lat and lon required"}, status_code=400)
+    if not (5 <= z <= 15 and 31.0 <= lat <= 43.5 and -126.5 <= lon <= -112.5):
+        return Response(status_code=404)
+    kind = request.query_params.get("k", "incident")
+    color = _STATICMAP_COLORS.get(kind, _STATICMAP_COLORS["incident"])
+
+    key = (z, round(lat, 3), round(lon, 3), kind)
+    now = time.monotonic()
+    hit = _STATICMAP_CACHE.get(key)
+    if hit and now - hit[0] < _STATICMAP_TTL:
+        return Response(hit[1], media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=21600"})
+
+    import io
+    import math as m
+
+    from PIL import Image, ImageDraw
+
+    n = 2 ** z
+    xf = (lon + 180.0) / 360.0 * n
+    yf = ((1.0 - m.log(m.tan(m.radians(lat))
+                       + 1.0 / m.cos(m.radians(lat))) / m.pi) / 2.0 * n)
+    cx, cy = xf * 256.0, yf * 256.0
+    left, top = cx - _STATICMAP_W / 2, cy - _STATICMAP_H / 2
+    tx0, ty0 = int(left // 256), int(top // 256)
+    tx1 = int((left + _STATICMAP_W) // 256)
+    ty1 = int((top + _STATICMAP_H) // 256)
+
+    road = tools.get_road()
+
+    async def fetch_tile(tx, ty):
+        if not (0 <= ty < n):
+            return tx, ty, None
+        try:
+            resp = await road.client.get(
+                f"https://a.basemaps.cartocdn.com/rastertiles/voyager/"
+                f"{z}/{tx % n}/{ty}.png",
+                headers={"User-Agent": "ca-roads-mcp staticmap"},
+                timeout=10,
+            )
+            return tx, ty, resp.content if resp.status_code == 200 else None
+        except Exception:  # noqa: BLE001
+            return tx, ty, None
+
+    tiles = await asyncio.gather(*(
+        fetch_tile(tx, ty)
+        for tx in range(tx0, tx1 + 1) for ty in range(ty0, ty1 + 1)
+    ))
+
+    def compose() -> bytes:
+        canvas = Image.new("RGB", (_STATICMAP_W, _STATICMAP_H),
+                           (229, 227, 223))
+        for tx, ty, blob in tiles:
+            if not blob:
+                continue
+            try:
+                tile = Image.open(io.BytesIO(blob)).convert("RGB")
+            except Exception:  # noqa: BLE001
+                continue
+            canvas.paste(tile, (int(tx * 256 - left), int(ty * 256 - top)))
+        draw = ImageDraw.Draw(canvas)
+        mx, my = _STATICMAP_W / 2, _STATICMAP_H / 2
+        draw.ellipse([mx - 11, my - 11, mx + 11, my + 11],
+                     fill=(255, 255, 255))
+        draw.ellipse([mx - 8, my - 8, mx + 8, my + 8], fill=color)
+        note = "(c) OpenStreetMap (c) CARTO"
+        tw = draw.textlength(note)
+        draw.rectangle([_STATICMAP_W - tw - 10, _STATICMAP_H - 16,
+                        _STATICMAP_W, _STATICMAP_H],
+                       fill=(255, 255, 255))
+        draw.text((_STATICMAP_W - tw - 5, _STATICMAP_H - 13), note,
+                  fill=(90, 100, 110))
+        out = io.BytesIO()
+        canvas.save(out, format="PNG", optimize=True)
+        return out.getvalue()
+
+    png = await asyncio.to_thread(compose)
+    if len(_STATICMAP_CACHE) >= _STATICMAP_MAX:
+        oldest = sorted(_STATICMAP_CACHE.items(), key=lambda kv: kv[1][0])
+        for k, _ in oldest[: _STATICMAP_MAX // 4]:
+            _STATICMAP_CACHE.pop(k, None)
+    _STATICMAP_CACHE[key] = (now, png)
+    return Response(png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=21600"})
+
+
 async def api_geocode(request: Request):
     """Address validation for the route planner. Returns the resolved
     candidates so the page can confirm one address or offer a choice when
@@ -1122,6 +1228,7 @@ app = Starlette(
         Route("/api/flow", api_flow, methods=["GET"]),
         Route("/api/traffictile/{z:int}/{x:int}/{y:int}.png", api_traffic_tile,
               methods=["GET"]),
+        Route("/api/staticmap", api_staticmap, methods=["GET"]),
         Route("/api/mapdata", api_mapdata, methods=["GET"]),
         Route("/watch", watch_page),
         Route("/admin", admin_page),
@@ -1161,7 +1268,7 @@ app = RateLimitMiddleware(
                      # as static files; the mutating watch APIs stay
                      # inside the bucket (and are token-gated anyway).
                      "/watch", "/admin", "/sw.js", "/manifest.webmanifest",
-                     "/api/watch/config"),
+                     "/api/watch/config", "/api/staticmap"),
 )
 
 

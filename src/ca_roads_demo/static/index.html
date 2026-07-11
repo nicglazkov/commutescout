@@ -1198,6 +1198,51 @@ function rebuildCameras() {
 }
 
 let ambientBounds = null, ambientTimer = null, ambientCycle = 0;
+const FOCUS_GROUPS = {
+  incident: ['inc_collision', 'inc_fire', 'inc_hazard', 'inc_other'],
+  closure: ['clo_full', 'clo_lane', 'clo_oneway', 'clo_ramp'],
+  chain: ['chain'],
+  fire: ['fire_pt'],
+};
+let focusReq = null;
+let focusDone = false;
+try {
+  const qs = new URLSearchParams(location.search);
+  const parts = (qs.get('focus') || '').split(',').map(Number);
+  if (parts.length === 2 && parts.every(Number.isFinite)) {
+    focusReq = { lat: parts[0], lon: parts[1],
+                 kind: qs.get('k') || 'incident' };
+  }
+} catch (e) { /* no focus */ }
+
+function tryFocus() {
+  if (!focusReq || focusDone) return;
+  focusDone = true;
+  const at = [focusReq.lat, focusReq.lon];
+  map.setView(at, Math.max(map.getZoom(), 12));
+  const ring = L.circleMarker(at, {
+    radius: 18, color: '#2f81f7', weight: 3, fill: false,
+  }).addTo(map);
+  let ringOn = true;
+  const pulse = setInterval(() => {
+    ringOn = !ringOn;
+    ring.setStyle({ opacity: ringOn ? 1 : 0.25 });
+  }, 450);
+  setTimeout(() => { clearInterval(pulse); map.removeLayer(ring); }, 9000);
+  // Open the matching marker's popup when one sits nearby; the event
+  // may have cleared since the alert went out, so the ring alone is a
+  // valid outcome.
+  let best = null;
+  for (const g of FOCUS_GROUPS[focusReq.kind] || []) {
+    (ambient[g] ? ambient[g].getLayers() : []).forEach((l) => {
+      if (!l.getLatLng) return;
+      const d = map.distance(l.getLatLng(), at);
+      if (d < 900 && (!best || d < best.d)) best = { l, d };
+    });
+  }
+  if (best) setTimeout(() => best.l.openPopup(), 650);
+}
+
 const FAST_GROUPS = ['inc_collision', 'inc_fire', 'inc_hazard', 'inc_other',
   'clo_full', 'clo_lane', 'clo_oneway', 'clo_ramp', 'chain',
   'fire_pt', 'fire_poly'];
@@ -1240,6 +1285,7 @@ function renderBatch(markers, groups) {
     counts[g] = (counts[g] || 0) + 1;
   }
   if (groups.includes('camera')) { rebuildCameras(); rebuildSigns(); }
+  if (groups.includes('inc_collision')) tryFocus();
   for (const g of groups) {
     if (g === 'camera' || g === 'sign') continue;
     const el = document.getElementById('n-' + g);
