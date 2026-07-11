@@ -233,14 +233,14 @@ def test_polygon_needs_three_points_inside_ca(approved_client):
     assert approved_client.post("/api/watch/create", json=two,
                                 headers=auth()).status_code == 400
     good = {**base, "points": [[38.9, -120.2], [39.2, -120.2],
-                               [39.2, -119.9]]}
+                               [39.2, -120.1]]}
     assert approved_client.post("/api/watch/create", json=good,
                                 headers=auth()).status_code == 200
 
 
 def test_polygon_stores_firestore_safe_points(approved_client, store):
     body = {"type": "polygon", "name": "Tahoe", "kinds": ["fire"],
-            "points": [[38.9, -120.2], [39.2, -120.2], [39.2, -119.9]]}
+            "points": [[38.9, -120.2], [39.2, -120.2], [39.2, -120.1]]}
     wid = approved_client.post("/api/watch/create", json=body,
                                headers=auth()).json()["id"]
     stored = store.watches[wid]["points"]
@@ -471,23 +471,44 @@ def test_update_is_owner_only_and_validates(approved_client, store):
 
 def test_update_polygon_shape(approved_client, store):
     body = {"type": "polygon", "name": "Tahoe", "kinds": ["fire"],
-            "points": [[38.9, -120.2], [39.2, -120.2], [39.2, -119.9]]}
+            "points": [[38.9, -120.2], [39.2, -120.2], [39.2, -120.1]]}
     wid = approved_client.post("/api/watch/create", json=body,
                                headers=auth()).json()["id"]
     r = approved_client.patch(
         "/api/watch/" + wid,
-        json={"points": [[38.8, -120.3], [39.3, -120.3],
-                         [39.3, -119.8], [38.8, -119.8]]},
+        json={"points": [[38.8, -120.5], [39.3, -120.5],
+                         [39.3, -120.1], [38.8, -120.1]]},
         headers=auth())
     assert r.status_code == 200
     stored = store.watches[wid]["points"]
     assert len(stored) == 4
-    assert stored[0] == {"lat": 38.8, "lon": -120.3}  # Firestore-safe maps
+    assert stored[0] == {"lat": 38.8, "lon": -120.5}  # Firestore-safe maps
+
+
+def test_nevada_and_oregon_corners_refuse(approved_client):
+    base = {"type": "polygon", "name": "Edge", "kinds": ["incident"]}
+    reno = {**base, "points": [[39.5, -119.8], [39.6, -119.8],
+                               [39.6, -119.7]]}
+    assert approved_client.post("/api/watch/create", json=reno,
+                                headers=auth()).status_code == 400
+    oregon = {**base, "points": [[42.3, -122.0], [42.4, -122.0],
+                                 [42.4, -121.9]]}
+    assert approved_client.post("/api/watch/create", json=oregon,
+                                headers=auth()).status_code == 400
+    # Offshore stays allowed: a coastal watch reaching into the Pacific.
+    coastal = {**base, "points": [[36.5, -122.5], [36.9, -122.5],
+                                  [36.9, -121.9]]}
+    assert approved_client.post("/api/watch/create", json=coastal,
+                                headers=auth()).status_code == 200
+    reno_circle = {"type": "circle", "name": "Reno", "kinds": ["incident"],
+                   "center": {"lat": 39.53, "lon": -119.81}, "radius_km": 10}
+    assert approved_client.post("/api/watch/create", json=reno_circle,
+                                headers=auth()).status_code == 400
 
 
 def test_update_shape_validates(approved_client, store):
     poly = {"type": "polygon", "name": "Tahoe", "kinds": ["fire"],
-            "points": [[38.9, -120.2], [39.2, -120.2], [39.2, -119.9]]}
+            "points": [[38.9, -120.2], [39.2, -120.2], [39.2, -120.1]]}
     wid = approved_client.post("/api/watch/create", json=poly,
                                headers=auth()).json()["id"]
     # Too few points, out-of-state points, and circles all refuse.
@@ -502,7 +523,7 @@ def test_update_shape_validates(approved_client, store):
                                headers=auth()).json()["id"]
     r = approved_client.patch(
         "/api/watch/" + cid,
-        json={"points": [[38.9, -120.2], [39.2, -120.2], [39.2, -119.9]]},
+        json={"points": [[38.9, -120.2], [39.2, -120.2], [39.2, -120.1]]},
         headers=auth())
     assert r.status_code == 400
 
