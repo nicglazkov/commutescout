@@ -43,6 +43,7 @@ from ca_roads_mcp.ratelimit import (
     RateLimitMiddleware,
     trusted_client_ip,
 )
+from ca_roads_mcp.serialize import direction_hint
 from ca_roads_mcp.telemetry import log_event, redact_coords, visitor_hash
 
 try:
@@ -917,6 +918,7 @@ async def api_mapdata(request: Request):
                     "kind": "incident", "lat": i.lat, "lon": i.lon,
                     "type": i.log_type, "location": i.location,
                     "area": i.area,
+                    "dir": direction_hint(i.location),
                     "reported": (i.reported_at.isoformat()
                                  if i.reported_at else None),
                 })
@@ -948,6 +950,8 @@ async def api_mapdata(request: Request):
                 "route": c.route, "county": c.county,
                 "lanes": lcs_feed.lanes_summary(c),
                 "work": c.type_of_work or None,
+                "facility": c.facility or None,
+                "delay_min": c.estimated_delay_minutes or None,
                 "since": c.epoch_1097 or c.start_epoch or None,
                 "until": None if c.indefinite_end else (c.end_epoch or None),
             }
