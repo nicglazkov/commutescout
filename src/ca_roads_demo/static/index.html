@@ -1181,6 +1181,13 @@ function renderBatch(markers, groups) {
       }
       continue;
     }
+    // Closures with a distinct endpoint get the affected stretch drawn
+    // under their dot; the dot stays as the click target at the start.
+    if (g.startsWith('clo_') && Array.isArray(m.end)) {
+      ambient[g].addLayer(L.polyline([[m.lat, m.lon], m.end], {
+        renderer: canvasR, color: GROUP_DOT[g], weight: 4, opacity: 0.45,
+      }).bindPopup(popupFor(m, g), { maxWidth: 320 }));
+    }
     ambient[g].addLayer(pointMarker(m, g));
     counts[g] = (counts[g] || 0) + 1;
   }
