@@ -62,6 +62,16 @@ MAX_ALERTS_PER_WATCH_CYCLE = 8
 MAX_SEEN_IDS = 1500
 CA_LAT = (31.0, 43.5)
 CA_LON = (-126.5, -112.5)
+# Simplified California outline for watch geometry: generous into the
+# Pacific (coastal-waters watches are fine) but tight along the Oregon,
+# Nevada, Arizona, and Mexico lines - the old box check accepted Reno.
+# [lat, lon] vertices, counterclockwise.
+CA_BOUNDARY = [
+    [42.0, -125.5], [42.0, -120.0], [39.0, -120.0], [35.0, -114.6],
+    [34.3, -114.1], [33.0, -114.5], [32.5, -114.5], [32.5, -117.3],
+    [31.8, -118.5], [32.5, -119.8], [33.8, -121.3], [36.3, -123.3],
+    [39.0, -125.0],
+]
 WATCH_KINDS = ("incident", "closure", "chain", "fire")
 
 
@@ -415,6 +425,11 @@ async def api_watch_redeem(request: Request) -> JSONResponse:
     return JSONResponse({"status": "approved"})
 
 
+def in_california(lat: float, lon: float) -> bool:
+    """Inside the simplified state outline (coastal waters count)."""
+    return point_in_polygon(lat, lon, CA_BOUNDARY)
+
+
 def _parse_polygon_points(raw) -> tuple[list | None, str | None]:
     """Validated polygon points as Firestore-safe {lat, lon} maps
     (nested arrays are rejected by Firestore), or an error string."""
@@ -425,9 +440,9 @@ def _parse_polygon_points(raw) -> tuple[list | None, str | None]:
     try:
         for p in raw:
             lat, lon = float(p[0]), float(p[1])
-            if not (CA_LAT[0] <= lat <= CA_LAT[1]
-                    and CA_LON[0] <= lon <= CA_LON[1]):
-                return None, "all points must be in California"
+            if not in_california(lat, lon):
+                return None, ("every corner must stay in California "
+                              "(offshore is fine)")
             points.append({"lat": lat, "lon": lon})
     except (TypeError, ValueError, IndexError):
         return None, "points must be [lat, lon] pairs"
@@ -468,8 +483,8 @@ async def api_watch_create(request: Request) -> JSONResponse:
             radius = float(body.get("radius_km"))
         except (TypeError, ValueError):
             return _err("circle needs center {lat, lon} and radius_km")
-        if not (CA_LAT[0] <= lat <= CA_LAT[1] and CA_LON[0] <= lon <= CA_LON[1]):
-            return _err("center must be in California")
+        if not in_california(lat, lon):
+            return _err("center must be in California (offshore is fine)")
         radius = min(max(radius, MIN_RADIUS_KM), MAX_RADIUS_KM)
         watch.update({"type": "circle", "center": {"lat": lat, "lon": lon},
                       "radius_km": radius})
