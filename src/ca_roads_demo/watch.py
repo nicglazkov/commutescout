@@ -685,21 +685,125 @@ class _GonePush(Exception):
     """Push endpoint says the subscription no longer exists."""
 
 
-async def _email_alert(to_email: str, subject: str, lines: list[str]) -> bool:
+DEMO_URL = os.environ.get(
+    "DEMO_URL", "https://ca-roads-demo-15002631928.us-west1.run.app")
+
+KIND_LABELS = {"incident": "Incident", "closure": "Closure",
+               "chain": "Chain control", "fire": "Wildfire"}
+KIND_COLORS = {"incident": "#d64545", "closure": "#a83232",
+               "chain": "#2f81f7", "fire": "#e08a3c"}
+
+
+def render_alert_email(watch_name: str, events: list[dict],
+                       more: int = 0) -> tuple[str, str, str]:
+    """(subject, html, text) for one check cycle's news in one watch.
+
+    Inline styles only and a single-column 560px table: the layout has
+    to survive Gmail, Outlook, and Apple Mail, which strip everything
+    fancier.
+    """
+    import html as html_mod
+
+    name = html_mod.escape(watch_name or "Watch area")
+    if len(events) == 1:
+        subject = f"CA Roads: {events[0]['title']} in {watch_name}"
+    else:
+        subject = (f"CA Roads: {len(events) + more} new events "
+                   f"in {watch_name}")
+
+    rows = []
+    text_lines = []
+    for e in events:
+        kind = e.get("kind", "incident")
+        label = KIND_LABELS.get(kind, "Event")
+        color = KIND_COLORS.get(kind, "#d64545")
+        title = html_mod.escape(e.get("title") or label)
+        body = html_mod.escape(e.get("body") or "")
+        rows.append(
+            f'<tr><td style="padding:14px 18px;border-bottom:1px solid '
+            f'#eee6d8">'
+            f'<div style="font:600 11px/1 -apple-system,Segoe UI,Arial,'
+            f'sans-serif;letter-spacing:.8px;color:{color};'
+            f'text-transform:uppercase;margin-bottom:5px">{label}</div>'
+            f'<div style="font:600 15px/1.4 -apple-system,Segoe UI,Arial,'
+            f'sans-serif;color:#0f1c2b">{title}</div>'
+            f'<div style="font:400 13.5px/1.5 -apple-system,Segoe UI,Arial,'
+            f'sans-serif;color:#5b6b7d;margin-top:3px">{body}</div>'
+            f'</td></tr>')
+        text_lines.append(f"[{label}] {e.get('title')} - {e.get('body')}")
+    if more > 0:
+        rows.append(
+            f'<tr><td style="padding:12px 18px;font:400 13px '
+            f'-apple-system,Segoe UI,Arial,sans-serif;color:#5b6b7d">'
+            f'…and {more} more in this area. The map has everything.'
+            f'</td></tr>')
+        text_lines.append(f"...and {more} more in this area.")
+
+    html = f"""\
+<body style="margin:0;padding:0;background:#f5f2ea">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+       style="background:#f5f2ea;padding:24px 12px">
+<tr><td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0"
+       style="max-width:560px;width:100%">
+  <tr><td style="background:#0b1f33;border-radius:14px 14px 0 0;
+      padding:16px 20px">
+    <span style="font:600 17px Georgia,serif;color:#fff">CA Roads</span>
+    <span style="font:400 12px -apple-system,Segoe UI,Arial,sans-serif;
+      color:#9fb4c9"> &nbsp;watch alert</span>
+  </td></tr>
+  <tr><td style="background:#fffdf7;padding:16px 18px 6px">
+    <div style="font:400 13.5px/1.5 -apple-system,Segoe UI,Arial,
+      sans-serif;color:#5b6b7d">New in your watch area
+      <b style="color:#0f1c2b">{name}</b>:</div>
+  </td></tr>
+  <tr><td style="background:#fffdf7;padding:0">
+    <table role="presentation" width="100%" cellpadding="0"
+           cellspacing="0">{''.join(rows)}</table>
+  </td></tr>
+  <tr><td style="background:#fffdf7;padding:18px;text-align:center">
+    <a href="{DEMO_URL}/" style="display:inline-block;background:#2f81f7;
+      color:#fff;text-decoration:none;font:600 14px -apple-system,
+      Segoe UI,Arial,sans-serif;padding:11px 26px;border-radius:9px">
+      Open the live map</a>
+  </td></tr>
+  <tr><td style="background:#fffdf7;border-radius:0 0 14px 14px;
+      border-top:1px solid #eee6d8;padding:14px 18px">
+    <div style="font:400 11.5px/1.6 -apple-system,Segoe UI,Arial,
+      sans-serif;color:#8a94a3">
+      Informational only; may be delayed, incomplete, or wrong. Verify
+      with 511 or quickmap.dot.ca.gov before you drive, and never rely
+      on this for evacuation or emergency decisions.<br>
+      You get these because your
+      <a href="{DEMO_URL}/watch" style="color:#8a94a3">CA Roads watch
+      area</a> matched new events. Delete the watch there to stop them.
+    </div>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>"""
+
+    text = (f"New in your CA Roads watch area \"{watch_name}\":\n\n"
+            + "\n".join(text_lines)
+            + f"\n\nLive map: {DEMO_URL}/\n\n"
+            "Informational only; may be delayed, incomplete, or wrong. "
+            "Verify with 511 or quickmap.dot.ca.gov before you drive. "
+            f"Manage or delete watches: {DEMO_URL}/watch")
+    return subject, html, text
+
+
+async def _email_alert(to_email: str, subject: str, html: str,
+                       text: str) -> bool:
     if not (RESEND_API_KEY and ALERT_FROM_EMAIL and to_email):
         return False
-    body_html = "".join(f"<p>{line}</p>" for line in lines)
-    disclaimer = ("<p style='color:#777;font-size:12px'>Informational only; "
-                  "may be delayed, incomplete, or wrong. Verify with 511 or "
-                  "quickmap.dot.ca.gov before you drive. Never rely on this "
-                  "for evacuation or emergency decisions.</p>")
     road = tools.get_road()
     try:
         resp = await road.client.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
             json={"from": ALERT_FROM_EMAIL, "to": [to_email],
-                  "subject": subject, "html": body_html + disclaimer},
+                  "subject": subject, "html": html, "text": text},
             timeout=15,
         )
         return resp.status_code in (200, 201)
@@ -739,7 +843,9 @@ async def run_check_cycle() -> dict:
         current_ids = {e["id"] for e in matched}
 
         if not first_run and fresh:
-            for event in fresh[:MAX_ALERTS_PER_WATCH_CYCLE]:
+            batch = fresh[:MAX_ALERTS_PER_WATCH_CYCLE]
+            overflow = len(fresh) - len(batch)
+            for event in batch:
                 stats["alerts"] += 1
                 title = f"{watch.get('name', 'Watch')}: {event['title']}"
                 if watch.get("channels", {}).get("push", True):
@@ -748,13 +854,14 @@ async def run_check_cycle() -> dict:
                         "title": title, "body": event["body"],
                         "url": "/watch",
                     })
-                if watch.get("channels", {}).get("email"):
-                    ok = await _email_alert(
-                        user.get("email") or "", title,
-                        [event["body"],
-                         "From your CA Roads watch area "
-                         f"“{watch.get('name', '')}”."])
-                    stats["emails"] += 1 if ok else 0
+            # One email per watch per cycle: pushes are per event, but a
+            # busy cycle as eight separate emails reads as spam.
+            if watch.get("channels", {}).get("email"):
+                subject, body_html, body_text = render_alert_email(
+                    watch.get("name", "Watch area"), batch, overflow)
+                ok = await _email_alert(user.get("email") or "", subject,
+                                        body_html, body_text)
+                stats["emails"] += 1 if ok else 0
 
         # Advance state: keep ids still current plus everything alerted,
         # trimmed in set_seen. An id that clears and returns re-alerts,
