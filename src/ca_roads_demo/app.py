@@ -917,30 +917,56 @@ async def api_mapdata(request: Request):
                     "kind": "incident", "lat": i.lat, "lon": i.lon,
                     "type": i.log_type, "location": i.location,
                     "area": i.area,
+                    "reported": (i.reported_at.isoformat()
+                                 if i.reported_at else None),
                 })
     if "closure" in want:
+        # One marker per stretch: Caltrans lists each scheduled window
+        # of each closure separately, so the same spot can carry a full
+        # closure and several lane-closure windows at once. Keep the
+        # most severe class currently listed there and count the rest.
+        cls_rank = {"full-roadway": 3, "one-way-traffic": 2,
+                    "alternating-lanes": 2, "lane": 1, "other": 1,
+                    "ramp": 0}
+        strips: dict = {}
         for c in lcs.records:
-            if inside(c.begin_lat, c.begin_lon):
-                marker = {
-                    "kind": "lane_closure", "lat": c.begin_lat,
-                    "lon": c.begin_lon,
-                    "label": lcs_feed.describe(c),
-                    "cls": lcs_feed.closure_class(c),
-                    "route": c.route, "county": c.county,
-                    "lanes": lcs_feed.lanes_summary(c),
-                }
-                # A closure with a distinct endpoint (> ~200 m away)
-                # ships both ends so the map can draw the stretch, not
-                # just a dot at the beginning. When the background
-                # snapper has road-following geometry, that ships too
-                # and the client prefers it over the straight line.
-                if _closure_has_stretch(c):
-                    marker["end"] = [round(c.end_lat, 5),
-                                     round(c.end_lon, 5)]
-                    snapped = _CLOSURE_PATHS.get(_closure_key(c))
-                    if snapped:
-                        marker["path"] = snapped
-                markers.append(marker)
+            if not inside(c.begin_lat, c.begin_lon):
+                continue
+            cls = lcs_feed.closure_class(c)
+            key = (c.route, c.direction,
+                   round(c.begin_lat, 3), round(c.begin_lon, 3))
+            rank = (cls_rank.get(cls, 1), c.end_epoch or 0)
+            entry = strips.get(key)
+            if entry and entry[0] >= rank:
+                entry[2] += 1
+                continue
+            marker = {
+                "kind": "lane_closure", "lat": c.begin_lat,
+                "lon": c.begin_lon,
+                "label": lcs_feed.describe(c),
+                "cls": cls,
+                "route": c.route, "county": c.county,
+                "lanes": lcs_feed.lanes_summary(c),
+                "work": c.type_of_work or None,
+                "since": c.epoch_1097 or c.start_epoch or None,
+                "until": None if c.indefinite_end else (c.end_epoch or None),
+            }
+            # A closure with a distinct endpoint (> ~200 m away)
+            # ships both ends so the map can draw the stretch, not
+            # just a dot at the beginning. When the background
+            # snapper has road-following geometry, that ships too
+            # and the client prefers it over the straight line.
+            if _closure_has_stretch(c):
+                marker["end"] = [round(c.end_lat, 5),
+                                 round(c.end_lon, 5)]
+                snapped = _CLOSURE_PATHS.get(_closure_key(c))
+                if snapped:
+                    marker["path"] = snapped
+            strips[key] = [rank, marker, (entry[2] + 1) if entry else 1]
+        for _, marker, count in strips.values():
+            if count > 1:
+                marker["windows"] = count
+            markers.append(marker)
     if "chain" in want:
         for c in cc.records:
             if inside(c.lat, c.lon):
@@ -948,6 +974,8 @@ async def api_mapdata(request: Request):
                     "kind": "chain_control", "lat": c.lat, "lon": c.lon,
                     "status": c.status, "route": c.route,
                     "label": c.description,
+                    "updated": (c.status_updated_at.isoformat()
+                                if c.status_updated_at else None),
                 })
     fire_markers = []
     if "fire" in want:
@@ -957,6 +985,8 @@ async def api_mapdata(request: Request):
                     "kind": "wildfire", "lat": f.lat, "lon": f.lon,
                     "name": f.name, "acres": f.size_acres,
                     "contained": f.percent_contained,
+                    "discovered": (f.discovered_at.isoformat()
+                                   if f.discovered_at else None),
                 })
         # Footprints ride along whenever fires match: it is one bbox
         # query with server-side simplification (~500m offset) however
@@ -1018,6 +1048,7 @@ async def api_mapdata(request: Request):
                     "route": s.route, "direction": s.direction,
                     "near": s.nearby_place or s.county,
                     "message": s.text,
+                    "lines": s.text.split(" / ") if s.text else [],
                 }
                 if not s.text:
                     marker["blank"] = True

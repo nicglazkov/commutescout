@@ -287,6 +287,14 @@ aside { background:var(--card); border-right:1px solid var(--line);
   #printwrap .routebtns { display:none !important }
 }
 
+.pop .cmsboard { background:#161613; border-radius:9px; padding:10px 12px;
+  margin-top:7px; text-align:center }
+.pop .cmsboard span { display:block; font:700 .8rem/1.6 'Courier New',
+  ui-monospace, monospace; color:#ffb400; letter-spacing:1.6px;
+  text-transform:uppercase; white-space:nowrap }
+.pop .hist { color:#8a94a3; font-size:.72rem; margin-top:7px;
+  border-top:1px dashed var(--line); padding-top:6px; line-height:1.5 }
+.pop .lanes-strong { font-weight:700; color:#a02c2c }
 .layersbtn { display:none; position:absolute; top:12px; right:12px;
   z-index:900; align-items:center; gap:6px; background:var(--card);
   border:1px solid var(--line); border-radius:10px; padding:9px 13px;
@@ -1101,6 +1109,31 @@ function popHead(group, title) {
   return '<div class="pop"><div class="k"><i style="--dot:' + GROUP_DOT[group] +
     '"></i>' + POP_LABEL[group] + '</div><div class="t">' + esc(title) + '</div>';
 }
+function agoTxt(iso) {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return null;
+  const mins = Math.round((Date.now() - t) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + ' min ago';
+  if (mins < 48 * 60) {
+    const h = Math.round(mins / 60);
+    return h + (h === 1 ? ' hour ago' : ' hours ago');
+  }
+  return Math.round(mins / 1440) + ' days ago';
+}
+function clockTxt(epoch) {
+  if (!epoch) return null;
+  const d = new Date(epoch * 1000);
+  const opts = { hour: 'numeric', minute: '2-digit' };
+  if (Math.abs(d - Date.now()) > 20 * 3600 * 1000) opts.weekday = 'short';
+  return d.toLocaleString([], opts);
+}
+function histBlock(bits) {
+  const keep = bits.filter(Boolean);
+  return keep.length ? '<div class="hist">' + keep.join('<br>') + '</div>' : '';
+}
+
 function popupFor(m, g) {
   if (g === 'camera') {
     let h = popHead(g, m.name || 'Roadside camera') +
@@ -1111,11 +1144,16 @@ function popupFor(m, g) {
     return h + '</div>';
   }
   if (g === 'sign') {
-    const body = m.message
-      ? '<div class="d" style="font-weight:600;margin-top:5px">&ldquo;' + esc(m.message) + '&rdquo;</div>'
+    const lines = (m.lines && m.lines.length)
+      ? m.lines : (m.message ? m.message.split(' / ') : []);
+    const body = lines.length
+      ? '<div class="cmsboard">' +
+        lines.map((l) => '<span>' + esc(l) + '</span>').join('') + '</div>'
       : '<div class="d" style="margin-top:5px">Blank right now - nothing displayed.</div>';
     return popHead(g, [m.route, m.direction].filter(Boolean).join(' ') || 'Changeable sign') +
-      '<div class="d">' + esc(m.near || '') + '</div>' + body + '</div>';
+      '<div class="d">' + esc(m.near || '') + '</div>' + body +
+      histBlock([lines.length ? 'Live text as displayed on the sign' : null]) +
+      '</div>';
   }
   if (g === 'rwis') {
     const bits = [];
@@ -1129,23 +1167,47 @@ function popupFor(m, g) {
       '<div class="d">' + (bits.join(' · ') || 'no current readings') + '</div></div>';
   }
   if (g && g.startsWith('inc_')) {
+    const ago = agoTxt(m.reported);
     return popHead(g, m.type || 'Incident') +
       '<div class="d">' + esc(m.location || '') + '</div>' +
-      '<div class="d">' + esc(m.area ? 'CHP ' + m.area + ' dispatch' : '') + '</div></div>';
+      '<div class="d">' + esc(m.area ? 'CHP ' + m.area + ' dispatch' : '') + '</div>' +
+      histBlock([ago ? 'Reported ' + ago : 'Live CHP call']) + '</div>';
   }
   if (g && g.startsWith('clo_')) {
+    const allLanes = m.cls === 'full-roadway' ||
+      /all lanes/i.test(m.lanes || '');
+    const lanesLine = m.lanes
+      ? '<div class="d' + (allLanes ? ' lanes-strong' : '') +
+        '" style="font-weight:600">' + esc(m.lanes) + '</div>'
+      : (m.cls === 'full-roadway'
+        ? '<div class="d lanes-strong" style="font-weight:600">All lanes closed</div>' : '');
+    const sched = [];
+    const since = clockTxt(m.since);
+    const until = clockTxt(m.until);
+    if (since) sched.push('in place since ' + since);
+    sched.push(until ? 'scheduled until ' + until : 'no scheduled end');
     return popHead(g, [m.route, m.county].filter(Boolean).join(' · ') || 'Closure') +
-      '<div class="d">' + esc(m.lanes || '') + '</div>' +
-      '<div class="d">' + esc(m.label || '') + '</div></div>';
+      lanesLine +
+      '<div class="d">' + esc(m.label || '') + '</div>' +
+      histBlock([
+        m.work ? 'Work: ' + esc(m.work) : null,
+        sched.join(' · '),
+        m.windows ? (m.windows - 1) + ' more scheduled window' +
+          (m.windows > 2 ? 's' : '') + ' at this spot' : null,
+      ]) + '</div>';
   }
   if (g === 'chain') {
+    const ago = agoTxt(m.updated);
     return popHead(g, m.status || 'Chain control') +
-      '<div class="d">' + esc([m.route, m.label].filter(Boolean).join(' · ')) + '</div></div>';
+      '<div class="d">' + esc([m.route, m.label].filter(Boolean).join(' · ')) + '</div>' +
+      histBlock([ago ? 'Status set ' + ago : null]) + '</div>';
   }
   const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : 'size unknown';
   const cont = (m.contained || m.contained === 0) ? m.contained + '% contained' : '';
+  const disc = agoTxt(m.discovered);
   return popHead(g || 'fire_pt', (m.name || 'Wildfire') + ' fire') +
-    '<div class="d">' + [size, cont].filter(Boolean).join(' · ') + '</div></div>';
+    '<div class="d">' + [size, cont].filter(Boolean).join(' · ') + '</div>' +
+    histBlock([disc ? 'Discovered ' + disc : null]) + '</div>';
 }
 
 function pointMarker(m, g) {
