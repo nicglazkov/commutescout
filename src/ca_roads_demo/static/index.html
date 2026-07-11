@@ -1109,6 +1109,34 @@ function popHead(group, title) {
   return '<div class="pop"><div class="k"><i style="--dot:' + GROUP_DOT[group] +
     '"></i>' + POP_LABEL[group] + '</div><div class="t">' + esc(title) + '</div>';
 }
+// CHP dispatch codes, decoded for people who don't speak scanner.
+const CHP_CODES = [
+  [/^1125/, 'A traffic hazard is on or near the roadway - debris, an animal, or a stalled vehicle. These usually clear quickly; expect brief slowing.'],
+  [/^1179/, 'Collision with an ambulance dispatched. Injuries are reported; lanes may be blocked while crews work the scene.'],
+  [/^1181/, 'Collision with minor injuries reported. Expect temporary lane blockage and slowing while CHP and medical clear the scene.'],
+  [/^1182/, 'Collision with property damage only - nobody reported hurt. Vehicles may be on the shoulder; watch for rubbernecking slowdowns.'],
+  [/^1183/, 'Collision reported, details still coming in. CHP has the call but no injury assessment yet.'],
+  [/^20001/, 'Hit and run with injuries (felony). CHP is investigating; the scene may block lanes.'],
+  [/^20002/, 'Hit and run, property damage only. Usually a short stop on the shoulder.'],
+  [/^23114/, 'A load has spilled from a vehicle onto the roadway. Lanes may close briefly for cleanup.'],
+  [/^1166/, 'A traffic signal is defective. Treat the intersection as an all-way stop.'],
+  [/SIG/i, 'A SIG Alert: a major incident expected to block lanes for 30 minutes or more. Avoid the area if you can.'],
+  [/fire/i, 'A fire reported on or near the roadway. Smoke may cut visibility; crews and closures possible.'],
+  [/ped/i, 'A pedestrian is involved or on the roadway. Slow down and give the scene room.'],
+  [/animal/i, 'A live or struck animal on the roadway. Brief slowing likely.'],
+];
+function chpGloss(type) {
+  for (const [re, text] of CHP_CODES) {
+    if (re.test(type || '')) return text;
+  }
+  return null;
+}
+const CHAIN_GLOSS = {
+  'R-1': 'R-1: chains or approved snow tires required. Carry chains even with snow tires.',
+  'R-2': 'R-2: chains required on every vehicle except 4WD/AWD with snow tires on all four - and even those must carry chains.',
+  'R-3': 'R-3: chains on every vehicle, no exceptions. Roads at R-3 often close soon after.',
+};
+
 function agoTxt(iso) {
   if (!iso) return null;
   const t = new Date(iso).getTime();
@@ -1168,10 +1196,15 @@ function popupFor(m, g) {
   }
   if (g && g.startsWith('inc_')) {
     const ago = agoTxt(m.reported);
+    const gloss = chpGloss(m.type);
     return popHead(g, m.type || 'Incident') +
       '<div class="d">' + esc(m.location || '') + '</div>' +
-      '<div class="d">' + esc(m.area ? 'CHP ' + m.area + ' dispatch' : '') + '</div>' +
-      histBlock([ago ? 'Reported ' + ago : 'Live CHP call']) + '</div>';
+      (gloss ? '<div class="d" style="margin-top:5px">' + gloss + '</div>' : '') +
+      histBlock([
+        ago ? 'Reported ' + ago : 'Live CHP call',
+        m.dir ? 'Affects the ' + m.dir + ' side' : 'Direction not stated in the CHP log',
+        m.area ? 'Dispatched by CHP ' + esc(m.area) : null,
+      ]) + '</div>';
   }
   if (g && g.startsWith('clo_')) {
     const allLanes = m.cls === 'full-roadway' ||
@@ -1186,11 +1219,15 @@ function popupFor(m, g) {
     const until = clockTxt(m.until);
     if (since) sched.push('in place since ' + since);
     sched.push(until ? 'scheduled until ' + until : 'no scheduled end');
+    const extras = [];
+    if (m.delay_min) extras.push('Caltrans expects ~' + m.delay_min + ' min delay through here');
+    if (m.facility && m.cls === 'ramp') extras.push('Closed facility: ' + esc(m.facility));
     return popHead(g, [m.route, m.county].filter(Boolean).join(' · ') || 'Closure') +
       lanesLine +
       '<div class="d">' + esc(m.label || '') + '</div>' +
       histBlock([
         m.work ? 'Work: ' + esc(m.work) : null,
+        ...extras,
         sched.join(' · '),
         m.windows ? (m.windows - 1) + ' more scheduled window' +
           (m.windows > 2 ? 's' : '') + ' at this spot' : null,
@@ -1198,8 +1235,10 @@ function popupFor(m, g) {
   }
   if (g === 'chain') {
     const ago = agoTxt(m.updated);
+    const gloss = CHAIN_GLOSS[(m.status || '').toUpperCase()];
     return popHead(g, m.status || 'Chain control') +
       '<div class="d">' + esc([m.route, m.label].filter(Boolean).join(' · ')) + '</div>' +
+      (gloss ? '<div class="d" style="margin-top:5px">' + gloss + '</div>' : '') +
       histBlock([ago ? 'Status set ' + ago : null]) + '</div>';
   }
   const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : 'size unknown';
