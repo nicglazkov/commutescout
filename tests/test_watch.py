@@ -399,3 +399,52 @@ async def test_revoked_users_get_nothing(checker):
 
 def test_scheduler_endpoint_refuses_anonymous(client):
     assert client.post("/api/check-watches").status_code == 403
+
+
+# ------------------------------------------------------------------ email
+
+def test_email_single_event_subject_and_body():
+    subject, html, text = watch.render_alert_email("Commute over 17", [EVENT])
+    assert subject == "CA Roads: Collision in Commute over 17"
+    assert "Commute over 17" in html
+    assert "US-101 near San Jose" in html and "US-101 near San Jose" in text
+    assert "Informational only" in html and "Informational only" in text
+    assert "Open the live map" in html
+
+
+def test_email_multi_event_counts_and_overflow():
+    events = [EVENT, {**EVENT, "id": "fire:2", "kind": "fire",
+                      "title": "Wildfire: KESTREL", "body": "310 acres"}]
+    subject, html, text = watch.render_alert_email("Tahoe", events, more=3)
+    assert subject == "CA Roads: 5 new events in Tahoe"
+    assert "and 3 more" in html and "3 more" in text
+    assert "WILDFIRE" in html.upper()
+
+
+def test_email_escapes_html_in_event_text():
+    evil = {**EVENT, "title": "<script>x</script>", "body": "a & b <i>"}
+    _, html, _ = watch.render_alert_email("Home", [evil])
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+async def test_busy_cycle_sends_one_email(checker, monkeypatch):
+    store, events, pushes = checker
+    wid = await seed_watch(store)
+    await store.upsert_user("sam", {"email": "sam@example.com"})
+    store.watches[wid]["channels"] = {"push": False, "email": True}
+    await store.set_seen(wid, {"chp:0"})
+    emails = []
+
+    async def fake_email(to, subject, html, text):
+        emails.append((to, subject))
+        return True
+
+    monkeypatch.setattr(watch, "_email_alert", fake_email)
+    for i in range(4):
+        events.append({**EVENT, "id": f"chp:{i + 1}"})
+    stats = await watch.run_check_cycle()
+    assert stats["alerts"] == 4
+    assert len(emails) == 1  # one digest, not four emails
+    assert emails[0][0] == "sam@example.com"
+    assert "4 new events" in emails[0][1]
