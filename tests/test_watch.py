@@ -69,6 +69,11 @@ class MemoryStore:
         self.watches[wid] = dict(data)
         return wid
 
+    async def update_watch(self, watch_id, data):
+        if _firestore_would_reject(data):
+            raise ValueError("400 Nested arrays are not allowed")
+        self.watches[watch_id].update(data)
+
     async def get_watch(self, watch_id):
         return (dict(self.watches[watch_id])
                 if watch_id in self.watches else None)
@@ -105,6 +110,8 @@ def make_app():
         Route("/api/watch/push", watch.api_push_subscribe, methods=["POST"]),
         Route("/api/watch/{watch_id}", watch.api_watch_delete,
               methods=["DELETE"]),
+        Route("/api/watch/{watch_id}", watch.api_watch_update,
+              methods=["PATCH"]),
         Route("/api/admin/overview", watch.api_admin_overview),
         Route("/api/admin/user", watch.api_admin_user, methods=["POST"]),
         Route("/api/admin/code", watch.api_admin_code, methods=["POST"]),
@@ -421,6 +428,55 @@ async def test_revoked_users_get_nothing(checker):
     events.append(EVENT)
     await watch.run_check_cycle()
     assert not pushes
+
+
+def test_update_edits_name_kinds_channels(approved_client, store):
+    wid = approved_client.post("/api/watch/create", json=CIRCLE,
+                               headers=auth()).json()["id"]
+    r = approved_client.patch(
+        "/api/watch/" + wid,
+        json={"name": "School run", "kinds": ["closure", "fire"],
+              "channels": {"push": False, "email": True}},
+        headers=auth())
+    assert r.status_code == 200
+    saved = store.watches[wid]
+    assert saved["name"] == "School run"
+    assert saved["kinds"] == ["closure", "fire"]
+    assert saved["channels"] == {"push": False, "email": True}
+
+
+def test_update_pause_and_resume(approved_client, store):
+    wid = approved_client.post("/api/watch/create", json=CIRCLE,
+                               headers=auth()).json()["id"]
+    approved_client.patch("/api/watch/" + wid, json={"active": False},
+                          headers=auth())
+    assert store.watches[wid]["active"] is False
+    approved_client.patch("/api/watch/" + wid, json={"active": True},
+                          headers=auth())
+    assert store.watches[wid]["active"] is True
+
+
+def test_update_is_owner_only_and_validates(approved_client, store):
+    wid = approved_client.post("/api/watch/create", json=CIRCLE,
+                               headers=auth()).json()["id"]
+    store.users["boss"] = {"email": "nic@glazkov.com", "status": "approved"}
+    assert approved_client.patch("/api/watch/" + wid,
+                                 json={"active": False},
+                                 headers=auth("tok-admin")).status_code == 404
+    assert approved_client.patch("/api/watch/" + wid, json={"kinds": []},
+                                 headers=auth()).status_code == 400
+    assert approved_client.patch("/api/watch/" + wid, json={},
+                                 headers=auth()).status_code == 400
+
+
+async def test_paused_watches_get_no_alerts(checker):
+    store, events, pushes = checker
+    wid = await seed_watch(store)
+    await store.set_seen(wid, {"chp:0"})
+    store.watches[wid]["active"] = False
+    events.append(EVENT)
+    stats = await watch.run_check_cycle()
+    assert stats["alerts"] == 0 and not pushes
 
 
 def test_scheduler_endpoint_refuses_anonymous(client):

@@ -60,6 +60,15 @@ input:focus { border-color:var(--sky) }
 code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
   font-size:.82rem }
 .hidden { display:none !important }
+.tablewrap { overflow-x:auto }
+@media (max-width: 700px) {
+  .topbar { gap:8px; padding:0 12px }
+  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
+  .topbar nav { overflow-x:auto; scrollbar-width:none }
+  .topbar nav a { white-space:nowrap; padding:7px 9px }
+  main { padding:14px 12px 40px }
+  button { min-height:40px }
+}
 </style>
 </head>
 <body>
@@ -93,21 +102,21 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
                style="flex:1;min-width:160px" maxlength="80">
         <button class="primary" id="newcode">New code</button>
       </div>
-      <table>
+      <div class="tablewrap"><table>
         <thead><tr><th>Code</th><th>Uses</th><th>Note</th><th>Status</th>
           <th></th></tr></thead>
         <tbody id="codes"></tbody>
-      </table>
+      </table></div>
       <div class="msg" id="codemsg"></div>
     </div>
 
     <div class="card">
       <h2>Users</h2>
-      <table>
+      <div class="tablewrap"><table>
         <thead><tr><th>Email</th><th>Status</th><th>Watches</th>
           <th>Code used</th><th>Since</th><th></th></tr></thead>
         <tbody id="users"></tbody>
-      </table>
+      </table></div>
       <div class="msg" id="usermsg"></div>
     </div>
 

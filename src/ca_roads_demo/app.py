@@ -1135,6 +1135,8 @@ app = Starlette(
         Route("/api/watch/test", watch.api_watch_test, methods=["POST"]),
         Route("/api/watch/{watch_id}", watch.api_watch_delete,
               methods=["DELETE"]),
+        Route("/api/watch/{watch_id}", watch.api_watch_update,
+              methods=["PATCH"]),
         Route("/api/admin/overview", watch.api_admin_overview,
               methods=["GET"]),
         Route("/api/admin/user", watch.api_admin_user, methods=["POST"]),

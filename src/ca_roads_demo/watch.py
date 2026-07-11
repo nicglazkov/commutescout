@@ -229,6 +229,10 @@ class FirestoreStore:
         snap = await self.db.collection("watches").document(watch_id).get()
         return snap.to_dict() if snap.exists else None
 
+    async def update_watch(self, watch_id: str, data: dict) -> None:
+        await self.db.collection("watches").document(watch_id).set(
+            data, merge=True)
+
     async def delete_watch(self, watch_id: str) -> None:
         await self.db.collection("watches").document(watch_id).delete()
         await self.db.collection("watch_state").document(watch_id).delete()
@@ -490,6 +494,45 @@ async def api_watch_delete(request: Request) -> JSONResponse:
         return _err("not found", 404)
     await store.delete_watch(watch_id)
     return JSONResponse({"deleted": watch_id})
+
+
+async def api_watch_update(request: Request) -> JSONResponse:
+    """Edit the mutable parts of a watch: name, kinds, channels, and
+    the active flag (pause/resume). Geometry stays immutable; drawing
+    a replacement is clearer than editing coordinates."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    watch_id = request.path_params["watch_id"]
+    store = get_store()
+    watch = await store.get_watch(watch_id)
+    if watch is None or watch.get("uid") != claims["sub"]:
+        return _err("not found", 404)
+    body = await _read_json(request)
+    if body is None:
+        return _err("json body required")
+
+    updates: dict = {}
+    if "name" in body:
+        updates["name"] = (str(body.get("name") or "").strip()[:60]
+                           or watch.get("name", "Watch area"))
+    if "kinds" in body:
+        kinds = [k for k in (body.get("kinds") or []) if k in WATCH_KINDS]
+        if not kinds:
+            return _err("pick at least one alert kind")
+        updates["kinds"] = kinds
+    if "channels" in body:
+        channels = body.get("channels") or {}
+        updates["channels"] = {"push": bool(channels.get("push", True)),
+                               "email": bool(channels.get("email", False))}
+    if "active" in body:
+        updates["active"] = bool(body.get("active"))
+    if not updates:
+        return _err("nothing to update")
+    await store.update_watch(watch_id, updates)
+    watch.update(updates)
+    watch["id"] = watch_id
+    return JSONResponse(watch)
 
 
 async def api_push_subscribe(request: Request) -> JSONResponse:

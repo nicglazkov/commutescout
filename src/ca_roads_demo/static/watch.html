@@ -64,8 +64,23 @@ input:focus { border-color:var(--sky) }
 .msg { font-size:.8rem; margin-top:9px; min-height:1.2em }
 .msg.err { color:var(--red) } .msg.ok { color:var(--green) }
 .split { display:grid; grid-template-columns:390px 1fr; gap:14px }
-@media (max-width: 900px) { .split { grid-template-columns:1fr } }
-#wmap { height:520px; border-radius:14px; border:1px solid var(--line) }
+@media (max-width: 900px) {
+  .split { grid-template-columns:1fr }
+  /* Map above the form on a phone: draw first, describe after. */
+  #wmap { order:-1; height:48vh; min-height:320px }
+  .split > div { order:1 }
+  .topbar { gap:8px; padding:0 12px }
+  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
+  .topbar nav { margin-left:0; overflow-x:auto; scrollbar-width:none }
+  .topbar nav::-webkit-scrollbar { display:none }
+  .topbar nav a { padding:7px 9px; white-space:nowrap }
+  .topbar nav a[href*="github"] { display:none }
+  .topbar .who span { display:none }
+  main { padding:14px 12px 40px }
+  button.primary, button.ghost { min-height:44px }
+  .witem > button { padding:8px }
+}
+#wmap { height:520px; min-height:320px; border-radius:14px; border:1px solid var(--line) }
 .field { margin-bottom:12px }
 .field label { display:block; font:600 .72rem Inter; letter-spacing:.6px;
   text-transform:uppercase; color:var(--dim); margin-bottom:5px }
@@ -91,9 +106,17 @@ input:focus { border-color:var(--sky) }
   background:var(--sky); flex:none }
 .witem .wname { font-weight:600; font-size:.86rem }
 .witem .wmeta { color:var(--dim); font-size:.76rem }
-.witem button { margin-left:auto; background:none; border:0;
-  color:var(--dim); cursor:pointer; font-size:1rem; padding:4px }
-.witem button:hover { color:var(--red) }
+.witem > button { background:none; border:0;
+  color:var(--dim); cursor:pointer; font-size:.95rem; padding:4px 6px }
+.witem > button:first-of-type { margin-left:auto }
+.witem > button:hover { color:var(--sky) }
+.witem > button:last-of-type:hover { color:var(--red) }
+.witem.paused .wname { color:var(--dim) }
+.witem { flex-wrap:wrap }
+.weditor { flex-basis:100%; border-top:1px dashed var(--line);
+  margin-top:8px; padding-top:10px; display:flex; flex-direction:column;
+  gap:8px; cursor:default }
+.weditor input[type=text] { width:100% }
 .devrow { display:flex; gap:8px; flex-wrap:wrap; align-items:center }
 .footer-note { color:var(--dim); font-size:.72rem; margin-top:22px;
   border-top:1px solid var(--line); padding-top:12px }
@@ -241,6 +264,8 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
 const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[<>&"]/g,
+  (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 const show = (id) => ['signin', 'gate', 'appzone']
   .forEach((s) => $(s).classList.toggle('hidden', s !== id));
 const msg = (id, text, cls) => {
@@ -409,6 +434,73 @@ $('radius').addEventListener('input', () => {
 
 // ------------------------------------------------------------- watches
 
+let fittedOnce = false;
+
+async function reloadWatches() {
+  me = await api('/api/watch/me');
+  renderWatches();
+}
+
+function watchEditor(w) {
+  const form = document.createElement('div');
+  form.className = 'weditor';
+  const nameIn = document.createElement('input');
+  nameIn.type = 'text'; nameIn.maxLength = 60; nameIn.value = w.name || '';
+  const kindsBox = document.createElement('div');
+  kindsBox.className = 'kinds';
+  for (const [kind, label] of [['incident', 'Incidents'],
+      ['closure', 'Closures'], ['chain', 'Chain controls'],
+      ['fire', 'Wildfires']]) {
+    const lab = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.dataset.kind = kind;
+    cb.checked = (w.kinds || []).includes(kind);
+    lab.append(cb, document.createTextNode(label));
+    kindsBox.append(lab);
+  }
+  const chanBox = document.createElement('div');
+  chanBox.className = 'chans';
+  const mkChan = (key, label, checked) => {
+    const lab = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.dataset.chan = key; cb.checked = checked;
+    lab.append(cb, document.createTextNode(label));
+    return lab;
+  };
+  chanBox.append(mkChan('push', 'Push', (w.channels || {}).push !== false));
+  if (CFG.emailEnabled) {
+    chanBox.append(mkChan('email', 'Email', !!(w.channels || {}).email));
+  }
+  const save = document.createElement('button');
+  save.className = 'primary'; save.textContent = 'Save';
+  save.style.width = 'auto'; save.style.padding = '7px 16px';
+  const cancel = document.createElement('button');
+  cancel.className = 'ghost'; cancel.textContent = 'Cancel';
+  const errBox = document.createElement('div');
+  errBox.className = 'msg';
+  save.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const kinds = [...kindsBox.querySelectorAll('input:checked')]
+      .map((c) => c.dataset.kind);
+    const channels = {};
+    for (const cb of chanBox.querySelectorAll('input[data-chan]')) {
+      channels[cb.dataset.chan] = cb.checked;
+    }
+    try {
+      await api('/api/watch/' + w.id, { method: 'PATCH',
+        body: JSON.stringify({ name: nameIn.value, kinds, channels }) });
+      await reloadWatches();
+    } catch (err) { msg('listmsg', err.message, 'err'); }
+  });
+  cancel.addEventListener('click', (e) => { e.stopPropagation(); form.remove(); });
+  form.addEventListener('click', (e) => e.stopPropagation());
+  const btnRow = document.createElement('div');
+  btnRow.className = 'devrow';
+  btnRow.append(save, cancel);
+  form.append(nameIn, kindsBox, chanBox, btnRow, errBox);
+  return form;
+}
+
 function renderWatches() {
   const list = $('wlist');
   list.innerHTML = '';
@@ -420,46 +512,82 @@ function renderWatches() {
     return;
   }
   for (const w of me.watches) {
+    const paused = w.active === false;
+    const style = paused
+      ? { color: '#8a94a3', weight: 1.5, dashArray: '6 6',
+          fillColor: '#8a94a3', fillOpacity: 0.05 }
+      : { color: '#1c3a2e', weight: 1.5,
+          fillColor: '#1c3a2e', fillOpacity: 0.08 };
     let shape;
     if (w.type === 'circle') {
-      shape = L.circle([w.center.lat, w.center.lon], {
-        radius: w.radius_km * 1000, color: '#1c3a2e', weight: 1.5,
-        fillColor: '#1c3a2e', fillOpacity: 0.08 }).addTo(savedLayer);
+      shape = L.circle([w.center.lat, w.center.lon],
+        Object.assign({ radius: w.radius_km * 1000 }, style))
+        .addTo(savedLayer);
     } else {
       const pts = (w.points || []).map(
         (pt) => Array.isArray(pt) ? pt : [pt.lat, pt.lon]);
-      shape = L.polygon(pts, { color: '#1c3a2e', weight: 1.5,
-        fillColor: '#1c3a2e', fillOpacity: 0.08 }).addTo(savedLayer);
+      shape = L.polygon(pts, style).addTo(savedLayer);
     }
+    shape.bindPopup(esc(w.name || 'Watch area') + (paused ? ' (paused)' : ''));
     const row = document.createElement('div');
-    row.className = 'witem';
+    row.className = 'witem' + (paused ? ' paused' : '');
     const dot = document.createElement('i');
-    dot.style.background = '#1c3a2e';
+    dot.style.background = paused ? '#8a94a3' : '#1c3a2e';
     const text = document.createElement('div');
     const name = document.createElement('div');
-    name.className = 'wname'; name.textContent = w.name;
+    name.className = 'wname';
+    name.textContent = w.name + (paused ? ' (paused)' : '');
     const meta = document.createElement('div');
     meta.className = 'wmeta';
+    const chans = [];
+    if ((w.channels || {}).push !== false) chans.push('push');
+    if ((w.channels || {}).email) chans.push('email');
     meta.textContent = (w.type === 'circle'
       ? Math.round(w.radius_km) + ' km circle' : 'polygon') +
-      ' - ' + (w.kinds || []).join(', ');
+      ' - ' + (w.kinds || []).join(', ') +
+      ' - ' + (chans.join(' + ') || 'no delivery');
     text.append(name, meta);
+    const pause = document.createElement('button');
+    pause.textContent = paused ? '\u25b6' : '\u23f8';
+    pause.title = paused ? 'Resume alerts' : 'Pause alerts';
+    pause.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api('/api/watch/' + w.id, { method: 'PATCH',
+          body: JSON.stringify({ active: paused }) });
+        await reloadWatches();
+      } catch (err) { msg('listmsg', err.message, 'err'); }
+    });
+    const edit = document.createElement('button');
+    edit.textContent = '\u270e';
+    edit.title = 'Edit name, kinds, delivery';
+    edit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = row.querySelector('.weditor');
+      if (open) { open.remove(); return; }
+      row.append(watchEditor(w));
+    });
     const del = document.createElement('button');
-    del.textContent = '×';
+    del.textContent = '\u00d7';
     del.title = 'Delete watch';
     del.addEventListener('click', async (e) => {
       e.stopPropagation();
+      if (!confirm('Delete "' + w.name + '"? Alerts for this area stop immediately.')) return;
       try {
         await api('/api/watch/' + w.id, { method: 'DELETE' });
-        me = await api('/api/watch/me');
-        renderWatches();
+        await reloadWatches();
       } catch (err) { msg('listmsg', err.message, 'err'); }
     });
-    row.append(dot, text, del);
+    row.append(dot, text, pause, edit, del);
     row.addEventListener('click', () => {
       map.fitBounds(shape.getBounds().pad(0.3));
     });
     list.append(row);
+  }
+  if (!fittedOnce && savedLayer.getLayers().length) {
+    fittedOnce = true;
+    const group = L.featureGroup(savedLayer.getLayers());
+    map.fitBounds(group.getBounds().pad(0.35));
   }
 }
 
