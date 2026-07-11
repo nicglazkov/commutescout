@@ -92,3 +92,18 @@ def test_flow_endpoint_without_key_returns_nulls(client, monkeypatch):
 def test_traffic_tile_404_without_key(client, monkeypatch):
     monkeypatch.delenv("TOMTOM_API_KEY", raising=False)
     assert client.get("/api/traffictile/10/163/395.png").status_code == 404
+
+
+def test_snap_path_downsamples_and_rejects_wanderers():
+    from ca_roads_demo.app import _snap_path
+
+    coords = [[-121.0 + i * 0.001, 38.0 + i * 0.001] for i in range(300)]
+    path = _snap_path(coords, straight_km=40.0, route_km=45.0)
+    assert path is not None
+    assert len(path) <= 62
+    assert path[0] == [38.0, -121.0]
+    assert path[-1] == [38.299, -120.701]
+    # A route three times the crow-flies distance is a detour tour, not
+    # the closed stretch: keep the straight line instead.
+    assert _snap_path(coords, straight_km=4.0, route_km=30.0) is None
+    assert _snap_path([], straight_km=4.0, route_km=4.0) is None

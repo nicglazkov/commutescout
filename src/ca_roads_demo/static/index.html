@@ -1183,8 +1183,12 @@ function renderBatch(markers, groups) {
     }
     // Closures with a distinct endpoint get the affected stretch drawn
     // under their dot; the dot stays as the click target at the start.
+    // The server ships road-snapped geometry (m.path) once its OSRM
+    // cache has it; the begin-to-end straight line is the fallback.
     if (g.startsWith('clo_') && Array.isArray(m.end)) {
-      ambient[g].addLayer(L.polyline([[m.lat, m.lon], m.end], {
+      const stretch = (Array.isArray(m.path) && m.path.length > 1)
+        ? m.path : [[m.lat, m.lon], m.end];
+      ambient[g].addLayer(L.polyline(stretch, {
         renderer: canvasR, color: GROUP_DOT[g], weight: 4, opacity: 0.45,
       }).bindPopup(popupFor(m, g), { maxWidth: 320 }));
     }

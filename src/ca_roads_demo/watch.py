@@ -690,8 +690,10 @@ DEMO_URL = os.environ.get(
 
 KIND_LABELS = {"incident": "Incident", "closure": "Closure",
                "chain": "Chain control", "fire": "Wildfire"}
-KIND_COLORS = {"incident": "#d64545", "closure": "#a83232",
-               "chain": "#2f81f7", "fire": "#e08a3c"}
+# Same colors the map legend uses for these kinds, so an email reads as
+# the same product.
+KIND_COLORS = {"incident": "#c9611a", "closure": "#a02c2c",
+               "chain": "#2b6cb0", "fire": "#d97706"}
 
 
 def render_alert_email(watch_name: str, events: list[dict],
@@ -721,7 +723,7 @@ def render_alert_email(watch_name: str, events: list[dict],
         body = html_mod.escape(e.get("body") or "")
         rows.append(
             f'<tr><td style="padding:14px 18px;border-bottom:1px solid '
-            f'#eee6d8">'
+            f'#e3ddd0">'
             f'<div style="font:600 11px/1 -apple-system,Segoe UI,Arial,'
             f'sans-serif;letter-spacing:.8px;color:{color};'
             f'text-transform:uppercase;margin-bottom:5px">{label}</div>'
@@ -768,7 +770,7 @@ def render_alert_email(watch_name: str, events: list[dict],
       Open the live map</a>
   </td></tr>
   <tr><td style="background:#fffdf7;border-radius:0 0 14px 14px;
-      border-top:1px solid #eee6d8;padding:14px 18px">
+      border-top:1px solid #e3ddd0;padding:14px 18px">
     <div style="font:400 11.5px/1.6 -apple-system,Segoe UI,Arial,
       sans-serif;color:#8a94a3">
       Informational only; may be delayed, incomplete, or wrong. Verify

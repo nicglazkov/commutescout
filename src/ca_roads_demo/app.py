@@ -824,12 +824,15 @@ async def api_mapdata(request: Request):
                 }
                 # A closure with a distinct endpoint (> ~200 m away)
                 # ships both ends so the map can draw the stretch, not
-                # just a dot at the beginning.
-                if (c.end_lat and c.end_lon
-                        and (abs(c.end_lat - c.begin_lat) > 0.002
-                             or abs(c.end_lon - c.begin_lon) > 0.002)):
+                # just a dot at the beginning. When the background
+                # snapper has road-following geometry, that ships too
+                # and the client prefers it over the straight line.
+                if _closure_has_stretch(c):
                     marker["end"] = [round(c.end_lat, 5),
                                      round(c.end_lon, 5)]
+                    snapped = _CLOSURE_PATHS.get(_closure_key(c))
+                    if snapped:
+                        marker["path"] = snapped
                 markers.append(marker)
     if "chain" in want:
         for c in cc.records:
@@ -1014,11 +1017,90 @@ async def _prewarm() -> None:
         )
 
 
+# Road-following geometry for closure stretches, keyed by rounded
+# begin/end coordinates. Filled by a background loop at OSRM public-
+# server pace (about one request per second) and shared by every
+# visitor; a missing or None entry falls back to the straight line.
+_CLOSURE_PATHS: dict[tuple, list | None] = {}
+_SNAP_MIN_DELTA = 0.002  # same threshold mapdata uses for "has an end"
+
+
+def _closure_key(c) -> tuple:
+    return (round(c.begin_lat, 4), round(c.begin_lon, 4),
+            round(c.end_lat, 4), round(c.end_lon, 4))
+
+
+def _closure_has_stretch(c) -> bool:
+    return bool(c.end_lat and c.end_lon
+                and (abs(c.end_lat - c.begin_lat) > _SNAP_MIN_DELTA
+                     or abs(c.end_lon - c.begin_lon) > _SNAP_MIN_DELTA))
+
+
+def _snap_path(coords: list, straight_km: float,
+               route_km: float) -> list | None:
+    """Downsampled [lat, lon] path, or None when the route is suspect.
+
+    A snapped route much longer than the crow-flies distance means OSRM
+    had to wander (endpoints on different roads, one-way detours): the
+    straight line misleads less than a tour of the county."""
+    if len(coords) < 2 or straight_km <= 0:
+        return None
+    if route_km > max(3 * straight_km, straight_km + 8):
+        return None
+    step = max(1, len(coords) // 60)
+    path = [[round(lat, 5), round(lon, 5)] for lon, lat in coords[::step]]
+    last = [round(coords[-1][1], 5), round(coords[-1][0], 5)]
+    if path[-1] != last:
+        path.append(last)
+    return path
+
+
+async def _snap_closures_loop() -> None:
+    """Every five minutes, fetch road geometry for closure stretches the
+    cache does not know yet, then drop entries for closures that ended."""
+    road = tools.get_road()
+    while True:
+        with contextlib.suppress(Exception):
+            lcs = await road.lane_closures()
+            fresh = [c for c in lcs.records if _closure_has_stretch(c)
+                     and _closure_key(c) not in _CLOSURE_PATHS]
+            for c in fresh[:120]:
+                path = None
+                with contextlib.suppress(Exception):
+                    resp = await road.client.get(
+                        "https://router.project-osrm.org/route/v1/driving/"
+                        f"{c.begin_lon},{c.begin_lat};{c.end_lon},{c.end_lat}",
+                        params={"overview": "full", "geometries": "geojson"},
+                        timeout=10,
+                    )
+                    if resp.status_code == 200:
+                        routes = resp.json().get("routes") or []
+                        if routes:
+                            coords = (routes[0].get("geometry") or {}).get(
+                                "coordinates") or []
+                            straight = watch.haversine_km(
+                                c.begin_lat, c.begin_lon,
+                                c.end_lat, c.end_lon)
+                            path = _snap_path(
+                                coords, straight,
+                                (routes[0].get("distance") or 0) / 1000)
+                _CLOSURE_PATHS[_closure_key(c)] = path
+                await asyncio.sleep(1.1)
+            current = {_closure_key(c) for c in lcs.records
+                       if _closure_has_stretch(c)}
+            for key in list(_CLOSURE_PATHS):
+                if key not in current:
+                    _CLOSURE_PATHS.pop(key, None)
+        await asyncio.sleep(300)
+
+
 @contextlib.asynccontextmanager
 async def _lifespan(app_):
     task = asyncio.create_task(_prewarm())
+    snap_task = asyncio.create_task(_snap_closures_loop())
     yield
     task.cancel()
+    snap_task.cancel()
 
 
 app = Starlette(
