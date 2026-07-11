@@ -22,3 +22,4 @@
 {"ts": "2026-07-11T09:50:19+00:00", "source_ref": "v2.6.0", "judge": "claude-opus-4-8", "questions": 91, "results": {"claude-haiku-4-5": "56/91 (62%)", "claude-sonnet-5": "61/91 (67%)"}}
 {"ts": "2026-07-11T10:00:01+00:00", "source_ref": "v2.7.0", "judge": "claude-opus-4-8", "questions": 91, "results": {"claude-haiku-4-5": "55/91 (60%)", "claude-sonnet-5": "68/91 (75%)"}}
 {"ts": "2026-07-11T18:23:05+00:00", "source_ref": "v2.7.1", "judge": "claude-opus-4-8", "questions": 91, "results": {"claude-haiku-4-5": "50/91 (55%)", "claude-sonnet-5": "62/91 (68%)"}}
+{"ts": "2026-07-11T18:30:29+00:00", "source_ref": "v2.8.0", "judge": "claude-opus-4-8", "questions": 91, "results": {"claude-haiku-4-5": "49/91 (54%)", "claude-sonnet-5": "60/91 (66%)"}}
