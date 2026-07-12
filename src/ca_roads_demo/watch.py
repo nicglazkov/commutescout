@@ -18,12 +18,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import ipaddress
 import json
 import math
 import os
+import re
 import secrets as pysecrets
 import time
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from starlette.requests import Request
@@ -78,6 +81,48 @@ CA_BOUNDARY = [
     [39.0, -125.0],
 ]
 WATCH_KINDS = ("incident", "closure", "chain", "fire")
+MAX_BODY_BYTES = 64 * 1024  # every JSON body we accept is far smaller
+# Firestore document ids we mint are URL-safe tokens; reject anything
+# else on the path so a crafted id can never reach the client library.
+_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+# Web push endpoints must belong to a real push service. This blocks
+# the SSRF where an approved account registers an endpoint pointing at
+# internal infrastructure and the checker POSTs to it.
+_PUSH_HOST_RE = re.compile(
+    r"(^|\.)("
+    r"googleapis\.com|"          # FCM (fcm.googleapis.com)
+    r"push\.apple\.com|"        # Apple (web.push.apple.com)
+    r"notify\.windows\.com|"    # Windows (*.notify.windows.com)
+    r"push\.services\.mozilla\.com"  # Firefox
+    r")$", re.I)
+
+
+def valid_push_endpoint(url: str) -> bool:
+    try:
+        u = urlparse(url)
+    except ValueError:
+        return False
+    if u.scheme != "https" or not u.hostname:
+        return False
+    host = u.hostname
+    if not _PUSH_HOST_RE.search(host):
+        return False
+    # Belt and suspenders: never a literal private/loopback/link-local
+    # IP even if it somehow matched (it will not, but defense in depth).
+    try:
+        ip = ipaddress.ip_address(host)
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved):
+            return False
+    except ValueError:
+        pass
+    return True
+
+
+def clean_text(value: str, limit: int) -> str:
+    """User-supplied text that reaches emails, pushes, or the sign
+    board: strip control characters (header/board injection) and cap."""
+    return re.sub(r"[\x00-\x1f\x7f]", " ", str(value or "")).strip()[:limit]
 
 
 # ---------------------------------------------------------------- tokens
@@ -397,11 +442,23 @@ def _approved(user: dict) -> bool:
 
 
 async def _read_json(request: Request) -> dict | None:
+    cl = request.headers.get("content-length")
+    if cl and cl.isdigit() and int(cl) > MAX_BODY_BYTES:
+        return None
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > MAX_BODY_BYTES:
+            return None
     try:
-        body = await request.json()
+        data = json.loads(body) if body else None
     except Exception:  # noqa: BLE001
         return None
-    return body if isinstance(body, dict) else None
+    return data if isinstance(data, dict) else None
+
+
+def _safe_id(value: str) -> str | None:
+    return value if _ID_RE.match(value or "") else None
 
 
 # ---------------------------------------------------------------- API
@@ -506,7 +563,7 @@ async def api_watch_create(request: Request) -> JSONResponse:
     if body is None:
         return _err("json body required")
 
-    name = str(body.get("name") or "").strip()[:60] or "Watch area"
+    name = clean_text(body.get("name"), 60) or "Watch area"
     kinds = [k for k in (body.get("kinds") or []) if k in WATCH_KINDS]
     if not kinds:
         return _err("pick at least one alert kind")
@@ -589,7 +646,9 @@ async def api_watch_delete(request: Request) -> JSONResponse:
     claims = await verify_user(request)
     if not claims:
         return _err("sign in required", 401)
-    watch_id = request.path_params["watch_id"]
+    watch_id = _safe_id(request.path_params["watch_id"])
+    if not watch_id:
+        return _err("not found", 404)
     store = get_store()
     watch = await store.get_watch(watch_id)
     if watch is None or watch.get("uid") != claims["sub"]:
@@ -606,7 +665,9 @@ async def api_watch_update(request: Request) -> JSONResponse:
     claims = await verify_user(request)
     if not claims:
         return _err("sign in required", 401)
-    watch_id = request.path_params["watch_id"]
+    watch_id = _safe_id(request.path_params["watch_id"])
+    if not watch_id:
+        return _err("not found", 404)
     store = get_store()
     watch = await store.get_watch(watch_id)
     if watch is None or watch.get("uid") != claims["sub"]:
@@ -617,7 +678,7 @@ async def api_watch_update(request: Request) -> JSONResponse:
 
     updates: dict = {}
     if "name" in body:
-        updates["name"] = (str(body.get("name") or "").strip()[:60]
+        updates["name"] = (clean_text(body.get("name"), 60)
                            or watch.get("name", "Watch area"))
     if "kinds" in body:
         kinds = [k for k in (body.get("kinds") or []) if k in WATCH_KINDS]
@@ -684,8 +745,16 @@ async def api_push_subscribe(request: Request) -> JSONResponse:
     body = await _read_json(request)
     sub = (body or {}).get("subscription") or {}
     endpoint = sub.get("endpoint") or ""
-    if not endpoint.startswith("https://") or "keys" not in sub:
-        return _err("a web push subscription is required")
+    keys = sub.get("keys") or {}
+    if (not valid_push_endpoint(endpoint)
+            or not isinstance(keys, dict)
+            or not keys.get("p256dh") or not keys.get("auth")):
+        return _err("a valid web push subscription is required")
+    # Store only the three fields pywebpush needs; never echo back
+    # arbitrary attacker-controlled keys.
+    sub = {"endpoint": endpoint,
+           "keys": {"p256dh": str(keys["p256dh"])[:200],
+                    "auth": str(keys["auth"])[:200]}}
     store = get_store()
     subs = await store.list_push_subs(claims["sub"])
     sub_id = hashlib.sha256(endpoint.encode()).hexdigest()[:24]
@@ -892,8 +961,13 @@ async def _push_to_subs(subs: list[dict], payload: dict) -> int:
             return False
 
     for sub in subs:
+        info = sub.get("subscription") or {}
+        if not valid_push_endpoint(info.get("endpoint") or ""):
+            with contextlib.suppress(Exception):
+                await get_store().delete_push_sub(sub["id"])
+            continue
         try:
-            ok = await asyncio.to_thread(_send, sub["subscription"])
+            ok = await asyncio.to_thread(_send, info)
         except _GonePush:
             with contextlib.suppress(Exception):
                 await get_store().delete_push_sub(sub["id"])

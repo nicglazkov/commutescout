@@ -16,6 +16,7 @@ import contextlib
 import html as html_mod
 import json
 import os
+import re
 import secrets as pysecrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -50,6 +51,12 @@ def _trip_allowed(ip: str) -> bool:
     return True
 
 _TEMPLATE_PATH = Path(__file__).parent / "static" / "trip.html"
+_TRIP_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_MAX_TRIP_BODY = 256 * 1024
+
+
+def _clean(value, limit):
+    return re.sub(r"[\x00-\x1f\x7f]", " ", str(value or "")).strip()[:limit]
 _template_cache: str | None = None
 
 
@@ -101,9 +108,15 @@ async def api_trip_create(request: Request) -> JSONResponse:
         return JSONResponse(
             {"error": "daily share-link limit reached; try tomorrow"},
             status_code=429)
+    raw = b""
+    async for chunk in request.stream():
+        raw += chunk
+        if len(raw) > _MAX_TRIP_BODY:
+            return JSONResponse({"error": "request too large"},
+                                status_code=413)
     body = None
     with contextlib.suppress(Exception):
-        body = await request.json()
+        body = json.loads(raw) if raw else None
     if not isinstance(body, dict):
         return JSONResponse({"error": "json body required"}, status_code=400)
 
@@ -125,15 +138,15 @@ async def api_trip_create(request: Request) -> JSONResponse:
     steps = []
     for s in (body.get("steps") or [])[:MAX_TRIP_STEPS]:
         if isinstance(s, dict) and s.get("text"):
-            steps.append({"text": str(s["text"])[:200],
+            steps.append({"text": _clean(s["text"], 200),
                           "miles": round(float(s.get("miles") or 0), 2)})
 
     trip = {
-        "from_name": str(body.get("from_name") or "Start")[:120],
-        "to_name": str(body.get("to_name") or "End")[:120],
+        "from_name": _clean(body.get("from_name"), 120) or "Start",
+        "to_name": _clean(body.get("to_name"), 120) or "End",
         "miles": round(float(body.get("miles") or 0), 1),
         "minutes": int(float(body.get("minutes") or 0)),
-        "via": str(body.get("via") or "")[:80],
+        "via": _clean(body.get("via"), 80),
         "polyline": encode_polyline(points),
         "steps": steps,
         "created_at": datetime.now(UTC).isoformat(),
@@ -152,8 +165,10 @@ def _trip_public(trip: dict) -> dict:
 
 
 async def api_trip_get(request: Request) -> JSONResponse:
-    trip = await watch_mod.get_store().get_trip(
-        request.path_params["trip_id"])
+    tid = request.path_params["trip_id"]
+    if not _TRIP_ID_RE.match(tid):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    trip = await watch_mod.get_store().get_trip(tid)
     if trip is None:
         return JSONResponse({"error": "not found"}, status_code=404)
     return JSONResponse(_trip_public(trip))
@@ -163,8 +178,11 @@ async def trip_page(request: Request) -> HTMLResponse:
     """Server-rendered so link unfurlers (which run no JS) see the og
     tags, and the page itself needs no second fetch."""
     global _template_cache
-    trip = await watch_mod.get_store().get_trip(
-        request.path_params["trip_id"])
+    tid = request.path_params["trip_id"]
+    if not _TRIP_ID_RE.match(tid):
+        return HTMLResponse("<h1>This trip link is not valid.</h1>",
+                            status_code=404)
+    trip = await watch_mod.get_store().get_trip(tid)
     if trip is None:
         return HTMLResponse("<h1>This trip link has expired or never "
                             "existed.</h1>", status_code=404)

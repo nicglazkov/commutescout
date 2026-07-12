@@ -281,11 +281,13 @@ def test_push_subscribe_validates_and_caps(approved_client, store):
                                 headers=auth()).status_code == 400
     for i in range(watch.MAX_PUSH_SUBS):
         sub = {"subscription": {
-            "endpoint": f"https://push.example/{i}", "keys": {"auth": "x"}}}
+            "endpoint": f"https://fcm.googleapis.com/fcm/send/dev{i}",
+            "keys": {"p256dh": "k", "auth": "x"}}}
         assert approved_client.post("/api/watch/push", json=sub,
                                     headers=auth()).status_code == 200
     extra = {"subscription": {
-        "endpoint": "https://push.example/extra", "keys": {"auth": "x"}}}
+        "endpoint": "https://fcm.googleapis.com/fcm/send/extra",
+        "keys": {"p256dh": "k", "auth": "x"}}}
     assert approved_client.post("/api/watch/push", json=extra,
                                 headers=auth()).status_code == 403
 
@@ -599,7 +601,8 @@ async def test_busy_cycle_sends_one_email(checker, monkeypatch):
 def test_account_delete_removes_everything(approved_client, store):
     approved_client.post("/api/watch/create", json=CIRCLE, headers=auth())
     approved_client.post("/api/watch/push", json={"subscription": {
-        "endpoint": "https://push.example/dev", "keys": {"auth": "x"}}},
+        "endpoint": "https://fcm.googleapis.com/fcm/send/dev",
+        "keys": {"p256dh": "k", "auth": "x"}}},
         headers=auth())
     r = approved_client.request("DELETE", "/api/watch/account",
                                 headers=auth())
@@ -702,3 +705,36 @@ def test_redeem_brute_force_throttles(client, store, monkeypatch):
                     headers=auth())
     assert r.status_code == 429
     watch._redeem_fails.clear()
+
+
+def test_push_endpoint_ssrf_blocked(approved_client, store):
+    from ca_roads_demo import watch as w
+    # Internal / metadata / arbitrary hosts are refused.
+    for bad_ep in ("https://169.254.169.254/push",
+                   "https://localhost/push",
+                   "https://evil.example.com/push",
+                   "https://10.0.0.1/x",
+                   "http://fcm.googleapis.com/fcm/send/x"):
+        r = approved_client.post("/api/watch/push", json={"subscription": {
+            "endpoint": bad_ep, "keys": {"p256dh": "k", "auth": "x"}}},
+            headers=auth())
+        assert r.status_code == 400, bad_ep
+    assert not w.valid_push_endpoint("https://169.254.169.254/x")
+    assert w.valid_push_endpoint(
+        "https://web.push.apple.com/abc")
+    assert w.valid_push_endpoint(
+        "https://fcm.googleapis.com/fcm/send/abc")
+
+
+def test_bad_watch_id_is_not_found(approved_client):
+    for bad in ("../../etc", "a/b", "..", "x" * 200):
+        assert approved_client.request(
+            "DELETE", "/api/watch/" + bad, headers=auth()).status_code == 404
+
+
+def test_oversized_body_rejected(approved_client):
+    huge = {"type": "circle", "name": "x", "kinds": ["incident"],
+            "center": {"lat": 37.3, "lon": -121.9}, "radius_km": 10,
+            "pad": "z" * 300000}
+    r = approved_client.post("/api/watch/create", json=huge, headers=auth())
+    assert r.status_code in (400, 413)

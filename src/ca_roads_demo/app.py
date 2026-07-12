@@ -335,10 +335,21 @@ def _log_question(visitor, question, location, prior, tool_calls, tokens,
     )
 
 
-async def ask(request: Request):
+async def _capped_json(request: Request):
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > MAX_REQUEST_BYTES:
+            return None
     try:
-        body = await request.json()
-    except json.JSONDecodeError:
+        return json.loads(body) if body else {}
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
+async def ask(request: Request):
+    body = await _capped_json(request)
+    if body is None:
         return JSONResponse({"error": "invalid JSON"}, status_code=400)
     question = (body.get("question") or "").strip()
     if not question:
@@ -862,9 +873,8 @@ EVENT_ALLOWLIST = {
 async def track(request: Request):
     """No-cookie interaction beacon from the page. Logs an event name and a
     daily-rotating visitor hash; nothing else."""
-    try:
-        body = await request.json()
-    except json.JSONDecodeError:
+    body = await _capped_json(request)
+    if body is None:
         return JSONResponse({"error": "invalid JSON"}, status_code=400)
     event = body.get("event")
     if event not in EVENT_ALLOWLIST:
@@ -1071,17 +1081,70 @@ app = Starlette(
 # sustained): normal browsing fires event beacons and watch-API calls
 # from the same per-IP bucket, and burst-5 tuning rate-limited real
 # users mid-session. Dollar protection lives in the daily caps.
+MAX_REQUEST_BYTES = 256 * 1024
+
+
+class BodyLimit:
+    """Reject oversized request bodies at the door so a single 512 MiB
+    instance cannot be OOM'd by a large POST."""
+
+    def __init__(self, app_):
+        self.app = app_
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope.get("method") in ("POST", "PUT",
+                                                                "PATCH"):
+            cl = dict(scope.get("headers") or {}).get(b"content-length")
+            if cl and cl.isdigit() and int(cl) > MAX_REQUEST_BYTES:
+                await send({"type": "http.response.start", "status": 413,
+                            "headers": [(b"content-type",
+                                         b"application/json")]})
+                await send({"type": "http.response.body",
+                            "body": b'{"error": "request too large"}'})
+                return
+        await self.app(scope, receive, send)
+
+
 class SecurityHeaders:
     """Baseline hardening headers on every response: no MIME sniffing,
     no framing (clickjacking), tight referrers, and geolocation only
     for this origin. No cookies exist, so there is no CSRF surface."""
 
+    # Content-Security-Policy: the pages use inline scripts, so
+    # script-src keeps 'unsafe-inline' - but everything an injected
+    # payload would want (loading external code, framing us, exfil to
+    # an arbitrary host, rewriting <base>, posting a form elsewhere) is
+    # locked to a fixed allowlist of the hosts we actually use.
+    CSP = (
+        "default-src 'self'; "
+        "base-uri 'none'; "
+        "object-src 'none'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "script-src 'self' 'unsafe-inline' https://www.gstatic.com "
+        "https://apis.google.com https://static.cloudflareinsights.com; "
+        "style-src 'self' 'unsafe-inline'; "
+        "font-src 'self'; "
+        "img-src 'self' data: https://*.basemaps.cartocdn.com "
+        "https://*.cartocdn.com; "
+        "connect-src 'self' https://router.project-osrm.org "
+        "https://valhalla1.openstreetmap.de https://*.googleapis.com "
+        "https://*.google.com https://cloudflareinsights.com "
+        "https://*.gstatic.com; "
+        "frame-src https://ca-roads-mcp.firebaseapp.com "
+        "https://accounts.google.com https://apis.google.com; "
+        "worker-src 'self'; manifest-src 'self'"
+    )
     HEADERS = [
         (b"x-content-type-options", b"nosniff"),
         (b"x-frame-options", b"DENY"),
         (b"referrer-policy", b"strict-origin-when-cross-origin"),
         (b"permissions-policy",
-         b"geolocation=(self), camera=(), microphone=()"),
+         b"geolocation=(self), camera=(), microphone=(), payment=()"),
+        (b"content-security-policy", CSP.encode()),
+        (b"strict-transport-security",
+         b"max-age=31536000; includeSubDomains"),
+        (b"cross-origin-opener-policy", b"same-origin-allow-popups"),
     ]
 
     def __init__(self, app_):
@@ -1155,6 +1218,7 @@ class StaticCacheHeaders:
         await self.app(scope, receive, send_with_cache if cacheable else send)
 
 
+app = BodyLimit(app)
 app = SoftLimit(app)
 app = StaticCacheHeaders(app)
 app = RateLimitMiddleware(

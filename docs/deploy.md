@@ -142,6 +142,17 @@ gcloud scheduler jobs create http watch-checker --location us-west1 \
 The demo's service account needs `roles/datastore.user` for Firestore
 and secretAccessor on the VAPID secret.
 
+Deploy the deny-all Firestore rules (clients never touch the database
+directly; the server uses the service-account SDK, which bypasses
+rules):
+
+```sh
+# once, and whenever firestore.rules changes
+gcloud firestore databases update --project ca-roads-mcp   # or via the Firebase Rules API / console: publish firestore.rules
+```
+The repo's `firestore.rules` is the source of truth; it is currently
+released to `cloud.firestore`.
+
 ## Optional data-source keys (both services)
 
 Three sources activate only when their key is present; everything else
