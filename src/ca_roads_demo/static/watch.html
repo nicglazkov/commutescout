@@ -206,12 +206,32 @@ input:focus { border-color:var(--sky) }
             <div class="modes">
               <button id="mode-circle" class="on">Circle</button>
               <button id="mode-polygon">Polygon</button>
+              <button id="mode-route">Route</button>
             </div>
             <div class="hint" id="shapehint">Click the map to place the
               center, then set the radius.</div>
             <div class="devrow hidden" id="polytools" style="margin-top:8px">
               <button class="ghost" id="undopt">Undo corner</button>
               <button class="ghost" id="clearpts">Start over</button>
+            </div>
+          </div>
+          <div class="field hidden" id="routerow">
+            <label>From</label>
+            <input type="text" id="rw-from" maxlength="200"
+                   placeholder="e.g. San Jose">
+            <div style="height:8px"></div>
+            <label>To</label>
+            <input type="text" id="rw-to" maxlength="200"
+                   placeholder="e.g. South Lake Tahoe">
+            <div style="height:8px"></div>
+            <button class="ghost" id="rw-preview" style="width:100%">
+              Preview route</button>
+            <div class="field" style="margin:12px 0 0">
+              <label>Alert distance from route</label>
+              <div class="radius">
+                <input type="range" id="rw-buffer" min="1" max="7" value="2">
+                <b id="rw-bufferlabel">2 mi</b>
+              </div>
             </div>
           </div>
           <div class="field" id="radiusrow">
@@ -448,7 +468,11 @@ const HINTS = {
   circle: 'Click the map to place the center, then set the radius.',
   polygon: 'Tap the map to add corners (3-20). Drag a corner to move it, '
     + 'tap it to remove it, tap a faint dot between corners to add one there.',
+  route: 'Name both ends, preview the route, set how far from it you '
+    + 'want alerts, then create.',
 };
+let routePts = null;
+let routeLine = null;
 
 function vertexIcon(mid) {
   return L.divIcon({ className: mid ? 'mhandle' : 'vhandle',
@@ -563,10 +587,56 @@ function setMode(m) {
   mode = m;
   $('mode-circle').classList.toggle('on', m === 'circle');
   $('mode-polygon').classList.toggle('on', m === 'polygon');
+  $('mode-route').classList.toggle('on', m === 'route');
   $('radiusrow').classList.toggle('hidden', m !== 'circle');
+  $('routerow').classList.toggle('hidden', m !== 'route');
   $('shapehint').textContent = HINTS[m];
-  center = null; polyPoints = []; redraw();
+  center = null; polyPoints = []; routePts = null;
+  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  redraw();
 }
+$('mode-route').addEventListener('click', () => setMode('route'));
+
+async function geocodeOne(q) {
+  const res = await fetch('/api/geocode?q=' + encodeURIComponent(q));
+  if (!res.ok) throw new Error('address lookup failed');
+  const c = ((await res.json()).candidates || [])[0];
+  if (!c) throw new Error('could not find \u201c' + q + '\u201d');
+  return c;
+}
+
+$('rw-preview').addEventListener('click', async () => {
+  const fromQ = $('rw-from').value.trim();
+  const toQ = $('rw-to').value.trim();
+  if (!fromQ || !toQ) {
+    msg('createmsg', 'Give the route a start and an end.', 'err');
+    return;
+  }
+  msg('createmsg', 'Routing\u2026');
+  try {
+    const [a, b] = await Promise.all([geocodeOne(fromQ), geocodeOne(toQ)]);
+    const res = await fetch('https://router.project-osrm.org/route/v1/driving/'
+      + a.lon + ',' + a.lat + ';' + b.lon + ',' + b.lat
+      + '?overview=full&geometries=geojson');
+    if (!res.ok) throw new Error('routing service unavailable, try again');
+    const route = (await res.json()).routes[0];
+    if (!route) throw new Error('no drivable route found');
+    routePts = route.geometry.coordinates.map((c) => [c[1], c[0]]);
+    if (routeLine) map.removeLayer(routeLine);
+    routeLine = L.polyline(routePts, { color: '#2f81f7', weight: 4,
+      opacity: 0.8 }).addTo(map);
+    map.fitBounds(routeLine.getBounds().pad(0.25));
+    if (!$('wname').value.trim()) {
+      $('wname').value = (fromQ + ' \u2192 ' + toQ).slice(0, 60);
+    }
+    msg('createmsg', 'Route previewed - alerts will cover '
+      + $('rw-buffer').value + ' mi either side.', 'ok');
+  } catch (e) { msg('createmsg', e.message, 'err'); }
+});
+
+$('rw-buffer').addEventListener('input', () => {
+  $('rw-bufferlabel').textContent = $('rw-buffer').value + ' mi';
+});
 $('mode-circle').addEventListener('click', () => setMode('circle'));
 $('mode-polygon').addEventListener('click', () => setMode('polygon'));
 $('radius').addEventListener('input', () => {
@@ -676,6 +746,11 @@ function renderWatches() {
       shape = L.circle([w.center.lat, w.center.lon],
         Object.assign({ radius: w.radius_km * 1000 }, style))
         .addTo(savedLayer);
+    } else if (w.type === 'route') {
+      const pts = (w.points || []).map(
+        (pt) => Array.isArray(pt) ? pt : [pt.lat, pt.lon]);
+      shape = L.polyline(pts, Object.assign({}, style,
+        { weight: 4, fill: false })).addTo(savedLayer);
     } else {
       const pts = (w.points || []).map(
         (pt) => Array.isArray(pt) ? pt : [pt.lat, pt.lon]);
@@ -696,7 +771,11 @@ function renderWatches() {
     if ((w.channels || {}).push !== false) chans.push('push');
     if ((w.channels || {}).email) chans.push('email');
     meta.textContent = (w.type === 'circle'
-      ? Math.round(w.radius_km) + ' km circle' : 'polygon') +
+      ? Math.round(w.radius_km) + ' km circle'
+      : w.type === 'route'
+        ? Math.round((w.length_km || 0) * 0.6214) + ' mi route \u00b7 '
+          + Math.round((w.buffer_km || 3) * 0.6214) + ' mi buffer'
+        : 'polygon') +
       ' - ' + (w.kinds || []).join(', ') +
       ' - ' + (chans.join(' + ') || 'no delivery');
     text.append(name, meta);
@@ -777,6 +856,12 @@ $('createbtn').addEventListener('click', async () => {
     Object.assign(body, { type: 'circle',
       center: { lat: center[0], lon: center[1] },
       radius_km: Number($('radius').value) });
+  } else if (mode === 'route') {
+    if (!routePts || routePts.length < 2) {
+      msg('createmsg', 'Preview the route first.', 'err'); return;
+    }
+    Object.assign(body, { type: 'route', points: routePts,
+      buffer_km: Number($('rw-buffer').value) * 1.609 });
   } else {
     if (polyPoints.length < 3) { msg('createmsg', 'Add at least three corners on the map.', 'err'); return; }
     Object.assign(body, { type: 'polygon', points: polyPoints });
@@ -784,7 +869,10 @@ $('createbtn').addEventListener('click', async () => {
   try {
     await api('/api/watch/create', { method: 'POST',
       body: JSON.stringify(body) });
-    center = null; polyPoints = []; $('wname').value = ''; redraw();
+    center = null; polyPoints = []; routePts = null;
+    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+    $('wname').value = ''; $('rw-from').value = ''; $('rw-to').value = '';
+    redraw();
     me = await api('/api/watch/me');
     renderWatches();
     msg('createmsg', 'Watch created.', 'ok');

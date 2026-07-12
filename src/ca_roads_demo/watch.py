@@ -59,6 +59,10 @@ MAX_PUSH_SUBS = 5
 MAX_RADIUS_KM = 65.0
 MIN_RADIUS_KM = 1.0
 MAX_POLY_POINTS = 20
+MAX_ROUTE_POINTS = 80
+MAX_ROUTE_KM = 800.0
+MIN_BUFFER_KM = 1.0
+MAX_BUFFER_KM = 12.0
 MAX_ALERTS_PER_WATCH_CYCLE = 8
 MAX_SEEN_IDS = 1500
 CA_LAT = (31.0, 43.5)
@@ -320,9 +324,37 @@ def point_in_polygon(lat: float, lon: float, points: list[list[float]]) -> bool:
     return inside
 
 
+def _point_to_segment_km(lat, lon, a, b) -> float:
+    kx = math.cos(math.radians(lat)) * 111.32
+    ky = 110.57
+    ax, ay = (a[1] - lon) * kx, (a[0] - lat) * ky
+    bx, by = (b[1] - lon) * kx, (b[0] - lat) * ky
+    dx, dy = bx - ax, by - ay
+    seg2 = dx * dx + dy * dy
+    t = 0.0 if seg2 == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / seg2))
+    px, py = ax + t * dx, ay + t * dy
+    return math.hypot(px, py)
+
+
+def route_distance_km(points: list, lat: float, lon: float) -> float:
+    """Distance from a point to the nearest segment of a route."""
+    pairs = [[p["lat"], p["lon"]] if isinstance(p, dict) else p
+             for p in points]
+    if len(pairs) == 1:
+        return haversine_km(pairs[0][0], pairs[0][1], lat, lon)
+    return min(_point_to_segment_km(lat, lon, pairs[i], pairs[i + 1])
+               for i in range(len(pairs) - 1))
+
+
 def watch_matches(watch: dict, lat: float, lon: float) -> bool:
     if not lat or not lon:
         return False
+    if watch.get("type") == "route":
+        pts = watch.get("points") or []
+        if not pts:
+            return False
+        return (route_distance_km(pts, lat, lon)
+                <= float(watch.get("buffer_km") or 3.0))
     if watch.get("type") == "polygon":
         pairs = [[p["lat"], p["lon"]] if isinstance(p, dict) else p
                  for p in (watch.get("points") or [])]
@@ -497,8 +529,42 @@ async def api_watch_create(request: Request) -> JSONResponse:
         if point_err:
             return _err(point_err)
         watch.update({"type": "polygon", "points": points})
+    elif wtype == "route":
+        raw = body.get("points") or []
+        if len(raw) < 2:
+            return _err("route needs at least two points")
+        step = max(1, len(raw) // MAX_ROUTE_POINTS)
+        sampled = raw[::step]
+        if sampled and raw and sampled[-1] != raw[-1]:
+            sampled.append(raw[-1])
+        points = []
+        total_km = 0.0
+        try:
+            prev = None
+            for pt in sampled:
+                lat, lon = float(pt[0]), float(pt[1])
+                if not in_california(lat, lon):
+                    return _err("routes must stay in California "
+                                "(offshore is fine)")
+                if prev:
+                    total_km += haversine_km(prev[0], prev[1], lat, lon)
+                prev = (lat, lon)
+                points.append({"lat": lat, "lon": lon})
+        except (TypeError, ValueError, IndexError):
+            return _err("points must be [lat, lon] pairs")
+        if total_km > MAX_ROUTE_KM:
+            return _err(f"routes are limited to {MAX_ROUTE_KM:.0f} km "
+                        "during the trial")
+        try:
+            buffer_km = float(body.get("buffer_km") or 3.0)
+        except (TypeError, ValueError):
+            buffer_km = 3.0
+        buffer_km = min(max(buffer_km, MIN_BUFFER_KM), MAX_BUFFER_KM)
+        watch.update({"type": "route", "points": points,
+                      "buffer_km": round(buffer_km, 2),
+                      "length_km": round(total_km, 1)})
     else:
-        return _err("type must be circle or polygon")
+        return _err("type must be circle, polygon, or route")
 
     store = get_store()
     existing = await store.list_watches(claims["sub"])
@@ -554,6 +620,15 @@ async def api_watch_update(request: Request) -> JSONResponse:
                                "email": bool(channels.get("email", False))}
     if "active" in body:
         updates["active"] = bool(body.get("active"))
+    if "buffer_km" in body:
+        if watch.get("type") != "route":
+            return _err("only route watches have a buffer")
+        try:
+            buffer_km = float(body.get("buffer_km"))
+        except (TypeError, ValueError):
+            return _err("buffer_km must be a number")
+        updates["buffer_km"] = round(
+            min(max(buffer_km, MIN_BUFFER_KM), MAX_BUFFER_KM), 2)
     if "points" in body:
         if watch.get("type") != "polygon":
             return _err("only polygon watches have editable points")
