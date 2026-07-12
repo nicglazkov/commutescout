@@ -1,8 +1,43 @@
 /* Service worker: receives watch-area push alerts and opens /watch on
    tap. No fetch interception - the page works identically without it. */
 
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+const ASSET_CACHE = 'ca-roads-assets-v1';
+
+self.addEventListener('install', (e) => {
+  e.waitUntil((async () => {
+    const cache = await caches.open(ASSET_CACHE);
+    await cache.addAll([
+      '/static/vendor/leaflet.js', '/static/vendor/leaflet.css',
+      '/static/fonts/fonts.css',
+      '/static/icon-192.png', '/static/icon-512.png',
+    ]).catch(() => {});
+    await self.skipWaiting();
+  })());
+});
+self.addEventListener('activate', (e) => e.waitUntil((async () => {
+  for (const key of await caches.keys()) {
+    if (key.startsWith('ca-roads-assets-') && key !== ASSET_CACHE) {
+      await caches.delete(key);
+    }
+  }
+  await self.clients.claim();
+})()));
+
+// Cache-first for vendored assets only: Leaflet, fonts, icons. Pages
+// and API calls always hit the network, so deploys stay instant.
+self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+  if (url.origin !== location.origin) return;
+  if (!/^\/static\/(vendor|fonts)\/|^\/static\/icon-/.test(url.pathname)) return;
+  e.respondWith((async () => {
+    const cache = await caches.open(ASSET_CACHE);
+    const hit = await cache.match(e.request);
+    if (hit) return hit;
+    const res = await fetch(e.request);
+    if (res.ok) cache.put(e.request, res.clone());
+    return res;
+  })());
+});
 
 self.addEventListener('push', (e) => {
   let data = {};

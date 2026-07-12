@@ -691,6 +691,7 @@ function ensureMap() {
   if (map) return;
   map = L.map('map', { scrollWheelZoom: true }).setView([37.4, -121.2], 6);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    keepBuffer: 4,
     maxZoom: 17,
     subdomains: 'abcd',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
@@ -894,6 +895,12 @@ function beacon(event, extra) {
   catch (e) { fetch('/api/event', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: payload}).catch(() => {}); }
 }
 beacon('pageview');
+if ('serviceWorker' in navigator) {
+  // Idle-time registration: caches Leaflet/fonts/icons for instant
+  // repeat visits; pages and data always come from the network.
+  setTimeout(() => navigator.serviceWorker.register('/sw.js')
+    .catch(() => {}), 3500);
+}
 
 ensureMap();
 fetch('/api/stats').then(r => r.json()).then(s => {
@@ -1974,9 +1981,43 @@ function setPinField(field, ll) {
   map.closePopup(pinPopup);
   if (fromF.input.dataset.lat && toF.input.dataset.lat) planbtn.click();
 }
+function clickNearRoute(latlng) {
+  if (!plannedRoute || !lastEnds) return false;
+  const pts = plannedRoute.route.latlngs;
+  const c = map.latLngToLayerPoint(latlng);
+  const step = Math.max(1, Math.floor(pts.length / 250));
+  let prev = map.latLngToLayerPoint(pts[0]);
+  for (let i = step; i < pts.length; i += step) {
+    const cur = map.latLngToLayerPoint(pts[i]);
+    const dx = cur.x - prev.x, dy = cur.y - prev.y;
+    const seg2 = dx * dx + dy * dy;
+    const t = seg2 ? Math.max(0, Math.min(1,
+      ((c.x - prev.x) * dx + (c.y - prev.y) * dy) / seg2)) : 0;
+    const px = prev.x + t * dx - c.x, py = prev.y + t * dy - c.y;
+    if (px * px + py * py < 26 * 26) return true;
+    prev = cur;
+  }
+  return false;
+}
+
 map.on('click', (e) => {
   // A reshape drag ends with a synthetic map click; swallow it.
   if (suppressPinOnce) { suppressPinOnce = false; return; }
+  // Tapping the planned route offers a stop there. This lives here
+  // rather than on the route layer because WebKit taps never reach
+  // canvas vectors.
+  if (clickNearRoute(e.latlng) && viaPoints.length < 5) {
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.textContent = 'Route through here';
+    btn.className = 'pinchoice-single';
+    btn.addEventListener('click', async () => {
+      map.closePopup();
+      viaPoints.push([e.latlng.lat, e.latlng.lng]);
+      await replanVias();
+    });
+    L.popup().setLatLng(e.latlng).setContent(btn).openOn(map);
+    return;
+  }
   const wrap = document.createElement('div');
   wrap.className = 'pinchoice';
   const mkBtn = (label, field) => {
@@ -2074,6 +2115,7 @@ async function colorRouteByTraffic(route, baseLine, gen) {
           ' mph free-flow</div></div>'
         : 'No speed data here', { maxWidth: 280 }).addTo(layerRoute);
     }
+    if (reshapeGrab) reshapeGrab.bringToFront();
   } catch (e) { /* keep the navy line */ }
 }
 
@@ -2083,6 +2125,7 @@ function wireReshape(route) {
   // as draggable dots; clicking one removes it.
   const grab = L.polyline(route.latlngs, { color: '#000', weight: 22,
     opacity: 0.001, interactive: true }).addTo(layerRoute);
+  reshapeGrab = grab;
   let ghost = null;
   grab.on('mousedown', (e) => {
     if (viaPoints.length >= 5) return;
@@ -2115,21 +2158,6 @@ function wireReshape(route) {
     map.on('mouseup', up);
     document.addEventListener('mouseup', docUp, true);
   });
-  // Touch fallback: tap the route, confirm the stop in a popup.
-  grab.on('click', (e) => {
-    if (!window.matchMedia('(max-width: 960px)').matches) return;
-    if (viaPoints.length >= 5) return;
-    L.DomEvent.stop(e.originalEvent);
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.textContent = 'Route through here';
-    btn.className = 'pinchoice-single';
-    btn.addEventListener('click', async () => {
-      map.closePopup();
-      viaPoints.push([e.latlng.lat, e.latlng.lng]);
-      await replanVias();
-    });
-    L.popup().setLatLng(e.latlng).setContent(btn).openOn(map);
-  });
   for (const [i, v] of viaPoints.entries()) {
     const mk = L.marker(v, { draggable: true, zIndexOffset: 500,
       icon: L.divIcon({ className: 'viadot', iconSize: [16, 16] }) })
@@ -2148,6 +2176,7 @@ function wireReshape(route) {
 }
 
 let routeGen = 0;
+let reshapeGrab = null;
 function showRoute(route, others, a, b) {
   routeGen += 1;
   mobileReveal(document.getElementById('routealts'));

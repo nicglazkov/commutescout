@@ -1053,6 +1053,31 @@ app = Starlette(
     ]
 )
 # Request-level limiter on top of the daily caps (burst 5, ~6/min sustained).
+class StaticCacheHeaders:
+    """Vendored assets (Leaflet, fonts, icons) almost never change:
+    let browsers keep them for a week instead of revalidating every
+    page view. HTML and API responses are untouched."""
+
+    def __init__(self, app_):
+        self.app = app_
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "")
+        cacheable = scope["type"] == "http" and (
+            path.startswith(("/static/vendor/", "/static/fonts/"))
+            or path.startswith("/static/icon-"))
+
+        async def send_with_cache(message):
+            if cacheable and message["type"] == "http.response.start":
+                headers = message.setdefault("headers", [])
+                headers.append((b"cache-control",
+                                b"public, max-age=604800, immutable"))
+            await send(message)
+
+        await self.app(scope, receive, send_with_cache if cacheable else send)
+
+
+app = StaticCacheHeaders(app)
 app = RateLimitMiddleware(
     app,
     RateLimiter(capacity=5, refill_per_second=0.1),
