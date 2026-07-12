@@ -273,6 +273,13 @@ class FirestoreStore:
     async def delete_push_sub(self, sub_id: str) -> None:
         await self.db.collection("watch_pushsubs").document(sub_id).delete()
 
+    async def create_trip(self, trip_id: str, data: dict) -> None:
+        await self.db.collection("trips").document(trip_id).set(data)
+
+    async def get_trip(self, trip_id: str) -> dict | None:
+        snap = await self.db.collection("trips").document(trip_id).get()
+        return snap.to_dict() if snap.exists else None
+
     async def get_seen(self, watch_id: str) -> set[str] | None:
         """None means the watch has never completed a cycle; an empty
         set means it has, and everything since cleared."""
