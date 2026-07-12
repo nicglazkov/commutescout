@@ -115,3 +115,45 @@ def test_to_event_families():
     assert chp.to_event(make("1183-Trfc Collision-Unkn Inj")).family == "accident"
     assert chp.to_event(make("CLOSURE of a Road")).family == "closure"
     assert chp.to_event(make("1125-Traffic Hazard")).family == "incident"
+
+
+async def test_truncated_feed_carries_recent_records(respx_mock=None):
+    import httpx
+    import respx
+
+    from ca_roads.feeds.chp import ChpSource
+
+    full = b"""<?xml version="1.0" encoding="UTF-8"?>
+<State>
+<Center ID="MY">
+<Dispatch ID="A">
+<Log ID="1"><LogType>"1182-Trfc Collision-No Inj"</LogType>
+<LogTime>"Jul 11 2026 11:37PM"</LogTime>
+<Location>"Sr9 / Shingle Mill Rd"</Location><Area>"Santa Cruz"</Area>
+<LATLON>"37248342:122154090"</LATLON></Log>
+<Log ID="2"><LogType>"1125-Traffic Hazard"</LogType>
+<LogTime>"Jul 11 2026 11:38PM"</LogTime>
+<Location>"US-101 N"</Location><Area>"San Jose"</Area>
+<LATLON>"37338200:121886300"</LATLON></Log>
+</Dispatch>
+</Center>
+</State>"""
+    # Truncated mid-record: only Log 2 is gone.
+    truncated = full.split(b"<Log ID=\"2\">")[0]
+
+    async with httpx.AsyncClient() as client:
+        source = ChpSource(client)
+        with respx.mock:
+            respx.get("https://media.chp.ca.gov/sa_xml/sa.xml").mock(
+                return_value=httpx.Response(200, content=full))
+            first = await source.get()
+            assert {i.id for i in first.records} == {"1", "2"}
+
+        with respx.mock:
+            # Both the fetch and the cache-busted retry return the cut file.
+            respx.get("https://media.chp.ca.gov/sa_xml/sa.xml").mock(
+                return_value=httpx.Response(200, content=truncated))
+            second = await source.get()
+            # Log 2 sits behind the cut but was seen recently: carried.
+            assert {i.id for i in second.records} == {"1", "2"}
+            assert any("carried forward" in n for n in second.notes)

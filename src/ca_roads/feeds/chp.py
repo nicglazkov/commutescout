@@ -24,6 +24,12 @@ SOURCE = "chp"
 TIMEOUT_SECONDS = 10.0
 # On a failed fetch, the last good parse may be served up to this old.
 MAX_SERVE_SECONDS = 10 * 60
+# When the server truncates sa.xml (it cuts the file under high load),
+# records recently seen in earlier fetches are carried forward this
+# long instead of silently vanishing. A watch alert arriving 78
+# minutes late traced back to exactly this: the incident's dispatch
+# center sat past the cut for over an hour on a busy Friday night.
+CARRY_SECONDS = 20 * 60
 
 TZ_PACIFIC = ZoneInfo("America/Los_Angeles")
 
@@ -137,6 +143,7 @@ class ChpSource:
         self._last_modified: str | None = None
         self._last_good: list[ChpIncident] | None = None
         self._last_good_notes: list[str] = []
+        self._carry: dict[str, tuple[float, ChpIncident]] = {}
         self._fetched_at: datetime | None = None
         self._fetched_monotonic: float = 0.0
 
@@ -159,11 +166,43 @@ class ChpSource:
             return self._fallback(f"{type(exc).__name__}: {exc}")
 
         incidents, truncated = parse_chp_xml(resp.content)
-        notes = []
         if truncated:
+            # One immediate cache-busted retry: when the cut came from an
+            # intermediary rather than CHP's generator, a refetch often
+            # returns the whole file.
+            try:
+                retry = await self._client.get(
+                    CHP_URL, params={"_": int(time.time())},
+                    headers={"User-Agent": USER_AGENT},
+                    timeout=TIMEOUT_SECONDS)
+                if retry.status_code == 200:
+                    incidents2, truncated2 = parse_chp_xml(retry.content)
+                    if len(incidents2) > len(incidents):
+                        incidents, truncated = incidents2, truncated2
+            except Exception:  # noqa: BLE001 - retry is best-effort
+                pass
+        notes = []
+        now_mono = time.monotonic()
+        if truncated:
+            # Union with recently-seen records: a truncated file proves
+            # nothing about the records behind the cut, so they stay
+            # current for CARRY_SECONDS instead of flapping out.
+            parsed_ids = {i.id for i in incidents}
+            carried = [inc for seen_at, inc in self._carry.values()
+                       if inc.id not in parsed_ids
+                       and now_mono - seen_at < CARRY_SECONDS]
+            incidents = [*incidents, *carried]
             notes.append(
-                "CHP feed was truncated by the server; only complete records were parsed"
+                "CHP feed was truncated by the server; "
+                f"{len(carried)} recently seen incident(s) carried forward"
             )
+            print(f"WARNING chp feed truncated: parsed={len(parsed_ids)} "
+                  f"carried={len(carried)}", flush=True)
+            for inc in incidents:
+                if inc.id in parsed_ids:
+                    self._carry[inc.id] = (now_mono, inc)
+        else:
+            self._carry = {i.id: (now_mono, i) for i in incidents}
         self._etag = resp.headers.get("ETag")
         self._last_modified = resp.headers.get("Last-Modified")
         self._last_good = incidents

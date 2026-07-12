@@ -295,6 +295,13 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .pop .hist { color:#8a94a3; font-size:.72rem; margin-top:7px;
   border-top:1px dashed var(--line); padding-top:6px; line-height:1.5 }
 .pop .lanes-strong { font-weight:700; color:#a02c2c }
+.viachips { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 2px }
+.viachips .chip { display:inline-flex; align-items:center; gap:5px;
+  background:var(--sky-soft); border:1px solid #cfe0fb; border-radius:99px;
+  padding:3px 6px 3px 10px; font:600 .74rem Inter; color:#1d4f9c }
+.viachips .chip button { background:none; border:0; cursor:pointer;
+  color:#1d4f9c; font-size:.8rem; padding:2px 3px; line-height:1 }
+.viachips .chip button:hover { color:var(--red) }
 .pinchoice { display:flex; flex-direction:column; gap:6px; min-width:150px }
 .pinchoice button, .pinchoice-single { font:600 .8rem Inter; color:var(--sky);
   background:var(--sky-soft); border:1px solid #cfe0fb; border-radius:8px;
@@ -382,12 +389,14 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <div id="printwrap" style="display:none">
         <div class="routealts" id="routealts"></div>
         <div class="routesum" id="routesum"></div>
+        <div class="viachips" id="viachips"></div>
         <div class="routebtns">
           <button type="button" id="printbtn">Print</button>
           <button type="button" id="exportbtn">Export .txt</button>
           <button type="button" id="gpxbtn">GPX</button>
           <button type="button" id="kmlbtn">KML</button>
           <button type="button" id="sharebtn" class="pri">Share link</button>
+          <button type="button" id="clearroutebtn">Clear route</button>
         </div>
         <div class="routeasks-wrap" id="routeasks-wrap">
           <b>Questions people ask about this drive</b>
@@ -1832,6 +1841,60 @@ let viaPoints = [];
 let lastEnds = null;
 let suppressPinOnce = false;
 
+let viaManual = false;
+
+function renderViaChips() {
+  const box = document.getElementById('viachips');
+  box.innerHTML = '';
+  viaPoints.forEach((v, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.append('Stop ' + (i + 1));
+    const mk = (label, title, fn) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = label; b.title = title;
+      b.addEventListener('click', fn);
+      return b;
+    };
+    if (i > 0) {
+      chip.append(mk('\u25b2', 'Visit earlier', async () => {
+        viaManual = true;
+        [viaPoints[i - 1], viaPoints[i]] = [viaPoints[i], viaPoints[i - 1]];
+        await replanVias();
+      }));
+    }
+    if (i < viaPoints.length - 1) {
+      chip.append(mk('\u25bc', 'Visit later', async () => {
+        viaManual = true;
+        [viaPoints[i], viaPoints[i + 1]] = [viaPoints[i + 1], viaPoints[i]];
+        await replanVias();
+      }));
+    }
+    chip.append(mk('\u00d7', 'Remove this stop', async () => {
+      viaPoints.splice(i, 1);
+      await replanVias();
+    }));
+    box.append(chip);
+  });
+}
+
+function clearRoute() {
+  viaPoints = []; viaManual = false; lastEnds = null;
+  plannedRoute = null; plannedRoutes = [];
+  layerRoute.clearLayers();
+  renderViaChips();
+  for (const id of ['routesum', 'routealts', 'routecond', 'steps']) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  }
+  const wrap = document.getElementById('routeasks-wrap');
+  if (wrap) wrap.style.display = 'none';
+  const pw = document.getElementById('printwrap');
+  if (pw) pw.style.display = 'none';
+}
+document.getElementById('clearroutebtn')
+  .addEventListener('click', clearRoute);
+
 function viaOrdered(routeLatlngs) {
   // Waypoints keep their order along the current route so dragging a
   // second bend never crosses the wires with the first.
@@ -1868,8 +1931,11 @@ async function planWith(points, a, b) {
 async function replanVias() {
   if (!lastEnds) return;
   const base = plannedRoute ? plannedRoute.route.latlngs : [];
-  await planWith([lastEnds.a, ...viaOrdered(base), lastEnds.b],
+  const vias = viaManual ? viaPoints : viaOrdered(base);
+  viaPoints = vias;
+  await planWith([lastEnds.a, ...vias, lastEnds.b],
     lastEnds.a, lastEnds.b);
+  renderViaChips();
 }
 
 planbtn.addEventListener('click', async () => {
@@ -1878,7 +1944,8 @@ planbtn.addEventListener('click', async () => {
   if (!fromF.input.dataset.lat || !toF.input.dataset.lat) return;
   const a = [+fromF.input.dataset.lat, +fromF.input.dataset.lon];
   const b = [+toF.input.dataset.lat, +toF.input.dataset.lon];
-  viaPoints = [];
+  viaPoints = []; viaManual = false;
+  renderViaChips();
   lastEnds = { a, b };
   await planWith([a, b], a, b);
 });
@@ -1911,6 +1978,16 @@ map.on('click', (e) => {
   };
   wrap.append(mkBtn('Route from here', fromF),
               mkBtn('Route to here', toF));
+  if (lastEnds && viaPoints.length < 5) {
+    const stop = document.createElement('button');
+    stop.type = 'button'; stop.textContent = 'Add stop on this route';
+    stop.addEventListener('click', async () => {
+      map.closePopup(pinPopup);
+      viaPoints.push([e.latlng.lat, e.latlng.lng]);
+      await replanVias();
+    });
+    wrap.append(stop);
+  }
   pinPopup.setLatLng(e.latlng).setContent(wrap).openOn(map);
 });
 
