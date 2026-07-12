@@ -37,10 +37,15 @@ from evals.fixture_mode import fixture_road_data
 GOLDEN_DIR = Path(__file__).parent / "golden"
 RESULTS_DIR = Path(__file__).parent / "results"
 
-DEFAULT_MODELS = ["claude-haiku-4-5", "claude-sonnet-5"]
-# The judge must not be an evaluated model (self-grading bias); Opus is
-# a tier above both candidates and the call volume is small.
-JUDGE_MODEL = "claude-opus-4-8"
+# Only the production model is scored on the regular cadence: Haiku
+# trend data was costing half of every run to answer a hypothetical
+# switch. Evaluate a candidate explicitly with --models when comparing.
+DEFAULT_MODELS = ["claude-sonnet-5"]
+# The judge must not be an evaluated model (self-grading bias).
+# Sonnet 4.6 is a different model from the evaluated Sonnet 5, grades
+# this rubric reliably, and costs a fraction of the Opus judge that
+# used to dominate each run's bill.
+JUDGE_MODEL = "claude-sonnet-4-6"
 MAX_TOOL_TURNS = 6
 CONCURRENCY = 4
 

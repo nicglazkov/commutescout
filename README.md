@@ -190,7 +190,7 @@ The eval suite ships with the server and gates every release:
   are scheduled but not established, ramp closures phrased as "is the
   highway closed", forecast questions the data cannot answer.
 - **A grading harness** that runs Claude against the tools in fixture mode
-  and scores exact-fact matching plus an LLM judge (claude-opus-4-8, never
+  and scores exact-fact matching plus an LLM judge (claude-sonnet-4-6, never
   an evaluated model), with a failure taxonomy and a tool-selection drift
   metric. Every run appends to a committed history file so the trend is
   public.

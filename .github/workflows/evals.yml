@@ -1,7 +1,8 @@
 name: Evals
 
-# The full suite is 91 questions x 2 models plus an Opus judge per
-# answer - a few dollars per run. It runs weekly and on demand; a
+# The suite is 91 questions answered by the production model plus a
+# Sonnet 4.6 judge per answer - roughly a dollar per run. It runs
+# monthly and on demand; a
 # release only triggers it when the release changed something a model
 # can notice (feeds, tools, prompts, or the evals themselves). A week
 # of rapid-fire docs/UI releases once burned ~$100 re-scoring identical
@@ -10,7 +11,7 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: "7 14 * * 1" # Mondays
+    - cron: "7 14 1 * *" # first of the month; dispatch for ad-hoc runs
   workflow_dispatch:
 
 jobs:
