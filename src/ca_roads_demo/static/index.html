@@ -1821,7 +1821,13 @@ let suppressPinOnce = false;
 
 let viaManual = false;
 
+let itinHl = null;
+function dropItinHl() {
+  if (itinHl) { map.removeLayer(itinHl); itinHl = null; }
+}
+
 function renderViaChips() {
+  dropItinHl();
   const box = document.getElementById('viachips');
   box.innerHTML = '';
   if (!lastEnds || !viaPoints.length) return;
@@ -1848,12 +1854,11 @@ function renderViaChips() {
     const row = legRow(String(i + 1),
       'Stop \u00b7 ' + v[0].toFixed(3) + ', ' + v[1].toFixed(3), true);
     row.addEventListener('mouseenter', () => {
-      row.__hl = L.circleMarker(v, { radius: 13, color: '#2f81f7',
+      dropItinHl();
+      itinHl = L.circleMarker(v, { radius: 13, color: '#2f81f7',
         weight: 3, fill: false }).addTo(map);
     });
-    row.addEventListener('mouseleave', () => {
-      if (row.__hl) { map.removeLayer(row.__hl); row.__hl = null; }
-    });
+    row.addEventListener('mouseleave', dropItinHl);
     if (i > 0) {
       row.append(mkBtn('\u25b2', 'Visit this stop earlier', '', async () => {
         viaManual = true;
@@ -1879,6 +1884,9 @@ function renderViaChips() {
 }
 
 function clearRoute() {
+  routeGen += 1;
+  dropItinHl();
+  if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
   viaPoints = []; viaManual = false; lastEnds = null;
   plannedRoute = null; plannedRoutes = [];
   layerRoute.clearLayers();
@@ -2030,7 +2038,7 @@ function flowColor(ratio) {
   return '#d64545';
 }
 
-async function colorRouteByTraffic(route, baseLine) {
+async function colorRouteByTraffic(route, baseLine, gen) {
   // Sample up to 10 midpoints along the route; color each stretch by
   // measured speed vs free-flow. No key or no data leaves the navy line.
   const pts = route.latlngs;
@@ -2052,6 +2060,7 @@ async function colorRouteByTraffic(route, baseLine) {
     const data = await res.json();
     const flow = data.flow || [];
     if (!flow.some(f => f)) return;
+    if (gen !== routeGen) return;  // route was replaced mid-fetch
     layerRoute.removeLayer(baseLine);
     for (let i = 0; i < segs; i++) {
       const seg = pts.slice(bounds[i], bounds[i + 1] + 1);
@@ -2082,18 +2091,29 @@ function wireReshape(route) {
     ghost = L.circleMarker(e.latlng, { radius: 7, color: '#fff',
       weight: 2, fillColor: '#0b1f33', fillOpacity: 1 }).addTo(layerRoute);
     const move = (ev) => ghost.setLatLng(ev.latlng);
-    const up = async (ev) => {
+    const finish = async (commit) => {
       map.off('mousemove', move); map.off('mouseup', up);
+      document.removeEventListener('mouseup', docUp, true);
       map.dragging.enable();
       suppressPinOnce = true;
       setTimeout(() => { suppressPinOnce = false; }, 400);
+      if (!ghost) return;
       const ll = ghost.getLatLng();
       layerRoute.removeLayer(ghost); ghost = null;
-      viaPoints.push([ll.lat, ll.lng]);
-      await replanVias();
+      if (commit) {
+        viaPoints.push([ll.lat, ll.lng]);
+        await replanVias();
+      }
+    };
+    const up = () => finish(true);
+    // Mouse released outside the map: cancel instead of stranding the
+    // ghost dot with dragging disabled.
+    const docUp = (ev) => {
+      if (!document.getElementById('map').contains(ev.target)) finish(false);
     };
     map.on('mousemove', move);
     map.on('mouseup', up);
+    document.addEventListener('mouseup', docUp, true);
   });
   // Touch fallback: tap the route, confirm the stop in a popup.
   grab.on('click', (e) => {
@@ -2127,7 +2147,9 @@ function wireReshape(route) {
   }
 }
 
+let routeGen = 0;
 function showRoute(route, others, a, b) {
+  routeGen += 1;
   mobileReveal(document.getElementById('routealts'));
   plannedRoute = { route, a, b,
     fromName: fromF.input.dataset.name, toName: toF.input.dataset.name };
@@ -2138,7 +2160,7 @@ function showRoute(route, others, a, b) {
   }
   const baseLine = L.polyline(route.latlngs,
     { color: '#0b1f33', weight: 4.5, opacity: 0.85 }).addTo(layerRoute);
-  colorRouteByTraffic(route, baseLine);
+  colorRouteByTraffic(route, baseLine, routeGen);
   wireReshape(route);
   [[a, 'A', plannedRoute.fromName], [b, 'B', plannedRoute.toName]].forEach(([pnt, letter, name]) => {
     const end = L.marker(pnt, { icon: L.divIcon({ className: 'route-end', html: letter, iconSize: [22, 22] }),
@@ -2198,6 +2220,9 @@ function nearRoute(m, latlngs, km) {
 }
 let condHighlight = null;
 function renderRouteConditions(latlngs) {
+  // The list is about to rebuild: a ring belonging to a row that is
+  // being destroyed would never get its mouseleave.
+  if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
   const box = document.getElementById('routecond');
   box.innerHTML = '<h4>Conditions along this route</h4>';
   let shown = 0;
@@ -2222,6 +2247,7 @@ function renderRouteConditions(latlngs) {
         row.append(dot, txt);
         const at = [p.lat, p.lng];
         row.addEventListener('mouseenter', () => {
+          if (condHighlight) map.removeLayer(condHighlight);
           condHighlight = L.circleMarker(at, {
             radius: 15, color: '#0b1f33', weight: 3, fill: false,
           }).addTo(map);
