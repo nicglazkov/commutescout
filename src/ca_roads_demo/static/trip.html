@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1f33">
+<title>__TITLE__</title>
+<meta property="og:title" content="__TITLE__">
+<meta property="og:description" content="Route, directions, and live road conditions on CA Roads.">
+<meta property="og:image" content="__OG_IMAGE__">
+<meta property="og:url" content="__OG_URL__">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/fonts/fonts.css">
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<style>
+:root {
+  --navy:#0b1f33; --navy2:#122c47; --ink:#0f1c2b; --dim:#5b6b7d;
+  --bg:#f5f2ea; --card:#fffdf7; --line:#e3ddd0; --sky:#2f81f7;
+  --green:#2f9e6e; --red:#d64545;
+}
+* { box-sizing:border-box; margin:0; -webkit-tap-highlight-color:transparent }
+body { background:var(--bg); color:var(--ink);
+  font:14.5px/1.55 Inter, system-ui, sans-serif }
+.topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
+  gap:14px; padding:0 20px; height:56px }
+.topbar img.mark { width:30px; height:30px; border-radius:7px }
+.topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
+.topbar nav { display:flex; gap:4px; margin-left:14px; overflow-x:auto }
+.topbar nav a { color:#b7c4d4; font-size:.85rem; padding:7px 12px; border-radius:8px;
+  text-decoration:none; white-space:nowrap }
+.topbar nav a:hover { color:#fff }
+main { max-width:1000px; margin:0 auto; padding:18px 14px 50px }
+h1 { font-size:1.15rem; margin:4px 0 2px }
+.sub { color:var(--dim); font-size:.85rem; margin-bottom:12px }
+#tmap { height:46dvh; min-height:300px; border-radius:14px;
+  border:1px solid var(--line) }
+.card { background:var(--card); border:1px solid var(--line);
+  border-radius:14px; padding:16px 18px; margin-top:12px }
+.card h2 { font-size:.92rem; margin-bottom:8px }
+.steps li { margin:0 0 6px 18px; color:#28323f }
+.cond { display:flex; gap:8px; align-items:baseline; padding:4px 0;
+  font-size:.84rem; color:#3c4a5a }
+.cond i { width:9px; height:9px; border-radius:99px; flex:none }
+.cta { display:inline-block; background:var(--sky); color:#fff;
+  text-decoration:none; font:600 .9rem Inter; padding:11px 22px;
+  border-radius:10px; margin-top:12px }
+.fine { color:var(--dim); font-size:.72rem; margin-top:16px }
+.fine a { color:var(--dim) }
+details summary { cursor:pointer; font-weight:600; font-size:.9rem }
+@media (max-width:700px){ .topbar{padding:0 12px} }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <img class="mark" src="/logo.svg" alt="">
+  <span class="wordmark">CA Roads</span>
+  <nav>
+    <a href="/">Live map</a>
+    <a href="/watch">Watch areas</a>
+    <a href="https://github.com/nicglazkov/ca-roads-mcp#add-to-claude" target="_blank" rel="noopener">Add to Claude</a>
+    <a href="https://github.com/nicglazkov/ca-roads-mcp" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+</header>
+<main>
+  <h1 id="head"></h1>
+  <div class="sub" id="sub"></div>
+  <div id="tmap"></div>
+  <div class="card">
+    <h2>Right now along this route</h2>
+    <div id="conds"><div class="sub">Checking live conditions&hellip;</div></div>
+  </div>
+  <div class="card">
+    <details>
+      <summary id="stepsum">Turn-by-turn directions</summary>
+      <ol class="steps" id="steps" style="margin-top:10px"></ol>
+    </details>
+  </div>
+  <a class="cta" href="/">Check this route live on CA Roads</a>
+  <div class="fine">
+    Shared route snapshot; conditions shown are live at the time you
+    open this page. Informational only - verify with 511 or
+    quickmap.dot.ca.gov before you drive.
+    <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a>
+  </div>
+</main>
+<script src="/static/vendor/leaflet.js"></script>
+<script>
+const TRIP = __TRIP_JSON__;
+
+function decodePolyline(str) {
+  const pts = []; let index = 0, lat = 0, lon = 0;
+  while (index < str.length) {
+    for (const which of ['lat', 'lon']) {
+      let shift = 0, result = 0, byte;
+      do {
+        byte = str.charCodeAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      const delta = (result & 1) ? ~(result >> 1) : (result >> 1);
+      if (which === 'lat') lat += delta; else lon += delta;
+    }
+    pts.push([lat / 1e5, lon / 1e5]);
+  }
+  return pts;
+}
+
+const pts = decodePolyline(TRIP.polyline);
+document.getElementById('head').textContent =
+  TRIP.from_name + ' → ' + TRIP.to_name;
+document.getElementById('sub').textContent =
+  Math.round(TRIP.miles) + ' mi · ~' + TRIP.minutes + ' min' +
+  (TRIP.via ? ' · via ' + TRIP.via : '');
+
+const map = L.map('tmap');
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  maxZoom: 18, attribution: '&copy; OpenStreetMap &copy; CARTO',
+}).addTo(map);
+const line = L.polyline(pts, { color: '#0b1f33', weight: 4.5, opacity: 0.85 })
+  .addTo(map);
+const mkIcon = (label) => L.divIcon({ className: '', iconSize: [26, 26],
+  html: '<div style="width:26px;height:26px;border-radius:99px;' +
+    'background:#0b1f33;color:#fff;display:grid;place-items:center;' +
+    'font:700 13px Inter">' + label + '</div>' });
+L.marker(pts[0], { icon: mkIcon('A') }).addTo(map);
+L.marker(pts[pts.length - 1], { icon: mkIcon('B') }).addTo(map);
+map.fitBounds(line.getBounds().pad(0.2));
+
+const steps = TRIP.steps || [];
+document.getElementById('stepsum').textContent =
+  'Turn-by-turn directions · ' + steps.length + ' steps';
+for (const s of steps) {
+  const li = document.createElement('li');
+  li.textContent = s.text + (s.miles >= 0.2
+    ? ' (' + s.miles.toFixed(1) + ' mi)' : '');
+  document.getElementById('steps').append(li);
+}
+
+// Live conditions within ~4 mi of the route, fetched fresh per view.
+const KIND_DOT = { incident: '#c9611a', lane_closure: '#a02c2c',
+  chain_control: '#2b6cb0', wildfire: '#d97706' };
+function segDistKm(p, a, b) {
+  const kx = Math.cos(p[0] * Math.PI / 180) * 111.32, ky = 110.57;
+  const ax = (a[1] - p[1]) * kx, ay = (a[0] - p[0]) * ky;
+  const bx = (b[1] - p[1]) * kx, by = (b[0] - p[0]) * ky;
+  const dx = bx - ax, dy = by - ay, seg2 = dx * dx + dy * dy;
+  const t = seg2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / seg2)) : 0;
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+function nearRoute(lat, lon, km) {
+  const step = Math.max(1, Math.floor(pts.length / 150));
+  for (let i = step; i < pts.length; i += step) {
+    if (segDistKm([lat, lon], pts[i - step], pts[i]) <= km) return true;
+  }
+  return false;
+}
+(async () => {
+  const box = line.getBounds().pad(0.15);
+  const bbox = [box.getSouth(), box.getWest(), box.getNorth(), box.getEast()]
+    .map((v) => v.toFixed(3)).join(',');
+  const out = document.getElementById('conds');
+  try {
+    const res = await fetch('/api/mapdata?bbox=' + bbox +
+      '&kinds=incident,closure,chain,fire');
+    const markers = (await res.json()).markers || [];
+    const near = markers.filter((m) => m.lat && nearRoute(m.lat, m.lon, 6.5));
+    out.innerHTML = '';
+    if (!near.length) {
+      out.innerHTML = '<div class="cond"><i style="background:#2f9e6e"></i>' +
+        'Nothing reported along this route right now.</div>';
+      return;
+    }
+    for (const m of near.slice(0, 10)) {
+      const row = document.createElement('div');
+      row.className = 'cond';
+      const dot = document.createElement('i');
+      dot.style.background = KIND_DOT[m.kind] || '#c9611a';
+      const txt = document.createElement('span');
+      txt.textContent = m.kind === 'incident'
+        ? (m.type || 'Incident') + ' - ' + (m.location || '')
+        : m.kind === 'wildfire'
+          ? 'Wildfire: ' + (m.name || '')
+          : (m.lanes ? m.lanes + ' - ' : '') + (m.label || m.status || '');
+      row.append(dot, txt);
+      out.append(row);
+    }
+    if (near.length > 10) {
+      const more = document.createElement('div');
+      more.className = 'cond';
+      more.textContent = '…and ' + (near.length - 10) + ' more on the live map.';
+      out.append(more);
+    }
+  } catch (e) {
+    out.innerHTML = '<div class="cond">Live conditions unavailable right now.</div>';
+  }
+})();
+</script>
+<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "90f462e0b7844f5082304a1dce315ad2"}'></script>
+</body>
+</html>

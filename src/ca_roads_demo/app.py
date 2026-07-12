@@ -35,7 +35,7 @@ from ca_roads.feeds import calfire as calfire_feed
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
-from ca_roads_demo import watch
+from ca_roads_demo import trips, watch
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_suggest
 from ca_roads_mcp.ratelimit import (
@@ -1277,6 +1277,9 @@ app = Starlette(
         Route("/admin", admin_page),
         Route("/privacy", privacy_page),
         Route("/terms", terms_page),
+        Route("/trip/{trip_id}", trips.trip_page),
+        Route("/api/trip", trips.api_trip_create, methods=["POST"]),
+        Route("/api/trip/{trip_id}", trips.api_trip_get),
         Route("/sw.js", sw_js),
         Route("/manifest.webmanifest", manifest_file),
         Route("/api/watch/config", watch.api_watch_config, methods=["GET"]),
@@ -1315,7 +1318,7 @@ app = RateLimitMiddleware(
                      # as static files; the mutating watch APIs stay
                      # inside the bucket (and are token-gated anyway).
                      "/watch", "/admin", "/sw.js", "/manifest.webmanifest",
-                     "/privacy", "/terms",
+                     "/privacy", "/terms", "/trip/", "/api/trip/",
                      "/api/watch/config", "/api/staticmap"),
 )
 

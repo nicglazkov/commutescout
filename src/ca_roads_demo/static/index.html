@@ -378,6 +378,9 @@ aside { background:var(--card); border-right:1px solid var(--line);
         <div class="routebtns">
           <button type="button" id="printbtn">Print</button>
           <button type="button" id="exportbtn">Export .txt</button>
+          <button type="button" id="gpxbtn">GPX</button>
+          <button type="button" id="kmlbtn">KML</button>
+          <button type="button" id="sharebtn" class="pri">Share link</button>
         </div>
         <div class="routeasks-wrap" id="routeasks-wrap">
           <b>Questions people ask about this drive</b>
@@ -1753,6 +1756,67 @@ async function anyDirections(a, b) {
 
 const layerRoute = L.layerGroup().addTo(map);
 let plannedRoute = null;
+
+function downloadFile(name, mime, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+function tripSlug() {
+  const clean = (s) => (s || '').split(',')[0].replace(/[^A-Za-z0-9]+/g, '-');
+  return clean(plannedRoute.fromName) + '-to-' + clean(plannedRoute.toName);
+}
+document.getElementById('gpxbtn').addEventListener('click', () => {
+  if (!plannedRoute) return;
+  const pts = plannedRoute.route.latlngs.map((p) =>
+    '<trkpt lat="' + p[0].toFixed(5) + '" lon="' + p[1].toFixed(5) + '"/>')
+    .join('\n      ');
+  downloadFile(tripSlug() + '.gpx', 'application/gpx+xml',
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<gpx version="1.1" creator="CA Roads" xmlns="http://www.topografix.com/GPX/1/1">\n' +
+    '  <trk><name>' + tripSlug() + '</name>\n    <trkseg>\n      ' +
+    pts + '\n    </trkseg>\n  </trk>\n</gpx>\n');
+});
+document.getElementById('kmlbtn').addEventListener('click', () => {
+  if (!plannedRoute) return;
+  const coords = plannedRoute.route.latlngs.map((p) =>
+    p[1].toFixed(5) + ',' + p[0].toFixed(5) + ',0').join(' ');
+  downloadFile(tripSlug() + '.kml', 'application/vnd.google-earth.kml+xml',
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>' +
+    '<name>' + tripSlug() + '</name><Placemark><LineString><coordinates>' +
+    coords + '</coordinates></LineString></Placemark></Document></kml>\n');
+});
+document.getElementById('sharebtn').addEventListener('click', async () => {
+  if (!plannedRoute) return;
+  const r = plannedRoute.route;
+  const step = Math.max(1, Math.floor(r.latlngs.length / 450));
+  const btn = document.getElementById('sharebtn');
+  btn.textContent = 'Creating\u2026';
+  try {
+    const res = await fetch('/api/trip', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from_name: plannedRoute.fromName, to_name: plannedRoute.toName,
+        miles: r.distance / 1609.344, minutes: r.duration / 60,
+        via: r.via || '',
+        latlngs: r.latlngs.filter((_, i) => i % step === 0 ||
+          i === r.latlngs.length - 1),
+        steps: (r.steps || []).map((s) => ({ text: s.text, miles: s.miles })),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'could not create link');
+    await navigator.clipboard.writeText(data.url).catch(() => {});
+    btn.textContent = 'Link copied!';
+    setTimeout(() => { btn.textContent = 'Share link'; }, 2500);
+  } catch (e) {
+    btn.textContent = 'Share link';
+    alert(e.message);
+  }
+});
 let plannedRoutes = [];
 const planbtn = document.getElementById('planbtn');
 planbtn.addEventListener('click', async () => {
