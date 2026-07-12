@@ -44,7 +44,7 @@ gcloud run deploy ca-roads-demo \
   --allow-unauthenticated \
   --memory 512Mi \
   --cpu 1 \
-  --min-instances 0 \
+  --min-instances 1 \
   --max-instances 1 \
   --concurrency 20 \
   --set-secrets ANTHROPIC_API_KEY=anthropic-api-key:latest \
@@ -53,8 +53,9 @@ gcloud run deploy ca-roads-demo \
 
 ## Cold starts
 
-Both services run with `--min-instances 0`, so an idle service costs
-nothing and the first visitor after ~15 idle minutes pays a cold start.
+The MCP service runs with `--min-instances 0` (scale to zero); the
+demo runs with `--min-instances 1` so visitors never pay a cold start,
+at roughly five to ten dollars a month of idle time.
 Two mitigations ship by default: `--cpu-boost` (faster container boot,
 free) and a startup prewarm in the demo that fills all feed caches in
 the background while the page is still loading. If the remaining first
