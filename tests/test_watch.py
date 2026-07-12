@@ -738,3 +738,33 @@ def test_oversized_body_rejected(approved_client):
             "pad": "z" * 300000}
     r = approved_client.post("/api/watch/create", json=huge, headers=auth())
     assert r.status_code in (400, 413)
+
+
+async def test_push_subs_fetched_once_per_user(checker, monkeypatch):
+    store, events, pushes = checker
+    await approve(store)
+    # One user, one watch, many matching events in a single cycle.
+    wid = await store.create_watch({
+        "uid": "sam", "name": "Home", "type": "circle",
+        "center": {"lat": 37.3, "lon": -121.9}, "radius_km": 20,
+        "kinds": ["incident"], "channels": {"push": True}, "active": True,
+    })
+    await store.upsert_push_sub("dev1", {
+        "uid": "sam",
+        "subscription": {"endpoint": "https://fcm.googleapis.com/fcm/send/1"}})
+    await store.set_seen(wid, {"chp:0"})
+    for i in range(6):
+        events.append({**EVENT, "id": f"chp:{i + 1}"})
+
+    calls = {"n": 0}
+    orig = store.list_push_subs
+
+    async def counting(uid):
+        calls["n"] += 1
+        return await orig(uid)
+
+    monkeypatch.setattr(store, "list_push_subs", counting)
+    stats = await watch.run_check_cycle()
+    assert stats["alerts"] == 6
+    # Six alerts, but push subscriptions read exactly once.
+    assert calls["n"] == 1

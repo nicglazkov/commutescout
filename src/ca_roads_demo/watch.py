@@ -802,6 +802,8 @@ async def api_watch_test(request: Request) -> JSONResponse:
     now = time.monotonic()
     if now - _test_sends.get(claims["sub"], 0.0) < 120:
         return _err("test already sent; wait two minutes", 429)
+    if len(_test_sends) > 5000:
+        _test_sends.clear()
     _test_sends[claims["sub"]] = now
     subs = await get_store().list_push_subs(claims["sub"])
     if not subs:
@@ -1155,6 +1157,15 @@ async def run_check_cycle() -> dict:
     archive_stats = await archive.observe(events)
     watches = await store.list_watches()
     users: dict[str, dict | None] = {}
+    # One push-subs read per user per cycle, not per matched event: a
+    # user has few devices and up to five watches, so re-fetching inside
+    # the alert loop was an N+1 Firestore amplification.
+    subs_by_uid: dict[str, list] = {}
+
+    async def push_subs_for(uid: str) -> list:
+        if uid not in subs_by_uid:
+            subs_by_uid[uid] = await store.list_push_subs(uid)
+        return subs_by_uid[uid]
     stats = {"watches": len(watches), "events": len(events),
              "alerts": 0, "pushes": 0, "emails": 0,
              "archived": archive_stats.get("archived", 0)}
@@ -1185,7 +1196,7 @@ async def run_check_cycle() -> dict:
                 stats["alerts"] += 1
                 title = f"{watch.get('name', 'Watch')}: {event['title']}"
                 if watch.get("channels", {}).get("push", True):
-                    subs = await store.list_push_subs(uid)
+                    subs = await push_subs_for(uid)
                     stats["pushes"] += await _push_to_subs(subs, {
                         "title": title, "body": event["body"],
                         "url": "/watch",
@@ -1199,11 +1210,10 @@ async def run_check_cycle() -> dict:
                                         body_html, body_text)
                 stats["emails"] += 1 if ok else 0
 
-        # Advance state: keep ids still current plus everything alerted,
-        # trimmed in set_seen. An id that clears and returns re-alerts,
-        # which is the behavior people want for reopened incidents.
-        await store.set_seen(watch["id"], seen.intersection(current_ids)
-                             | current_ids)
+        # Advance state to exactly what is present now: an id that
+        # clears and later returns is absent here and re-alerts on
+        # return, which is the behavior people want for reopened events.
+        await store.set_seen(watch["id"], current_ids)
     return stats
 
 

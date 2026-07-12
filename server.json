@@ -6,7 +6,7 @@
     "url": "https://github.com/nicglazkov/ca-roads-mcp",
     "source": "github"
   },
-  "version": "2.20.0",
+  "version": "2.20.1",
   "remotes": [
     {
       "type": "streamable-http",
