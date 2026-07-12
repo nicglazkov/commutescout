@@ -42,6 +42,9 @@ class MemoryStore:
     async def upsert_user(self, uid, data):
         self.users.setdefault(uid, {}).update(data)
 
+    async def delete_user(self, uid):
+        self.users.pop(uid, None)
+
     async def list_users(self):
         return [{"uid": k, **v} for k, v in self.users.items()]
 
@@ -108,6 +111,8 @@ def make_app():
         Route("/api/watch/redeem", watch.api_watch_redeem, methods=["POST"]),
         Route("/api/watch/create", watch.api_watch_create, methods=["POST"]),
         Route("/api/watch/push", watch.api_push_subscribe, methods=["POST"]),
+        Route("/api/watch/account", watch.api_account_delete,
+              methods=["DELETE"]),
         Route("/api/watch/{watch_id}", watch.api_watch_delete,
               methods=["DELETE"]),
         Route("/api/watch/{watch_id}", watch.api_watch_update,
@@ -589,3 +594,21 @@ async def test_busy_cycle_sends_one_email(checker, monkeypatch):
     assert len(emails) == 1  # one digest, not four emails
     assert emails[0][0] == "sam@example.com"
     assert "4 new events" in emails[0][1]
+
+
+def test_account_delete_removes_everything(approved_client, store):
+    approved_client.post("/api/watch/create", json=CIRCLE, headers=auth())
+    approved_client.post("/api/watch/push", json={"subscription": {
+        "endpoint": "https://push.example/dev", "keys": {"auth": "x"}}},
+        headers=auth())
+    r = approved_client.request("DELETE", "/api/watch/account",
+                                headers=auth())
+    assert r.status_code == 200
+    body = r.json()
+    assert body["deleted"] is True
+    assert body["watches"] == 1 and body["devices"] == 1
+    assert "sam" not in store.users
+    assert not store.watches and not store.subs
+    # Anonymous callers get refused.
+    assert approved_client.request(
+        "DELETE", "/api/watch/account").status_code == 401

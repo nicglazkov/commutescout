@@ -1131,6 +1131,14 @@ async def admin_page(_: Request):
     return FileResponse(STATIC_DIR / "admin.html")
 
 
+async def privacy_page(_: Request):
+    return FileResponse(STATIC_DIR / "privacy.html")
+
+
+async def terms_page(_: Request):
+    return FileResponse(STATIC_DIR / "terms.html")
+
+
 async def sw_js(_: Request):
     # Served from the root so the service worker scope covers /watch.
     return FileResponse(STATIC_DIR / "sw.js",
@@ -1267,6 +1275,8 @@ app = Starlette(
         Route("/api/mapdata", api_mapdata, methods=["GET"]),
         Route("/watch", watch_page),
         Route("/admin", admin_page),
+        Route("/privacy", privacy_page),
+        Route("/terms", terms_page),
         Route("/sw.js", sw_js),
         Route("/manifest.webmanifest", manifest_file),
         Route("/api/watch/config", watch.api_watch_config, methods=["GET"]),
@@ -1274,6 +1284,8 @@ app = Starlette(
         Route("/api/watch/redeem", watch.api_watch_redeem, methods=["POST"]),
         Route("/api/watch/create", watch.api_watch_create, methods=["POST"]),
         Route("/api/watch/push", watch.api_push_subscribe, methods=["POST"]),
+        Route("/api/watch/account", watch.api_account_delete,
+              methods=["DELETE"]),
         Route("/api/watch/test", watch.api_watch_test, methods=["POST"]),
         Route("/api/watch/{watch_id}", watch.api_watch_delete,
               methods=["DELETE"]),
@@ -1303,6 +1315,7 @@ app = RateLimitMiddleware(
                      # as static files; the mutating watch APIs stay
                      # inside the bucket (and are token-gated anyway).
                      "/watch", "/admin", "/sw.js", "/manifest.webmanifest",
+                     "/privacy", "/terms",
                      "/api/watch/config", "/api/staticmap"),
 )
 

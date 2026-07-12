@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1f33">
+<title>Privacy - CA Roads</title>
+<meta name="description" content="What CA Roads collects, why, and how to get it deleted.">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/fonts/fonts.css">
+<style>
+:root {
+  --navy:#0b1f33; --navy2:#122c47; --ink:#0f1c2b; --dim:#5b6b7d;
+  --bg:#f5f2ea; --card:#fffdf7; --line:#e3ddd0; --sky:#2f81f7;
+}
+* { box-sizing:border-box; margin:0 }
+body { background:var(--bg); color:var(--ink);
+  font:14.5px/1.65 Inter, system-ui, sans-serif }
+.topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
+  gap:14px; padding:0 20px; height:56px }
+.topbar img.mark { width:30px; height:30px; border-radius:7px }
+.topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
+.topbar nav { display:flex; gap:4px; margin-left:14px }
+.topbar nav a { color:#b7c4d4; font-size:.85rem; padding:7px 12px; border-radius:8px;
+  text-decoration:none }
+.topbar nav a:hover { color:#fff }
+main { max-width:760px; margin:0 auto; padding:26px 18px 60px }
+h1 { font:600 1.5rem Lora, serif; margin:8px 0 4px }
+.date { color:var(--dim); font-size:.82rem; margin-bottom:22px }
+h2 { font-size:1.02rem; margin:26px 0 8px }
+p, li { color:#28323f; margin-bottom:10px }
+ul { padding-left:22px; margin-bottom:12px }
+li { margin-bottom:6px }
+a { color:var(--sky) }
+.card { background:var(--card); border:1px solid var(--line);
+  border-radius:14px; padding:22px 26px }
+@media (max-width:700px){ .topbar{padding:0 12px} main{padding:18px 12px 50px}
+  .card{padding:18px 16px} }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <img class="mark" src="/logo.svg" alt="">
+  <span class="wordmark">CA Roads</span>
+  <nav>
+    <a href="/">Live map</a>
+    <a href="/watch">Watch areas</a>
+    <a href="/terms">Terms</a>
+  </nav>
+</header>
+<main>
+<div class="card">
+<h1>Privacy</h1>
+<div class="date">Effective July 11, 2026. Material changes will be posted
+here with a new effective date; account holders get an email when a change
+affects them.</div>
+
+<p>CA Roads is an independent, one-person project. The short version:
+the map and assistant work without an account and store nothing that
+identifies you; if you create an account for watch areas, we store your
+email and the areas you draw, because that is what alerts are; nothing
+is sold, there are no ads, and there is no cross-site tracking.</p>
+
+<h2>What we collect</h2>
+<ul>
+  <li><b>Without an account</b> (the map, route planner, and assistant):
+    questions you ask the assistant are logged to improve answers, tied
+    to a salted daily hash instead of your address, with coordinates
+    rounded to about a kilometer. Route and address searches are
+    processed to answer them and appear in the same anonymized logs.
+    No cookies are set.</li>
+  <li><b>With an account</b> (watch areas): your email address, your
+    sign-in identity from Google or the email link you used, the watch
+    areas you draw (names, shapes, alert settings), and, if you enable
+    notifications, the push subscription for each device. Alert emails
+    we send you are delivered through Resend.</li>
+  <li><b>Analytics</b>: cookieless Cloudflare Web Analytics counts
+    visits and page timings. It sets no cookies, stores no device
+    identifiers, and does not follow you to other sites.</li>
+</ul>
+
+<h2>Who touches the data</h2>
+<p>Categories of third parties that process data to run the service.
+None of them get your data for their own marketing, and we do not sell
+or rent anything:</p>
+<ul>
+  <li><b>Google Cloud and Firebase</b> host the service, sign-ins, and
+    the database that stores accounts and watch areas.</li>
+  <li><b>Anthropic</b> processes assistant questions to generate
+    answers.</li>
+  <li><b>Resend</b> delivers alert and sign-in emails.</li>
+  <li><b>Cloudflare</b> provides the cookieless visit counts.</li>
+  <li><b>TomTom</b> provides live traffic speeds; the server sends it
+    road coordinates being checked, never your identity.</li>
+  <li><b>OpenStreetMap public services</b> (OSRM, Valhalla, Nominatim,
+    Photon) and <b>CARTO</b> provide routing, address lookup, and map
+    tiles; they see the coordinates and place names involved in what
+    you look up, as your browser or our server queries them.</li>
+</ul>
+
+<h2>Review, change, delete</h2>
+<p>Signed-in users can see every watch area on the
+<a href="/watch">watch page</a>, edit or delete any of them, and delete
+the whole account with the "Delete my account" button there - that
+removes the account record, all watch areas, alert state, and push
+subscriptions immediately. Anything else, or any question about data we
+hold: email <a href="mailto:nic@glazkov.com">nic@glazkov.com</a>.</p>
+
+<h2>Do Not Track</h2>
+<p>We do not respond to Do Not Track signals, because there is nothing
+to turn off: no advertising trackers, no cross-site tracking, and no
+cookies on the public site. No other parties conduct cross-site
+tracking through this service.</p>
+
+<h2>Where and how long</h2>
+<p>Data lives in Google Cloud's us-west1 region. Anonymized question
+logs age out with normal log retention (about 30 days). Account data
+stays until you delete it. Push subscriptions are dropped automatically
+when a device unsubscribes.</p>
+
+<h2>Contact</h2>
+<p>Nic Glazkov · <a href="mailto:nic@glazkov.com">nic@glazkov.com</a>.
+The code behind the service is open source at
+<a href="https://github.com/nicglazkov/ca-roads-mcp">github.com/nicglazkov/ca-roads-mcp</a>,
+so you can check any of this yourself.</p>
+</div>
+</main>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1f33">
+<title>Terms - CA Roads</title>
+<meta name="description" content="Plain-language terms for using CA Roads.">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/fonts/fonts.css">
+<style>
+:root {
+  --navy:#0b1f33; --navy2:#122c47; --ink:#0f1c2b; --dim:#5b6b7d;
+  --bg:#f5f2ea; --card:#fffdf7; --line:#e3ddd0; --sky:#2f81f7;
+}
+* { box-sizing:border-box; margin:0 }
+body { background:var(--bg); color:var(--ink);
+  font:14.5px/1.65 Inter, system-ui, sans-serif }
+.topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
+  gap:14px; padding:0 20px; height:56px }
+.topbar img.mark { width:30px; height:30px; border-radius:7px }
+.topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
+.topbar nav { display:flex; gap:4px; margin-left:14px }
+.topbar nav a { color:#b7c4d4; font-size:.85rem; padding:7px 12px; border-radius:8px;
+  text-decoration:none }
+.topbar nav a:hover { color:#fff }
+main { max-width:760px; margin:0 auto; padding:26px 18px 60px }
+h1 { font:600 1.5rem Lora, serif; margin:8px 0 4px }
+.date { color:var(--dim); font-size:.82rem; margin-bottom:22px }
+h2 { font-size:1.02rem; margin:26px 0 8px }
+p, li { color:#28323f; margin-bottom:10px }
+ul { padding-left:22px; margin-bottom:12px }
+li { margin-bottom:6px }
+a { color:var(--sky) }
+.card { background:var(--card); border:1px solid var(--line);
+  border-radius:14px; padding:22px 26px }
+.warn { background:#fdf2df; border:1px solid #ecd9b2; border-radius:10px;
+  padding:12px 16px; font-weight:500 }
+@media (max-width:700px){ .topbar{padding:0 12px} main{padding:18px 12px 50px}
+  .card{padding:18px 16px} }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <img class="mark" src="/logo.svg" alt="">
+  <span class="wordmark">CA Roads</span>
+  <nav>
+    <a href="/">Live map</a>
+    <a href="/watch">Watch areas</a>
+    <a href="/privacy">Privacy</a>
+  </nav>
+</header>
+<main>
+<div class="card">
+<h1>Terms of use</h1>
+<div class="date">Effective July 11, 2026. Changes will be posted here
+with a new effective date.</div>
+
+<p class="warn">CA Roads is informational only. Data can be delayed,
+incomplete, or wrong. Always verify with 511 or
+<a href="https://quickmap.dot.ca.gov">quickmap.dot.ca.gov</a> before you
+drive, and never rely on this service for evacuation or any emergency
+decision. If you are in danger, call 911.</p>
+
+<h2>What this is</h2>
+<p>A free, independent project that displays public road data from
+CHP, Caltrans, and other public feeds, plus routing and an AI
+assistant. It is not affiliated with, endorsed by, or operated by any
+government agency. Names of data sources are used to describe where
+data comes from, nothing more.</p>
+
+<h2>Using it</h2>
+<ul>
+  <li>Don't use the service while driving.</li>
+  <li>Don't abuse it: no scraping at volumes that degrade it for
+    others, no attempts to bypass rate limits or access controls, no
+    using the assistant for anything other than road questions.</li>
+  <li>Watch-area accounts are an invite-gated trial. We can approve,
+    limit, or revoke access at any time, and alert delivery is best
+    effort - alerts can be late, missed, or wrong.</li>
+</ul>
+
+<h2>No warranty, limited liability</h2>
+<p>The service is provided as is, without warranties of any kind,
+express or implied, including fitness for a particular purpose. To the
+maximum extent permitted by law, the operator is not liable for any
+damages arising from use of the service or reliance on its data,
+including decisions made based on alerts, maps, routes, or assistant
+answers. Road conditions are verified by official sources, not by us;
+your driving decisions are yours.</p>
+
+<h2>The code</h2>
+<p>The software is open source under the MIT license at
+<a href="https://github.com/nicglazkov/ca-roads-mcp">github.com/nicglazkov/ca-roads-mcp</a>.
+These terms cover this hosted instance, not the code - you are welcome
+to run your own.</p>
+
+<h2>Governing law and contact</h2>
+<p>These terms are governed by California law. Questions:
+<a href="mailto:nic@glazkov.com">nic@glazkov.com</a>.</p>
+</div>
+</main>
+</body>
+</html>

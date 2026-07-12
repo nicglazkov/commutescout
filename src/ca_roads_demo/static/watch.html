@@ -259,6 +259,16 @@ input:focus { border-color:var(--sky) }
             your home screen (Share &rarr; Add to Home Screen), then open
             it from there and enable notifications.</div>
         </div>
+        <div class="card">
+          <h2>Account</h2>
+          <p class="hint" style="margin-bottom:10px">Deleting your
+            account removes it completely and immediately: every watch
+            area, alert state, and registered device. There is no undo.</p>
+          <button class="ghost" id="deleteacct"
+                  style="color:var(--red);border-color:#e8c9c9">
+            Delete my account</button>
+          <div class="msg" id="acctmsg"></div>
+        </div>
       </div>
       <div id="wmap"></div>
     </div>
@@ -267,9 +277,8 @@ input:focus { border-color:var(--sky) }
       wrong. Always verify with <a href="tel:511">511</a> or
       quickmap.dot.ca.gov before you drive, and never rely on this
       service for evacuation or emergency decisions. Your account email
-      and the areas you draw are stored to run your alerts; delete a
-      watch to remove its data, or contact nic@glazkov.com to delete
-      your account entirely.
+      and the areas you draw are stored to run your alerts - see the
+      <a href="/privacy">privacy page</a> and <a href="/terms">terms</a>.
     </div>
   </section>
 </main>
@@ -825,6 +834,17 @@ $('notifbtn').addEventListener('click', async () => {
       body: JSON.stringify({ subscription: sub.toJSON() }) });
     msg('devmsg', 'This device will now receive alerts.', 'ok');
   } catch (e) { msg('devmsg', e.message, 'err'); }
+});
+
+$('deleteacct').addEventListener('click', async () => {
+  if (!confirm('Delete your account and all watch areas? This cannot be undone.')) return;
+  if (!confirm('Last check: every watch area, alert, and device registration will be removed immediately. Delete?')) return;
+  try {
+    const r = await api('/api/watch/account', { method: 'DELETE' });
+    msg('acctmsg', 'Deleted (' + r.watches + ' watches, ' + r.devices +
+      ' devices). Signing out\u2026', 'ok');
+    setTimeout(() => signOut(auth), 1400);
+  } catch (e) { msg('acctmsg', e.message, 'err'); }
 });
 
 $('testbtn').addEventListener('click', async () => {

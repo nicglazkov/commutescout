@@ -240,6 +240,9 @@ class FirestoreStore:
         snap = await self.db.collection("watches").document(watch_id).get()
         return snap.to_dict() if snap.exists else None
 
+    async def delete_user(self, uid: str) -> None:
+        await self.db.collection("watch_users").document(uid).delete()
+
     async def update_watch(self, watch_id: str, data: dict) -> None:
         await self.db.collection("watches").document(watch_id).set(
             data, merge=True)
@@ -564,6 +567,26 @@ async def api_watch_update(request: Request) -> JSONResponse:
     watch.update(updates)
     watch["id"] = watch_id
     return JSONResponse(watch)
+
+
+async def api_account_delete(request: Request) -> JSONResponse:
+    """Self-serve account deletion: removes the user record, every
+    watch and its alert state, and all push subscriptions. The privacy
+    page promises this is immediate and complete."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    uid = claims["sub"]
+    store = get_store()
+    removed = {"watches": 0, "devices": 0}
+    for w in await store.list_watches(uid):
+        await store.delete_watch(w["id"])
+        removed["watches"] += 1
+    for sub in await store.list_push_subs(uid):
+        await store.delete_push_sub(sub["id"])
+        removed["devices"] += 1
+    await store.delete_user(uid)
+    return JSONResponse({"deleted": True, **removed})
 
 
 async def api_push_subscribe(request: Request) -> JSONResponse:
