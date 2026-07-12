@@ -25,6 +25,7 @@ demo = [
     "anthropic>=0.40",
     "google-auth>=2.30",
     "google-cloud-firestore>=2.16",
+    "google-cloud-bigquery>=3.20",
     "pillow>=10",
     "pywebpush>=2.0",
 ]

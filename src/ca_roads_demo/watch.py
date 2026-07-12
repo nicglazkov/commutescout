@@ -969,10 +969,16 @@ async def run_check_cycle() -> dict:
     dump the current backlog on the user."""
     store = get_store()
     events = await _collect_events()
+    # Feed the historical archive every cycle: recording started long
+    # before the features that read it, because history cannot be
+    # backfilled. Failures are swallowed inside observe().
+    from ca_roads_demo import archive
+    archive_stats = await archive.observe(events)
     watches = await store.list_watches()
     users: dict[str, dict | None] = {}
     stats = {"watches": len(watches), "events": len(events),
-             "alerts": 0, "pushes": 0, "emails": 0}
+             "alerts": 0, "pushes": 0, "emails": 0,
+             "archived": archive_stats.get("archived", 0)}
 
     for watch in watches:
         if not watch.get("active"):
