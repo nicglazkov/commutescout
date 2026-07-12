@@ -731,7 +731,13 @@ function renderWatches() {
   if (!fittedOnce && savedLayer.getLayers().length) {
     fittedOnce = true;
     const group = L.featureGroup(savedLayer.getLayers());
-    map.fitBounds(group.getBounds().pad(0.35));
+    // The map container was hidden until this render. Let Leaflet
+    // re-measure it first, or fitBounds computes against a 0x0 map
+    // and lands on a world view instead of the watch areas.
+    setTimeout(() => {
+      map.invalidateSize();
+      map.fitBounds(group.getBounds().pad(0.35), { maxZoom: 13 });
+    }, 120);
   }
 }
 

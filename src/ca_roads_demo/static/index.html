@@ -1256,8 +1256,10 @@ function pointMarker(m, g) {
     style = Object.assign({ renderer: canvasR, color: '#fff', weight: 1.2 },
       CLOSURE_STYLES[m.cls]);
   }
-  return L.circleMarker([m.lat, m.lon], style)
+  const mk = L.circleMarker([m.lat, m.lon], style)
     .bindPopup(popupFor(m, g), { maxWidth: 320 });
+  mk.__m = m; mk.__g = g;
+  return mk;
 }
 
 function rebuildSigns() {
@@ -1378,9 +1380,11 @@ function renderBatch(markers, groups) {
     if (g.startsWith('clo_') && Array.isArray(m.end)) {
       const stretch = (Array.isArray(m.path) && m.path.length > 1)
         ? m.path : [[m.lat, m.lon], m.end];
-      ambient[g].addLayer(L.polyline(stretch, {
+      const strip = L.polyline(stretch, {
         renderer: canvasR, color: GROUP_DOT[g], weight: 4, opacity: 0.45,
-      }).bindPopup(popupFor(m, g), { maxWidth: 320 }));
+      }).bindPopup(popupFor(m, g), { maxWidth: 320 });
+      strip.__m = m; strip.__g = g;
+      ambient[g].addLayer(strip);
     }
     ambient[g].addLayer(pointMarker(m, g));
     counts[g] = (counts[g] || 0) + 1;
@@ -1442,6 +1446,70 @@ document.getElementById('camvideo').addEventListener('change', rebuildCameras);
 document.getElementById('layersbtn').addEventListener('click', () => {
   document.getElementById('filters').classList.toggle('open');
 });
+map.on('popupopen', async (e) => {
+  const mk = e.popup && e.popup._source;
+  const m = mk && mk.__m;
+  if (!m || !(mk.__g || '').startsWith('clo_') || !Array.isArray(m.end)) return;
+  // Re-sample after two minutes: the number is a live measurement,
+  // not a cached guess.
+  if (mk.__measuredHtml !== undefined
+      && Date.now() - (mk.__measuredAt || 0) < 120000) {
+    if (mk.__measuredHtml) appendMeasured(e.popup, mk.__measuredHtml);
+    return;
+  }
+  mk.__measuredHtml = null;
+  mk.__measuredAt = Date.now();
+  const pts = (Array.isArray(m.path) && m.path.length > 1)
+    ? m.path : [[m.lat, m.lon], m.end];
+  let meters = 0;
+  for (let i = 1; i < pts.length; i++) {
+    meters += map.distance(pts[i - 1], pts[i]);
+  }
+  const mid = pts[Math.floor(pts.length / 2)];
+  try {
+    const res = await fetch('/api/flow?pts=' +
+      mid[0].toFixed(4) + ',' + mid[1].toFixed(4));
+    if (!res.ok) return;
+    const f = ((await res.json()).flow || [])[0];
+    if (!f || !f.current || !f.freeflow) return;
+    const miles = meters / 1609.344;
+    const delay = Math.max(0,
+      miles * 60 * (1 / f.current - 1 / f.freeflow));
+    let text;
+    if (delay >= 1) {
+      text = 'Measured now: ~' + Math.round(delay) + ' min over free flow '
+        + 'across this ' + miles.toFixed(1) + ' mi stretch ('
+        + Math.round(f.current) + ' vs ' + Math.round(f.freeflow)
+        + ' mph, live TomTom sample)';
+    } else if (f.ratio != null && f.ratio < 0.85) {
+      text = 'Measured now: traffic here runs ' + Math.round(f.current)
+        + ' vs ' + Math.round(f.freeflow) + ' mph free flow, but the '
+        + 'stretch is short - under a minute of added time '
+        + '(live TomTom sample)';
+    } else {
+      text = 'Measured now: traffic is moving at free-flow speed through '
+        + 'this ' + miles.toFixed(1) + ' mi stretch ('
+        + Math.round(f.current) + ' mph, live TomTom sample)';
+    }
+    mk.__measuredHtml = '<div class="hist" style="margin-top:5px">'
+      + text + '</div>';
+    if (e.popup.isOpen()) appendMeasured(e.popup, mk.__measuredHtml);
+  } catch (err) { /* no sample, no line */ }
+});
+
+function appendMeasured(popup, html) {
+  const el = popup.getElement();
+  const box = el && el.querySelector('.pop');
+  if (box && !box.querySelector('.measured')) {
+    const div = document.createElement('div');
+    div.className = 'measured';
+    div.innerHTML = html;
+    // No popup.update() here: it re-renders from the original content
+    // string and would wipe this node.
+    box.append(div);
+  }
+}
+
 map.on('click', () => {
   document.getElementById('filters').classList.remove('open');
 });
