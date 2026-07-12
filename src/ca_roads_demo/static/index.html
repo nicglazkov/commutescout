@@ -295,13 +295,25 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .pop .hist { color:#8a94a3; font-size:.72rem; margin-top:7px;
   border-top:1px dashed var(--line); padding-top:6px; line-height:1.5 }
 .pop .lanes-strong { font-weight:700; color:#a02c2c }
-.viachips { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 2px }
-.viachips .chip { display:inline-flex; align-items:center; gap:5px;
-  background:var(--sky-soft); border:1px solid #cfe0fb; border-radius:99px;
-  padding:3px 6px 3px 10px; font:600 .74rem Inter; color:#1d4f9c }
-.viachips .chip button { background:none; border:0; cursor:pointer;
-  color:#1d4f9c; font-size:.8rem; padding:2px 3px; line-height:1 }
-.viachips .chip button:hover { color:var(--red) }
+.viachips { display:flex; flex-direction:column; gap:0; margin:8px 0 4px }
+.viachips .leg { display:flex; align-items:center; gap:9px; padding:4px 0;
+  font:500 .8rem Inter; color:var(--ink); position:relative }
+.viachips .leg::before { content:""; position:absolute; left:10px;
+  top:-8px; bottom:-8px; width:2px; background:#cfe0fb; z-index:0 }
+.viachips .leg:first-child::before { top:50% }
+.viachips .leg:last-child::before { bottom:50% }
+.viachips .badge { width:21px; height:21px; border-radius:99px;
+  background:var(--navy); color:#fff; display:grid; place-items:center;
+  font:700 .68rem Inter; flex:none; z-index:1 }
+.viachips .leg.stop .badge { background:var(--sky) }
+.viachips .legname { flex:1; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; color:var(--ink) }
+.viachips .leg.stop .legname { color:#1d4f9c }
+.viachips .leg button { background:none; border:1px solid var(--line);
+  border-radius:7px; cursor:pointer; color:var(--dim); font-size:.78rem;
+  padding:3px 7px; line-height:1 }
+.viachips .leg button:hover { color:var(--sky); border-color:var(--sky) }
+.viachips .leg button.rm:hover { color:var(--red); border-color:var(--red) }
 .pinchoice { display:flex; flex-direction:column; gap:6px; min-width:150px }
 .pinchoice button, .pinchoice-single { font:600 .8rem Inter; color:var(--sky);
   background:var(--sky-soft); border:1px solid #cfe0fb; border-radius:8px;
@@ -431,14 +443,6 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <button type="button">Any fires near I-5?</button>
       <button type="button">Lane closures on 101 in the Bay Area?</button>
     </div>
-    <div class="locrow">
-      <label class="switch">
-        <input type="checkbox" id="useloc">
-        <span class="track"></span>
-      </label>
-      <span>Use my location</span>
-      <span class="locstatus" id="locstatus"></span>
-    </div>
     <div class="result" id="result">
       <div class="answer-card">
         <div class="loader" id="loader">
@@ -493,8 +497,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <label><input type="checkbox" data-group="chain" checked><i style="--dot:#2b6cb0"></i>Chain controls <em id="n-chain"></em></label>
       <label><input type="checkbox" data-group="rwis" checked><i style="--dot:#2f9e6e"></i>Weather stations <em id="n-rwis"></em></label>
       <u>Wildfire</u>
-      <label><input type="checkbox" data-group="fire_pt" checked><i style="--dot:#d97706"></i>Fire locations <em id="n-fire_pt"></em></label>
-      <label><input type="checkbox" data-group="fire_poly" checked><i class="ring" style="--dot:#d97706"></i>Burn footprints <em id="n-fire_poly"></em></label>
+      <label><input type="checkbox" data-group="fire_pt" checked><i style="--dot:#d97706"></i>Wildfires <em id="n-fire_pt"></em></label>
       <u>Traffic</u>
       <label><input type="checkbox" id="trafficlayer"><i style="--dot:#7a4bd6"></i>Live traffic overlay</label>
       <u>Roadside</u>
@@ -881,45 +884,9 @@ function drawGeo(geo) {
   setTimeout(() => map.invalidateSize(), 60);
 }
 
-// ── Location toggle ──────────────────────────────────────────────────
-const useloc = document.getElementById('useloc');
-const locstatus = document.getElementById('locstatus');
+// The Ask section's location toggle is gone (it crowded the
+// panel); questions carry no coordinates now.
 let userLocation = null;
-
-useloc.addEventListener('change', () => {
-  if (!useloc.checked) {
-    userLocation = null;
-    locstatus.textContent = '';
-    locstatus.classList.remove('on');
-    return;
-  }
-  if (!navigator.geolocation) {
-    locstatus.textContent = 'Not supported by this browser.';
-    useloc.checked = false;
-    return;
-  }
-  locstatus.textContent = 'Locating…';
-  beacon('location_on');
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      userLocation = {
-        lat: Math.round(pos.coords.latitude * 1e4) / 1e4,
-        lon: Math.round(pos.coords.longitude * 1e4) / 1e4,
-      };
-      locstatus.textContent =
-        `On (${userLocation.lat.toFixed(2)}, ${userLocation.lon.toFixed(2)}) - ` +
-        'sent only when you ask a question';
-      locstatus.classList.add('on');
-    },
-    () => {
-      locstatus.textContent = 'Location permission denied.';
-      locstatus.classList.remove('on');
-      useloc.checked = false;
-      userLocation = null;
-    },
-    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
-  );
-});
 
 function beacon(event, extra) {
   const payload = JSON.stringify(Object.assign({event}, extra || {}));
@@ -978,7 +945,7 @@ async function runQuery(question, prior) {
   let raw = '';
   try {
     const payload = {question, tz: Intl.DateTimeFormat().resolvedOptions().timeZone};
-    if (useloc.checked && userLocation) payload.location = userLocation;
+    if (userLocation) payload.location = userLocation;
     if (prior) payload.prior = prior;
     const res = await fetch('/api/ask', {
       method: 'POST',
@@ -1364,7 +1331,16 @@ function tryFocus() {
       if (d < 900 && (!best || d < best.d)) best = { l, d };
     });
   }
-  if (best) setTimeout(() => best.l.openPopup(), 650);
+  if (best) {
+    setTimeout(() => best.l.openPopup(), 650);
+  } else {
+    // The alerted event has cleared since the notification went out:
+    // say so instead of leaving a silently empty spot.
+    L.popup({ maxWidth: 280 }).setLatLng(at).setContent(
+      '<div class="pop"><div class="t">This alert has cleared</div>' +
+      '<div class="d">Nothing is being reported at this spot right ' +
+      'now. The ring marks where it was.</div></div>').openOn(map);
+  }
 }
 
 const FAST_GROUPS = ['inc_collision', 'inc_fire', 'inc_hazard', 'inc_other',
@@ -1383,14 +1359,16 @@ function renderBatch(markers, groups) {
     if (g === 'camera') { cameraCache.push(m); continue; }
     if (g === 'sign') { signCache.push(m); continue; }
     if (g === 'fire_pt') {
-      ambient.fire_pt.addLayer(pointMarker(m, 'fire_pt'));
       counts.fire_pt = (counts.fire_pt || 0) + 1;
       if (Array.isArray(m.poly) && m.poly.length > 2) {
-        ambient.fire_poly.addLayer(
-          L.polygon(m.poly, { color: '#d97706', weight: 1.5,
-            fillColor: '#d97706', fillOpacity: 0.22 })
-            .bindPopup(popupFor(m, 'fire_poly'), { maxWidth: 320 }));
-        counts.fire_poly = (counts.fire_poly || 0) + 1;
+        // The burn footprint is the fire; a dot only stands in when
+        // WFIGS has no perimeter for it.
+        ambient.fire_pt.addLayer(
+          L.polygon(m.poly, { color: '#d97706', weight: 2,
+            fillColor: '#d97706', fillOpacity: 0.28 })
+            .bindPopup(popupFor(m, 'fire_pt'), { maxWidth: 320 }));
+      } else {
+        ambient.fire_pt.addLayer(pointMarker(m, 'fire_pt'));
       }
       continue;
     }
@@ -1846,36 +1824,58 @@ let viaManual = false;
 function renderViaChips() {
   const box = document.getElementById('viachips');
   box.innerHTML = '';
+  if (!lastEnds || !viaPoints.length) return;
+  const mkBtn = (label, title, cls, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label; b.title = title;
+    if (cls) b.className = cls;
+    b.addEventListener('click', fn);
+    return b;
+  };
+  const legRow = (badgeText, name, isStop) => {
+    const row = document.createElement('div');
+    row.className = 'leg' + (isStop ? ' stop' : '');
+    const badge = document.createElement('span');
+    badge.className = 'badge'; badge.textContent = badgeText;
+    const nm = document.createElement('span');
+    nm.className = 'legname'; nm.textContent = name;
+    row.append(badge, nm);
+    return row;
+  };
+  box.append(legRow('A',
+    (fromF.input.dataset.name || 'Start').split(',')[0], false));
   viaPoints.forEach((v, i) => {
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.append('Stop ' + (i + 1));
-    const mk = (label, title, fn) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.textContent = label; b.title = title;
-      b.addEventListener('click', fn);
-      return b;
-    };
+    const row = legRow(String(i + 1),
+      'Stop \u00b7 ' + v[0].toFixed(3) + ', ' + v[1].toFixed(3), true);
+    row.addEventListener('mouseenter', () => {
+      row.__hl = L.circleMarker(v, { radius: 13, color: '#2f81f7',
+        weight: 3, fill: false }).addTo(map);
+    });
+    row.addEventListener('mouseleave', () => {
+      if (row.__hl) { map.removeLayer(row.__hl); row.__hl = null; }
+    });
     if (i > 0) {
-      chip.append(mk('\u25b2', 'Visit earlier', async () => {
+      row.append(mkBtn('\u25b2', 'Visit this stop earlier', '', async () => {
         viaManual = true;
         [viaPoints[i - 1], viaPoints[i]] = [viaPoints[i], viaPoints[i - 1]];
         await replanVias();
       }));
     }
     if (i < viaPoints.length - 1) {
-      chip.append(mk('\u25bc', 'Visit later', async () => {
+      row.append(mkBtn('\u25bc', 'Visit this stop later', '', async () => {
         viaManual = true;
         [viaPoints[i], viaPoints[i + 1]] = [viaPoints[i + 1], viaPoints[i]];
         await replanVias();
       }));
     }
-    chip.append(mk('\u00d7', 'Remove this stop', async () => {
+    row.append(mkBtn('\u00d7', 'Remove this stop', 'rm', async () => {
       viaPoints.splice(i, 1);
       await replanVias();
     }));
-    box.append(chip);
+    box.append(row);
   });
+  box.append(legRow('B',
+    (toF.input.dataset.name || 'End').split(',')[0], false));
 }
 
 function clearRoute() {
@@ -1931,7 +1931,8 @@ async function planWith(points, a, b) {
 async function replanVias() {
   if (!lastEnds) return;
   const base = plannedRoute ? plannedRoute.route.latlngs : [];
-  const vias = viaManual ? viaPoints : viaOrdered(base);
+  const vias = viaPoints.length
+    ? (viaManual ? viaPoints : viaOrdered(base)) : [];
   viaPoints = vias;
   await planWith([lastEnds.a, ...vias, lastEnds.b],
     lastEnds.a, lastEnds.b);
@@ -2140,8 +2141,23 @@ function showRoute(route, others, a, b) {
   colorRouteByTraffic(route, baseLine);
   wireReshape(route);
   [[a, 'A', plannedRoute.fromName], [b, 'B', plannedRoute.toName]].forEach(([pnt, letter, name]) => {
-    L.marker(pnt, { icon: L.divIcon({ className: 'route-end', html: letter, iconSize: [22, 22] }),
-      zIndexOffset: 400 }).bindPopup(esc(name)).addTo(layerRoute);
+    const end = L.marker(pnt, { icon: L.divIcon({ className: 'route-end', html: letter, iconSize: [22, 22] }),
+      zIndexOffset: 400, draggable: true }).bindPopup(esc(name)).addTo(layerRoute);
+    end.bindTooltip('Drag to move the ' + (letter === 'A' ? 'start' : 'destination'));
+    end.on('dragend', async () => {
+      const ll = end.getLatLng();
+      const field = letter === 'A' ? fromF : toF;
+      const pinName = 'Pin ' + ll.lat.toFixed(3) + ' / ' + ll.lng.toFixed(3);
+      field.input.value = pinName;
+      field.input.dataset.lat = ll.lat;
+      field.input.dataset.lon = ll.lng;
+      field.input.dataset.name = pinName;
+      const val = document.getElementById(letter === 'A' ? 'fromval' : 'toval');
+      val.className = 'val ok'; val.textContent = '\u2713 ' + pinName;
+      if (letter === 'A') lastEnds.a = [ll.lat, ll.lng];
+      else lastEnds.b = [ll.lat, ll.lng];
+      await replanVias();
+    });
   });
   map.fitBounds(L.latLngBounds(route.latlngs).pad(0.15));
   const mi = route.distance / 1609.344, min = route.duration / 60;
