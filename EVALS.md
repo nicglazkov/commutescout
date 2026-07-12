@@ -1,6 +1,6 @@
 # Eval results
 
-Generated 2026-07-12T07:32:29+00:00 by `evals/run_evals.py` from `v2.15.0`. Models answer the golden questions using the MCP tool surface served from recorded fixtures; grading is exact-fact matching plus an LLM judge scored against ground truth. Judge: `claude-opus-4-8` (not an evaluated model).
+Generated 2026-07-12T07:40:26+00:00 by `evals/run_evals.py` from `v2.15.1`. Models answer the golden questions using the MCP tool surface served from recorded fixtures; grading is exact-fact matching plus an LLM judge scored against ground truth. Judge: `claude-opus-4-8` (not an evaluated model).
 
 ## Scorecard
 
