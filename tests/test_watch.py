@@ -612,3 +612,74 @@ def test_account_delete_removes_everything(approved_client, store):
     # Anonymous callers get refused.
     assert approved_client.request(
         "DELETE", "/api/watch/account").status_code == 401
+
+
+ROUTE_PTS = [[37.34, -121.89], [37.45, -122.0], [37.6, -122.1],
+             [37.77, -122.42]]
+
+
+def test_create_route_watch(approved_client, store):
+    body = {"type": "route", "name": "SJ to SF", "kinds": ["incident"],
+            "points": ROUTE_PTS, "buffer_km": 3.2}
+    r = approved_client.post("/api/watch/create", json=body, headers=auth())
+    assert r.status_code == 200
+    saved = store.watches[r.json()["id"]]
+    assert saved["type"] == "route"
+    assert saved["buffer_km"] == 3.2
+    assert saved["length_km"] > 50
+    assert isinstance(saved["points"][0], dict)  # Firestore-safe
+
+
+def test_route_watch_validation(approved_client):
+    base = {"type": "route", "name": "Bad", "kinds": ["incident"]}
+    one = {**base, "points": [[37.3, -121.9]]}
+    assert approved_client.post("/api/watch/create", json=one,
+                                headers=auth()).status_code == 400
+    reno = {**base, "points": [[38.6, -121.5], [39.53, -119.81]]}
+    assert approved_client.post("/api/watch/create", json=reno,
+                                headers=auth()).status_code == 400
+    too_long = {**base, "points": [[33.0, -117.2], [41.9, -122.3]]}
+    assert approved_client.post("/api/watch/create", json=too_long,
+                                headers=auth()).status_code == 400
+
+
+def test_route_matching_uses_corridor_distance():
+    w = {"type": "route", "buffer_km": 3.0,
+         "points": [{"lat": 37.34, "lon": -121.89},
+                    {"lat": 37.77, "lon": -122.42}]}
+    assert watch.watch_matches(w, 37.55, -122.15)
+    assert not watch.watch_matches(w, 37.55, -121.8)
+
+
+async def test_route_watch_alerts(checker):
+    store, events, pushes = checker
+    await approve(store)
+    wid = await store.create_watch({
+        "uid": "sam", "name": "SJ-SF", "type": "route",
+        "points": [{"lat": 37.34, "lon": -121.89},
+                   {"lat": 37.77, "lon": -122.42}],
+        "buffer_km": 3.0, "kinds": ["incident"],
+        "channels": {"push": True}, "active": True,
+    })
+    await store.upsert_push_sub("dev1", {
+        "uid": "sam", "subscription": {"endpoint": "https://p/1"}})
+    await store.set_seen(wid, {"chp:0"})
+    events.append({**EVENT, "lat": 37.55, "lon": -122.15})
+    stats = await watch.run_check_cycle()
+    assert stats["alerts"] == 1 and len(pushes) == 1
+
+
+def test_route_buffer_updates_and_clamps(approved_client, store):
+    body = {"type": "route", "name": "SJ to SF", "kinds": ["incident"],
+            "points": ROUTE_PTS, "buffer_km": 3.0}
+    wid = approved_client.post("/api/watch/create", json=body,
+                               headers=auth()).json()["id"]
+    r = approved_client.patch("/api/watch/" + wid,
+                              json={"buffer_km": 50}, headers=auth())
+    assert r.status_code == 200
+    assert store.watches[wid]["buffer_km"] == watch.MAX_BUFFER_KM
+    cid = approved_client.post("/api/watch/create", json=CIRCLE,
+                               headers=auth()).json()["id"]
+    assert approved_client.patch("/api/watch/" + cid,
+                                 json={"buffer_km": 3},
+                                 headers=auth()).status_code == 400
