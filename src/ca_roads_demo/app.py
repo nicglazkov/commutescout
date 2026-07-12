@@ -1052,7 +1052,10 @@ app = Starlette(
         Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
     ]
 )
-# Request-level limiter on top of the daily caps (burst 5, ~6/min sustained).
+# Request-level limiter on top of the daily caps (burst 20, ~30/min
+# sustained): normal browsing fires event beacons and watch-API calls
+# from the same per-IP bucket, and burst-5 tuning rate-limited real
+# users mid-session. Dollar protection lives in the daily caps.
 class StaticCacheHeaders:
     """Vendored assets (Leaflet, fonts, icons) almost never change:
     let browsers keep them for a week instead of revalidating every
@@ -1080,7 +1083,7 @@ class StaticCacheHeaders:
 app = StaticCacheHeaders(app)
 app = RateLimitMiddleware(
     app,
-    RateLimiter(capacity=5, refill_per_second=0.1),
+    RateLimiter(capacity=20, refill_per_second=0.5),
     # The bucket protects the model-spending path (/api/ask) and event
     # spam. Data-plane GETs are cheap, feed-cached, and the standalone map
     # legitimately calls them on every pan - throttling them starves
