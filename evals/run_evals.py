@@ -30,7 +30,7 @@ from pathlib import Path
 import anthropic
 import yaml
 
-from ca_roads_demo.app import SYSTEM, TOOL_DEFS, TOOL_FUNCS
+from ca_roads_demo.prompt import SYSTEM, TOOL_DEFS, TOOL_FUNCS
 from ca_roads_mcp import server as tool_server
 from evals.fixture_mode import fixture_road_data
 

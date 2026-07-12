@@ -37,7 +37,7 @@ jobs:
           fi
           changed=$(git diff --name-only "$prev" "$TAG")
           printf 'Changed since %s:\n%s\n' "$prev" "$changed"
-          if printf '%s\n' "$changed" | grep -qE '^(src/ca_roads/|src/ca_roads_mcp/|evals/|src/ca_roads_demo/app\.py)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(src/ca_roads/|src/ca_roads_mcp/|evals/|src/ca_roads_demo/prompt\.py)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
