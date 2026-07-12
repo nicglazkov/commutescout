@@ -683,3 +683,22 @@ def test_route_buffer_updates_and_clamps(approved_client, store):
     assert approved_client.patch("/api/watch/" + cid,
                                  json={"buffer_km": 3},
                                  headers=auth()).status_code == 400
+
+
+def test_redeem_brute_force_throttles(client, store, monkeypatch):
+    monkeypatch.setattr(watch, "REDEEM_FAILS_PER_DAY", 3)
+    watch._redeem_fails.clear()
+    for i in range(3):
+        r = client.post("/api/watch/redeem", json={"code": f"ROADS-WRONG{i}"},
+                        headers=auth())
+        assert r.status_code == 403
+    r = client.post("/api/watch/redeem", json={"code": "ROADS-WRONG9"},
+                    headers=auth())
+    assert r.status_code == 429
+    # Even a VALID code is refused while throttled: guessing is over
+    # for the day.
+    store.codes["ROADS-GOOD"] = {"active": True, "max_uses": 5, "uses": 0}
+    r = client.post("/api/watch/redeem", json={"code": "ROADS-GOOD"},
+                    headers=auth())
+    assert r.status_code == 429
+    watch._redeem_fails.clear()

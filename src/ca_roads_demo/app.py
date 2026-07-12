@@ -419,6 +419,9 @@ async def api_suggest(request: Request):
     return JSONResponse({"suggestions": merged[:7]})
 
 
+_FLOW_CACHE: dict[tuple, tuple[float, dict | None]] = {}
+
+
 async def api_flow(request: Request):
     """Per-point traffic flow for coloring a planned route. Returns one
     entry per requested point: {ratio, current, freeflow} or null. Without
@@ -436,8 +439,20 @@ async def api_flow(request: Request):
         return JSONResponse({"error": "pts=lat,lon|lat,lon required"},
                             status_code=400)
     road = tools.get_road()
+
+    async def cached_flow(lat, lon):
+        key = (round(lat, 3), round(lon, 3))
+        hit = _FLOW_CACHE.get(key)
+        if hit and time.monotonic() - hit[0] < 90:
+            return hit[1]
+        sample = await tomtom_feed.flow_at_point(road.client, lat, lon)
+        if len(_FLOW_CACHE) > 800:
+            _FLOW_CACHE.clear()
+        _FLOW_CACHE[key] = (time.monotonic(), sample)
+        return sample
+
     samples = await asyncio.gather(*(
-        tomtom_feed.flow_at_point(road.client, lat, lon) for lat, lon in pairs
+        cached_flow(lat, lon) for lat, lon in pairs
     ))
     out = []
     for s in samples:
@@ -1056,6 +1071,66 @@ app = Starlette(
 # sustained): normal browsing fires event beacons and watch-API calls
 # from the same per-IP bucket, and burst-5 tuning rate-limited real
 # users mid-session. Dollar protection lives in the daily caps.
+class SecurityHeaders:
+    """Baseline hardening headers on every response: no MIME sniffing,
+    no framing (clickjacking), tight referrers, and geolocation only
+    for this origin. No cookies exist, so there is no CSRF surface."""
+
+    HEADERS = [
+        (b"x-content-type-options", b"nosniff"),
+        (b"x-frame-options", b"DENY"),
+        (b"referrer-policy", b"strict-origin-when-cross-origin"),
+        (b"permissions-policy",
+         b"geolocation=(self), camera=(), microphone=()"),
+    ]
+
+    def __init__(self, app_):
+        self.app = app_
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_secure(message):
+            if message["type"] == "http.response.start":
+                message.setdefault("headers", []).extend(self.HEADERS)
+            await send(message)
+
+        await self.app(scope, receive, send_secure)
+
+
+class SoftLimit:
+    """A second, roomier bucket for endpoints exempt from the strict
+    limiter because normal browsing hits them constantly - but which
+    still burn upstream quota (TomTom, CARTO, OSM geocoders) or CPU
+    when scripted. Sixty-burst at two per second never touches a
+    human; it stops a curl loop."""
+
+    PREFIXES = ("/api/suggest", "/api/geocode", "/api/flow",
+                "/api/staticmap", "/api/traffictile")
+
+    def __init__(self, app_):
+        self.app = app_
+        self.limiter = RateLimiter(capacity=60, refill_per_second=2.0)
+
+    async def __call__(self, scope, receive, send):
+        if (scope["type"] == "http"
+                and scope.get("path", "").startswith(self.PREFIXES)):
+            headers = dict(scope.get("headers") or [])
+            fwd = (headers.get(b"x-forwarded-for") or b"").decode() or None
+            client = scope.get("client")
+            ip = trusted_client_ip(fwd, client[0] if client else None)
+            if not self.limiter.allow(ip):
+                await send({"type": "http.response.start", "status": 429,
+                            "headers": [(b"content-type",
+                                         b"application/json")]})
+                await send({"type": "http.response.body",
+                            "body": b'{"error": "slow down"}'})
+                return
+        await self.app(scope, receive, send)
+
+
 class StaticCacheHeaders:
     """Vendored assets (Leaflet, fonts, icons) almost never change:
     let browsers keep them for a week instead of revalidating every
@@ -1080,6 +1155,7 @@ class StaticCacheHeaders:
         await self.app(scope, receive, send_with_cache if cacheable else send)
 
 
+app = SoftLimit(app)
 app = StaticCacheHeaders(app)
 app = RateLimitMiddleware(
     app,
@@ -1098,6 +1174,7 @@ app = RateLimitMiddleware(
                      "/privacy", "/terms", "/trip/", "/api/trip",
                      "/api/watch/config", "/api/staticmap"),
 )
+app = SecurityHeaders(app)
 
 
 def main() -> None:

@@ -452,9 +452,12 @@ async def api_watch_redeem(request: Request) -> JSONResponse:
     user = await _load_user(claims)
     if _approved(user):
         return JSONResponse({"status": "approved"})
+    if _redeem_throttled(claims["sub"]):
+        return _err("too many attempts today; try again tomorrow", 429)
     rec = await store.get_code(code)
     if (rec is None or not rec.get("active")
             or rec.get("uses", 0) >= rec.get("max_uses", 1)):
+        _note_redeem_failure(claims["sub"])
         return _err("that code is not valid", 403)
     # Read-then-increment without a transaction: worst case a code is
     # honored one extra time at trial scale, which an admin can revoke.
@@ -697,6 +700,26 @@ async def api_push_subscribe(request: Request) -> JSONResponse:
 
 
 _test_sends: dict[str, float] = {}
+_redeem_fails: dict[str, tuple[str, int]] = {}
+REDEEM_FAILS_PER_DAY = 20
+
+
+def _redeem_throttled(uid: str) -> bool:
+    day = datetime.now(UTC).date().isoformat()
+    stored_day, count = _redeem_fails.get(uid, (day, 0))
+    if stored_day != day:
+        count = 0
+    return count >= REDEEM_FAILS_PER_DAY
+
+
+def _note_redeem_failure(uid: str) -> None:
+    day = datetime.now(UTC).date().isoformat()
+    stored_day, count = _redeem_fails.get(uid, (day, 0))
+    if stored_day != day:
+        count = 0
+    _redeem_fails[uid] = (day, count + 1)
+    if len(_redeem_fails) > 5000:
+        _redeem_fails.clear()
 
 
 async def api_watch_test(request: Request) -> JSONResponse:

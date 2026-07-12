@@ -83,3 +83,15 @@ async def test_static_paths_bypass_the_bucket():
 
 async def _sink(message):
     pass
+
+
+def test_security_headers_and_softlimit():
+    from starlette.testclient import TestClient
+
+    from ca_roads_demo.app import app
+
+    client = TestClient(app)
+    r = client.get("/health")
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "DENY"
+    assert "geolocation=(self)" in r.headers["permissions-policy"]
