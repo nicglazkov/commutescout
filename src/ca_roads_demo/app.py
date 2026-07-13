@@ -286,8 +286,10 @@ async def answer_stream(
                 is_error = False
                 if isinstance(result, dict):
                     geo = extract_geo(block.name, result)
-            except Exception as exc:  # noqa: BLE001 - surface tool failure to the model
-                content = f"tool failed: {type(exc).__name__}: {exc}"
+            except Exception as exc:  # noqa: BLE001 - surface only the class
+                # Only the exception type reaches the model, never its
+                # message, which could carry an internal URL or path.
+                content = f"tool failed ({type(exc).__name__})"
                 is_error = True
             tool_calls.append({
                 "tool": block.name,

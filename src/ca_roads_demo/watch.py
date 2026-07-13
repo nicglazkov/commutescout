@@ -89,11 +89,11 @@ _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 # the SSRF where an approved account registers an endpoint pointing at
 # internal infrastructure and the checker POSTs to it.
 _PUSH_HOST_RE = re.compile(
-    r"(^|\.)("
-    r"googleapis\.com|"          # FCM (fcm.googleapis.com)
-    r"push\.apple\.com|"        # Apple (web.push.apple.com)
-    r"notify\.windows\.com|"    # Windows (*.notify.windows.com)
-    r"push\.services\.mozilla\.com"  # Firefox
+    r"^("
+    r"fcm\.googleapis\.com|"                 # FCM (Chrome/Android)
+    r"([a-z0-9-]+\.)?push\.apple\.com|"     # Apple (web.push.apple.com)
+    r"[a-z0-9-]+\.notify\.windows\.com|"    # Windows (WNS)
+    r"([a-z0-9-]+\.)?push\.services\.mozilla\.com"  # Firefox autopush
     r")$", re.I)
 
 
@@ -105,7 +105,7 @@ def valid_push_endpoint(url: str) -> bool:
     if u.scheme != "https" or not u.hostname:
         return False
     host = u.hostname
-    if not _PUSH_HOST_RE.search(host):
+    if not _PUSH_HOST_RE.match(host):
         return False
     # Belt and suspenders: never a literal private/loopback/link-local
     # IP even if it somehow matched (it will not, but defense in depth).
