@@ -4,6 +4,34 @@ The server runs as a single Cloud Run service using the streamable HTTP
 transport. Scale-to-zero is fine: cold starts are a few seconds and the data
 is fetched fresh anyway.
 
+## Runtime identity (least privilege)
+
+Both Cloud Run services run as a dedicated service account
+`ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com`, NOT the default
+Compute Engine SA (which carries `roles/editor`). A compromised app
+must not inherit project-wide Editor. The runtime SA holds only
+`roles/datastore.user`, `roles/bigquery.dataEditor`, and
+`roles/secretmanager.secretAccessor` on each mounted secret.
+
+```sh
+gcloud iam service-accounts create ca-roads-run \
+  --display-name "CA Roads Cloud Run runtime (least privilege)"
+SA=ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com
+gcloud projects add-iam-policy-binding ca-roads-mcp \
+  --member "serviceAccount:$SA" --role roles/datastore.user --condition=None
+gcloud projects add-iam-policy-binding ca-roads-mcp \
+  --member "serviceAccount:$SA" --role roles/bigquery.dataEditor --condition=None
+for s in anthropic-api-key tomtom-api-key bay511-api-key \
+         vapid-private-key resend-api-key; do
+  gcloud secrets add-iam-policy-binding "$s" --member "serviceAccount:$SA" \
+    --role roles/secretmanager.secretAccessor
+done
+```
+Always pass `--service-account $SA` on deploy (both service blocks
+below do). Residual: the default Compute SA still has Editor and is
+used for `--source` builds; migrating builds to a dedicated build SA
+would remove that entirely.
+
 ## One-time setup
 
 ```sh
@@ -21,6 +49,7 @@ gcloud run deploy ca-roads-mcp \
   --source . \
   --region us-west1 \
   --allow-unauthenticated \
+  --service-account ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com \
   --memory 512Mi \
   --cpu 1 \
   --min-instances 0 \
@@ -42,6 +71,7 @@ gcloud run deploy ca-roads-demo \
   --command ca-roads-demo \
   --region us-west1 \
   --allow-unauthenticated \
+  --service-account ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com \
   --memory 512Mi \
   --cpu 1 \
   --min-instances 1 \
