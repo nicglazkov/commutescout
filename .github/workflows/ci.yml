@@ -20,3 +20,13 @@ jobs:
         run: ruff check .
       - name: Test
         run: pytest -q
+      - name: Dependency vulnerability audit
+        run: |
+          pip install pip-audit
+          # Audit the installed environment (the real ship target on
+          # Linux). Exits non-zero on any known vulnerability. Not using
+          # -r constraints.txt: that file pins the Windows-only pywin32,
+          # which pip-audit's requirements mode fails to install on the
+          # Linux runner. Not using --strict: the only un-auditable
+          # entry is this repo's own editable package, which is fine.
+          pip-audit
