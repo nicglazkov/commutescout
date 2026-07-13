@@ -28,9 +28,18 @@ for s in anthropic-api-key tomtom-api-key bay511-api-key \
 done
 ```
 Always pass `--service-account $SA` on deploy (both service blocks
-below do). Residual: the default Compute SA still has Editor and is
-used for `--source` builds; migrating builds to a dedicated build SA
-would remove that entirely.
+below do).
+
+The default Compute SA (used by `--source` builds) has had
+`roles/editor` REMOVED and replaced with only the build roles it
+needs, so no service account in the project carries Editor:
+```sh
+CS=15002631928-compute@developer.gserviceaccount.com
+gcloud projects add-iam-policy-binding ca-roads-mcp   --member "serviceAccount:$CS" --role roles/cloudbuild.builds.builder --condition=None
+gcloud projects add-iam-policy-binding ca-roads-mcp   --member "serviceAccount:$CS" --role roles/run.admin --condition=None
+gcloud iam service-accounts add-iam-policy-binding "$SA"   --member "serviceAccount:$CS" --role roles/iam.serviceAccountUser
+gcloud projects remove-iam-policy-binding ca-roads-mcp   --member "serviceAccount:$CS" --role roles/editor --condition=None
+```
 
 ## One-time setup
 
