@@ -20,3 +20,12 @@ jobs:
         run: ruff check .
       - name: Test
         run: pytest -q
+      - name: Dependency vulnerability audit
+        run: |
+          pip install pip-audit
+          # Audit the exact pinned dependency set that ships. --strict
+          # fails the build on any known-vulnerable OR un-auditable
+          # dependency, so a CVE can never ship silently. Auditing the
+          # constraints file (not the live env) avoids choking on the
+          # local editable package, which is not on PyPI.
+          pip-audit --strict -r constraints.txt
