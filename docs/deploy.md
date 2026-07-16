@@ -15,7 +15,7 @@ must not inherit project-wide Editor. The runtime SA holds only
 
 ```sh
 gcloud iam service-accounts create ca-roads-run \
-  --display-name "CA Roads Cloud Run runtime (least privilege)"
+  --display-name "CommuteScout Cloud Run runtime (least privilege)"
 SA=ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com
 gcloud projects add-iam-policy-binding ca-roads-mcp \
   --member "serviceAccount:$SA" --role roles/datastore.user --condition=None
