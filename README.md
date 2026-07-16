@@ -1,11 +1,11 @@
 <div align="center">
-  <img src="docs/logo.svg" width="110" alt="CA Roads logo">
-  <h1>CA Roads</h1>
+  <img src="docs/logo.svg" width="110" alt="CommuteScout logo">
+  <h1>CommuteScout</h1>
   <p><b>A live map, route planner, and AI assistant for California roads.<br>
   Also an MCP server, so your assistant can use it too.</b></p>
 
-[![CI](https://github.com/nicglazkov/ca-roads-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/nicglazkov/ca-roads-mcp/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/nicglazkov/ca-roads-mcp?color=2f81f7)](https://github.com/nicglazkov/ca-roads-mcp/releases)
+[![CI](https://github.com/nicglazkov/commutescout/actions/workflows/ci.yml/badge.svg)](https://github.com/nicglazkov/commutescout/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/nicglazkov/commutescout?color=2f81f7)](https://github.com/nicglazkov/commutescout/releases)
 [![Evals](evals/results/badge.svg)](EVALS.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
@@ -20,16 +20,16 @@
   </p>
 
   <p>
-    <a href="https://ca-roads-demo-15002631928.us-west1.run.app">
+    <a href="https://commutescout.com">
       <img src="docs/try-demo-button.svg" width="230" alt="Try the live demo">
     </a>
   </p>
   <p>
     No install, no account:
-    <a href="https://ca-roads-demo-15002631928.us-west1.run.app"><b>ca-roads-demo-15002631928.us-west1.run.app</b></a>
+    <a href="https://commutescout.com"><b>commutescout.com</b></a>
   </p>
 
-  <a href="https://ca-roads-demo-15002631928.us-west1.run.app">
+  <a href="https://commutescout.com">
     <img src="docs/demo.gif" width="880"
          alt="Demo: autocompleting San Jose and San Francisco, planning a route with two traffic-colored options (Bayshore and Nimitz), switching between them, tapping a suggested question for a live AI answer, then flashing the statewide live traffic overlay">
   </a>
@@ -46,7 +46,7 @@ I host a copy anyone can use. If you would rather run your own, see
 
 ## The hosted app
 
-**[ca-roads-demo-15002631928.us-west1.run.app](https://ca-roads-demo-15002631928.us-west1.run.app)**
+**[commutescout.com](https://commutescout.com)**
 
 What is on it:
 
@@ -103,9 +103,9 @@ Desktop or Claude Code):
 ```json
 {
   "mcpServers": {
-    "ca-roads": {
+    "commutescout": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/nicglazkov/ca-roads-mcp", "ca-roads-mcp"]
+      "args": ["--from", "git+https://github.com/nicglazkov/commutescout", "ca-roads-mcp"]
     }
   }
 }

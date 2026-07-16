@@ -553,7 +553,7 @@ def test_scheduler_endpoint_refuses_anonymous(client):
 
 def test_email_single_event_subject_and_body():
     subject, html, text = watch.render_alert_email("Commute over 17", [EVENT])
-    assert subject == "CA Roads: Collision in Commute over 17"
+    assert subject == "CommuteScout: Collision in Commute over 17"
     assert "Commute over 17" in html
     assert "US-101 near San Jose" in html and "US-101 near San Jose" in text
     assert "Informational only" in html and "Informational only" in text
@@ -564,7 +564,7 @@ def test_email_multi_event_counts_and_overflow():
     events = [EVENT, {**EVENT, "id": "fire:2", "kind": "fire",
                       "title": "Wildfire: KESTREL", "body": "310 acres"}]
     subject, html, text = watch.render_alert_email("Tahoe", events, more=3)
-    assert subject == "CA Roads: 5 new events in Tahoe"
+    assert subject == "CommuteScout: 5 new events in Tahoe"
     assert "and 3 more" in html and "3 more" in text
     assert "WILDFIRE" in html.upper()
 

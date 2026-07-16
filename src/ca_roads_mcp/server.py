@@ -52,7 +52,7 @@ cannot forecast. Remind users to verify before they drive (dial 511 or check
 quickmap.dot.ca.gov). Not affiliated with any government agency.
 """
 
-mcp = FastMCP("CA Roads", instructions=INSTRUCTIONS)
+mcp = FastMCP("CommuteScout", instructions=INSTRUCTIONS)
 
 _road: RoadData | None = None
 
@@ -1295,7 +1295,7 @@ conditions for this trip:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="CA Roads MCP server")
+    parser = argparse.ArgumentParser(description="CommuteScout MCP server")
     parser.add_argument(
         "--transport",
         choices=["stdio", "http"],

@@ -4,23 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b1f33">
-<title>CA Roads - live California road conditions, traffic map, and route planner</title>
+<title>CommuteScout - live California road conditions, traffic map, and route planner</title>
 <meta name="description" content="Live California traffic map and route planner: CHP incidents, Caltrans lane closures, chain controls, wildfires, live highway cameras, and message signs. Plan a route or ask about a drive in plain words.">
-<link rel="canonical" href="https://ca-roads-demo-15002631928.us-west1.run.app/">
+<link rel="canonical" href="https://commutescout.com/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="CA Roads - live California road conditions">
+<meta property="og:title" content="CommuteScout - live California road conditions">
 <meta property="og:description" content="Every incident, closure, chain control, wildfire, live camera, and message sign in California on one map. Plan a route or ask an assistant about your drive.">
-<meta property="og:url" content="https://ca-roads-demo-15002631928.us-west1.run.app/">
-<meta property="og:image" content="https://ca-roads-demo-15002631928.us-west1.run.app/static/shots/og.png">
+<meta property="og:url" content="https://commutescout.com/">
+<meta property="og:image" content="https://commutescout.com/static/shots/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="CA Roads - live California road conditions">
+<meta name="twitter:title" content="CommuteScout - live California road conditions">
 <meta name="twitter:description" content="Live traffic map, route planner, and AI assistant for California roads.">
-<meta name="twitter:image" content="https://ca-roads-demo-15002631928.us-west1.run.app/static/shots/og.png">
+<meta name="twitter:image" content="https://commutescout.com/static/shots/og.png">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebApplication",
- "name":"CA Roads","applicationCategory":"TravelApplication",
+ "name":"CommuteScout","applicationCategory":"TravelApplication",
  "operatingSystem":"Web",
- "url":"https://ca-roads-demo-15002631928.us-west1.run.app/",
+ "url":"https://commutescout.com/",
  "description":"Live California road conditions: CHP incidents, Caltrans closures, chain controls, wildfires, cameras, and message signs on a map, with a route planner and an AI assistant.",
  "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
 </script>
@@ -369,12 +369,12 @@ aside { background:var(--card); border-right:1px solid var(--line);
 <body>
 <header class="topbar">
   <img class="mark" src="/logo.svg" alt="">
-  <span class="wordmark">CA Roads</span>
+  <span class="wordmark">CommuteScout</span>
   <nav>
     <a class="on" href="/">Live map</a>
     <a href="/watch">Watch areas</a>
-    <a href="https://github.com/nicglazkov/ca-roads-mcp#add-to-claude" target="_blank" rel="noopener">Add to Claude</a>
-    <a href="https://github.com/nicglazkov/ca-roads-mcp" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/nicglazkov/commutescout#add-to-claude" target="_blank" rel="noopener">Add to Claude</a>
+    <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
   </nav>
   <span class="sysok"><i></i><span id="feedsok">live from CHP · Caltrans · WFIGS + 11 more</span></span>
   <span id="ver"></span>
@@ -474,7 +474,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
       which see the coordinates involved. ·
       <a href="/privacy">Privacy</a> ·
       <a href="/terms">Terms</a> ·
-      <a href="https://github.com/nicglazkov/ca-roads-mcp">GitHub</a>
+      <a href="https://github.com/nicglazkov/commutescout">GitHub</a>
     </p>
   </aside>
   <div class="map-card active" id="mapcard">
@@ -1778,7 +1778,7 @@ document.getElementById('gpxbtn').addEventListener('click', () => {
     .join('\n      ');
   downloadFile(tripSlug() + '.gpx', 'application/gpx+xml',
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<gpx version="1.1" creator="CA Roads" xmlns="http://www.topografix.com/GPX/1/1">\n' +
+    '<gpx version="1.1" creator="CommuteScout" xmlns="http://www.topografix.com/GPX/1/1">\n' +
     '  <trk><name>' + tripSlug() + '</name>\n    <trkseg>\n      ' +
     pts + '\n    </trkseg>\n  </trk>\n</gpx>\n');
 });
@@ -2342,7 +2342,7 @@ document.getElementById('exportbtn').addEventListener('click', () => {
   if (!plannedRoute) return;
   const r = plannedRoute.route;
   const lines = [
-    'CA Roads - driving directions',
+    'CommuteScout - driving directions',
     plannedRoute.fromName + '  ->  ' + plannedRoute.toName,
     (r.distance / 1609.344).toFixed(0) + ' miles, about ' +
       Math.round(r.duration / 60) + ' minutes without delays',
@@ -2351,7 +2351,7 @@ document.getElementById('exportbtn').addEventListener('click', () => {
     ...r.steps.map((s, i) => (i + 1) + '. ' + s.text +
       (s.miles >= 0.05 ? '  (' + s.miles.toFixed(1) + ' mi)' : '')),
     '',
-    'Live conditions: https://ca-roads-demo-15002631928.us-west1.run.app',
+    'Live conditions: https://commutescout.com',
   ];
   const blob = new Blob([lines.join('\r\n')], { type: 'text/plain' });
   const aEl = document.createElement('a');

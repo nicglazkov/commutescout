@@ -809,7 +809,7 @@ async def api_watch_test(request: Request) -> JSONResponse:
     if not subs:
         return _err("no devices registered for push yet")
     sent = await _push_to_subs(subs, {
-        "title": "CA Roads test alert",
+        "title": "CommuteScout test alert",
         "body": "Push notifications are working for your account.",
         "url": "/watch",
     })
@@ -983,7 +983,7 @@ class _GonePush(Exception):
 
 
 DEMO_URL = os.environ.get(
-    "DEMO_URL", "https://ca-roads-demo-15002631928.us-west1.run.app")
+    "DEMO_URL", "https://commutescout.com")
 
 KIND_LABELS = {"incident": "Incident", "closure": "Closure",
                "chain": "Chain control", "fire": "Wildfire"}
@@ -1005,9 +1005,9 @@ def render_alert_email(watch_name: str, events: list[dict],
 
     name = html_mod.escape(watch_name or "Watch area")
     if len(events) == 1:
-        subject = f"CA Roads: {events[0]['title']} in {watch_name}"
+        subject = f"CommuteScout: {events[0]['title']} in {watch_name}"
     else:
-        subject = (f"CA Roads: {len(events) + more} new events "
+        subject = (f"CommuteScout: {len(events) + more} new events "
                    f"in {watch_name}")
 
     rows = []
@@ -1079,7 +1079,7 @@ def render_alert_email(watch_name: str, events: list[dict],
        style="max-width:560px;width:100%">
   <tr><td style="background:#0b1f33;border-radius:14px 14px 0 0;
       padding:16px 20px">
-    <span style="font:600 17px Georgia,serif;color:#fff">CA Roads</span>
+    <span style="font:600 17px Georgia,serif;color:#fff">CommuteScout</span>
     <span style="font:400 12px -apple-system,Segoe UI,Arial,sans-serif;
       color:#9fb4c9"> &nbsp;watch alert</span>
   </td></tr>
@@ -1106,7 +1106,7 @@ def render_alert_email(watch_name: str, events: list[dict],
       with 511 or quickmap.dot.ca.gov before you drive, and never rely
       on this for evacuation or emergency decisions.<br>
       You get these because your
-      <a href="{DEMO_URL}/watch" style="color:#8a94a3">CA Roads watch
+      <a href="{DEMO_URL}/watch" style="color:#8a94a3">CommuteScout watch
       area</a> matched new events. Delete the watch there to stop them.
       Maps &copy; OpenStreetMap &copy; CARTO.
     </div>
@@ -1116,7 +1116,7 @@ def render_alert_email(watch_name: str, events: list[dict],
 </table>
 </body>"""
 
-    text = (f"New in your CA Roads watch area \"{watch_name}\":\n\n"
+    text = (f"New in your CommuteScout watch area \"{watch_name}\":\n\n"
             + "\n".join(text_lines)
             + f"\n\nLive map: {DEMO_URL}/\n\n"
             "Informational only; may be delayed, incomplete, or wrong. "

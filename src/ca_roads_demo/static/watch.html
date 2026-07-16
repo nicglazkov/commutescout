@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b1f33">
-<title>Watch areas - CA Roads</title>
+<title>Watch areas - CommuteScout</title>
 <meta name="description" content="Get alerted when incidents, closures, chain controls, or wildfires appear in an area you care about.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
@@ -144,12 +144,12 @@ input:focus { border-color:var(--sky) }
 <body>
 <header class="topbar">
   <img class="mark" src="/logo.svg" alt="">
-  <span class="wordmark">CA Roads</span>
+  <span class="wordmark">CommuteScout</span>
   <nav>
     <a href="/">Live map</a>
     <a href="/watch" class="on">Watch areas</a>
-    <a href="https://github.com/nicglazkov/ca-roads-mcp#add-to-claude" target="_blank" rel="noopener">Add to Claude</a>
-    <a href="https://github.com/nicglazkov/ca-roads-mcp" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/nicglazkov/commutescout#add-to-claude" target="_blank" rel="noopener">Add to Claude</a>
+    <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
   </nav>
   <span class="who" id="who"></span>
 </header>
@@ -897,7 +897,7 @@ $('notifbtn').addEventListener('click', async () => {
       if (isIOS && !installed) {
         msg('devmsg', 'iPhone and iPad only allow notifications for '
           + 'installed web apps: open this page in Safari, tap Share, '
-          + 'choose "Add to Home Screen", then open CA Roads from your '
+          + 'choose "Add to Home Screen", then open CommuteScout from your '
           + 'Home Screen and tap this button again.', 'err');
       } else {
         msg('devmsg', 'This browser does not support push notifications.', 'err');

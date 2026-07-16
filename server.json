@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
-  "name": "io.github.nicglazkov/ca-roads-mcp",
+  "name": "io.github.nicglazkov/commutescout",
   "description": "Live California road conditions: CHP incidents, Caltrans lane closures, chain controls, and wildfire impacts. Ask about a route and get what is actually happening on it right now.",
   "repository": {
-    "url": "https://github.com/nicglazkov/ca-roads-mcp",
+    "url": "https://github.com/nicglazkov/commutescout",
     "source": "github"
   },
   "version": "2.20.2",

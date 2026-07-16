@@ -1,7 +1,7 @@
 /* Service worker: receives watch-area push alerts and opens /watch on
    tap. No fetch interception - the page works identically without it. */
 
-const ASSET_CACHE = 'ca-roads-assets-v1';
+const ASSET_CACHE = 'ca-roads-assets-v2';
 
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
@@ -42,7 +42,7 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch (err) { /* text push */ }
-  const title = data.title || 'CA Roads alert';
+  const title = data.title || 'CommuteScout alert';
   e.waitUntil(self.registration.showNotification(title, {
     body: data.body || '',
     icon: '/static/icon-192.png',

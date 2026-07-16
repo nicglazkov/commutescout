@@ -65,7 +65,7 @@ def main() -> None:
         if str(p.get("event", "")).startswith("feedback"):
             feedback[p["event"]] += 1
 
-    print(f"=== CA Roads usage, last {DAYS} day(s) ===\n")
+    print(f"=== CommuteScout usage, last {DAYS} day(s) ===\n")
     print("Day         Uniques  Questions")
     for day in sorted(by_day_visitors):
         print(f"{day}  {len(by_day_visitors[day]):7}  {by_day_questions[day]:9}")

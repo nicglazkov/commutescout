@@ -27,7 +27,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 from ca_roads_demo import watch as watch_mod
 
 DEMO_URL = os.environ.get(
-    "DEMO_URL", "https://ca-roads-demo-15002631928.us-west1.run.app")
+    "DEMO_URL", "https://commutescout.com")
 MAX_TRIP_POINTS = 500
 MAX_TRIP_STEPS = 80
 TRIP_TTL_DAYS = 180
@@ -190,7 +190,7 @@ async def trip_page(request: Request) -> HTMLResponse:
         _template_cache = _TEMPLATE_PATH.read_text(encoding="utf-8")
     pub = _trip_public(trip)
     title = (f"{pub['from_name']} → {pub['to_name']} · "
-             f"{pub['miles']:.0f} mi · CA Roads")
+             f"{pub['miles']:.0f} mi · CommuteScout")
     mid = decode_polyline(pub["polyline"])
     mid = mid[len(mid) // 2] if mid else [37.5, -120.5]
     og_image = (f"{DEMO_URL}/api/staticmap?lat={mid[0]:.4f}"

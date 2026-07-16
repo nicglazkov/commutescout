@@ -20,7 +20,7 @@ deploy, once the service URL exists.
 
 Submission form asks for a name, the connector URL, and a description.
 
-- Name: `CA Roads`
+- Name: `CommuteScout`
 - URL: `https://<service-url>/mcp`
 - Short description:
 
@@ -30,7 +30,7 @@ Submission form asks for a name, the connector URL, and a description.
 
 - Longer description:
 
-  > CA Roads gives your assistant live California road intelligence. Ask
+  > CommuteScout gives your assistant live California road intelligence. Ask
   > "do I need chains to get to Tahoe?", "is 17 clear right now?", or "how
   > is the Bay Area?" and it answers from the same feeds Caltrans and CHP
   > publish: real-time incidents, closures that are physically in place

@@ -78,7 +78,7 @@ def test_trip_validation(client):
 def test_trip_page_renders_og_and_data(client):
     trip_id = client.post("/api/trip", json=ROUTE).json()["id"]
     html = client.get("/trip/" + trip_id).text
-    assert "San Jose → San Francisco · 54 mi · CA Roads" in html
+    assert "San Jose → San Francisco · 54 mi · CommuteScout" in html
     assert 'property="og:image"' in html and "/api/staticmap" in html
     assert '"from_name": "San Jose"' in html
     assert client.get("/trip/nope").status_code == 404

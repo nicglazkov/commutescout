@@ -1,6 +1,6 @@
 {
-  "name": "CA Roads",
-  "short_name": "CA Roads",
+  "name": "CommuteScout",
+  "short_name": "CommuteScout",
   "description": "Live California road conditions: incidents, closures, chain controls, and wildfire impacts.",
   "start_url": "/watch",
   "scope": "/",
