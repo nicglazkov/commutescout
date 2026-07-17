@@ -20,21 +20,57 @@ async def test_fresh_hit_skips_fetch():
     assert not second.stale
 
 
-async def test_stale_serve_on_failure():
+async def test_expired_serves_stale_then_refreshes():
+    """Stale-while-revalidate: an expired-but-servable key returns the cached
+    value immediately (never awaiting the refresh) and updates in the
+    background."""
     cache = TTLCache()
+    calls = 0
 
-    async def ok():
+    async def fetch():
+        nonlocal calls
+        calls += 1
+        return f"v{calls}"
+
+    first = await cache.get("k", ttl_seconds=0, max_serve_seconds=300, fetch=fetch)
+    assert first.value == "v1" and calls == 1 and not first.stale
+
+    # ttl=0 -> already expired, but within max_serve: serve v1 now, refresh async.
+    second = await cache.get("k", ttl_seconds=0, max_serve_seconds=300, fetch=fetch)
+    assert second.served and second.value == "v1" and not second.stale
+
+    await cache._drain()
+    assert calls == 2  # the refresh ran off the caller's path
+
+    third = await cache.get("k", ttl_seconds=0, max_serve_seconds=300, fetch=fetch)
+    assert third.value == "v2"  # now serving the refreshed value
+    await cache._drain()
+
+
+async def test_failed_refresh_keeps_serving_and_flags_stale():
+    """When the background refresh fails, the last good value keeps being served
+    and is flagged stale with the error."""
+    cache = TTLCache()
+    state = {"fail": False}
+
+    async def fetch():
+        if state["fail"]:
+            raise RuntimeError("down")
         return "good"
 
-    async def boom():
-        raise RuntimeError("down")
+    await cache.get("k", ttl_seconds=0, max_serve_seconds=300, fetch=fetch)  # cold -> good
 
-    await cache.get("k", ttl_seconds=0, max_serve_seconds=300, fetch=ok)
-    outcome = await cache.get("k", ttl_seconds=0, max_serve_seconds=300, fetch=boom)
-    assert outcome.served
-    assert outcome.stale
-    assert outcome.value == "good"
-    assert "down" in outcome.error
+    state["fail"] = True
+    # First expired serve returns cached "good" immediately; failure not known yet.
+    first = await cache.get("k", ttl_seconds=0, max_serve_seconds=300, fetch=fetch)
+    assert first.served and first.value == "good" and not first.stale
+
+    await cache._drain()  # background refresh fails and records the error
+
+    second = await cache.get("k", ttl_seconds=0, max_serve_seconds=300, fetch=fetch)
+    assert second.served and second.value == "good"
+    assert second.stale and "down" in second.error
+    await cache._drain()
 
 
 async def test_failure_without_cache():

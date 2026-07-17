@@ -206,6 +206,14 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .fld input:focus { border-color:var(--sky) }
 .val { font-size:.75rem; margin-top:3px; min-height:1.1em }
 .val.ok { color:var(--green) } .val.err { color:var(--red) }
+.pickmap { position:absolute; top:0; right:0; font:600 .68rem Inter; color:var(--sky);
+  background:none; border:0; padding:2px 3px; cursor:pointer; letter-spacing:.3px }
+.pickmap:hover { text-decoration:underline }
+.pickmap.armed { color:#fff; background:var(--sky); border-radius:6px; text-decoration:none }
+.pickhint { position:absolute; z-index:900; top:12px; left:50%; transform:translateX(-50%);
+  background:var(--sky); color:#fff; font:600 .8rem Inter; padding:7px 14px;
+  border-radius:99px; box-shadow:0 2px 8px rgba(15,28,43,.35);
+  pointer-events:none; white-space:nowrap }
 .val select { font:inherit; font-size:.8rem; width:100%; margin-top:3px;
   padding:6px; border:1px solid var(--line); border-radius:7px }
 .planbtn { width:100%; font:600 .9rem Inter; background:var(--sky); color:#fff;
@@ -390,10 +398,12 @@ aside { background:var(--card); border-right:1px solid var(--line);
   <aside>
     <section id="pane-plan">
       <div class="fld"><label>From</label>
+        <button type="button" class="pickmap" id="pickfrom" data-pick="from">Pick on map</button>
         <input id="from" maxlength="200" placeholder="e.g. San Jose or 123 Main St, Davis" autocomplete="off">
         <div class="sugg" id="fromsugg"></div>
         <div class="val" id="fromval"></div></div>
       <div class="fld"><label>To</label>
+        <button type="button" class="pickmap" id="pickto" data-pick="to">Pick on map</button>
         <input id="to" maxlength="200" placeholder="e.g. South Lake Tahoe" autocomplete="off">
         <div class="sugg" id="tosugg"></div>
         <div class="val" id="toval"></div></div>
@@ -409,6 +419,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
           <button type="button" id="kmlbtn">KML</button>
           <button type="button" id="sharebtn" class="pri">Share link</button>
           <button type="button" id="clearroutebtn">Clear route</button>
+          <button type="button" id="viapickbtn">Add stop on map</button>
         </div>
         <div class="routeasks-wrap" id="routeasks-wrap">
           <b>Questions people ask about this drive</b>
@@ -479,6 +490,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
   </aside>
   <div class="map-card active" id="mapcard">
     <div id="map"></div>
+    <div class="pickhint" id="pickhint" hidden></div>
     <div class="roadinfo" id="roadinfo"></div>
     <button type="button" class="layersbtn" id="layersbtn">Layers</button>
   <div class="filters" id="filters">
@@ -1981,6 +1993,37 @@ function setPinField(field, ll) {
   map.closePopup(pinPopup);
   if (fromF.input.dataset.lat && toF.input.dataset.lat) planbtn.click();
 }
+// ── Pick-on-map: a sidebar "Pick on map" button arms which route point
+// the next single map click sets. Without an armed mode, map clicks no
+// longer drop a from/to/stop chooser on every click. ───────────────────
+let pickMode = null;  // 'from' | 'to' | 'via' | null
+const pickHint = document.getElementById('pickhint');
+const pickBtns = {
+  from: document.getElementById('pickfrom'),
+  to: document.getElementById('pickto'),
+  via: document.getElementById('viapickbtn'),
+};
+const PICK_LABEL = {
+  from: 'Click the map to set your start',
+  to: 'Click the map to set your destination',
+  via: 'Click the map to add a stop',
+};
+function setPickMode(mode) {
+  pickMode = (pickMode === mode) ? null : mode;
+  for (const [k, btn] of Object.entries(pickBtns)) {
+    if (btn) btn.classList.toggle('armed', pickMode === k);
+  }
+  map.getContainer().style.cursor = pickMode ? 'crosshair' : '';
+  if (pickMode) { pickHint.textContent = PICK_LABEL[pickMode]; pickHint.hidden = false; }
+  else { pickHint.hidden = true; }
+}
+pickBtns.from.addEventListener('click', () => setPickMode('from'));
+pickBtns.to.addEventListener('click', () => setPickMode('to'));
+if (pickBtns.via) pickBtns.via.addEventListener('click', () => setPickMode('via'));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && pickMode) setPickMode(null);
+});
+
 function clickNearRoute(latlng) {
   if (!plannedRoute || !lastEnds) return false;
   const pts = plannedRoute.route.latlngs;
@@ -2000,45 +2043,21 @@ function clickNearRoute(latlng) {
   return false;
 }
 
-map.on('click', (e) => {
+map.on('click', async (e) => {
   // A reshape drag ends with a synthetic map click; swallow it.
   if (suppressPinOnce) { suppressPinOnce = false; return; }
-  // Tapping the planned route offers a stop there. This lives here
-  // rather than on the route layer because WebKit taps never reach
-  // canvas vectors.
-  if (clickNearRoute(e.latlng) && viaPoints.length < 5) {
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.textContent = 'Route through here';
-    btn.className = 'pinchoice-single';
-    btn.addEventListener('click', async () => {
-      map.closePopup();
-      viaPoints.push([e.latlng.lat, e.latlng.lng]);
-      await replanVias();
-    });
-    L.popup().setLatLng(e.latlng).setContent(btn).openOn(map);
-    return;
+  // Map clicks only set route points when a sidebar "Pick on map" button
+  // has armed a target. Without that, clicking the map does nothing here
+  // (it no longer drops a from/to/stop chooser on every click).
+  if (!pickMode) return;
+  const mode = pickMode;
+  setPickMode(null);
+  if (mode === 'from') { setPinField(fromF, e.latlng); return; }
+  if (mode === 'to') { setPinField(toF, e.latlng); return; }
+  if (mode === 'via' && lastEnds && viaPoints.length < 5) {
+    viaPoints.push([e.latlng.lat, e.latlng.lng]);
+    await replanVias();
   }
-  const wrap = document.createElement('div');
-  wrap.className = 'pinchoice';
-  const mkBtn = (label, field) => {
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.textContent = label;
-    btn.addEventListener('click', () => setPinField(field, e.latlng));
-    return btn;
-  };
-  wrap.append(mkBtn('Route from here', fromF),
-              mkBtn('Route to here', toF));
-  if (lastEnds && viaPoints.length < 5) {
-    const stop = document.createElement('button');
-    stop.type = 'button'; stop.textContent = 'Add stop on this route';
-    stop.addEventListener('click', async () => {
-      map.closePopup(pinPopup);
-      viaPoints.push([e.latlng.lat, e.latlng.lng]);
-      await replanVias();
-    });
-    wrap.append(stop);
-  }
-  pinPopup.setLatLng(e.latlng).setContent(wrap).openOn(map);
 });
 
 function mobileReveal(el) {
