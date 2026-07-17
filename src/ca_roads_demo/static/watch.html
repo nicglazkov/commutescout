@@ -388,12 +388,6 @@ async function refresh() {
   out.textContent = 'Sign out';
   out.addEventListener('click', () => signOut(auth));
   $('who').append(label, out);
-  if (me.admin) {
-    const a = document.createElement('a');
-    a.href = '/admin'; a.textContent = 'Admin';
-    a.style.cssText = 'color:#e8a13c;font-size:.78rem';
-    $('who').prepend(a);
-  }
   if (me.status === 'approved') {
     show('appzone');
     if (CFG.emailEnabled) $('emailchan').classList.remove('hidden');

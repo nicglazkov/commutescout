@@ -62,6 +62,19 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
   font-size:.82rem }
 .hidden { display:none !important }
 .tablewrap { overflow-x:auto }
+.an-kpis { display:flex; gap:32px; margin:4px 0 14px }
+.an-n { font:700 1.7rem Inter; display:block; line-height:1.1 }
+.an-l { font-size:.72rem; color:var(--dim); text-transform:uppercase;
+  letter-spacing:.6px }
+.an-chart { width:100%; height:110px; display:block; margin-bottom:12px;
+  border-bottom:1px solid var(--line) }
+.an-chart rect { fill:var(--sky) }
+.an-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px }
+.an-grid h3 { font:600 .72rem Inter; text-transform:uppercase;
+  letter-spacing:.6px; color:var(--dim); margin-bottom:4px }
+.an-grid td:last-child { text-align:right; color:var(--dim);
+  font-variant-numeric:tabular-nums }
+@media (max-width:700px){ .an-grid { grid-template-columns:1fr } }
 @media (max-width: 700px) {
   .topbar { gap:8px; padding:0 12px }
   .topbar .wordmark { white-space:nowrap; font-size:.98rem }
@@ -85,7 +98,6 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
     <a href="/watch">Watch areas</a>
     <a href="https://github.com/nicglazkov/commutescout#add-to-claude" target="_blank" rel="noopener">Add to Claude</a>
     <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
-    <a href="/admin" class="on">Admin</a>
   </nav>
   <span class="who" id="who"></span>
 </header>
@@ -98,7 +110,30 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
   </section>
 
   <section id="panel" class="hidden">
-    <h1>Premium trial management</h1>
+    <h1>Traffic</h1>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+        <h2 style="margin:0">Cloudflare Web Analytics</h2>
+        <select id="an-range" style="width:auto;min-width:130px">
+          <option value="24h">Last 24 hours</option>
+          <option value="7d" selected>Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </select>
+      </div>
+      <div class="an-kpis">
+        <div><span class="an-n" id="an-pv">–</span><span class="an-l">pageviews</span></div>
+        <div><span class="an-n" id="an-vis">–</span><span class="an-l">visitors</span></div>
+      </div>
+      <svg class="an-chart" id="an-chart" viewBox="0 0 600 120" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="an-grid">
+        <div><h3>Top pages</h3><div class="tablewrap"><table><tbody id="an-pages"></tbody></table></div></div>
+        <div><h3>Top referrers</h3><div class="tablewrap"><table><tbody id="an-refs"></tbody></table></div></div>
+        <div><h3>Top countries</h3><div class="tablewrap"><table><tbody id="an-countries"></tbody></table></div></div>
+      </div>
+      <div class="msg" id="an-msg"></div>
+    </div>
+
+    <h1 style="margin-top:24px">Premium trial management</h1>
 
     <div class="card">
       <h2>Access codes</h2>
@@ -181,6 +216,7 @@ onAuthStateChanged(auth, async (u) => {
     await load();
     $('signin').classList.add('hidden');
     $('panel').classList.remove('hidden');
+    loadAnalytics();
   } catch (e) {
     $('signin').classList.remove('hidden');
     msg('signinmsg', e.message, 'err');
@@ -272,6 +308,60 @@ $('runcheck').addEventListener('click', async () => {
     msg('checkmsg', JSON.stringify(r), 'ok');
   } catch (e) { msg('checkmsg', e.message, 'err'); }
 });
+
+// ── Cloudflare Web Analytics ──────────────────────────────────────────
+$('an-range').addEventListener('change', loadAnalytics);
+
+async function loadAnalytics() {
+  try {
+    const a = await api('/api/admin/analytics?range=' + $('an-range').value);
+    if (!a.ok) { msg('an-msg', a.error || 'analytics unavailable', 'err'); return; }
+    $('an-pv').textContent = (a.pageviews || 0).toLocaleString();
+    $('an-vis').textContent = (a.visitors || 0).toLocaleString();
+    renderChart(a.series || []);
+    renderTop('an-pages', a.top_pages);
+    renderTop('an-refs', a.top_referrers);
+    renderTop('an-countries', a.top_countries);
+    msg('an-msg', (a.series && a.series.length) ? ''
+        : 'No data yet — check back once the site has some traffic.');
+  } catch (e) { msg('an-msg', e.message, 'err'); }
+}
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+function renderChart(series) {
+  const svg = $('an-chart');
+  svg.innerHTML = '';
+  if (!series.length) return;
+  const max = Math.max(1, ...series.map((d) => d.views || 0));
+  const w = 600 / series.length, gap = 2;
+  series.forEach((d, i) => {
+    const h = Math.max(1, Math.round(((d.views || 0) / max) * 110));
+    const r = document.createElementNS(SVGNS, 'rect');
+    r.setAttribute('x', (i * w + gap / 2).toFixed(1));
+    r.setAttribute('y', (120 - h).toFixed(1));
+    r.setAttribute('width', Math.max(1, w - gap).toFixed(1));
+    r.setAttribute('height', h);
+    const t = document.createElementNS(SVGNS, 'title');
+    t.textContent = (d.date || '') + ': ' + (d.views || 0) + ' views';
+    r.append(t);
+    svg.append(r);
+  });
+}
+
+function renderTop(id, rows) {
+  const tb = $(id);
+  tb.innerHTML = '';
+  for (const r of (rows || []).slice(0, 8)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td></td><td></td>';
+    tr.children[0].textContent = r.name || '(none)';
+    tr.children[1].textContent = (r.views || 0).toLocaleString();
+    tb.append(tr);
+  }
+  if (!(rows || []).length) {
+    tb.innerHTML = '<tr><td style="color:var(--dim)">—</td></tr>';
+  }
+}
 </script>
 <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d2d77aff6dfe4462b09ca501c9151de4"}'></script>
 </body>

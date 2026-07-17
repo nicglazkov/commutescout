@@ -35,7 +35,7 @@ from ca_roads.feeds import calfire as calfire_feed
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
-from ca_roads_demo import trips, watch
+from ca_roads_demo import analytics, trips, watch
 from ca_roads_demo.prompt import SYSTEM, TOOL_DEFS, TOOL_FUNCS  # noqa: F401
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_suggest
@@ -907,6 +907,12 @@ async def admin_page(_: Request):
     return FileResponse(STATIC_DIR / "admin.html")
 
 
+# The admin page lives at a secret, unguessable path in production (ADMIN_PATH);
+# /admin then simply 404s. This obscurity sits on top of the real gate: every
+# admin API call is still verified server-side against ADMIN_EMAILS.
+ADMIN_PAGE_PATH = "/" + os.environ.get("ADMIN_PATH", "admin").strip("/")
+
+
 async def privacy_page(_: Request):
     return FileResponse(STATIC_DIR / "privacy.html")
 
@@ -1050,7 +1056,9 @@ app = Starlette(
         Route("/api/staticmap", api_staticmap, methods=["GET"]),
         Route("/api/mapdata", api_mapdata, methods=["GET"]),
         Route("/watch", watch_page),
-        Route("/admin", admin_page),
+        Route(ADMIN_PAGE_PATH, admin_page),
+        Route("/api/admin/analytics", analytics.api_admin_analytics,
+              methods=["GET"]),
         Route("/privacy", privacy_page),
         Route("/terms", terms_page),
         Route("/trip/{trip_id}", trips.trip_page),
@@ -1236,7 +1244,7 @@ app = RateLimitMiddleware(
                      # Watch pages + public bootstrap config are as cheap
                      # as static files; the mutating watch APIs stay
                      # inside the bucket (and are token-gated anyway).
-                     "/watch", "/admin", "/sw.js", "/manifest.webmanifest",
+                     "/watch", ADMIN_PAGE_PATH, "/sw.js", "/manifest.webmanifest",
                      "/privacy", "/terms", "/trip/", "/api/trip",
                      "/api/watch/config", "/api/staticmap"),
 )
