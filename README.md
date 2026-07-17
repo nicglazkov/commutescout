@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/logo.svg" width="110" alt="CommuteScout logo">
   <h1>CommuteScout</h1>
-  <p><b>Live California road conditions — a map, a route planner, and an
+  <p><b>Live California road conditions: a map, a route planner, and an
   AI assistant.<br>Also an MCP server, so your assistant can use it too.</b></p>
 
 [![CI](https://github.com/nicglazkov/commutescout/actions/workflows/ci.yml/badge.svg)](https://github.com/nicglazkov/commutescout/actions/workflows/ci.yml)
@@ -34,9 +34,9 @@
   </a>
 </div>
 
-CommuteScout watches 13 public agency feeds — CHP dispatch, Caltrans
+CommuteScout watches 13 public agency feeds (CHP dispatch, Caltrans
 closures, chain controls, cameras and message signs, wildfire
-perimeters, weather — and turns them into one live picture of
+perimeters, weather) and turns them into one live picture of
 California's roads. Look at the map, plan a route and see what's
 actually on it, or just ask about a drive in plain English. The same
 data is served over [MCP](docs/mcp.md), so Claude and other AI
@@ -44,23 +44,23 @@ assistants can use it as a tool instead of guessing about traffic.
 
 ## What you get
 
-- 🗺️ **A live statewide map** — incidents by type, closures by class,
+- **A live statewide map:** incidents by type, closures by class,
   chain controls, wildfires with burn footprints, weather stations,
   ~3,300 verified-live cameras, and every message sign currently
   displaying something.
-- 🚗 **A route planner that knows the roads** — autocomplete, route
+- **A route planner that knows the roads:** autocomplete, route
   options, turn-by-turn directions, live conditions along the way, and
   print / GPX / KML / share-link export.
-- 💬 **An assistant that reads the feeds** — plan a route, tap a
-  suggested question, and the answer streams in from the same live
-  data, with per-source timestamps.
-- 🔔 **Watch areas** — draw a circle, polygon, or route corridor and
-  get a push or email alert when an incident, closure, chain control,
-  or wildfire appears inside it.
-- 🤖 **An MCP server** — nine tools over curated corridors and regions,
+- **An assistant that reads the feeds:** plan a route, tap a suggested
+  question, and the answer streams in from the same live data, with
+  per-source timestamps.
+- **Watch areas:** draw a circle, polygon, or route corridor and get a
+  push or email alert when an incident, closure, chain control, or
+  wildfire appears inside it.
+- **An MCP server:** nine tools over curated corridors and regions,
   with a [closure taxonomy](docs/data-sources.md#the-closure-taxonomy)
   that keeps a closed on-ramp from reading as a closed highway.
-- 📊 **Public evals** — 91 golden questions on recorded fixtures gate
+- **Public evals:** 91 golden questions on recorded fixtures gate
   every release; the [scorecard](EVALS.md) and its history are
   committed to this repo.
 
@@ -75,16 +75,16 @@ assistants can use it as a tool instead of guessing about traffic.
 ## Get started
 
 The fastest way to use CommuteScout is the hosted app:
-**[commutescout.com](https://commutescout.com)** — nothing to run,
+**[commutescout.com](https://commutescout.com)**. Nothing to run,
 always on the latest release, feeds already warm.
 
 |  | [commutescout.com](https://commutescout.com) | Self-hosted |
 |---|---|---|
-| Setup | None — open it | `pip install` or Cloud Run deploy |
+| Setup | None, just open it | `pip install` or Cloud Run deploy |
 | Updates & feeds | Always current, managed | You redeploy and manage keys |
 | AI assistant | Included | Bring your own Anthropic API key |
 | Watch-area alerts | Included (invite-only trial) | Extra setup: Firestore, push keys, a scheduler |
-| Upcoming premium features | Land here first | — |
+| Upcoming premium features | Land here first | Not planned |
 | Support | Actively maintained | Best effort via issues |
 
 ### Add to Claude
@@ -118,7 +118,7 @@ The web app is `pip install ".[demo]"` then `ca-roads-demo` with an
 (small enough for the free tier most months), optional feed keys, and
 the watch-areas setup, see **[docs/deploy.md](docs/deploy.md)**.
 
-Self-hosted deployments are supported on a best-effort basis — issues
+Self-hosted deployments are supported on a best-effort basis: issues
 and PRs are very welcome, but there is no support guarantee for
 deployments I don't run.
 
@@ -145,21 +145,21 @@ trend is public: **[EVALS.md](EVALS.md)**.
 
 ## Under the hood
 
-Three cleanly layered Python packages — a feed layer with
+Three cleanly layered Python packages (a feed layer with
 stale-while-revalidate caches and salvaging parsers, the MCP surface,
-and the web app — sharing one data spine. Diagram and design notes:
+and the web app) sharing one data spine. Diagram and design notes:
 **[docs/architecture.md](docs/architecture.md)**.
 
 ## Contributing
 
-PRs welcome — the test suite is fixture-based and runs without network
+PRs welcome. The test suite is fixture-based and runs without network
 access. Start with **[CONTRIBUTING.md](CONTRIBUTING.md)**, and see
 [adding a data source](docs/adding-a-source.md) if you want to wire up
 a new feed.
 
 ## License & sustainability
 
-CommuteScout is [MIT licensed](LICENSE) — the map, the planner, the MCP
+CommuteScout is [MIT licensed](LICENSE): the map, the planner, the MCP
 server, and every data parser, with no open-core carve-outs. The hosted
 app at [commutescout.com](https://commutescout.com) will soon offer
 optional premium features (deeper history, more alerts); that is what

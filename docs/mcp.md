@@ -41,7 +41,7 @@ checks off), so bind it to localhost when running it on your machine:
 
 | Tool | What it answers |
 |------|-----------------|
-| `check_route(from_place, to_place)` | Everything active along a major corridor (17 curated corridors: I-80 Sacramento–Reno, US-50 to Tahoe, I-5, US-101, SR-17, SR-99, SR-1, I-15 to Vegas, Bay Area freeways, Tahoe locals), ordered by miles along the route |
+| `check_route(from_place, to_place)` | Everything active along a major corridor (17 curated corridors: I-80 Sacramento-Reno, US-50 to Tahoe, I-5, US-101, SR-17, SR-99, SR-1, I-15 to Vegas, Bay Area freeways, Tahoe locals), ordered by miles along the route |
 | `check_region(region)` | One-call report for a whole region (Bay Area, SoCal, Sierra, Central Valley, and four more): exact counts, incidents severity-sorted, full closures first, capped lists that say when they truncate |
 | `get_incidents(highway?, area?, center?)` | Live CHP incidents by route, dispatch area, or a point and radius |
 | `get_lane_closures(route?, district?, center?)` | Closures in place right now, classified per the [closure taxonomy](data-sources.md#the-closure-taxonomy) |
@@ -49,7 +49,7 @@ checks off), so bind it to localhost when running it on your machine:
 | `get_wildfires(near_route?, center?)` | Active fires with size, containment, and mapped perimeter edges, flagged near major highways |
 | `get_cameras(center?, route?)` | Roadside camera snapshots, each verified live before it is returned (offline placeholder frames are filtered by image freshness) |
 | `get_road_signs(route?, center?)` | What changeable message signs are displaying right now, verbatim |
-| `rank_routes(by?, limit?)` | All 17 corridors ranked by live events or measured congestion, with reasons — answers "what are the busiest routes right now" |
+| `rank_routes(by?, limit?)` | All 17 corridors ranked by live events or measured congestion, with reasons; answers "what are the busiest routes right now" |
 
 Route and region reports also carry context that changes the advice:
 weather alerts sampled along the trip, road-weather stations reporting

@@ -1,7 +1,7 @@
 # Self-hosting on Cloud Run
 
-This is the complete runbook for running your own CommuteScout — the
-same commands that deploy the hosted app. (If you just want to use
+This is the complete runbook for running your own CommuteScout, using
+the same commands that deploy the hosted app. (If you just want to use
 CommuteScout, [commutescout.com](https://commutescout.com) is always
 current and needs none of this.)
 

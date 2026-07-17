@@ -23,24 +23,24 @@ flowchart LR
 
 Three packages, cleanly layered:
 
-- **`ca_roads`** — the feed layer. No MCP dependency. Async httpx
+- **`ca_roads`**: the feed layer. No MCP dependency. Async httpx
   fetchers, per-district TTL caches with stale-while-revalidate (an
   expired feed serves from memory instantly and refreshes in the
   background), stale-serve on upstream failure, parsers that salvage
   complete records from truncated feeds, and rules learned from running
   these feeds in production. Details: [data sources](data-sources.md).
-- **`ca_roads_mcp`** — the MCP surface. FastMCP server, curated
+- **`ca_roads_mcp`**: the MCP surface. FastMCP server, curated
   corridor and region tables, route-name normalization, an offline
   California gazetteer, and docstrings written for the LLM consumer.
   Details: [the MCP server](mcp.md).
-- **`ca_roads_demo`** — the web app at
+- **`ca_roads_demo`**: the web app at
   [commutescout.com](https://commutescout.com). The standalone map and
   route planner (viewport-driven data API, address autocomplete,
   turn-by-turn via OSRM with a Valhalla fallback), watch-area alerts
   (web push + email), trip share pages, plus Claude in a tool loop over
-  the same tool functions — streaming SSE with map geometry and hard
-  cost caps (per-IP rate limits, daily question caps, a global daily
-  dollar budget).
+  the same tool functions, streaming SSE with map geometry and hard
+  cost caps: per-IP rate limits, daily question caps, a global daily
+  dollar budget.
 
 The layering is strict: the web app and the MCP server both sit on
 `ca_roads`, so a fix to a parser or cache benefits every surface at

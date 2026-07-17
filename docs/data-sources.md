@@ -4,7 +4,7 @@ Everything CommuteScout serves comes from public agency feeds, fetched
 live and cached briefly in-process. No feed is ever silently dropped:
 every response carries per-source `data_as_of` timestamps, and when a
 feed is stale or failing the last good data is served, flagged stale,
-with the error attached — so both the UI and an AI assistant can say
+with the error attached, so both the UI and an AI assistant can say
 how much to trust the answer.
 
 ## The feeds
@@ -53,7 +53,7 @@ learned running them:
   every complete record instead of failing, and recently-seen incidents
   are carried forward briefly so they do not flap out of existence.
 - Camera "liveness" is judged by image freshness (Last-Modified within
-  30 minutes), not byte size — night frames are tiny but live.
+  30 minutes), not byte size: night frames are tiny but live.
 - A missing Caltrans district feed is treated as an empty district, not
   an error: one flaky district should not blank the state.
 - Place names go through a real geocoder with an offline California
