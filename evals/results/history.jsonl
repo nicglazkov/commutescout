@@ -44,3 +44,4 @@
 {"ts": "2026-07-17T00:51:43+00:00", "source_ref": "v2.22.0", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "65/91 (71%)"}}
 {"ts": "2026-07-17T01:31:01+00:00", "source_ref": "v2.22.1", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "62/91 (68%)"}}
 {"ts": "2026-07-17T07:58:28+00:00", "source_ref": "v2.23.0", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "66/91 (73%)"}}
+{"ts": "2026-07-17T19:52:34+00:00", "source_ref": "v2.24.0", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "64/91 (70%)"}}
