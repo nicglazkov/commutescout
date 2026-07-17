@@ -48,7 +48,7 @@ class RoadData:
             await self._client.aclose()
 
     async def incidents(self) -> FeedResult:
-        """Live CHP incidents statewide (fetched per request)."""
+        """Live CHP incidents statewide (memory-cached, background-refreshed)."""
         return await self.chp.get()
 
     async def lane_closures(

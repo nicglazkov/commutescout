@@ -64,14 +64,14 @@ async def test_source_fetch_and_304(fixture_bytes):
     )
     async with httpx.AsyncClient() as client:
         source = chp.ChpSource(client)
-        result = await source.get()
+        result = await source._fetch()
         assert result.ok and not result.stale
         assert len(result.records) == 2
         first_as_of = result.data_as_of
 
         # Second request sends the validator and serves the last parse on 304.
         route.mock(return_value=httpx.Response(304))
-        result2 = await source.get()
+        result2 = await source._fetch()
         assert route.calls.last.request.headers.get("If-None-Match") == '"abc"'
         assert result2.ok
         assert len(result2.records) == 2
@@ -85,9 +85,9 @@ async def test_source_serves_stale_on_failure(fixture_bytes):
     )
     async with httpx.AsyncClient() as client:
         source = chp.ChpSource(client)
-        await source.get()
+        await source._fetch()
         route.mock(side_effect=httpx.ConnectError("boom"))
-        result = await source.get()
+        result = await source._fetch()
         assert result.ok
         assert result.stale
         assert result.error and "ConnectError" in result.error
@@ -103,6 +103,24 @@ async def test_source_fails_without_cache():
         assert not result.ok
         assert result.records == []
         assert result.error
+
+
+@respx.mock
+async def test_get_caches_within_ttl(fixture_bytes):
+    # get() serves from the in-memory cache within TTL: repeated calls do not
+    # re-hit CHP (that per-request round-trip was the latency spike).
+    route = respx.get(chp.CHP_URL).mock(
+        return_value=httpx.Response(
+            200, content=fixture_bytes("chp_sample.xml"), headers={"ETag": '"abc"'}
+        )
+    )
+    async with httpx.AsyncClient() as client:
+        source = chp.ChpSource(client)
+        r1 = await source.get()
+        r2 = await source.get()
+        assert route.call_count == 1
+        assert r1.ok and r2.ok
+        assert len(r1.records) == 2 and len(r2.records) == 2
 
 
 def test_to_event_families():
@@ -146,14 +164,14 @@ async def test_truncated_feed_carries_recent_records(respx_mock=None):
         with respx.mock:
             respx.get("https://media.chp.ca.gov/sa_xml/sa.xml").mock(
                 return_value=httpx.Response(200, content=full))
-            first = await source.get()
+            first = await source._fetch()
             assert {i.id for i in first.records} == {"1", "2"}
 
         with respx.mock:
             # Both the fetch and the cache-busted retry return the cut file.
             respx.get("https://media.chp.ca.gov/sa_xml/sa.xml").mock(
                 return_value=httpx.Response(200, content=truncated))
-            second = await source.get()
+            second = await source._fetch()
             # Log 2 sits behind the cut but was seen recently: carried.
             assert {i.id for i in second.records} == {"1", "2"}
             assert any("carried forward" in n for n in second.notes)

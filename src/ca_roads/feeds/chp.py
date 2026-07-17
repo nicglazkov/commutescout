@@ -1,7 +1,9 @@
 """CHP statewide live incident feed (sa.xml).
 
-The feed refreshes about once a minute and is fetched per request with
-conditional GET: an unchanged feed answers 304 and the last parse is reused.
+The feed refreshes about once a minute. get() serves the last parse from an
+in-memory TTL cache and refreshes in the background (stale-while-revalidate),
+so a request never waits on CHP; the underlying _fetch uses conditional GET,
+so an unchanged feed answers 304 and the last parse is reused.
 The server truncates the document mid-record when incident volume is high, so
 parsing salvages complete records instead of failing (see xmlutil).
 """
@@ -15,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from ca_roads.cache import TTLCache
 from ca_roads.feeds import USER_AGENT
 from ca_roads.models import ChpIncident, FeedResult, RoadEvent
 from ca_roads.xmlutil import iter_complete_records
@@ -24,6 +27,9 @@ SOURCE = "chp"
 TIMEOUT_SECONDS = 10.0
 # On a failed fetch, the last good parse may be served up to this old.
 MAX_SERVE_SECONDS = 10 * 60
+# Serve the last parse from memory for this long before a background refresh,
+# so request latency is decoupled from CHP's per-call round-trip.
+TTL_SECONDS = 60
 # When the server truncates sa.xml (it cuts the file under high load),
 # records recently seen in earlier fetches are carried forward this
 # long instead of silently vanishing. A watch alert arriving 78
@@ -146,8 +152,22 @@ class ChpSource:
         self._carry: dict[str, tuple[float, ChpIncident]] = {}
         self._fetched_at: datetime | None = None
         self._fetched_monotonic: float = 0.0
+        self._cache = TTLCache()
 
     async def get(self) -> FeedResult:
+        # Serve the last parse from memory and refresh in the background so a
+        # slow CHP round-trip never lands on the request path (SWR). Only a
+        # cold instance fetches inline; the boot prewarm covers that.
+        outcome = await self._cache.get(
+            "chp", TTL_SECONDS, MAX_SERVE_SECONDS, self._fetch)
+        if outcome.value is not None:
+            return outcome.value
+        return FeedResult(
+            source=SOURCE, records=[], data_as_of=None, ok=False,
+            error=outcome.error,
+        )
+
+    async def _fetch(self) -> FeedResult:
         headers = {"User-Agent": USER_AGENT}
         # Only send validators when we hold a cached parse; otherwise a 304
         # would leave nothing to serve.
