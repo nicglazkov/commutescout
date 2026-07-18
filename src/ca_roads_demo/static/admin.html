@@ -133,6 +133,18 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
       <div class="msg" id="an-msg"></div>
     </div>
 
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+        <h2 style="margin:0">Answer feedback ("Was this right?")</h2>
+        <span id="fb-tally" style="font:600 .8rem Inter;color:var(--dim)"></span>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>When</th><th>Vote</th><th>Question</th><th>Visitor</th></tr></thead>
+        <tbody id="fb-rows"></tbody>
+      </table></div>
+      <div class="msg" id="fb-msg"></div>
+    </div>
+
     <h1 style="margin-top:24px">Premium trial management</h1>
 
     <div class="card">
@@ -217,6 +229,7 @@ onAuthStateChanged(auth, async (u) => {
     $('signin').classList.add('hidden');
     $('panel').classList.remove('hidden');
     loadAnalytics();
+    loadFeedback();
   } catch (e) {
     $('signin').classList.remove('hidden');
     msg('signinmsg', e.message, 'err');
@@ -325,6 +338,32 @@ async function loadAnalytics() {
     msg('an-msg', (a.series && a.series.length) ? ''
         : 'No data yet — check back once the site has some traffic.');
   } catch (e) { msg('an-msg', e.message, 'err'); }
+}
+
+async function loadFeedback() {
+  try {
+    const f = await api('/api/admin/feedback?days=14');
+    if (!f.ok) { msg('fb-msg', f.error || 'feedback unavailable', 'err'); return; }
+    document.getElementById('fb-tally').textContent =
+      f.up + ' up · ' + f.down + ' down · last ' + f.days + ' days';
+    const tb = document.getElementById('fb-rows');
+    tb.innerHTML = '';
+    for (const r of f.rows.slice(0, 50)) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td></td><td><span class="pill"></span></td><td></td><td></td>';
+      tr.children[0].textContent = r.ts ? new Date(r.ts).toLocaleString([], {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+      const pill = tr.children[1].firstChild;
+      pill.textContent = r.vote;
+      pill.className = 'pill ' + (r.vote === 'up' ? 'approved' : 'revoked');
+      tr.children[2].textContent = r.question || '(question not recorded)';
+      tr.children[3].textContent = r.visitor;
+      tb.append(tr);
+    }
+    if (!f.rows.length) {
+      tb.innerHTML = '<tr><td colspan="4" style="color:var(--dim)">No feedback votes in the last ' + f.days + ' days.</td></tr>';
+    }
+  } catch (e) { msg('fb-msg', e.message, 'err'); }
 }
 
 const SVGNS = 'http://www.w3.org/2000/svg';

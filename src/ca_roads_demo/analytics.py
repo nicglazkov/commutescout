@@ -9,6 +9,7 @@ is admin-gated by the same check the rest of the admin API uses.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -118,6 +119,59 @@ async def fetch_web_analytics(range_key: str) -> dict:
     if outcome.value is not None:
         return outcome.value
     return {"ok": False, "error": outcome.error or "analytics unavailable"}
+
+
+def _fetch_feedback_sync(project: str, days: int) -> list[dict]:
+    """Recent feedback events from Cloud Logging (the telemetry JSON lines
+    Cloud Run captures as jsonPayload). Runs in a thread: google-auth's
+    transport is synchronous."""
+    import google.auth
+    from google.auth.transport.requests import AuthorizedSession
+
+    creds, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/logging.read"])
+    session = AuthorizedSession(creds)
+    since = datetime.now(UTC) - timedelta(days=days)
+    body = {
+        "resourceNames": [f"projects/{project}"],
+        "orderBy": "timestamp desc",
+        "pageSize": 200,
+        "filter": (
+            'resource.type="cloud_run_revision" '
+            'AND resource.labels.service_name="ca-roads-demo" '
+            'AND jsonPayload.log_type="ca_roads_event" '
+            'AND jsonPayload.event=("feedback_up" OR "feedback_down") '
+            f'AND timestamp>="{since.strftime("%Y-%m-%dT%H:%M:%SZ")}"'
+        ),
+    }
+    resp = session.post("https://logging.googleapis.com/v2/entries:list",
+                        json=body, timeout=20)
+    resp.raise_for_status()
+    out = []
+    for entry in resp.json().get("entries", []):
+        p = entry.get("jsonPayload") or {}
+        out.append({
+            "ts": entry.get("timestamp"),
+            "vote": "up" if p.get("event") == "feedback_up" else "down",
+            "question": (p.get("question") or "")[:300],
+            "visitor": p.get("visitor") or "",
+        })
+    return out
+
+
+async def api_admin_feedback(request: Request) -> JSONResponse:
+    """Admin-only: the 'Was this right?' votes with their questions."""
+    if not await _require_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT", "ca-roads-mcp")
+    days = min(int(request.query_params.get("days") or 14), 90)
+    try:
+        rows = await asyncio.to_thread(_fetch_feedback_sync, project, days)
+    except Exception as exc:  # noqa: BLE001 - surface, don't 500 the portal
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
+    ups = sum(1 for r in rows if r["vote"] == "up")
+    return JSONResponse({"ok": True, "days": days, "up": ups,
+                         "down": len(rows) - ups, "rows": rows})
 
 
 async def api_admin_analytics(request: Request) -> JSONResponse:

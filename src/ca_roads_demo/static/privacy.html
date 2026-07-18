@@ -67,7 +67,9 @@ is sold, there are no ads, and there is no cross-site tracking.</p>
   <li><b>Without an account</b> (the map, route planner, and assistant):
     questions you ask the assistant are logged to improve answers, tied
     to a salted daily hash instead of your address, with coordinates
-    rounded to about a kilometer. Route and address searches are
+    rounded to about a kilometer. If you press the "Was this right?"
+    thumbs, that vote is logged with the question the same way and
+    reviewed to improve answers. Route and address searches are
     processed to answer them and appear in the same anonymized logs.
     No cookies are set.</li>
   <li><b>With an account</b> (watch areas): your email address, your
@@ -117,7 +119,10 @@ tracking through this service.</p>
 <p>Data lives in Google Cloud's us-west1 region. Anonymized question
 logs age out with normal log retention (about 30 days). Account data
 stays until you delete it. Push subscriptions are dropped automatically
-when a device unsubscribes.</p>
+when a device unsubscribes. Separately, we keep a long-term archive of
+the public road events themselves (incidents, closures, fires, as the
+agencies publish them) to build history features; it contains no user
+data of any kind.</p>
 
 <h2>Contact</h2>
 <p>Nic Glazkov · <a href="mailto:nic@glazkov.com">nic@glazkov.com</a>.

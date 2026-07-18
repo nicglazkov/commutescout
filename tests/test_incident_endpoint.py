@@ -27,6 +27,28 @@ class FakeRoad:
         return FeedResult(source="chp", records=[INC],
                           data_as_of=datetime(2026, 7, 18, 0, 55, tzinfo=UTC))
 
+    async def _empty(self, source):
+        return FeedResult(source=source, records=[],
+                          data_as_of=datetime(2026, 7, 18, 0, 50, tzinfo=UTC))
+
+    async def lane_closures(self):
+        return await self._empty("lcs")
+
+    async def chain_controls(self):
+        return await self._empty("chains")
+
+    async def wildfires(self):
+        return await self._empty("wfigs")
+
+    async def cameras(self):
+        return await self._empty("cctv")
+
+    async def message_signs(self):
+        return await self._empty("cms")
+
+    async def road_weather(self):
+        return await self._empty("rwis")
+
 
 def test_incident_detail_roundtrip(monkeypatch):
     monkeypatch.setattr(demo_app.tools, "get_road", lambda: FakeRoad())
@@ -37,6 +59,21 @@ def test_incident_detail_roundtrip(monkeypatch):
     assert d["location_desc"] == "EB AT THE ONRAMP"
     assert d["details"][1][1] == "[18] X2 TOYT COA / HOND SUV"
     assert d["units"] == [["Jul 18 2026 12:40AM", "Unit Enroute"]]
+
+
+def test_sources_status(monkeypatch):
+    monkeypatch.setattr(demo_app.tools, "get_road", lambda: FakeRoad())
+    client = TestClient(demo_app.app)
+    res = client.get("/api/sources")
+    assert res.status_code == 200
+    d = res.json()
+    names = [s["name"] for s in d["sources"]]
+    assert "Incidents" in names and "Cameras" in names
+    chp = next(s for s in d["sources"] if s["name"] == "Incidents")
+    assert chp["ok"] is True and chp["count"] == 1 and chp["as_of"]
+    nws = next(s for s in d["sources"] if s["agency"] == "NWS")
+    assert nws.get("on_demand") is True
+    assert d["checked_at"]
 
 
 def test_incident_not_found_and_bad_id(monkeypatch):
