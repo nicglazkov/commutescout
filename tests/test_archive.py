@@ -46,7 +46,9 @@ async def test_appear_then_clear_lifecycle(bq):
     _, clear = bq.rows[-1]
     assert clear["phase"] == "clear"
     assert clear["first_seen"] == bq.rows[0][1]["first_seen"]
-    assert clear["kind"] == "chp"
+    # The clear row keeps the appear-time kind; deriving it from the id
+    # prefix ("chp:") once split one event across two kind vocabularies.
+    assert clear["kind"] == "incident"
 
     # Reappearance archives again (re-opened incident).
     out = await archive.observe([EV])

@@ -29,7 +29,7 @@ DATASET = os.environ.get("ARCHIVE_DATASET", "events")
 TABLE = os.environ.get("ARCHIVE_TABLE", "event_log")
 ENABLED = os.environ.get("ARCHIVE_ENABLED", "1").lower() not in ("0", "false")
 
-_seen: dict[str, str] = {}  # event_id -> first_seen isoformat
+_seen: dict[str, tuple[str, str]] = {}  # event_id -> (first_seen isoformat, kind)
 _started = False
 _client = None
 
@@ -76,13 +76,16 @@ def observe_sync(events: list[dict]) -> dict:
     rows = []
     for eid, e in current.items():
         if eid not in _seen:
-            _seen[eid] = now_iso
+            _seen[eid] = (now_iso, e.get("kind", ""))
             rows.append(_row(e, "appear", now_iso, now_iso))
     for eid in list(_seen):
         if eid not in current:
-            first = _seen.pop(eid)
+            # Reuse the kind recorded at appear time: the id prefix is a
+            # different vocabulary (chp:/lcs: vs incident/closure), and
+            # deriving kind from it split one event across two kinds.
+            first, kind = _seen.pop(eid)
             rows.append({
-                "event_id": eid, "kind": eid.split(":", 1)[0],
+                "event_id": eid, "kind": kind,
                 "phase": "clear", "lat": None, "lon": None,
                 "title": None, "detail": None,
                 "first_seen": first, "seen_at": now_iso,
