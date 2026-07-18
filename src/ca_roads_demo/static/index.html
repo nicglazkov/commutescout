@@ -225,6 +225,61 @@ aside { background:var(--card); border-right:1px solid var(--line);
   white-space:nowrap }
 .pop .dets h5 { font:600 .64rem Inter; text-transform:uppercase;
   letter-spacing:.5px; color:var(--dim); margin:7px 0 2px }
+.pop .dets .xl { display:none; color:var(--dim); font-size:.68rem;
+  padding-left:10px; border-left:2px solid var(--sky-soft) }
+.pop .dets.explained .xl { display:block }
+.pop .xbtn { margin:6px 6px 0 0; font:600 .68rem Inter; color:var(--dim);
+  background:none; border:1px solid var(--line); border-radius:7px;
+  padding:3px 9px; cursor:pointer }
+.pop .xbtn:hover { color:var(--sky); border-color:var(--sky) }
+.hidden { display:none !important }
+.asof { font:500 .68rem Inter; color:var(--dim); margin-left:6px;
+  text-transform:none; letter-spacing:0 }
+.condrow .when { display:block; font-size:.7rem; color:var(--dim) }
+.condrow .when.gone { color:var(--green) }
+.condrow .when.active { color:var(--amber) }
+.departrow { display:flex; align-items:center; gap:8px; margin-top:8px;
+  font:600 .72rem Inter; color:var(--dim); text-transform:uppercase;
+  letter-spacing:.6px }
+.departrow select, .departrow input { font:400 .82rem Inter; border:1.5px solid
+  var(--line); border-radius:8px; padding:5px 8px; background:#fff;
+  text-transform:none; letter-spacing:0 }
+.departnote { margin-top:6px; font:500 .78rem Inter; color:var(--ink);
+  background:var(--sky-soft); border-radius:8px; padding:7px 10px }
+.sysok { cursor:pointer }
+.srcpanel { position:fixed; z-index:1200; top:60px; right:12px; width:300px;
+  background:var(--card); border:1px solid var(--line); border-radius:12px;
+  box-shadow:0 12px 34px rgba(15,28,43,.22); padding:12px 14px }
+.srcpanel h4 { font-size:.8rem; margin-bottom:2px }
+.srcpanel .sub { font-size:.68rem; color:var(--dim); margin-bottom:8px }
+.srcpanel .src { display:flex; align-items:center; gap:8px; padding:4px 0;
+  font:500 .76rem Inter; border-top:1px solid #efeadf }
+.srcpanel .src i { width:9px; height:9px; border-radius:99px; flex:none }
+.srcpanel .src small { margin-left:auto; color:var(--dim); font-size:.66rem;
+  text-align:right }
+.viachips .leg { position:relative }
+.viachips .leg .badge { display:inline-flex; align-items:center;
+  justify-content:center; flex:none }
+.viachips .leg.origin .badge { width:13px; height:13px; border-radius:99px;
+  background:#fff; border:3.5px solid var(--ink); color:transparent }
+.viachips .leg.stop .badge { width:15px; height:15px; border-radius:99px;
+  background:#5b6b7d; color:#fff; font:700 .58rem Inter; border:0 }
+.viachips .leg.dest .badge { width:14px; height:14px; border-radius:50% 50% 50% 0;
+  transform:rotate(-45deg); background:var(--red); border:0; color:transparent }
+.viachips .leg:not(:last-child)::after { content:''; position:absolute;
+  left:6px; bottom:-7px; width:2px; height:8px;
+  background-image:radial-gradient(circle, #9aa7b5 1px, transparent 1.4px);
+  background-size:2px 4px }
+.viachips .leg.dragging { opacity:.45 }
+.viachips .leg.stop { cursor:grab }
+.viachips .addstop { display:flex; align-items:center; gap:9px; width:100%;
+  font:600 .78rem Inter; color:var(--sky); background:none; border:0;
+  padding:6px 0 2px 0; cursor:pointer; text-align:left }
+.viachips .addstop .plus { width:15px; height:15px; border-radius:99px;
+  border:1.5px solid var(--sky); display:inline-flex; align-items:center;
+  justify-content:center; font-size:.7rem; flex:none }
+.viachips .addstop.armed { color:#fff; background:var(--sky);
+  border-radius:8px; padding:6px 8px }
 .val select { font:inherit; font-size:.8rem; width:100%; margin-top:3px;
   padding:6px; border:1px solid var(--line); border-radius:7px }
 .planbtn { width:100%; font:600 .9rem Inter; background:var(--sky); color:#fff;
@@ -395,7 +450,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
     <a href="https://github.com/nicglazkov/commutescout#add-to-claude" target="_blank" rel="noopener">Add to Claude</a>
     <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
   </nav>
-  <span class="sysok"><i></i><span id="feedsok">live from CHP · Caltrans · WFIGS + 11 more</span></span>
+  <span class="sysok" id="sysok" title="Click for live data-source status"><i></i><span id="feedsok">live from CHP · Caltrans · WFIGS + 11 more</span></span>
   <span id="ver"></span>
 </header>
 <div class="kpis" id="kpis">
@@ -419,6 +474,14 @@ aside { background:var(--card); border-right:1px solid var(--line);
         <div class="sugg" id="tosugg"></div>
         <div class="val" id="toval"></div></div>
       <button type="button" class="planbtn" id="planbtn">Plan route</button>
+      <div class="departrow">
+        <label for="departmode">Depart</label>
+        <select id="departmode">
+          <option value="now" selected>now</option>
+          <option value="later">later&hellip;</option>
+        </select>
+        <input type="datetime-local" id="departat" class="hidden">
+      </div>
       <div id="printwrap" style="display:none">
         <div class="routealts" id="routealts"></div>
         <div class="routesum" id="routesum"></div>
@@ -430,7 +493,6 @@ aside { background:var(--card); border-right:1px solid var(--line);
           <button type="button" id="kmlbtn">KML</button>
           <button type="button" id="sharebtn" class="pri">Share link</button>
           <button type="button" id="clearroutebtn">Clear route</button>
-          <button type="button" id="viapickbtn">Add stop on map</button>
         </div>
         <div class="routeasks-wrap" id="routeasks-wrap">
           <b>Questions people ask about this drive</b>
@@ -1149,6 +1211,54 @@ function chpGloss(type) {
   }
   return null;
 }
+// Dispatch-log shorthand, decoded deterministically (no AI): only terms
+// we are confident about get translated; everything else stays verbatim.
+const CHP_TERMS = [
+  [/\b1125\b/g, 'traffic hazard'], [/\b1141\b/g, 'ambulance'],
+  [/\b1144\b/g, 'fatality'], [/\b1166\b/g, 'defective signal'],
+  [/\b1179\b/g, 'collision, ambulance en route'],
+  [/\b1180\b/g, 'collision, major injuries'],
+  [/\b1181\b/g, 'collision, minor injuries'],
+  [/\b1182\b/g, 'collision, property damage'],
+  [/\b1183\b/g, 'collision, unknown injuries'],
+  [/\b1185\b/g, 'tow requested'], [/\b1186\b/g, 'operator alerted'],
+  [/\b1097\b/g, 'unit on scene'], [/\b97\b/g, 'on scene'],
+  [/\b1098\b/g, 'assignment complete'], [/\b1039\b/g, 'notified'],
+  [/\b1022\b/g, 'disregard'], [/\b23103\b/g, 'reckless driving'],
+  [/\b23114\b/g, 'spilled load'], [/\b20001\b/g, 'hit and run, injuries'],
+  [/\b20002\b/g, 'hit and run, no injuries'],
+  [/\bTC\b/g, 'collision'], [/\bVEHS\b/g, 'vehicles'], [/\bVEH\b/g, 'vehicle'],
+  [/\bPED\b/g, 'pedestrian'], [/\bMC\b/g, 'motorcycle'],
+  [/\bTRLR\b/g, 'trailer'], [/\bBLKG\b/g, 'blocking'],
+  [/\bO\/TURNED\b/g, 'overturned'], [/\bENRT\b/g, 'en route'],
+  [/\bNEG\b/g, 'no'], [/\bPOSS\b/g, 'possible'], [/\bUNK\b/g, 'unknown'],
+  [/\bRHS\b/g, 'right-hand shoulder'], [/\bLHS\b/g, 'left-hand shoulder'],
+  [/\bCD\b/g, 'center divider'], [/\bOFR\b/g, 'off-ramp'],
+  [/\bONR\b/g, 'on-ramp'], [/\bJSO\b/g, 'just south of'],
+  [/\bJNO\b/g, 'just north of'], [/\bJEO\b/g, 'just east of'],
+  [/\bJWO\b/g, 'just west of'], [/\bNB\b/g, 'northbound'],
+  [/\bSB\b/g, 'southbound'], [/\bEB\b/g, 'eastbound'],
+  [/\bWB\b/g, 'westbound'], [/\bLNS\b/g, 'lanes'], [/\bLN\b/g, 'lane'],
+  [/\bPK\b/g, 'pickup'], [/\bTK\b/g, 'truck'], [/\bSD\b/g, 'sedan'],
+  [/\bFSP\b/g, 'Freeway Service Patrol'], [/\bI\/S\b/g, 'intersection'],
+  [/\bTOYT\b/g, 'Toyota'], [/\bHOND\b/g, 'Honda'], [/\bCHEV\b/g, 'Chevrolet'],
+  [/\bNISS\b/g, 'Nissan'], [/\bFORD\b/g, 'Ford'], [/\bDODG\b/g, 'Dodge'],
+  [/\bSUBA\b/g, 'Subaru'], [/\bHYUN\b/g, 'Hyundai'], [/\bVOLK\b/g, 'Volkswagen'],
+  [/\bMERZ\b/g, 'Mercedes'], [/\bTESL\b/g, 'Tesla'], [/\bMAZD\b/g, 'Mazda'],
+  [/\bLEXS\b/g, 'Lexus'], [/\bTOYO\b/g, 'Toyota'], [/\bVOLV\b/g, 'Volvo'],
+  [/\bWHI\b/g, 'white'], [/\bBLK\b/g, 'black'], [/\bGRY\b/g, 'gray'],
+  [/\bSIL\b/g, 'silver'], [/\bBLU\b/g, 'blue'], [/\bGRN\b/g, 'green'],
+  [/\bYEL\b/g, 'yellow'], [/\bORG\b/g, 'orange'], [/\bBRO\b/g, 'brown'],
+];
+function explainLine(text) {
+  let out = text;
+  for (const [re, plain] of CHP_TERMS) out = out.replace(re, plain);
+  return out === text ? null : out;
+}
+function fmtNowDay() {
+  return new Date().toLocaleString([], {
+    hour: 'numeric', minute: '2-digit', weekday: 'long' });
+}
 const CHAIN_GLOSS = {
   'R-1': 'R-1: chains or approved snow tires required. Carry chains even with snow tires.',
   'R-2': 'R-2: chains required on every vehicle except 4WD/AWD with snow tires on all four - and even those must carry chains.',
@@ -1267,9 +1377,14 @@ function popupFor(m, g) {
   const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : 'size unknown';
   const cont = (m.contained || m.contained === 0) ? m.contained + '% contained' : '';
   const disc = agoTxt(m.discovered);
+  const hasShape = Array.isArray(m.poly) && m.poly.length > 2;
   return popHead(g || 'fire_pt', (m.name || 'Wildfire') + ' fire') +
     '<div class="d">' + [size, cont].filter(Boolean).join(' · ') + '</div>' +
-    histBlock([disc ? 'Discovered ' + disc : null]) + '</div>';
+    histBlock([
+      disc ? 'Discovered ' + disc : null,
+      hasShape ? 'Outline is the mapped burn footprint'
+               : 'Exact shape unknown - no mapped perimeter yet, the dot marks the reported origin',
+    ]) + '</div>';
 }
 
 function pointMarker(m, g) {
@@ -1548,6 +1663,58 @@ map.on('click', () => {
   document.getElementById('filters').classList.remove('open');
 });
 
+// ── Data-source status panel: click "live from ..." in the topbar ──
+let srcPanel = null;
+async function renderSourcePanel() {
+  if (!srcPanel) return;
+  srcPanel.innerHTML = '<h4>Data sources</h4><div class="sub">Loading&hellip;</div>';
+  try {
+    const res = await fetch('/api/sources');
+    const d = await res.json();
+    const at = new Date(d.checked_at);
+    srcPanel.innerHTML = '<h4>Data sources</h4>' +
+      '<div class="sub">Checked ' + at.toLocaleString([], {
+        hour: 'numeric', minute: '2-digit', weekday: 'short' }) + '</div>';
+    for (const s of d.sources) {
+      const row = document.createElement('div');
+      row.className = 'src';
+      const dot = document.createElement('i');
+      let state, color;
+      if (s.on_demand) { state = 'queried per route'; color = '#2f81f7'; }
+      else if ('enabled' in s) {
+        state = s.enabled ? 'active' : 'no key set';
+        color = s.enabled ? '#2f9e6e' : '#9aa7b5';
+      } else if (!s.ok) { state = 'unavailable'; color = '#d64545'; }
+      else if (s.stale) { state = 'serving cached data'; color = '#e8a13c'; }
+      else { state = 'online'; color = '#2f9e6e'; }
+      dot.style.background = color;
+      const name = document.createElement('span');
+      name.textContent = s.name + ' · ' + s.agency;
+      const meta = document.createElement('small');
+      const ago = s.as_of ? agoTxt(s.as_of) : null;
+      meta.textContent = state + (ago ? ' · data ' + ago : '');
+      if (s.error) meta.title = s.error;
+      row.append(dot, name, meta);
+      srcPanel.append(row);
+    }
+  } catch (_) {
+    srcPanel.innerHTML = '<h4>Data sources</h4><div class="sub">Status unavailable right now.</div>';
+  }
+}
+document.getElementById('sysok').addEventListener('click', () => {
+  if (srcPanel) { srcPanel.remove(); srcPanel = null; return; }
+  srcPanel = document.createElement('div');
+  srcPanel.className = 'srcpanel';
+  document.body.append(srcPanel);
+  renderSourcePanel();
+});
+document.addEventListener('click', (e) => {
+  if (srcPanel && !srcPanel.contains(e.target) &&
+      !document.getElementById('sysok').contains(e.target)) {
+    srcPanel.remove(); srcPanel = null;
+  }
+});
+
 // "Show dispatch log" in incident popups: lazy-fetch the full CHP
 // timeline only when someone asks for it, newest entries first.
 map.on('popupopen', (e) => {
@@ -1566,8 +1733,21 @@ map.on('popupopen', (e) => {
       if (d.location_desc) {
         h += '<div class="drow" style="border-top:0"><b>Where</b>' + esc(d.location_desc) + '</div>';
       }
-      const rows = (list) => list.slice().reverse().map((en) =>
-        '<div class="drow"><b>' + esc(en[0] || '') + '</b>' + esc(en[1] || '') + '</div>').join('');
+      // CHP numbers each comment ("[18] ..."), so sort by that index,
+      // newest first; entries without one keep their feed position.
+      const seq = (en) => {
+        const m2 = /^\[(\d+)\]/.exec(en[1] || '');
+        return m2 ? Number(m2[1]) : -1;
+      };
+      const rows = (list) => list.map((en, i) => [en, seq(en) >= 0 ? seq(en) : i])
+        .sort((x, y) => y[1] - x[1])
+        .map(([en]) => {
+          const xl = explainLine(en[1] || '');
+          return '<div class="drow"><b>' + esc(en[0] || '') + '</b>' +
+            esc(en[1] || '') +
+            (xl ? '<span class="xl">' + esc(xl) + '</span>' : '') +
+            '</div>';
+        }).join('');
       if (d.details && d.details.length) {
         h += '<h5>Dispatch log</h5>' + rows(d.details);
       }
@@ -1578,6 +1758,16 @@ map.on('popupopen', (e) => {
       // string and would wipe this injected log (same rule as
       // appendMeasured above). The .dets box scrolls within max-height.
       box.innerHTML = h || '<div class="drow">No shared entries yet.</div>';
+      if (h) {
+        const xb = document.createElement('button');
+        xb.type = 'button'; xb.className = 'xbtn';
+        xb.textContent = 'Explain the codes';
+        xb.addEventListener('click', () => {
+          const on = box.classList.toggle('explained');
+          xb.textContent = on ? 'Hide explanations' : 'Explain the codes';
+        });
+        box.prepend(xb);
+      }
       btn.remove();
     } catch (_) {
       btn.textContent = 'Log unavailable right now'; btn.disabled = true;
@@ -1902,7 +2092,7 @@ function renderViaChips() {
   dropItinHl();
   const box = document.getElementById('viachips');
   box.innerHTML = '';
-  if (!lastEnds || !viaPoints.length) return;
+  if (!lastEnds) return;
   const mkBtn = (label, title, cls, fn) => {
     const b = document.createElement('button');
     b.type = 'button'; b.textContent = label; b.title = title;
@@ -1910,9 +2100,11 @@ function renderViaChips() {
     b.addEventListener('click', fn);
     return b;
   };
-  const legRow = (badgeText, name, isStop) => {
+  // Google Maps grammar: hollow circle for the start, numbered gray dots
+  // for stops, a red pin for the destination, dotted connector between.
+  const legRow = (kind, badgeText, name) => {
     const row = document.createElement('div');
-    row.className = 'leg' + (isStop ? ' stop' : '');
+    row.className = 'leg ' + kind;
     const badge = document.createElement('span');
     badge.className = 'badge'; badge.textContent = badgeText;
     const nm = document.createElement('span');
@@ -1920,44 +2112,56 @@ function renderViaChips() {
     row.append(badge, nm);
     return row;
   };
-  box.append(legRow('A',
-    (fromF.input.dataset.name || 'Start').split(',')[0], false));
+  box.append(legRow('origin', '',
+    (fromF.input.dataset.name || 'Start').split(',')[0]));
   viaPoints.forEach((v, i) => {
-    const row = legRow(String(i + 1),
-      'Stop \u00b7 ' + v[0].toFixed(3) + ', ' + v[1].toFixed(3), true);
+    const row = legRow('stop', String(i + 1),
+      'Stop \u00b7 ' + v[0].toFixed(3) + ', ' + v[1].toFixed(3));
+    row.draggable = true;
+    row.addEventListener('dragstart', (ev) => {
+      ev.dataTransfer.setData('text/plain', String(i));
+      ev.dataTransfer.effectAllowed = 'move';
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+    row.addEventListener('dragover', (ev) => { ev.preventDefault(); });
+    row.addEventListener('drop', async (ev) => {
+      ev.preventDefault();
+      const from = Number(ev.dataTransfer.getData('text/plain'));
+      if (!Number.isInteger(from) || from === i) return;
+      viaManual = true;
+      const [moved] = viaPoints.splice(from, 1);
+      viaPoints.splice(i, 0, moved);
+      await replanVias();
+    });
     row.addEventListener('mouseenter', () => {
       dropItinHl();
       itinHl = L.circleMarker(v, { radius: 13, color: '#2f81f7',
         weight: 3, fill: false }).addTo(map);
     });
     row.addEventListener('mouseleave', dropItinHl);
-    if (i > 0) {
-      row.append(mkBtn('\u25b2', 'Visit this stop earlier', '', async () => {
-        viaManual = true;
-        [viaPoints[i - 1], viaPoints[i]] = [viaPoints[i], viaPoints[i - 1]];
-        await replanVias();
-      }));
-    }
-    if (i < viaPoints.length - 1) {
-      row.append(mkBtn('\u25bc', 'Visit this stop later', '', async () => {
-        viaManual = true;
-        [viaPoints[i], viaPoints[i + 1]] = [viaPoints[i + 1], viaPoints[i]];
-        await replanVias();
-      }));
-    }
     row.append(mkBtn('\u00d7', 'Remove this stop', 'rm', async () => {
       viaPoints.splice(i, 1);
       await replanVias();
     }));
     box.append(row);
   });
-  box.append(legRow('B',
-    (toF.input.dataset.name || 'End').split(',')[0], false));
+  box.append(legRow('dest', '',
+    (toF.input.dataset.name || 'End').split(',')[0]));
+  if (viaPoints.length < 5) {
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'addstop';
+    add.innerHTML = '<span class="plus">+</span> Add stop \u00b7 click the map';
+    add.classList.toggle('armed', pickMode === 'via');
+    add.addEventListener('click', () => setPickMode('via'));
+    box.append(add);
+  }
 }
 
 function clearRoute() {
   routeGen += 1;
   dropItinHl();
+  clearPickMarks();
   if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
   viaPoints = []; viaManual = false; lastEnds = null;
   plannedRoute = null; plannedRoutes = [];
@@ -1974,6 +2178,31 @@ function clearRoute() {
 }
 document.getElementById('clearroutebtn')
   .addEventListener('click', clearRoute);
+
+// ── Depart at: pick a future time, the conditions list re-reads every
+// item's Caltrans schedule against it. (Historical predictions will
+// plug in here once the event archive is deep enough.) ───────────────
+const departMode = document.getElementById('departmode');
+const departAt = document.getElementById('departat');
+function localStamp(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+    'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+departMode.addEventListener('change', () => {
+  const later = departMode.value === 'later';
+  departAt.classList.toggle('hidden', !later);
+  if (later && !departAt.value) {
+    const d = new Date(Date.now() + 3600 * 1000);
+    d.setMinutes(0, 0, 0);
+    departAt.min = localStamp(new Date());
+    departAt.value = localStamp(d);
+  }
+  if (lastRouteLL) renderRouteConditions(lastRouteLL);
+});
+departAt.addEventListener('change', () => {
+  if (lastRouteLL) renderRouteConditions(lastRouteLL);
+});
 
 function viaOrdered(routeLatlngs) {
   // Waypoints keep their order along the current route so dragging a
@@ -2026,8 +2255,10 @@ planbtn.addEventListener('click', async () => {
   const a = [+fromF.input.dataset.lat, +fromF.input.dataset.lon];
   const b = [+toF.input.dataset.lat, +toF.input.dataset.lon];
   viaPoints = []; viaManual = false;
-  renderViaChips();
+  // lastEnds must be set BEFORE rendering: renderViaChips() early-returns
+  // without it, which used to blank the itinerary on the first plan.
   lastEnds = { a, b };
+  renderViaChips();
   await planWith([a, b], a, b);
 });
 
@@ -2066,9 +2297,42 @@ function setPickMode(mode) {
   for (const [k, btn] of Object.entries(pickBtns)) {
     if (btn) btn.classList.toggle('armed', pickMode === k);
   }
+  document.querySelectorAll('.addstop').forEach((b) =>
+    b.classList.toggle('armed', pickMode === 'via'));
   map.getContainer().style.cursor = pickMode ? 'crosshair' : '';
   if (pickMode) { pickHint.textContent = PICK_LABEL[pickMode]; pickHint.hidden = false; }
   else { pickHint.hidden = true; }
+}
+
+// Every pick drops a marker at the chosen spot immediately, so the point
+// is visible before (and independent of) any route render. Google-style
+// grammar: hollow circle for the start, red pin for the destination,
+// small gray dot for stops.
+const pickMarks = { from: null, to: null, via: L.layerGroup() };
+pickMarks.via.addTo(map);
+function dropPickMark(mode, latlng) {
+  const mk = (opts) => L.circleMarker(latlng, Object.assign({
+    pane: 'markerPane', weight: 3, fillOpacity: 1 }, opts));
+  if (mode === 'from') {
+    if (pickMarks.from) map.removeLayer(pickMarks.from);
+    pickMarks.from = mk({ radius: 7, color: '#0f1c2b', fillColor: '#fff' }).addTo(map);
+  } else if (mode === 'to') {
+    if (pickMarks.to) map.removeLayer(pickMarks.to);
+    pickMarks.to = L.marker(latlng, {
+      icon: L.divIcon({ className: '', iconSize: [18, 18], iconAnchor: [9, 16],
+        html: '<div style="width:15px;height:15px;border-radius:50% 50% 50% 0;' +
+              'transform:rotate(-45deg);background:#d64545;' +
+              'border:2.5px solid #fffdf7"></div>' }),
+    }).addTo(map);
+  } else {
+    pickMarks.via.addLayer(mk({ radius: 5, color: '#fff', weight: 2,
+      fillColor: '#5b6b7d' }));
+  }
+}
+function clearPickMarks() {
+  if (pickMarks.from) { map.removeLayer(pickMarks.from); pickMarks.from = null; }
+  if (pickMarks.to) { map.removeLayer(pickMarks.to); pickMarks.to = null; }
+  pickMarks.via.clearLayers();
 }
 pickBtns.from.addEventListener('click', () => setPickMode('from'));
 pickBtns.to.addEventListener('click', () => setPickMode('to'));
@@ -2105,6 +2369,7 @@ map.on('click', async (e) => {
   if (!pickMode) return;
   const mode = pickMode;
   setPickMode(null);
+  dropPickMark(mode, e.latlng);
   if (mode === 'from') { setPinField(fromF, e.latlng); return; }
   if (mode === 'to') { setPinField(toF, e.latlng); return; }
   if (mode === 'via' && lastEnds && viaPoints.length < 5) {
@@ -2320,12 +2585,61 @@ function nearRoute(m, latlngs, km) {
   return false;
 }
 let condHighlight = null;
+let lastRouteLL = null;
+
+function departEpoch() {
+  if (document.getElementById('departmode').value !== 'later') return null;
+  const v = document.getElementById('departat').value;
+  if (!v) return null;
+  const t = new Date(v).getTime();
+  return Number.isFinite(t) && t > Date.now() ? Math.round(t / 1000) : null;
+}
+
+// What a condition means for a FUTURE departure, from its scheduled
+// window. Deterministic: closure windows come straight from Caltrans;
+// live incidents get an honest "probably gone by then" based on their
+// short typical lifetime.
+function departNote(m, g, dep) {
+  const fmt = (ep) => clockTxt(ep) || '';
+  if (g && g.startsWith('clo_')) {
+    if (m.until && m.until < dep) {
+      return ['gone', 'Scheduled to be picked up by ' + fmt(m.until) +
+        ', before you leave'];
+    }
+    if (m.since && m.since > dep) {
+      return ['active', 'Starts later: scheduled from ' + fmt(m.since)];
+    }
+    return ['active', m.until
+      ? 'Expected still in place when you leave (until ' + fmt(m.until) + ')'
+      : 'Expected still in place when you leave (no scheduled end)'];
+  }
+  if (g && g.startsWith('inc_')) {
+    return ['gone', 'Live now; most CHP incidents clear within the hour'];
+  }
+  if (g === 'chain') {
+    return ['active', 'Chain status changes with weather; check before leaving'];
+  }
+  if (g === 'fire_pt') return ['active', 'Ongoing fire; check again before leaving'];
+  return [null, null];
+}
+
 function renderRouteConditions(latlngs) {
   // The list is about to rebuild: a ring belonging to a row that is
   // being destroyed would never get its mouseleave.
   if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
+  lastRouteLL = latlngs;
   const box = document.getElementById('routecond');
-  box.innerHTML = '<h4>Conditions along this route</h4>';
+  box.innerHTML = '<h4>Conditions on this route <span class="asof">as of ' +
+    esc(fmtNowDay()) + '</span></h4>';
+  const dep = departEpoch();
+  if (dep) {
+    const note = document.createElement('div');
+    note.className = 'departnote';
+    note.textContent = 'Planning for a ' + new Date(dep * 1000).toLocaleString([],
+      { weekday: 'long', hour: 'numeric', minute: '2-digit' }) +
+      ' departure: each item below says how its schedule lines up.';
+    box.append(note);
+  }
   let shown = 0;
   const condGroups = ['clo_full', 'clo_lane', 'clo_oneway', 'clo_ramp',
     'inc_collision', 'inc_fire', 'inc_hazard', 'inc_other',
@@ -2335,7 +2649,8 @@ function renderRouteConditions(latlngs) {
       if (shown >= 12 || !l.getLatLng) return;
       const p = l.getLatLng();
       const m = { lat: p.lat, lon: p.lng };
-      if (nearRoute(m, latlngs, 4)) {
+      // 0.35 km: on the roadway itself (plus GPS slop), not "nearby".
+      if (nearRoute(m, latlngs, 0.35)) {
         const row = document.createElement('div');
         row.className = 'condrow';
         const dot = document.createElement('i');
@@ -2346,6 +2661,15 @@ function renderRouteConditions(latlngs) {
         txt.textContent = (popEl.querySelector('.t')?.textContent || POP_LABEL[g]) +
           (popEl.querySelector('.d')?.textContent ? ' - ' + popEl.querySelector('.d').textContent : '');
         row.append(dot, txt);
+        if (dep && l.__m) {
+          const [cls, noteTxt] = departNote(l.__m, g, dep);
+          if (noteTxt) {
+            const when = document.createElement('span');
+            when.className = 'when' + (cls ? ' ' + cls : '');
+            when.textContent = noteTxt;
+            txt.append(when);
+          }
+        }
         const at = [p.lat, p.lng];
         row.addEventListener('mouseenter', () => {
           if (condHighlight) map.removeLayer(condHighlight);
@@ -2374,22 +2698,62 @@ function renderRouteConditions(latlngs) {
 }
 
 function buildRouteAsks() {
+  clearPickMarks();  // the planned route now carries its own markers
   const wrap = document.getElementById('routeasks');
   wrap.innerHTML = '';
   const a = plannedRoute.fromName.split(',')[0];
   const b = plannedRoute.toName.split(',')[0];
   const fromMe = a === 'My location';
-  const questions = fromMe ? [
-    'Will I hit traffic driving to ' + b + ' right now?',
-    'Is there roadwork on my way to ' + b + '?',
-    'What do the road signs say on the way to ' + b + '?',
-    'Anything to worry about driving to ' + b + ' today?',
-  ] : [
-    'Will I hit traffic driving from ' + a + ' to ' + b + ' right now?',
-    'Is there roadwork between ' + a + ' and ' + b + '?',
-    'What do the road signs say between ' + a + ' and ' + b + '?',
-    'Anything to worry about driving from ' + a + ' to ' + b + ' today?',
+  const to = fromMe ? 'to ' + b : 'from ' + a + ' to ' + b;
+  const between = fromMe ? 'on my way to ' + b : 'between ' + a + ' and ' + b;
+
+  // Templated, not AI: the pool flexes with the route (corridors it
+  // uses, fires near it, mountain season, time of day) and the picks
+  // shuffle so the chips feel alive without inventing anything.
+  const r = plannedRoute.route;
+  const miles = r.distance / 1609.344;
+  const stepText = (r.steps || []).map((s) => s.text).join(' ');
+  const corridors = [...new Set((stepText.match(
+    /\b(?:I-\d{1,3}|US[- ]\d{1,3}|SR[- ]\d{1,3}|CA[- ]\d{1,3}|Highway \d{1,3})\b/gi) || [])
+    .map((c) => c.replace(/\s+/, '-').replace(/^CA-/i, 'SR-').toUpperCase()))];
+  const mountain = corridors.some((c) =>
+    ['I-80', 'US-50', 'SR-88', 'SR-4', 'SR-108', 'SR-120', 'SR-89',
+     'SR-267', 'SR-28', 'SR-2', 'SR-330', 'SR-18'].includes(c));
+  const month = new Date().getMonth() + 1;   // chains: roughly Oct-Apr
+  const chainSeason = month >= 10 || month <= 4;
+  let fireNear = false;
+  ambient.fire_pt.eachLayer((l) => {
+    if (fireNear) return;
+    const p = l.getLatLng ? l.getLatLng()
+      : (l.getBounds ? l.getBounds().getCenter() : null);
+    if (p && nearRoute({ lat: p.lat, lon: p.lng }, r.latlngs, 40)) fireNear = true;
+  });
+  const hour = new Date().getHours();
+  const weekday = new Date().getDay() >= 1 && new Date().getDay() <= 5;
+  const rush = weekday && ((hour >= 6 && hour <= 9) || (hour >= 15 && hour <= 19));
+
+  const pool = [
+    'Is there roadwork ' + between + '?',
+    'What do the road signs say ' + between + '?',
+    'Anything to worry about driving ' + to + ' today?',
+    'What do the cameras show near ' + b + ' right now?',
+    'Any big delays ' + between + ' right now?',
   ];
+  for (const c of corridors.slice(0, 2)) pool.push('How is ' + c + ' right now?');
+  if (mountain && chainSeason) {
+    pool.push('Do I need chains ' + to + ' today?');
+  }
+  if (fireNear) pool.push('Are any fires affecting the drive ' + to + '?');
+  if (rush) pool.push('How bad is rush hour ' + between + ' right now?');
+  if (hour >= 20 || hour < 5) pool.push('Any overnight roadwork ' + between + '?');
+  if (miles > 150) pool.push('Where are the trouble spots ' + between + '?');
+
+  const questions = ['Will I hit traffic driving ' + to + ' right now?'];
+  for (let i = pool.length - 1; i > 0; i--) {   // shuffle the rest
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  questions.push(...pool.slice(0, 3));
   for (const q of questions) {
     const btn = document.createElement('button');
     btn.type = 'button';

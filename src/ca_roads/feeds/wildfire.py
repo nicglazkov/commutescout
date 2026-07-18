@@ -167,12 +167,14 @@ async def perimeters_in_bbox(
     lon_min: float,
     lat_max: float,
     lon_max: float,
+    max_offset: float = 0.005,
 ) -> list[dict]:
     """Simplified fire perimeter rings intersecting a bounding box.
 
-    Geometry is server-simplified (maxAllowableOffset ~500m) since the use
-    is distance-to-edge estimation, not cartography. Failures return empty:
-    perimeter data refines fire distances, it never gates a report.
+    Geometry is server-simplified via ``max_offset`` (degrees; the 0.005
+    default is ~500m, fine for distance-to-edge estimation). Callers that
+    draw the shape (the demo map) pass a finer offset. Failures return
+    empty: perimeter data refines fire distances, it never gates a report.
     """
     try:
         resp = await client.get(
@@ -185,7 +187,7 @@ async def perimeters_in_bbox(
                 "inSR": 4326,
                 "outSR": 4326,
                 "outFields": "poly_IncidentName,poly_GISAcres",
-                "maxAllowableOffset": 0.005,
+                "maxAllowableOffset": max_offset,
                 "returnGeometry": "true",
                 "f": "json",
             },

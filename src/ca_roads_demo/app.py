@@ -784,9 +784,11 @@ async def api_mapdata(request: Request):
             if cached and time.monotonic() - cached[0] < 600:
                 perims = cached[1]
             else:
+                # Fine offset (~80m) because the map draws these shapes;
+                # the coarse default is for distance estimation only.
                 perims = await wildfire_feed.perimeters_in_bbox(
                     road.client, lat_min - 0.2, lon_min - 0.2,
-                    lat_max + 0.2, lon_max + 0.2)
+                    lat_max + 0.2, lon_max + 0.2, max_offset=0.0008)
                 _PERIM_CACHE[key] = (time.monotonic(), perims)
             by_name = {calfire_feed.normalize_fire_name(p["name"]): p
                        for p in perims if p["name"]}
@@ -795,7 +797,7 @@ async def api_mapdata(request: Request):
                     calfire_feed.normalize_fire_name(m["name"] or ""))
                 if perim:
                     pts = perim["points"]
-                    step = max(1, len(pts) // 120)
+                    step = max(1, len(pts) // 400)
                     m["poly"] = [[round(a, 4), round(b, 4)]
                                  for a, b in pts[::step]]
     markers.extend(fire_markers)
@@ -851,6 +853,48 @@ async def api_mapdata(request: Request):
             headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
         )
     return Response(body, media_type="application/json")
+
+
+async def api_sources(request: Request):
+    """Live health of every data source, for the topbar status panel.
+    All feeds are cache-backed, so this is cheap to serve."""
+    road = tools.get_road()
+    chp, lcs, cc, wf, cams, signs, wx = await asyncio.gather(
+        road.incidents(), road.lane_closures(), road.chain_controls(),
+        road.wildfires(), road.cameras(), road.message_signs(),
+        road.road_weather(),
+    )
+
+    def one(name: str, agency: str, r) -> dict:
+        return {
+            "name": name, "agency": agency,
+            "ok": bool(r.ok), "stale": bool(getattr(r, "stale", False)),
+            "as_of": r.data_as_of.isoformat() if r.data_as_of else None,
+            "count": len(r.records),
+            "error": (str(r.error)[:160] if r.error else None),
+        }
+
+    sources = [
+        one("Incidents", "CHP", chp),
+        one("Lane closures", "Caltrans LCS", lcs),
+        one("Chain controls", "Caltrans", cc),
+        one("Wildfires", "WFIGS + CAL FIRE", wf),
+        one("Cameras", "Caltrans CCTV", cams),
+        one("Message signs", "Caltrans CMS", signs),
+        one("Road weather", "Caltrans RWIS", wx),
+        {"name": "Weather alerts", "agency": "NWS", "on_demand": True},
+        {"name": "Earthquakes", "agency": "USGS", "on_demand": True},
+        {"name": "Traffic speeds", "agency": "TomTom",
+         "enabled": bool(os.environ.get("TOMTOM_API_KEY"))},
+        {"name": "Bay Area events", "agency": "511 SF Bay",
+         "enabled": bool(os.environ.get("BAY511_API_KEY"))},
+        {"name": "Nevada continuations", "agency": "NV DOT",
+         "enabled": bool(os.environ.get("NVROADS_API_KEY"))},
+    ]
+    return JSONResponse({
+        "checked_at": datetime.now(UTC).isoformat(),
+        "sources": sources,
+    })
 
 
 async def api_incident(request: Request):
@@ -1090,6 +1134,9 @@ app = Starlette(
         Route(ADMIN_PAGE_PATH, admin_page),
         Route("/api/admin/analytics", analytics.api_admin_analytics,
               methods=["GET"]),
+        Route("/api/admin/feedback", analytics.api_admin_feedback,
+              methods=["GET"]),
+        Route("/api/sources", api_sources, methods=["GET"]),
         Route("/privacy", privacy_page),
         Route("/terms", terms_page),
         Route("/trip/{trip_id}", trips.trip_page),
@@ -1166,8 +1213,11 @@ class SecurityHeaders:
         "https://apis.google.com https://static.cloudflareinsights.com; "
         "style-src 'self' 'unsafe-inline'; "
         "font-src 'self'; "
+        # cwwp2.dot.ca.gov serves the Caltrans camera snapshots; without it
+        # here the browser blocks every popup image and cameras all read
+        # "snapshot unavailable".
         "img-src 'self' data: https://*.basemaps.cartocdn.com "
-        "https://*.cartocdn.com; "
+        "https://*.cartocdn.com https://cwwp2.dot.ca.gov; "
         "connect-src 'self' https://router.project-osrm.org "
         "https://valhalla1.openstreetmap.de https://*.googleapis.com "
         "https://*.google.com https://cloudflareinsights.com "
@@ -1271,7 +1321,7 @@ app = RateLimitMiddleware(
     # address validation behind map browsing.
     exempt_prefixes=("/static/", "/logo.svg", "/health", "/favicon",
                      "/api/mapdata", "/api/stats", "/api/geocode",
-                     "/api/incident/",
+                     "/api/incident/", "/api/sources",
                      "/api/suggest", "/api/flow", "/api/traffictile",
                      # Watch pages + public bootstrap config are as cheap
                      # as static files; the mutating watch APIs stay
