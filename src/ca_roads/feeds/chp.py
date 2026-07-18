@@ -103,6 +103,23 @@ def parse_chp_xml(data: bytes) -> tuple[list[ChpIncident], bool]:
         coords = parse_latlon(fields.get("LATLON", ""))
         if coords is None:
             continue
+        # The full dispatch timeline ships in the feed: dispatcher
+        # comments under <details> and unit lifecycle under <units>.
+        details: list[tuple[str, str]] = []
+        units: list[tuple[str, str]] = []
+        log_details = log.find("LogDetails")
+        if log_details is not None:
+            for entry in log_details:
+                if entry.tag == "details":
+                    text = _clean(entry.findtext("IncidentDetail") or "")
+                    if text:
+                        details.append(
+                            (_clean(entry.findtext("DetailTime") or ""), text))
+                elif entry.tag == "units":
+                    text = _clean(entry.findtext("UnitDetail") or "")
+                    if text:
+                        units.append(
+                            (_clean(entry.findtext("UnitTime") or ""), text))
         incidents.append(
             ChpIncident(
                 id=log_id,
@@ -112,6 +129,9 @@ def parse_chp_xml(data: bytes) -> tuple[list[ChpIncident], bool]:
                 lat=coords[0],
                 lon=coords[1],
                 reported_at=parse_log_time(fields.get("LogTime", "")),
+                location_desc=fields.get("LocationDesc", ""),
+                details=tuple(details),
+                units=tuple(units),
             )
         )
     return incidents, truncated

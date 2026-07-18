@@ -692,12 +692,16 @@ async def api_mapdata(request: Request):
         for i in chp.records:
             if inside(i.lat, i.lon):
                 markers.append({
-                    "kind": "incident", "lat": i.lat, "lon": i.lon,
+                    "kind": "incident", "id": i.id,
+                    "lat": i.lat, "lon": i.lon,
                     "type": i.log_type, "location": i.location,
                     "area": i.area,
                     "dir": direction_hint(i.location),
                     "reported": (i.reported_at.isoformat()
                                  if i.reported_at else None),
+                    # Lets the popup offer "Show dispatch log" only when
+                    # the feed actually shared timeline entries.
+                    "log_n": len(i.details) + len(i.units),
                 })
     if "closure" in want:
         # One marker per stretch: Caltrans lists each scheduled window
@@ -847,6 +851,32 @@ async def api_mapdata(request: Request):
             headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
         )
     return Response(body, media_type="application/json")
+
+
+async def api_incident(request: Request):
+    """Full dispatch log for one CHP incident, straight from the cached
+    feed. Fetched lazily when someone opens 'Show dispatch log' in a
+    popup, so the map payload stays light."""
+    iid = request.path_params.get("incident_id", "")
+    if not (iid.isascii() and iid.isalnum() and 4 <= len(iid) <= 32):
+        return JSONResponse({"error": "bad id"}, status_code=400)
+    chp = await tools.get_road().incidents()
+    for i in chp.records:
+        if i.id == iid:
+            return JSONResponse({
+                "id": i.id,
+                "type": i.log_type,
+                "location": i.location,
+                "location_desc": i.location_desc,
+                "area": i.area,
+                "reported": (i.reported_at.isoformat()
+                             if i.reported_at else None),
+                "details": [list(d) for d in i.details],
+                "units": [list(u) for u in i.units],
+                "data_as_of": (chp.data_as_of.isoformat()
+                               if chp.data_as_of else None),
+            })
+    return JSONResponse({"error": "not found"}, status_code=404)
 
 
 async def stats(request: Request):
@@ -1055,6 +1085,7 @@ app = Starlette(
               methods=["GET"]),
         Route("/api/staticmap", api_staticmap, methods=["GET"]),
         Route("/api/mapdata", api_mapdata, methods=["GET"]),
+        Route("/api/incident/{incident_id}", api_incident, methods=["GET"]),
         Route("/watch", watch_page),
         Route(ADMIN_PAGE_PATH, admin_page),
         Route("/api/admin/analytics", analytics.api_admin_analytics,
@@ -1240,6 +1271,7 @@ app = RateLimitMiddleware(
     # address validation behind map browsing.
     exempt_prefixes=("/static/", "/logo.svg", "/health", "/favicon",
                      "/api/mapdata", "/api/stats", "/api/geocode",
+                     "/api/incident/",
                      "/api/suggest", "/api/flow", "/api/traffictile",
                      # Watch pages + public bootstrap config are as cheap
                      # as static files; the mutating watch APIs stay

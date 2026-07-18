@@ -11,7 +11,7 @@ how much to trust the answer.
 
 | Source | Data | Refresh |
 |--------|------|---------|
-| **CHP live feed** | Statewide incidents (collisions, hazards, closures) as dispatchers log them, with travel direction parsed from the location text | 1-minute cache; feed updates ~1/min |
+| **CHP live feed** | Statewide incidents (collisions, hazards, closures) as dispatchers log them, with travel direction parsed from the location text, plus the full shared dispatch timeline (comments and unit lifecycle, verbatim) | 1-minute cache; feed updates ~1/min |
 | **Caltrans LCS** | Lane and road closures physically in place right now (CHP code 1097), classified by what they mean for through traffic | 5-minute cache |
 | **Caltrans chain controls** | R-1/R-2/R-3 requirements at mountain checkpoints | 5-minute cache |
 | **WFIGS** | Active wildfires (name, size, containment), flagged within ~10 miles of major highways; perimeter edges refine distances for big fires | 5-minute cache |

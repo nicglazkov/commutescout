@@ -55,6 +55,49 @@ async def test_appear_then_clear_lifecycle(bq):
     assert out["archived"] == 1
 
 
+async def test_update_rows_carry_only_new_timeline_entries(bq):
+    import json
+
+    ev = dict(EV)
+    ev["payload"] = {"details": [["12:37AM", "[1] 2 VEH TC"]],
+                     "units": [], "location_desc": "EB AT THE ONRAMP"}
+    out = await archive.observe([ev])
+    assert out["archived"] == 1
+    _, appear = bq.rows[0]
+    payload = json.loads(appear["payload"])
+    assert payload["details"] == [["12:37AM", "[1] 2 VEH TC"]]
+    assert payload["state"]["location_desc"] == "EB AT THE ONRAMP"
+
+    # Same state: nothing new to write.
+    out = await archive.observe([ev])
+    assert out["archived"] == 0
+
+    # A new dispatch entry appears: one update row with ONLY the new line.
+    ev2 = dict(ev)
+    ev2["payload"] = {"details": [["12:37AM", "[1] 2 VEH TC"],
+                                  ["12:51AM", "[18] X2 TOYT COA / HOND SUV"]],
+                      "units": [], "location_desc": "EB AT THE ONRAMP"}
+    out = await archive.observe([ev2])
+    assert out["archived"] == 1
+    _, upd = bq.rows[-1]
+    assert upd["phase"] == "update"
+    assert upd["first_seen"] == appear["first_seen"]
+    assert json.loads(upd["payload"])["details"] == [
+        ["12:51AM", "[18] X2 TOYT COA / HOND SUV"]]
+
+    # A problem-type change (title) is also an update.
+    ev3 = dict(ev2)
+    ev3["title"] = "1181-Trfc Collision-Minor Inj"
+    out = await archive.observe([ev3])
+    assert out["archived"] == 1
+    assert bq.rows[-1][1]["phase"] == "update"
+
+    # Clear still keeps the appear-time kind.
+    out = await archive.observe([])
+    assert bq.rows[-1][1]["phase"] == "clear"
+    assert bq.rows[-1][1]["kind"] == "incident"
+
+
 async def test_archive_failure_never_raises(bq, monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("bq down")

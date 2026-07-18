@@ -22,6 +22,46 @@ def test_parse_full_feed(fixture_bytes):
     assert first.reported_at.tzinfo is not None
 
 
+def test_parse_log_details_timeline():
+    xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+<State>
+<Center ID="GG">
+<Dispatch ID="A">
+<Log ID="260718GG0075"><LogType>"1181-Trfc Collision-Minor Inj"</LogType>
+<LogTime>"Jul 18 2026 12:36AM"</LogTime>
+<Location>"Sr84 E / University Ave Onr"</Location>
+<LocationDesc>"EB AT THE ONRAMP"</LocationDesc>
+<Area>"Redwood City"</Area>
+<LATLON>"37482000:122140000"</LATLON>
+<LogDetails>
+<details>
+<DetailTime>"Jul 18 2026 12:37AM"</DetailTime>
+<IncidentDetail>"[1] 2 VEH TC"</IncidentDetail>
+</details>
+<details>
+<DetailTime>"Jul 18 2026 12:51AM"</DetailTime>
+<IncidentDetail>"[18] C25-070 1185 X2 TOYT COA / HOND SUV"</IncidentDetail>
+</details>
+<units>
+<UnitTime>"Jul 18 2026 12:40AM"</UnitTime>
+<UnitDetail>"Unit Enroute"</UnitDetail>
+</units>
+</LogDetails></Log>
+</Dispatch>
+</Center>
+</State>"""
+    incidents, truncated = chp.parse_chp_xml(xml)
+    assert not truncated
+    (inc,) = incidents
+    assert inc.location_desc == "EB AT THE ONRAMP"
+    # Timeline preserved verbatim, in feed order, quotes stripped.
+    assert inc.details == (
+        ("Jul 18 2026 12:37AM", "[1] 2 VEH TC"),
+        ("Jul 18 2026 12:51AM", "[18] C25-070 1185 X2 TOYT COA / HOND SUV"),
+    )
+    assert inc.units == (("Jul 18 2026 12:40AM", "Unit Enroute"),)
+
+
 def test_parse_truncated_feed_salvages_complete_records(fixture_bytes):
     incidents, truncated = chp.parse_chp_xml(fixture_bytes("chp_truncated.xml"))
     assert truncated

@@ -214,6 +214,17 @@ aside { background:var(--card); border-right:1px solid var(--line);
   background:var(--sky); color:#fff; font:600 .8rem Inter; padding:7px 14px;
   border-radius:99px; box-shadow:0 2px 8px rgba(15,28,43,.35);
   pointer-events:none; white-space:nowrap }
+.pop .detbtn { margin-top:7px; display:inline-block; font:600 .72rem Inter;
+  color:var(--sky); background:none; border:1px solid var(--line);
+  border-radius:7px; padding:4px 10px; cursor:pointer }
+.pop .detbtn:hover { border-color:var(--sky) }
+.pop .dets { max-height:190px; overflow-y:auto; margin-top:6px }
+.pop .drow { font-size:.7rem; line-height:1.45; padding:3px 0;
+  border-top:1px solid #efeadf }
+.pop .drow b { color:var(--dim); font-weight:600; margin-right:6px;
+  white-space:nowrap }
+.pop .dets h5 { font:600 .64rem Inter; text-transform:uppercase;
+  letter-spacing:.5px; color:var(--dim); margin:7px 0 2px }
 .val select { font:inherit; font-size:.8rem; width:100%; margin-top:3px;
   padding:6px; border:1px solid var(--line); border-radius:7px }
 .planbtn { width:100%; font:600 .9rem Inter; background:var(--sky); color:#fff;
@@ -1211,7 +1222,12 @@ function popupFor(m, g) {
         ago ? 'Reported ' + ago : 'Live CHP call',
         m.dir ? 'Affects the ' + m.dir + ' side' : 'Direction not stated in the CHP log',
         m.area ? 'Dispatched by CHP ' + esc(m.area) : null,
-      ]) + '</div>';
+      ]) +
+      (m.id && m.log_n
+        ? '<button type="button" class="detbtn" data-inc="' + esc(m.id) +
+          '">Show dispatch log (' + m.log_n + ')</button><div class="dets"></div>'
+        : '') +
+      '</div>';
   }
   if (g && g.startsWith('clo_')) {
     const allLanes = m.cls === 'full-roadway' ||
@@ -1530,6 +1546,43 @@ function appendMeasured(popup, html) {
 
 map.on('click', () => {
   document.getElementById('filters').classList.remove('open');
+});
+
+// "Show dispatch log" in incident popups: lazy-fetch the full CHP
+// timeline only when someone asks for it, newest entries first.
+map.on('popupopen', (e) => {
+  const el = e.popup.getElement();
+  const btn = el && el.querySelector('.detbtn[data-inc]');
+  if (!btn || btn.dataset.wired) return;
+  btn.dataset.wired = '1';
+  btn.addEventListener('click', async () => {
+    const box = el.querySelector('.dets');
+    btn.textContent = 'Loading…'; btn.disabled = true;
+    try {
+      const res = await fetch('/api/incident/' + encodeURIComponent(btn.dataset.inc));
+      if (!res.ok) throw new Error('unavailable');
+      const d = await res.json();
+      let h = '';
+      if (d.location_desc) {
+        h += '<div class="drow" style="border-top:0"><b>Where</b>' + esc(d.location_desc) + '</div>';
+      }
+      const rows = (list) => list.slice().reverse().map((en) =>
+        '<div class="drow"><b>' + esc(en[0] || '') + '</b>' + esc(en[1] || '') + '</div>').join('');
+      if (d.details && d.details.length) {
+        h += '<h5>Dispatch log</h5>' + rows(d.details);
+      }
+      if (d.units && d.units.length) {
+        h += '<h5>Units</h5>' + rows(d.units);
+      }
+      // No popup.update() here: it re-renders from the original content
+      // string and would wipe this injected log (same rule as
+      // appendMeasured above). The .dets box scrolls within max-height.
+      box.innerHTML = h || '<div class="drow">No shared entries yet.</div>';
+      btn.remove();
+    } catch (_) {
+      btn.textContent = 'Log unavailable right now'; btn.disabled = true;
+    }
+  });
 });
 
 // TomTom flow raster, proxied server-side; 404s harmlessly with no key.

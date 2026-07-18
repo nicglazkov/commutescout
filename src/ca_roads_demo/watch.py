@@ -907,6 +907,14 @@ async def _collect_events() -> list[dict]:
             "title": i.log_type or "Incident",
             "body": f"{i.location} ({i.area})",
             "meta": f"CHP call logged {when}" if when else "Live CHP call",
+            # Structured extras for the event archive: the dispatch
+            # timeline and unit lifecycle, verbatim, so history features
+            # can go as granular as the raw CHP shorthand allows.
+            "payload": {
+                "details": [list(d) for d in i.details],
+                "units": [list(u) for u in i.units],
+                "location_desc": i.location_desc,
+            },
         })
     for c in lcs.records:
         lanes = lcs_feed.lanes_summary(c)
@@ -917,6 +925,13 @@ async def _collect_events() -> list[dict]:
             "body": lcs_feed.describe(c),
             "meta": (f"{lanes} - {c.type_of_work}".strip(" -")
                      if lanes or c.type_of_work else "Caltrans closure"),
+            "payload": {
+                "class": lcs_feed.closure_class(c),
+                "lanes": lanes or None,
+                "work": c.type_of_work or None,
+                "facility": c.facility or None,
+                "delay_min": c.estimated_delay_minutes or None,
+            },
         })
     for c in cc.records:
         if c.status and c.status != "R-0":
@@ -926,6 +941,7 @@ async def _collect_events() -> list[dict]:
                 "title": f"Chain control {c.status} on {c.route}",
                 "body": c.status_description or c.location_name,
                 "meta": f"Checkpoint: {c.location_name}",
+                "payload": {"status": c.status, "route": c.route},
             })
     for f in wf.records:
         contained = (f"{f.percent_contained:.0f}% contained"
@@ -937,6 +953,10 @@ async def _collect_events() -> list[dict]:
             "body": (f"{f.size_acres:,.0f} acres"
                      if f.size_acres else "size unknown"),
             "meta": contained,
+            "payload": {
+                "acres": f.size_acres,
+                "contained_pct": f.percent_contained,
+            },
         })
     return events
 

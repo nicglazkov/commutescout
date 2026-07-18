@@ -8,7 +8,13 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class ChpIncident:
-    """One live CHP incident from the statewide sa.xml feed."""
+    """One live CHP incident from the statewide sa.xml feed.
+
+    ``details`` is the dispatcher comment timeline and ``units`` the unit
+    lifecycle, each as (raw CHP time string, text) pairs in feed order.
+    The raw strings are kept verbatim: they carry their own timestamps
+    and CHP shorthand that downstream analytics want untouched.
+    """
 
     id: str
     log_type: str
@@ -17,6 +23,9 @@ class ChpIncident:
     lat: float
     lon: float
     reported_at: datetime | None
+    location_desc: str = ""
+    details: tuple[tuple[str, str], ...] = ()
+    units: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
