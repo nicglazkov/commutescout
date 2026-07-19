@@ -1299,7 +1299,10 @@ function popupFor(m, g) {
   if (g === 'camera') {
     let h = popHead(g, m.name || 'Roadside camera') +
       '<div class="d">' + esc([m.route, m.direction, m.near].filter(Boolean).join(' · ')) + '</div>' +
+      // no-referrer: some state camera hosts (TravelMidwest) 403 any
+      // request carrying a foreign Referer header.
       '<img src="' + encodeURI(m.image) + '?t=' + Date.now() + '" width="300" ' +
+      'referrerpolicy="no-referrer" ' +
       'alt="" onerror="this.replaceWith(document.createTextNode(\'snapshot unavailable right now\'))">';
     if (m.stream) h += '<a href="' + encodeURI(m.stream) + '" target="_blank" rel="noopener">Open live video stream</a>';
     return h + '</div>';
