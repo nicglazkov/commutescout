@@ -68,6 +68,10 @@ Beyond California, the map also shows live data when you pan there:
 |---|---|---|
 | Maine, New Hampshire, Vermont | NE Compass tri-state portal (keyless C2C XML) | Incidents, lane closures, message signs, road weather, cameras (snapshots served via `/api/stcam`) |
 | Iowa | Iowa DOT WZDx feed (keyless, CC0) | Roadwork and closures with route geometry and schedule windows |
+| North Carolina | NCDOT WZDx feed (keyless) | Roadwork and closures with geometry and schedules |
+| Washington | WSDOT Traveler API (free key) | Incidents, closures, cameras, mountain-pass traction restrictions |
+| Oregon | ODOT TripCheck API (free key) | Incidents, roadwork, cameras |
+| Ohio | OHGO public API (free key) | Incidents, roadwork, cameras, message signs |
 
 These feeds are fetched only when the viewport touches the state and
 carry a source label in every popup. The full state-by-state expansion

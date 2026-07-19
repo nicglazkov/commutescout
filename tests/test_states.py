@@ -137,6 +137,99 @@ def test_iowa_wzdx_parses_closures():
     assert m["path"][0] == [41.6, -93.6]
 
 
+async def test_wa_fetch_maps_alerts_cameras_passes(monkeypatch):
+    import httpx
+    import respx
+
+    monkeypatch.setenv("WSDOT_API_KEY", "k")
+    alerts = [{"AlertID": 1, "EventCategory": "Collision",
+               "HeadlineDescription": "Two-car collision blocking right lane",
+               "County": "King",
+               "StartRoadwayLocation": {"Latitude": 47.6, "Longitude": -122.3,
+                                        "RoadName": "I-5", "Direction": "N",
+                                        "Description": "at Mercer St"}},
+              {"AlertID": 2, "EventCategory": "Closure",
+               "HeadlineDescription": "Full closure for repaving",
+               "County": "Pierce",
+               "StartRoadwayLocation": {"Latitude": 47.2, "Longitude": -122.4,
+                                        "RoadName": "SR-16"},
+               "EndRoadwayLocation": {"Latitude": 47.25, "Longitude": -122.5}}]
+    cams = [{"CameraID": 9, "IsActive": True, "Title": "I-5 at Mercer",
+             "ImageURL": "https://images.wsdot.wa.gov/nw/005vc.jpg",
+             "DisplayLatitude": 47.61, "DisplayLongitude": -122.33,
+             "CameraLocation": {"RoadName": "I-5", "Description": "Mercer"}}]
+    passes = [{"MountainPassName": "Snoqualmie Pass",
+               "Latitude": 47.42, "Longitude": -121.4,
+               "RestrictionOne": {"RestrictionText": "Chains required"},
+               "RestrictionTwo": {"RestrictionText": "No restrictions"}}]
+    with respx.mock:
+        respx.get(url__regex=r".*HighwayAlerts.*").mock(
+            return_value=httpx.Response(200, json=alerts))
+        respx.get(url__regex=r".*HighwayCameras.*").mock(
+            return_value=httpx.Response(200, json=cams))
+        respx.get(url__regex=r".*MountainPassConditions.*").mock(
+            return_value=httpx.Response(200, json=passes))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_wa(client)
+    kinds = sorted(m["kind"] for m in out["markers"])
+    assert kinds == ["camera", "chain_control", "incident", "lane_closure"]
+    clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
+    assert clo["cls"] == "full-roadway" and clo["end"] == [47.25, -122.5]
+    chain = next(m for m in out["markers"] if m["kind"] == "chain_control")
+    assert "Chains required" in chain["label"]
+    assert "No restrictions" not in chain["label"]
+
+
+async def test_or_fetch_rewrites_http_camera_urls(monkeypatch):
+    import httpx
+    import respx
+
+    monkeypatch.setenv("TRIPCHECK_API_KEY", "k")
+    inc = {"incidents": [{"is-active": "true", "event-type-id": "RW",
+                          "headline": "Nighttime closures of I-205",
+                          "impact-desc": "Delay under 20 minutes",
+                          "location": {"route-id": "I205",
+                                       "location-name": "EAST PORTLAND FWY",
+                                       "start-location": {"start-lat": 45.36,
+                                                          "start-long": -122.61},
+                                       "end-location": {"end-lat": 45.37,
+                                                        "end-long": -122.60}}}]}
+    cams = {"CCTVInventoryRequest": [{"device-id": "277",
+                                      "latitude": "46.18", "longitude": "-123.85",
+                                      "route-id": "US101",
+                                      "cctv-other": "US101 at Astoria",
+                                      "cctv-url": "http://www.TripCheck.com/roadcams/a.jpg"}]}
+    with respx.mock:
+        respx.get(url__regex=r".*tripcheck/Incidents").mock(
+            return_value=httpx.Response(200, json=inc))
+        respx.get(url__regex=r".*tripcheck/Cctv/Inventory").mock(
+            return_value=httpx.Response(200, json=cams))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_or(client)
+    cam = next(m for m in out["markers"] if m["kind"] == "camera")
+    assert cam["image"].startswith("https://")   # mixed-content rewrite
+    clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
+    assert clo["route"] == "I205" and clo["end"] == [45.37, -122.6]
+
+
+async def test_nc_wzdx_relabels_source(monkeypatch):
+    import httpx
+    import respx
+
+    payload = {"features": [{"properties": {
+        "core_details": {"event_type": "work-zone", "road_names": ["I-40"],
+                         "description": "Lane closed"},
+        "vehicle_impact": "some-lanes-closed"},
+        "geometry": {"type": "LineString",
+                     "coordinates": [[-78.9, 35.9], [-78.8, 35.95]]}}]}
+    with respx.mock:
+        respx.get(states.NC_WZDX_URL).mock(
+            return_value=httpx.Response(200, json=payload))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_nc(client)
+    assert out["markers"][0]["src"] == "NCDOT"
+
+
 def test_bbox_gating():
     ca_box = (32.0, -125.0, 42.5, -113.5)
     me_bounds = states.NEC_STATES["me"][2]

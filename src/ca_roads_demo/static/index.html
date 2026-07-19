@@ -26,7 +26,7 @@
 </script>
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" as="fetch" crossorigin="anonymous"
-      href="/api/mapdata?bbox=32.000,-125.000,42.500,-113.500&kinds=incident,closure,chain,fire">
+      href="/api/mapdata?bbox=-85.000,-180.000,85.000,180.000&kinds=incident,closure,chain,fire">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
@@ -774,7 +774,8 @@ function renderChips() {
 function ensureMap() {
   mapcard.classList.add('active');
   if (map) return;
-  map = L.map('map', { scrollWheelZoom: true }).setView([37.4, -121.2], 6);
+  map = L.map('map', { scrollWheelZoom: true, preferCanvas: true })
+    .setView([39.3, -97.5], 5);   // lower 48 in view by default
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     keepBuffer: 4,
     maxZoom: 17,
@@ -1397,8 +1398,11 @@ function pointMarker(m, g) {
     style = Object.assign({ renderer: canvasR, color: '#fff', weight: 1.2 },
       CLOSURE_STYLES[m.cls]);
   }
+  // Lazy popup content: with 10k+ nationwide markers, building HTML
+  // strings eagerly on every render is the difference between instant
+  // and stuttering on a low-end phone.
   const mk = L.circleMarker([m.lat, m.lon], style)
-    .bindPopup(popupFor(m, g), { maxWidth: 320 });
+    .bindPopup(() => popupFor(m, g), { maxWidth: 320 });
   mk.__m = m; mk.__g = g;
   return mk;
 }
@@ -1501,10 +1505,31 @@ const FAST_GROUPS = ['inc_collision', 'inc_fire', 'inc_hazard', 'inc_other',
   'fire_pt', 'fire_poly'];
 const HEAVY_GROUPS = ['camera', 'sign', 'rwis'];
 
+// Closure stretch polylines, deferred: built once, the first time the
+// zoom crosses STRIP_ZOOM after a data refresh.
+let pendingStrips = [];
+let stripsBuilt = false;
+const STRIP_ZOOM = 8;
+function syncStrips() {
+  if (stripsBuilt || map.getZoom() < STRIP_ZOOM) return;
+  stripsBuilt = true;
+  for (const [m, g] of pendingStrips) {
+    const stretch = (Array.isArray(m.path) && m.path.length > 1)
+      ? m.path : [[m.lat, m.lon], m.end];
+    const strip = L.polyline(stretch, {
+      renderer: canvasR, color: GROUP_DOT[g], weight: 4, opacity: 0.45,
+    }).bindPopup(() => popupFor(m, g), { maxWidth: 320 });
+    strip.__m = m; strip.__g = g;
+    ambient[g].addLayer(strip);
+  }
+}
+map.on('zoomend', syncStrips);
+
 function renderBatch(markers, groups) {
   const counts = {};
   for (const g of groups) ambient[g].clearLayers();
   if (groups.includes('camera')) { cameraCache = []; signCache = []; }
+  if (groups.some((g) => g.startsWith('clo_'))) pendingStrips = [];
   for (const m of markers) {
     const g = classify(m);
     if (!g || !m.lat || !groups.includes(g === 'sign' || g === 'camera' ? g : g)) continue;
@@ -1515,32 +1540,29 @@ function renderBatch(markers, groups) {
       counts.fire_pt = (counts.fire_pt || 0) + 1;
       if (Array.isArray(m.poly) && m.poly.length > 2) {
         // The burn footprint is the fire; a dot only stands in when
-        // WFIGS has no perimeter for it.
+        // WFIGS has no perimeter for it. Popup content is built lazily
+        // on open, never per-render.
         ambient.fire_pt.addLayer(
           L.polygon(m.poly, { color: '#d97706', weight: 2,
             fillColor: '#d97706', fillOpacity: 0.28 })
-            .bindPopup(popupFor(m, 'fire_pt'), { maxWidth: 320 }));
+            .bindPopup(() => popupFor(m, 'fire_pt'), { maxWidth: 320 }));
       } else {
         ambient.fire_pt.addLayer(pointMarker(m, 'fire_pt'));
       }
       continue;
     }
     // Closures with a distinct endpoint get the affected stretch drawn
-    // under their dot; the dot stays as the click target at the start.
-    // The server ships road-snapped geometry (m.path) once its OSRM
-    // cache has it; the begin-to-end straight line is the fallback.
+    // under their dot. With thousands of nationwide closures the strips
+    // are sub-pixel at country zoom, so they build lazily the first
+    // time the user zooms in far enough to see them.
     if (g.startsWith('clo_') && Array.isArray(m.end)) {
-      const stretch = (Array.isArray(m.path) && m.path.length > 1)
-        ? m.path : [[m.lat, m.lon], m.end];
-      const strip = L.polyline(stretch, {
-        renderer: canvasR, color: GROUP_DOT[g], weight: 4, opacity: 0.45,
-      }).bindPopup(popupFor(m, g), { maxWidth: 320 });
-      strip.__m = m; strip.__g = g;
-      ambient[g].addLayer(strip);
+      pendingStrips.push([m, g]);
     }
     ambient[g].addLayer(pointMarker(m, g));
     counts[g] = (counts[g] || 0) + 1;
   }
+  stripsBuilt = false;
+  syncStrips();
   if (groups.includes('camera')) { rebuildCameras(); rebuildSigns(); }
   if (groups.includes('inc_collision')) tryFocus();
   for (const g of groups) {
@@ -1554,12 +1576,15 @@ async function refreshAmbient(force) {
   const view = map.getBounds();
   if (!force && ambientBounds && ambientBounds.contains(view)) return;
   const mine = ++ambientCycle;
-  // First load uses a fixed statewide box: it matches the <link rel=preload>
-  // in the head (the browser starts that request before Leaflet loads) and
-  // it means panning anywhere in California never needs a refetch.
+  // First load fetches the WHOLE-WORLD box: the data is inherently
+  // US-only, so this costs the server nothing extra, it matches the
+  // <link rel=preload> in the head (the browser starts that request
+  // before Leaflet even loads), and the containment check above then
+  // holds for every pan and zoom a user can make. Dots never require
+  // re-querying; data refreshes on the interval timer instead.
   const first = ambientBounds === null;
   const fetchBounds = first
-    ? L.latLngBounds([[32.0, -125.0], [42.5, -113.5]])
+    ? L.latLngBounds([[-85.0, -180.0], [85.0, 180.0]])
     : view.pad(0.35);
   const sw = fetchBounds.getSouthWest(), ne = fetchBounds.getNorthEast();
   const bbox = [sw.lat, sw.lng, ne.lat, ne.lng].map(v => v.toFixed(3)).join(',');
@@ -1678,7 +1703,29 @@ async function renderSourcePanel() {
     srcPanel.innerHTML = '<h4>Data sources</h4>' +
       '<div class="sub">Checked ' + at.toLocaleString([], {
         hour: 'numeric', minute: '2-digit', weekday: 'short' }) + '</div>';
+    // Group per state (California first, then expansion states, then
+    // nationwide pieces) so each region's health reads at a glance.
+    const order = ['California'];
     for (const s of d.sources) {
+      const st = s.state || 'Other';
+      if (!order.includes(st) && st !== 'Nationwide') order.push(st);
+    }
+    order.push('Nationwide');
+    const grouped = [];
+    for (const st of order) {
+      grouped.push({ header: st });
+      for (const s of d.sources) if ((s.state || 'Other') === st) grouped.push(s);
+    }
+    for (const g of grouped) {
+      if (g.header) {
+        const h = document.createElement('h5');
+        h.textContent = g.header;
+        h.style.cssText = 'font:700 .64rem Inter;text-transform:uppercase;' +
+          'letter-spacing:.6px;color:var(--dim);margin:9px 0 2px';
+        srcPanel.append(h);
+        continue;
+      }
+      const s = g;
       const row = document.createElement('div');
       row.className = 'src';
       const dot = document.createElement('i');

@@ -18,6 +18,8 @@ California browsing never pays for them.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import re
 import time
 from base64 import b64decode
@@ -373,6 +375,267 @@ def snapshot(code: str, cam_id: str) -> bytes | None:
     return hit[0] if hit else None
 
 
+# ── Wave 2: keyed states (WSDOT, TripCheck, OHGO) + NC WZDx ──────────
+
+WA_BOUNDS = (45.5, -124.9, 49.05, -116.9)
+OR_BOUNDS = (41.9, -124.7, 46.3, -116.4)
+OH_BOUNDS = (38.4, -84.9, 42.0, -80.5)
+NC_BOUNDS = (33.7, -84.4, 36.6, -75.4)
+NC_WZDX_URL = "https://www.drivenc.gov/api/wzdx"
+
+# Alert categories that are planned work rather than live incidents.
+_WA_WORK = {"Closure", "Construction", "Maintenance"}
+
+
+def _wa_key() -> str:
+    import os
+    return os.environ.get("WSDOT_API_KEY", "")
+
+
+def _or_key() -> str:
+    import os
+    return os.environ.get("TRIPCHECK_API_KEY", "")
+
+
+def _oh_key() -> str:
+    import os
+    return os.environ.get("OHGO_API_KEY", "")
+
+
+async def _fetch_wa(client) -> dict:
+    key = _wa_key()
+    base = "https://wsdot.wa.gov/Traffic/api"
+    alerts, cams, passes = [
+        (await client.get(u, headers=UA, timeout=30.0)).json()
+        for u in (
+            f"{base}/HighwayAlerts/HighwayAlertsREST.svc/GetAlertsAsJson?AccessCode={key}",
+            f"{base}/HighwayCameras/HighwayCamerasREST.svc/GetCamerasAsJson?AccessCode={key}",
+            f"{base}/MountainPassConditions/MountainPassConditionsREST.svc/GetMountainPassConditionsAsJson?AccessCode={key}",
+        )
+    ]
+    markers: list[dict] = []
+    for a in alerts or []:
+        loc = a.get("StartRoadwayLocation") or {}
+        lat, lon = loc.get("Latitude"), loc.get("Longitude")
+        if not lat or not lon:
+            continue
+        headline = (a.get("HeadlineDescription") or "")[:250]
+        where = ", ".join(x for x in (loc.get("RoadName"),
+                                      loc.get("Description")) if x)
+        if a.get("EventCategory") in _WA_WORK:
+            end = a.get("EndRoadwayLocation") or {}
+            marker = {
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "label": headline, "cls": "lane"
+                if a.get("EventCategory") != "Closure" else "full-roadway",
+                "route": loc.get("RoadName") or "", "county": a.get("County"),
+                "src": "WSDOT", "lanes": None, "work": a.get("EventCategory"),
+                "facility": None, "delay_min": None,
+                "since": None, "until": None,
+            }
+            if end.get("Latitude") and end.get("Longitude") \
+                    and (abs(end["Latitude"] - lat) > 0.002
+                         or abs(end["Longitude"] - lon) > 0.002):
+                marker["end"] = [round(end["Latitude"], 5),
+                                 round(end["Longitude"], 5)]
+            markers.append(marker)
+        else:
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon,
+                "type": a.get("EventCategory") or "Incident",
+                "location": where or headline[:120],
+                "area": "", "src": "WSDOT",
+                "dir": loc.get("Direction") or None,
+                "reported": None, "detail": headline,
+            })
+    for c in cams or []:
+        loc = c.get("CameraLocation") or {}
+        lat = c.get("DisplayLatitude") or loc.get("Latitude")
+        lon = c.get("DisplayLongitude") or loc.get("Longitude")
+        if not lat or not lon or not c.get("IsActive"):
+            continue
+        markers.append({
+            "kind": "camera", "lat": lat, "lon": lon,
+            "name": c.get("Title") or loc.get("Description") or "Camera",
+            "route": loc.get("RoadName"), "direction": loc.get("Direction"),
+            "near": loc.get("Description"), "src": "WSDOT",
+            "image": c.get("ImageURL"), "stream": None,
+        })
+    for p in passes or []:
+        lat, lon = p.get("Latitude"), p.get("Longitude")
+        if not lat or not lon:
+            continue
+        r1 = ((p.get("RestrictionOne") or {}).get("RestrictionText") or "").strip()
+        r2 = ((p.get("RestrictionTwo") or {}).get("RestrictionText") or "").strip()
+        active = [r for r in (r1, r2)
+                  if r and "no restriction" not in r.lower()]
+        if not active:
+            continue
+        markers.append({
+            "kind": "chain_control", "lat": lat, "lon": lon,
+            "status": "Pass restriction",
+            "route": p.get("MountainPassName") or "",
+            "label": "; ".join(active)[:220], "src": "WSDOT",
+            "updated": None,
+        })
+    return {"markers": markers}
+
+
+_OR_HTTP_IMG = re.compile(r"^http://", re.IGNORECASE)
+
+
+async def _fetch_or(client) -> dict:
+    key = {"Ocp-Apim-Subscription-Key": _or_key(), **UA}
+    base = "https://api.odot.state.or.us/tripcheck"
+    inc = (await client.get(f"{base}/Incidents", headers=key,
+                            timeout=30.0)).json()
+    cams = (await client.get(f"{base}/Cctv/Inventory", headers=key,
+                             timeout=30.0)).json()
+    markers: list[dict] = []
+    for i in (inc.get("incidents") or []):
+        if str(i.get("is-active")).lower() != "true":
+            continue
+        loc = i.get("location") or {}
+        start = loc.get("start-location") or {}
+        lat, lon = start.get("start-lat"), start.get("start-long")
+        if not lat or not lon:
+            continue
+        headline = (i.get("headline") or "")[:250]
+        where = ", ".join(x for x in (loc.get("route-id"),
+                                      loc.get("location-name")) if x)
+        if (i.get("event-type-id") or "").upper() == "RW":
+            end = loc.get("end-location") or {}
+            marker = {
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "label": headline, "cls": "lane",
+                "route": loc.get("route-id") or "", "county": None,
+                "src": "Oregon DOT (TripCheck)", "lanes": None,
+                "work": i.get("impact-desc"), "facility": None,
+                "delay_min": None, "since": None, "until": None,
+            }
+            elat, elon = end.get("end-lat"), end.get("end-long")
+            if elat and elon and (abs(elat - lat) > 0.002
+                                  or abs(elon - lon) > 0.002):
+                marker["end"] = [round(elat, 5), round(elon, 5)]
+            markers.append(marker)
+        else:
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon,
+                "type": "Incident", "location": where or headline[:120],
+                "area": "", "src": "Oregon DOT (TripCheck)",
+                "dir": loc.get("direction") or None,
+                "reported": i.get("update-time"), "detail": headline,
+            })
+    for c in (cams.get("CCTVInventoryRequest") or []):
+        lat, lon = c.get("latitude"), c.get("longitude")
+        url = c.get("cctv-url") or ""
+        if not lat or not lon or not url:
+            continue
+        markers.append({
+            "kind": "camera", "lat": float(lat), "lon": float(lon),
+            "name": c.get("cctv-other") or c.get("device-name") or "Camera",
+            "route": c.get("route-id"), "direction": None,
+            "near": c.get("cctv-other"),
+            "src": "Oregon DOT (TripCheck)",
+            # The inventory hands out http:// URLs; the host serves https.
+            "image": _OR_HTTP_IMG.sub("https://", url), "stream": None,
+        })
+    return {"markers": markers}
+
+
+async def _fetch_oh(client) -> dict:
+    hdr = {"Authorization": f"APIKEY {_oh_key()}", **UA}
+    base = "https://publicapi.ohgo.com/api/v1"
+    inc = (await client.get(f"{base}/incidents?page-all=true", headers=hdr,
+                            timeout=30.0)).json()
+    con = (await client.get(f"{base}/construction?page-all=true", headers=hdr,
+                            timeout=30.0)).json()
+    cams = (await client.get(f"{base}/cameras?page-all=true", headers=hdr,
+                             timeout=30.0)).json()
+    dms = (await client.get(f"{base}/digital-signs?page-all=true", headers=hdr,
+                            timeout=30.0)).json()
+    markers: list[dict] = []
+
+    def road_items(payload, default_kind):
+        for r in (payload.get("results") or []):
+            lat, lon = r.get("latitude"), r.get("longitude")
+            if not lat or not lon:
+                continue
+            lat, lon = float(lat), float(lon)
+            desc = (r.get("description") or "")[:250]
+            if default_kind == "lane_closure" \
+                    or (r.get("category") or "") == "Road Work":
+                markers.append({
+                    "kind": "lane_closure", "lat": lat, "lon": lon,
+                    "label": desc, "cls": "full-roadway"
+                    if "closed" in (r.get("roadStatus") or "").lower()
+                    else "lane",
+                    "route": r.get("routeName") or "", "county": None,
+                    "src": "OHGO", "lanes": None,
+                    "work": r.get("category"), "facility": None,
+                    "delay_min": None, "since": None, "until": None,
+                })
+            else:
+                markers.append({
+                    "kind": "incident", "lat": lat, "lon": lon,
+                    "type": r.get("category") or "Incident",
+                    "location": r.get("location") or "",
+                    "area": "", "src": "OHGO",
+                    "dir": r.get("direction") or None,
+                    "reported": None, "detail": desc,
+                })
+
+    road_items(inc, "incident")
+    road_items(con, "lane_closure")
+    for c in (cams.get("results") or []):
+        lat, lon = c.get("latitude"), c.get("longitude")
+        views = c.get("cameraViews") or []
+        if not lat or not lon or not views:
+            continue
+        markers.append({
+            "kind": "camera", "lat": float(lat), "lon": float(lon),
+            "name": c.get("location") or "Camera",
+            "route": (views[0] or {}).get("mainRoute"), "direction": None,
+            "near": c.get("location"), "src": "OHGO",
+            "image": (views[0] or {}).get("largeUrl")
+                     or (views[0] or {}).get("smallUrl"),
+            "stream": None,
+        })
+    for s in (dms.get("results") or []):
+        lat, lon = s.get("latitude"), s.get("longitude")
+        if not lat or not lon:
+            continue
+        lines = [ln for msg in (s.get("messages") or [])
+                 for ln in str(msg).split("\n") if ln.strip()][:6]
+        marker = {
+            "kind": "sign", "lat": float(lat), "lon": float(lon),
+            "route": None, "direction": None,
+            "near": s.get("location") or s.get("description"),
+            "message": " / ".join(lines), "lines": lines, "src": "OHGO",
+        }
+        if not lines:
+            marker["blank"] = True
+        markers.append(marker)
+    return {"markers": markers}
+
+
+async def _fetch_nc(client) -> dict:
+    resp = await client.get(NC_WZDX_URL, headers=UA, timeout=30.0)
+    resp.raise_for_status()
+    markers = _parse_ia_wzdx(resp.json())
+    for m in markers:
+        m["src"] = "NCDOT"
+    return {"markers": markers}
+
+
+KEYED_STATES = {
+    # code: (display state, bounds, fetcher, ready-check)
+    "wa": ("Washington", WA_BOUNDS, _fetch_wa, _wa_key),
+    "or": ("Oregon", OR_BOUNDS, _fetch_or, _or_key),
+    "oh": ("Ohio", OH_BOUNDS, _fetch_oh, _oh_key),
+}
+
+
 async def markers_for_bbox(client, box, want) -> list[dict]:
     """All out-of-state markers intersecting the viewport. Never raises:
     a failing state simply contributes nothing this cycle."""
@@ -393,39 +656,94 @@ async def markers_for_bbox(client, box, want) -> list[dict]:
                         and lon_min <= m["lon"] <= lon_max:
                     out.append(m)
 
+    lookups = []
     for code, (_net, _agency, bounds) in NEC_STATES.items():
         if not _overlaps(box, bounds):
             continue
-        await add(await _cache.get(
+        lookups.append(_cache.get(
             f"nec:{code}", TTL, MAX_SERVE,
             lambda c=code: _fetch_nec(client, c)))
         if "camera" in want:
-            await add(await _cache.get(
+            lookups.append(_cache.get(
                 f"neccam:{code}", CAM_TTL, MAX_SERVE,
                 lambda c=code: _fetch_nec_cameras(client, c)))
     if _overlaps(box, IA_BOUNDS):
-        await add(await _cache.get(
+        lookups.append(_cache.get(
             "ia:wzdx", TTL, MAX_SERVE, lambda: _fetch_iowa(client)))
+    if _overlaps(box, NC_BOUNDS):
+        lookups.append(_cache.get(
+            "nc:wzdx", TTL, MAX_SERVE, lambda: _fetch_nc(client)))
+    for code, (_name, bounds, fetcher, ready) in KEYED_STATES.items():
+        if not ready() or not _overlaps(box, bounds):
+            continue
+        lookups.append(_cache.get(
+            f"{code}:all", TTL, MAX_SERVE, lambda f=fetcher: f(client)))
+    # A nationwide viewport touches every state at once; fetch them
+    # concurrently so cold latency is the slowest feed, not the sum.
+    for outcome in await asyncio.gather(*lookups, return_exceptions=True):
+        if not isinstance(outcome, BaseException):
+            await add(outcome)
     return out
 
 
+async def prewarm(client) -> None:
+    """Warm every expansion-state cache at boot (called in the background
+    from the demo's prewarm), so the first nationwide map request lands
+    on hot caches. Failures are fine; the request path retries."""
+    with contextlib.suppress(Exception):
+        lookups = [
+            _cache.get(f"nec:{c}", TTL, MAX_SERVE,
+                       lambda cc=c: _fetch_nec(client, cc))
+            for c in NEC_STATES
+        ]
+        lookups.append(_cache.get("ia:wzdx", TTL, MAX_SERVE,
+                                  lambda: _fetch_iowa(client)))
+        lookups.append(_cache.get("nc:wzdx", TTL, MAX_SERVE,
+                                  lambda: _fetch_nc(client)))
+        for code, (_n, _b, fetcher, ready) in KEYED_STATES.items():
+            if ready():
+                lookups.append(_cache.get(f"{code}:all", TTL, MAX_SERVE,
+                                          lambda f=fetcher: f(client)))
+        await asyncio.gather(*lookups, return_exceptions=True)
+        # Camera bundles are ~20 MB each; warm them after the light feeds.
+        await asyncio.gather(*[
+            _cache.get(f"neccam:{c}", CAM_TTL, MAX_SERVE,
+                       lambda cc=c: _fetch_nec_cameras(client, cc))
+            for c in NEC_STATES
+        ], return_exceptions=True)
+
+
+_STATE_NAMES = {"me": "Maine", "nh": "New Hampshire", "vt": "Vermont"}
+
+
+def _status_entry(key: str, name: str, agency: str, state: str) -> dict:
+    entry = _cache._entries.get(key)  # noqa: SLF001 - read-only peek
+    return {
+        "name": name, "agency": agency, "state": state,
+        "on_demand": entry is None,
+        **({"ok": True, "stale": False,
+            "count": len(entry.value["markers"]),
+            "as_of": entry.fetched_at.isoformat()} if entry else {}),
+    }
+
+
 def source_status() -> list[dict]:
-    """Entries for /api/sources describing the expansion states. Reports
-    cache state without forcing a fetch."""
+    """Entries for /api/sources describing the expansion states, grouped
+    per state. Reports cache state without forcing a fetch."""
     out = []
     for code, (_net, agency, _bounds) in NEC_STATES.items():
-        entry = _cache._entries.get(f"nec:{code}")  # noqa: SLF001 - read-only peek
-        out.append({
-            "name": f"{agency} (NE Compass)", "agency": agency,
-            "on_demand": entry is None,
-            **({"ok": True, "stale": False, "count": len(entry.value["markers"]),
-                "as_of": entry.fetched_at.isoformat()} if entry else {}),
-        })
-    entry = _cache._entries.get("ia:wzdx")  # noqa: SLF001
-    out.append({
-        "name": "Roadwork (WZDx)", "agency": "Iowa DOT",
-        "on_demand": entry is None,
-        **({"ok": True, "stale": False, "count": len(entry.value["markers"]),
-            "as_of": entry.fetched_at.isoformat()} if entry else {}),
-    })
+        out.append(_status_entry(
+            f"nec:{code}", "All feeds (NE Compass)", agency,
+            _STATE_NAMES[code]))
+    out.append(_status_entry("ia:wzdx", "Roadwork (WZDx)", "Iowa DOT", "Iowa"))
+    out.append(_status_entry("nc:wzdx", "Roadwork (WZDx)", "NCDOT",
+                             "North Carolina"))
+    for code, (name, _bounds, _fetcher, ready) in KEYED_STATES.items():
+        if not ready():
+            out.append({"name": "All feeds", "agency": name, "state": name,
+                        "enabled": False})
+            continue
+        agency = {"wa": "WSDOT", "or": "Oregon DOT (TripCheck)",
+                  "oh": "OHGO"}[code]
+        out.append(_status_entry(f"{code}:all", "All feeds", agency, name))
     return out

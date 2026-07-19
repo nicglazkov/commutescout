@@ -872,7 +872,7 @@ async def api_sources(request: Request):
 
     def one(name: str, agency: str, r) -> dict:
         return {
-            "name": name, "agency": agency,
+            "name": name, "agency": agency, "state": "California",
             "ok": bool(r.ok), "stale": bool(getattr(r, "stale", False)),
             "as_of": r.data_as_of.isoformat() if r.data_as_of else None,
             "count": len(r.records),
@@ -887,13 +887,17 @@ async def api_sources(request: Request):
         one("Cameras", "Caltrans CCTV", cams),
         one("Message signs", "Caltrans CMS", signs),
         one("Road weather", "Caltrans RWIS", wx),
-        {"name": "Weather alerts", "agency": "NWS", "on_demand": True},
-        {"name": "Earthquakes", "agency": "USGS", "on_demand": True},
-        {"name": "Traffic speeds", "agency": "TomTom",
+        {"name": "Weather alerts", "agency": "NWS", "state": "Nationwide",
+         "on_demand": True},
+        {"name": "Earthquakes", "agency": "USGS", "state": "Nationwide",
+         "on_demand": True},
+        {"name": "Traffic speeds", "agency": "TomTom", "state": "Nationwide",
          "enabled": bool(os.environ.get("TOMTOM_API_KEY"))},
         {"name": "Bay Area events", "agency": "511 SF Bay",
+         "state": "California",
          "enabled": bool(os.environ.get("BAY511_API_KEY"))},
         {"name": "Nevada continuations", "agency": "NV DOT",
+         "state": "Nevada",
          "enabled": bool(os.environ.get("NVROADS_API_KEY"))},
     ]
     sources.extend(states.source_status())
@@ -1044,6 +1048,10 @@ async def _prewarm() -> None:
             road.road_weather(),
             return_exceptions=True,
         )
+    # Expansion states warm after California so the default nationwide
+    # view lands on hot caches for every region.
+    with contextlib.suppress(Exception):
+        await states.prewarm(road.client)
 
 
 # Road-following geometry for closure stretches, keyed by rounded
@@ -1239,7 +1247,10 @@ class SecurityHeaders:
         # here the browser blocks every popup image and cameras all read
         # "snapshot unavailable".
         "img-src 'self' data: https://*.basemaps.cartocdn.com "
-        "https://*.cartocdn.com https://cwwp2.dot.ca.gov; "
+        "https://*.cartocdn.com https://cwwp2.dot.ca.gov "
+        # Expansion-state camera hosts (WSDOT, TripCheck, OHGO).
+        "https://images.wsdot.wa.gov https://*.tripcheck.com "
+        "https://itscameras.dot.state.oh.us; "
         "connect-src 'self' https://router.project-osrm.org "
         "https://valhalla1.openstreetmap.de https://*.googleapis.com "
         "https://*.google.com https://cloudflareinsights.com "
