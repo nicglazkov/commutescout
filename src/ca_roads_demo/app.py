@@ -35,7 +35,7 @@ from ca_roads.feeds import calfire as calfire_feed
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
-from ca_roads_demo import analytics, trips, watch
+from ca_roads_demo import analytics, states, trips, watch
 from ca_roads_demo.prompt import SYSTEM, TOOL_DEFS, TOOL_FUNCS  # noqa: F401
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_suggest
@@ -841,6 +841,11 @@ async def api_mapdata(request: Request):
                     marker["blank"] = True
                 markers.append(marker)
 
+    # Out-of-state expansion feeds ride along only when the viewport
+    # actually touches those states, so California browsing pays nothing.
+    with contextlib.suppress(Exception):  # expansion states never break CA
+        markers.extend(await states.markers_for_bbox(road.client, box, want))
+
     # Everything, gzipped: the whole state is ~4k markers and compresses
     # roughly 10:1. No caps - the map IS the product.
     body = json.dumps({"markers": markers}).encode()
@@ -891,10 +896,26 @@ async def api_sources(request: Request):
         {"name": "Nevada continuations", "agency": "NV DOT",
          "enabled": bool(os.environ.get("NVROADS_API_KEY"))},
     ]
+    sources.extend(states.source_status())
     return JSONResponse({
         "checked_at": datetime.now(UTC).isoformat(),
         "sources": sources,
     })
+
+
+async def api_stcam(request: Request):
+    """Snapshot frame for an expansion-state camera. NE Compass embeds
+    JPEG bytes in its XML instead of hosting image URLs, so the map
+    serves them from the in-process cache filled by the camera feed."""
+    code = request.path_params.get("state", "")
+    cam_id = request.path_params.get("cam_id", "")
+    if code not in states.NEC_STATES or not (1 <= len(cam_id) <= 120):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    frame = states.snapshot(code, cam_id)
+    if frame is None:
+        return JSONResponse({"error": "no current frame"}, status_code=404)
+    return Response(frame, media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=120"})
 
 
 async def api_incident(request: Request):
@@ -1130,6 +1151,7 @@ app = Starlette(
         Route("/api/staticmap", api_staticmap, methods=["GET"]),
         Route("/api/mapdata", api_mapdata, methods=["GET"]),
         Route("/api/incident/{incident_id}", api_incident, methods=["GET"]),
+        Route("/api/stcam/{state}/{cam_id:path}", api_stcam, methods=["GET"]),
         Route("/watch", watch_page),
         Route(ADMIN_PAGE_PATH, admin_page),
         Route("/api/admin/analytics", analytics.api_admin_analytics,
@@ -1321,7 +1343,7 @@ app = RateLimitMiddleware(
     # address validation behind map browsing.
     exempt_prefixes=("/static/", "/logo.svg", "/health", "/favicon",
                      "/api/mapdata", "/api/stats", "/api/geocode",
-                     "/api/incident/", "/api/sources",
+                     "/api/incident/", "/api/sources", "/api/stcam/",
                      "/api/suggest", "/api/flow", "/api/traffictile",
                      # Watch pages + public bootstrap config are as cheap
                      # as static files; the mutating watch APIs stay

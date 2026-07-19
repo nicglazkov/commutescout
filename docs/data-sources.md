@@ -60,4 +60,17 @@ learned running them:
   gazetteer fallback, and when a street exists in several towns the
   tools say so and ask instead of guessing.
 
+## Expansion states (map only, first wave)
+
+Beyond California, the map also shows live data when you pan there:
+
+| Region | Source | Data |
+|---|---|---|
+| Maine, New Hampshire, Vermont | NE Compass tri-state portal (keyless C2C XML) | Incidents, lane closures, message signs, road weather, cameras (snapshots served via `/api/stcam`) |
+| Iowa | Iowa DOT WZDx feed (keyless, CC0) | Roadwork and closures with route geometry and schedule windows |
+
+These feeds are fetched only when the viewport touches the state and
+carry a source label in every popup. The full state-by-state expansion
+plan lives in [state-expansion-audit.md](state-expansion-audit.md).
+
 Want to add a feed? See [adding a data source](adding-a-source.md).

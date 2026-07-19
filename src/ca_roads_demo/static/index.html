@@ -1329,9 +1329,11 @@ function popupFor(m, g) {
       '<div class="d">' + esc(m.location || '') + '</div>' +
       (gloss ? '<div class="d" style="margin-top:5px">' + gloss + '</div>' : '') +
       histBlock([
-        ago ? 'Reported ' + ago : 'Live CHP call',
-        m.dir ? 'Affects the ' + m.dir + ' side' : 'Direction not stated in the CHP log',
-        m.area ? 'Dispatched by CHP ' + esc(m.area) : null,
+        ago ? 'Reported ' + ago : (m.src ? 'Live report' : 'Live CHP call'),
+        m.dir ? 'Affects the ' + m.dir + ' side'
+              : (m.src ? null : 'Direction not stated in the CHP log'),
+        m.src ? 'Reported by ' + esc(m.src)
+              : (m.area ? 'Dispatched by CHP ' + esc(m.area) : null),
       ]) +
       (m.id && m.log_n
         ? '<button type="button" class="detbtn" data-inc="' + esc(m.id) +
@@ -1364,6 +1366,7 @@ function popupFor(m, g) {
         sched.join(' · '),
         m.windows ? (m.windows - 1) + ' more scheduled window' +
           (m.windows > 2 ? 's' : '') + ' at this spot' : null,
+        m.src ? 'Source: ' + esc(m.src) : null,
       ]) + '</div>';
   }
   if (g === 'chain') {
