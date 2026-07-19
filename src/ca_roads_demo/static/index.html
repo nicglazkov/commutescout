@@ -774,7 +774,11 @@ function renderChips() {
 function ensureMap() {
   mapcard.classList.add('active');
   if (map) return;
-  map = L.map('map', { scrollWheelZoom: true, preferCanvas: true })
+  // No preferCanvas here: the dense layers already share one explicit
+  // canvas renderer (canvasR), and adding the map-default canvas on top
+  // created a second overlapping canvas that swallowed tap hit-testing
+  // on iOS WebKit (dots became unclickable on phones).
+  map = L.map('map', { scrollWheelZoom: true })
     .setView([39.3, -97.5], 5);   // lower 48 in view by default
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     keepBuffer: 4,
