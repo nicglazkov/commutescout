@@ -37,6 +37,7 @@ UA = {"User-Agent": "commutescout.com feed client (nic@glazkov.com)"}
 TTL = 180.0
 MAX_SERVE = 1800.0
 CAM_TTL = 600.0          # the camera XML is ~20 MB per state; refresh slowly
+WZDX_TTL = 600.0         # WZDx dumps change slowly and some are 8-16 MB
 TZ_EAST = ZoneInfo("America/New_York")
 
 # (lat_min, lon_min, lat_max, lon_max) - fetch a state only when the
@@ -323,7 +324,13 @@ def _iso_epoch(iso: str | None) -> int | None:
         return None
 
 
-def _parse_ia_wzdx(payload: dict) -> list[dict]:
+def _parse_ia_wzdx(payload: dict, src: str = "Iowa DOT",
+                   cap: int = 2000) -> list[dict]:
+    """WZDx FeatureCollection to closure markers. Only work that is
+    ACTIVE NOW ships (same semantics as the California LCS layer):
+    many feeds list projects months out, and a 16 MB statewide plan
+    dump is noise on a live-conditions map."""
+    now = time.time()
     markers: list[dict] = []
     for feat in payload.get("features", []):
         props = (feat.get("properties") or {})
@@ -339,19 +346,29 @@ def _parse_ia_wzdx(payload: dict) -> list[dict]:
         pts = [c for c in pts if isinstance(c, list) and len(c) >= 2]
         if not pts:
             continue
+        since = _iso_epoch(props.get("start_date"))
+        until = _iso_epoch(props.get("end_date"))
+        # Prefer the feed's own status when it declares one (UDOT marks
+        # everything with lapsed *estimated* end dates but
+        # event_status=active); fall back to the date window.
+        status = (props.get("event_status") or "").lower()
+        if status in ("planned", "pending", "completed", "cancelled"):
+            continue
+        if status != "active" and (
+                (since and since > now) or (until and until < now)):
+            continue          # planned for later, or already done
         lat, lon = pts[0][1], pts[0][0]
         marker = {
             "kind": "lane_closure", "lat": lat, "lon": lon,
             "label": (core.get("description") or "")[:250],
             "cls": _IMPACT_CLS.get(props.get("vehicle_impact"), "other"),
             "route": ", ".join(core.get("road_names") or [])[:60],
-            "county": None, "src": "Iowa DOT",
+            "county": None, "src": src,
             "lanes": None,
             "work": (props.get("types_of_work") or [{}])[0].get("type_name")
                     if props.get("types_of_work") else None,
             "facility": None, "delay_min": None,
-            "since": _iso_epoch(props.get("start_date")),
-            "until": _iso_epoch(props.get("end_date")),
+            "since": since, "until": until,
         }
         if len(pts) > 1:
             step = max(1, len(pts) // 60)
@@ -361,13 +378,9 @@ def _parse_ia_wzdx(payload: dict) -> list[dict]:
             marker["end"] = path[-1]
             marker["path"] = path
         markers.append(marker)
+        if len(markers) >= cap:
+            break
     return markers
-
-
-async def _fetch_iowa(client) -> dict:
-    resp = await client.get(IA_WZDX_URL, headers=UA, timeout=30.0)
-    resp.raise_for_status()
-    return {"markers": _parse_ia_wzdx(resp.json())}
 
 
 def snapshot(code: str, cam_id: str) -> bytes | None:
@@ -423,8 +436,10 @@ async def _fetch_wa(client) -> dict:
         where = ", ".join(x for x in (loc.get("RoadName"),
                                       loc.get("Description")) if x)
         if a.get("EventCategory") in _WA_WORK:
-            end = a.get("EndRoadwayLocation") or {}
-            marker = {
+            # No end/stretch here: WSDOT gives endpoints but no road
+            # geometry, and a straight begin-to-end line cuts through
+            # terrain. A dot beats a line in the forest.
+            markers.append({
                 "kind": "lane_closure", "lat": lat, "lon": lon,
                 "label": headline, "cls": "lane"
                 if a.get("EventCategory") != "Closure" else "full-roadway",
@@ -432,13 +447,7 @@ async def _fetch_wa(client) -> dict:
                 "src": "WSDOT", "lanes": None, "work": a.get("EventCategory"),
                 "facility": None, "delay_min": None,
                 "since": None, "until": None,
-            }
-            if end.get("Latitude") and end.get("Longitude") \
-                    and (abs(end["Latitude"] - lat) > 0.002
-                         or abs(end["Longitude"] - lon) > 0.002):
-                marker["end"] = [round(end["Latitude"], 5),
-                                 round(end["Longitude"], 5)]
-            markers.append(marker)
+            })
         else:
             markers.append({
                 "kind": "incident", "lat": lat, "lon": lon,
@@ -504,20 +513,15 @@ async def _fetch_or(client) -> dict:
         where = ", ".join(x for x in (loc.get("route-id"),
                                       loc.get("location-name")) if x)
         if (i.get("event-type-id") or "").upper() == "RW":
-            end = loc.get("end-location") or {}
-            marker = {
+            # Same rule as WSDOT: no road geometry means no stretch line.
+            markers.append({
                 "kind": "lane_closure", "lat": lat, "lon": lon,
                 "label": headline, "cls": "lane",
                 "route": loc.get("route-id") or "", "county": None,
                 "src": "Oregon DOT (TripCheck)", "lanes": None,
                 "work": i.get("impact-desc"), "facility": None,
                 "delay_min": None, "since": None, "until": None,
-            }
-            elat, elon = end.get("end-lat"), end.get("end-long")
-            if elat and elon and (abs(elat - lat) > 0.002
-                                  or abs(elon - lon) > 0.002):
-                marker["end"] = [round(elat, 5), round(elon, 5)]
-            markers.append(marker)
+            })
         else:
             markers.append({
                 "kind": "incident", "lat": lat, "lon": lon,
@@ -619,20 +623,236 @@ async def _fetch_oh(client) -> dict:
     return {"markers": markers}
 
 
-async def _fetch_nc(client) -> dict:
-    resp = await client.get(NC_WZDX_URL, headers=UA, timeout=30.0)
-    resp.raise_for_status()
-    markers = _parse_ia_wzdx(resp.json())
-    for m in markers:
-        m["src"] = "NCDOT"
-    return {"markers": markers}
-
-
 KEYED_STATES = {
     # code: (display state, bounds, fetcher, ready-check)
     "wa": ("Washington", WA_BOUNDS, _fetch_wa, _wa_key),
     "or": ("Oregon", OR_BOUNDS, _fetch_or, _or_key),
     "oh": ("Ohio", OH_BOUNDS, _fetch_oh, _oh_key),
+}
+
+
+# ── Wave 3: the WZDx registry + remaining keyless states ─────────────
+# One WZDx parser covers roadwork/closures in a dozen states; feeds
+# listed here are keyless (verified live 2026-07-19).
+
+MD_BOUNDS = (37.9, -79.5, 39.8, -74.9)
+# TravelMidwest aggregates the upper midwest (IL plus IN/WI/IA/KY
+# cameras), so its fetch gate covers the region, not just Illinois.
+IL_BOUNDS = (36.5, -97.5, 47.5, -84.5)
+AL_BOUNDS = (30.1, -88.5, 35.1, -84.9)
+MO_BOUNDS = (35.9, -95.8, 40.7, -89.0)
+
+WZDX_FEEDS = {
+    # code: (state, src label, bounds, url)
+    "ia": ("Iowa", "Iowa DOT", IA_BOUNDS, IA_WZDX_URL),
+    "nc": ("North Carolina", "NCDOT", NC_BOUNDS, NC_WZDX_URL),
+    "ut": ("Utah", "UDOT", (36.9, -114.1, 42.1, -109.0),
+           "https://udottraffic.utah.gov/wzdx/udot/v40/data"),
+    "az": ("Arizona", "ADOT", (31.3, -114.9, 37.1, -109.0),
+           "https://az511.com/api/wzdx"),
+    "id": ("Idaho", "ITD", (41.9, -117.3, 49.1, -111.0),
+           "https://511.idaho.gov/api/wzdx"),
+    "wi": ("Wisconsin", "WisDOT", (42.4, -92.9, 47.1, -86.7),
+           "https://511wi.gov/api/wzdx"),
+    "ny": ("New York", "511NY", (40.4, -79.8, 45.1, -71.8),
+           "https://511ny.org/api/wzdx"),
+    "in": ("Indiana", "INDOT", (37.7, -88.1, 41.8, -84.7),
+           "https://in.carsprogram.org/carsapi_v1/api/wzdx"),
+    "mnw": ("Minnesota", "MnDOT", (43.4, -97.3, 49.4, -89.4),
+            "https://mn.carsprogram.org/carsapi_v1/api/wzdx"),
+    "ks": ("Kansas", "KDOT", (36.9, -102.1, 40.1, -94.5),
+           "https://kscars.kandrive.gov/carsapi_v1/api/wzdx"),
+    "nj": ("New Jersey", "NJDOT", (38.8, -75.6, 41.4, -73.8),
+           "https://smartworkzones.njit.edu/nj/wzdx"),
+    "mdw": ("Maryland", "MDOT SHA", MD_BOUNDS,
+            "https://filter.ritis.org/wzdx_v4.1/mdot.geojson"),
+    "mow": ("Missouri", "MoDOT", MO_BOUNDS,
+            "https://traveler.modot.org/timconfig/feed/desktop/mo_wzdx.json"),
+}
+
+
+async def _fetch_wzdx(client, url: str, src: str) -> dict:
+    resp = await client.get(url, headers=UA, timeout=45.0)
+    resp.raise_for_status()
+    return {"markers": _parse_ia_wzdx(resp.json(), src)}
+
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _f_to_c(raw: str) -> float | None:
+    m = re.match(r"(-?\d+)\s*F", raw or "")
+    return round((int(m.group(1)) - 32) * 5 / 9, 1) if m else None
+
+
+def _mph(raw: str) -> float | None:
+    m = re.match(r"(\d+)\s*MPH", raw or "", re.IGNORECASE)
+    return float(m.group(1)) if m else None
+
+
+async def _fetch_md(client) -> dict:
+    """Maryland CHART: live events, message signs, road weather."""
+    base = "https://chartexp1.sha.maryland.gov/CHARTExportClientService"
+    ev = (await client.get(f"{base}/getEventMapDataJSON.do", headers=UA,
+                           timeout=30.0)).json().get("data") or []
+    dms = (await client.get(f"{base}/getDMSMapDataJSON.do", headers=UA,
+                            timeout=30.0)).json().get("data") or []
+    wx = (await client.get(f"{base}/getRWISMapDataJSON.do", headers=UA,
+                           timeout=30.0)).json().get("data") or []
+    markers: list[dict] = []
+    for e in ev:
+        lat, lon = e.get("lat"), e.get("lon")
+        if not lat or not lon or str(e.get("closed")).lower() == "true":
+            continue
+        markers.append({
+            "kind": "incident", "lat": float(lat), "lon": float(lon),
+            "type": e.get("incidentType") or "Incident",
+            "location": (e.get("description") or "")[:160],
+            "area": "", "src": "MDOT CHART",
+            "dir": e.get("direction") or None, "reported": None,
+        })
+    for s in dms:
+        lat, lon = s.get("lat"), s.get("lon")
+        if not lat or not lon or (s.get("commMode") or "") != "ONLINE":
+            continue
+        text = _TAG_RE.sub(" / ", s.get("msgHTML") or "")
+        lines = [ln.strip() for ln in text.split("/") if ln.strip()][:6]
+        marker = {
+            "kind": "sign", "lat": float(lat), "lon": float(lon),
+            "route": None, "direction": None,
+            "near": s.get("description") or "",
+            "message": " / ".join(lines), "lines": lines,
+            "src": "MDOT CHART",
+        }
+        if not lines:
+            marker["blank"] = True
+        markers.append(marker)
+    for w in wx:
+        lat, lon = w.get("lat"), w.get("lon")
+        if not lat or not lon:
+            continue
+        markers.append({
+            "kind": "rwis", "lat": float(lat), "lon": float(lon),
+            "station": w.get("description") or "Weather station",
+            "route": None, "src": "MDOT CHART",
+            "air_c": _f_to_c(w.get("airTemp") or ""),
+            "pave_c": _f_to_c(w.get("surfaceTemp") or ""),
+            "wind": _mph(w.get("windSpeed") or ""),
+            "gust": _mph(w.get("gustSpeed") or ""), "vis_m": None,
+        })
+    return {"markers": markers}
+
+
+async def _fetch_il(client) -> dict:
+    """Illinois TravelMidwest: incident and camera CSVs (attribution
+    required; polled well within their reuse-policy caps)."""
+    import csv
+    import io
+    inc_txt = (await client.get(
+        "https://travelmidwest.com/lmiga/incidentInfo.csv",
+        headers=UA, timeout=30.0)).text
+    cam_txt = (await client.get(
+        "https://travelmidwest.com/lmiga/cameraInfo.csv",
+        headers=UA, timeout=30.0)).text
+    markers: list[dict] = []
+    for row in csv.DictReader(io.StringIO(inc_txt)):
+        try:
+            lat, lon = float(row.get("y") or 0), float(row.get("x") or 0)
+        except ValueError:
+            continue
+        if not lat or not lon:
+            continue
+        where = _TAG_RE.sub("", row.get("Location") or "")[:160]
+        markers.append({
+            "kind": "incident", "lat": lat, "lon": lon,
+            "type": row.get("Description") or "Incident",
+            "location": where, "area": "", "src": "TravelMidwest (IDOT)",
+            "dir": None, "reported": None,
+            "detail": (row.get("ClosureDetails") or "")[:250] or None,
+        })
+    for row in csv.DictReader(io.StringIO(cam_txt)):
+        snap = (row.get("SnapShot") or "").strip()
+        try:
+            lat, lon = float(row.get("y") or 0), float(row.get("x") or 0)
+        except ValueError:
+            continue
+        if not lat or not lon or not snap.startswith("https://"):
+            continue
+        if str(row.get("TooOld")).strip().lower() == "true":
+            continue
+        markers.append({
+            "kind": "camera", "lat": lat, "lon": lon,
+            "name": row.get("CameraLocation") or "Camera",
+            "route": None, "direction": row.get("CameraDirection") or None,
+            "near": row.get("CameraLocation"),
+            "src": "TravelMidwest (IDOT)", "image": snap, "stream": None,
+        })
+    return {"markers": markers}
+
+
+async def _fetch_al(client) -> dict:
+    """Alabama ALGO Traffic cameras (snapshots + camera pages)."""
+    cams = (await client.get("https://api.algotraffic.com/v4.0/cameras",
+                             headers=UA, timeout=30.0)).json()
+    markers: list[dict] = []
+    for c in cams or []:
+        loc = c.get("location") or {}
+        lat, lon = loc.get("latitude"), loc.get("longitude")
+        snap = c.get("snapshotImageUrl")
+        if not lat or not lon or not snap:
+            continue
+        name = " ".join(x for x in (
+            loc.get("displayRouteDesignator"),
+            "at " + loc["displayCrossStreet"]
+            if loc.get("displayCrossStreet") else None,
+        ) if x) or "Camera"
+        if loc.get("city"):
+            name = f"{name}, {loc['city']}"
+        markers.append({
+            "kind": "camera", "lat": lat, "lon": lon,
+            "name": name[:90],
+            "route": loc.get("routeDesignator"),
+            "direction": loc.get("direction"),
+            "near": loc.get("city"),
+            "src": "ALGO Traffic (ALDOT)",
+            "image": snap, "stream": c.get("permLink"),
+        })
+    return {"markers": markers}
+
+
+async def _fetch_mo_dms(client) -> dict:
+    """Missouri message signs (keyless MoDOT feed)."""
+    dms = (await client.get(
+        "https://traveler.modot.org/timconfig/feed/desktop/MsgBrdV1.json",
+        headers=UA, timeout=30.0)).json()
+    markers: list[dict] = []
+    for s in dms or []:
+        try:
+            lat, lon = float(s.get("y") or 0), float(s.get("x") or 0)
+        except ValueError:
+            continue
+        if not lat or not lon:
+            continue
+        lines = [ln.strip() for ln in re.split(r"[\n|]+", s.get("msg") or "")
+                 if ln.strip()][:6]
+        marker = {
+            "kind": "sign", "lat": lat, "lon": lon,
+            "route": None, "direction": None,
+            "near": s.get("dev") or "Message sign",
+            "message": " / ".join(lines), "lines": lines, "src": "MoDOT",
+        }
+        if not lines:
+            marker["blank"] = True
+        markers.append(marker)
+    return {"markers": markers}
+
+
+KEYLESS_STATES = {
+    # code: (display state, bounds, fetcher)
+    "md": ("Maryland", MD_BOUNDS, _fetch_md),
+    "il": ("Illinois", IL_BOUNDS, _fetch_il),
+    "al": ("Alabama", AL_BOUNDS, _fetch_al),
+    "mod": ("Missouri", MO_BOUNDS, _fetch_mo_dms),
 }
 
 
@@ -667,12 +887,15 @@ async def markers_for_bbox(client, box, want) -> list[dict]:
             lookups.append(_cache.get(
                 f"neccam:{code}", CAM_TTL, MAX_SERVE,
                 lambda c=code: _fetch_nec_cameras(client, c)))
-    if _overlaps(box, IA_BOUNDS):
-        lookups.append(_cache.get(
-            "ia:wzdx", TTL, MAX_SERVE, lambda: _fetch_iowa(client)))
-    if _overlaps(box, NC_BOUNDS):
-        lookups.append(_cache.get(
-            "nc:wzdx", TTL, MAX_SERVE, lambda: _fetch_nc(client)))
+    for code, (_st, src, bounds, url) in WZDX_FEEDS.items():
+        if _overlaps(box, bounds):
+            lookups.append(_cache.get(
+                f"wzdx:{code}", WZDX_TTL, MAX_SERVE,
+                lambda u=url, s=src: _fetch_wzdx(client, u, s)))
+    for code, (_st, bounds, fetcher) in KEYLESS_STATES.items():
+        if _overlaps(box, bounds):
+            lookups.append(_cache.get(
+                f"{code}:all", TTL, MAX_SERVE, lambda f=fetcher: f(client)))
     for code, (_name, bounds, fetcher, ready) in KEYED_STATES.items():
         if not ready() or not _overlaps(box, bounds):
             continue
@@ -696,15 +919,24 @@ async def prewarm(client) -> None:
                        lambda cc=c: _fetch_nec(client, cc))
             for c in NEC_STATES
         ]
-        lookups.append(_cache.get("ia:wzdx", TTL, MAX_SERVE,
-                                  lambda: _fetch_iowa(client)))
-        lookups.append(_cache.get("nc:wzdx", TTL, MAX_SERVE,
-                                  lambda: _fetch_nc(client)))
+        for code, (_n, _b, fetcher) in KEYLESS_STATES.items():
+            lookups.append(_cache.get(f"{code}:all", TTL, MAX_SERVE,
+                                      lambda f=fetcher: f(client)))
         for code, (_n, _b, fetcher, ready) in KEYED_STATES.items():
             if ready():
                 lookups.append(_cache.get(f"{code}:all", TTL, MAX_SERVE,
                                           lambda f=fetcher: f(client)))
         await asyncio.gather(*lookups, return_exceptions=True)
+        # WZDx feeds run up to 16 MB each; warm them in small batches so
+        # concurrent JSON parses cannot spike the container's memory.
+        codes = list(WZDX_FEEDS)
+        for i in range(0, len(codes), 3):
+            await asyncio.gather(*[
+                _cache.get(f"wzdx:{c}", WZDX_TTL, MAX_SERVE,
+                           lambda u=WZDX_FEEDS[c][3], s=WZDX_FEEDS[c][1]:
+                           _fetch_wzdx(client, u, s))
+                for c in codes[i:i + 3]
+            ], return_exceptions=True)
         # Camera bundles are ~20 MB each; warm them after the light feeds.
         await asyncio.gather(*[
             _cache.get(f"neccam:{c}", CAM_TTL, MAX_SERVE,
@@ -735,9 +967,14 @@ def source_status() -> list[dict]:
         out.append(_status_entry(
             f"nec:{code}", "All feeds (NE Compass)", agency,
             _STATE_NAMES[code]))
-    out.append(_status_entry("ia:wzdx", "Roadwork (WZDx)", "Iowa DOT", "Iowa"))
-    out.append(_status_entry("nc:wzdx", "Roadwork (WZDx)", "NCDOT",
-                             "North Carolina"))
+    for code, (st, src, _b, _u) in WZDX_FEEDS.items():
+        out.append(_status_entry(f"wzdx:{code}", "Roadwork (WZDx)", src, st))
+    for code, (st, _b, _f) in KEYLESS_STATES.items():
+        out.append(_status_entry(f"{code}:all", "Live feeds",
+                                 {"md": "MDOT CHART",
+                                  "il": "TravelMidwest (IDOT)",
+                                  "al": "ALGO Traffic (ALDOT)",
+                                  "mod": "MoDOT"}[code], st))
     for code, (name, _bounds, _fetcher, ready) in KEYED_STATES.items():
         if not ready():
             out.append({"name": "All feeds", "agency": name, "state": name,

@@ -1250,7 +1250,12 @@ class SecurityHeaders:
         "https://*.cartocdn.com https://cwwp2.dot.ca.gov "
         # Expansion-state camera hosts (WSDOT, TripCheck, OHGO).
         "https://images.wsdot.wa.gov https://*.tripcheck.com "
-        "https://itscameras.dot.state.oh.us; "
+        "https://itscameras.dot.state.oh.us "
+        "https://cctv.travelmidwest.com https://api.algotraffic.com "
+        # TravelMidwest aggregates cameras from neighboring states' hosts.
+        "https://*.lakecountypassage.com https://content.trafficwise.org "
+        "https://511wi.gov https://*.trimarc.org "
+        "https://atmsqf.iowadot.gov; "
         "connect-src 'self' https://router.project-osrm.org "
         "https://valhalla1.openstreetmap.de https://*.googleapis.com "
         "https://*.google.com https://cloudflareinsights.com "

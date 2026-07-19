@@ -109,32 +109,77 @@ def test_nec_cameras_join_on_location():
     assert states.snapshot("me", "NO-LOCATION-CAM") is None
 
 
-def test_iowa_wzdx_parses_closures():
-    payload = {
-        "features": [{
-            "id": "OpenTMS-1", "type": "Feature",
-            "properties": {
-                "core_details": {
-                    "event_type": "work-zone",
-                    "road_names": ["I-80"], "direction": "eastbound",
-                    "description": "Lane closed for bridge work",
-                },
-                "vehicle_impact": "some-lanes-closed",
-                "start_date": "2026-07-18T12:00:00Z",
-                "end_date": "2026-07-20T12:00:00Z",
-                "types_of_work": [{"type_name": "roadway-relocation"}],
-            },
-            "geometry": {"type": "LineString",
-                         "coordinates": [[-93.6, 41.6], [-93.5, 41.61]]},
-        }],
+def _wz_feature(desc, start, end):
+    return {
+        "type": "Feature",
+        "properties": {
+            "core_details": {"event_type": "work-zone",
+                             "road_names": ["I-80"],
+                             "description": desc},
+            "vehicle_impact": "some-lanes-closed",
+            "start_date": start, "end_date": end,
+        },
+        "geometry": {"type": "LineString",
+                     "coordinates": [[-93.6, 41.6], [-93.5, 41.61]]},
     }
-    markers = states._parse_ia_wzdx(payload)
+
+
+def test_wzdx_parses_active_and_filters_planned():
+    payload = {"features": [
+        _wz_feature("Active now", "2020-01-01T00:00:00Z", "2030-01-01T00:00:00Z"),
+        _wz_feature("Planned for later", "2029-01-01T00:00:00Z", "2030-01-01T00:00:00Z"),
+        _wz_feature("Already done", "2020-01-01T00:00:00Z", "2020-06-01T00:00:00Z"),
+    ]}
+    markers = states._parse_ia_wzdx(payload, src="NCDOT")
+    # Only work that is in place right now ships to the map.
     assert len(markers) == 1
     m = markers[0]
+    assert m["label"] == "Active now"
     assert m["kind"] == "lane_closure" and m["cls"] == "lane"
-    assert m["route"] == "I-80" and m["src"] == "Iowa DOT"
-    assert m["since"] and m["until"] and m["until"] > m["since"]
+    assert m["route"] == "I-80" and m["src"] == "NCDOT"
     assert m["path"][0] == [41.6, -93.6]
+
+
+def test_md_chart_parses_events_signs_weather():
+    class FakeResp:
+        def __init__(self, data):
+            self._d = data
+
+        def json(self):
+            return self._d
+
+    class FakeClient:
+        async def get(self, url, **kw):
+            if "getEventMapDataJSON" in url:
+                return FakeResp({"data": [
+                    {"lat": "39.2", "lon": "-76.6", "closed": "False",
+                     "incidentType": "Collision", "direction": "East",
+                     "description": "US 50 at MD 70"},
+                    {"lat": "39.3", "lon": "-76.7", "closed": "True",
+                     "incidentType": "Stale", "description": "old"},
+                ]})
+            if "getDMSMapDataJSON" in url:
+                return FakeResp({"data": [
+                    {"lat": "38.9", "lon": "-76.2", "commMode": "ONLINE",
+                     "description": "US 50 WEST",
+                     "msgHTML": "<table><tr><td>CRASH AHEAD</td></tr>"
+                                "<tr><td>USE CAUTION</td></tr></table>"},
+                ]})
+            return FakeResp({"data": [
+                {"lat": "39.19", "lon": "-76.0", "description": "MD 20",
+                 "airTemp": "73F", "surfaceTemp": "88F",
+                 "windSpeed": "5 MPH", "gustSpeed": "9 MPH"},
+            ]})
+
+    import asyncio
+    out = asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
+        states._fetch_md(FakeClient()))
+    kinds = sorted(m["kind"] for m in out["markers"])
+    assert kinds == ["incident", "rwis", "sign"]   # closed event filtered
+    sign = next(m for m in out["markers"] if m["kind"] == "sign")
+    assert "CRASH AHEAD" in sign["lines"]
+    wx = next(m for m in out["markers"] if m["kind"] == "rwis")
+    assert wx["air_c"] == 22.8 and wx["gust"] == 9.0
 
 
 async def test_wa_fetch_maps_alerts_cameras_passes(monkeypatch):
@@ -174,7 +219,10 @@ async def test_wa_fetch_maps_alerts_cameras_passes(monkeypatch):
     kinds = sorted(m["kind"] for m in out["markers"])
     assert kinds == ["camera", "chain_control", "incident", "lane_closure"]
     clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
-    assert clo["cls"] == "full-roadway" and clo["end"] == [47.25, -122.5]
+    assert clo["cls"] == "full-roadway"
+    # No road geometry from WSDOT, so no stretch: a straight begin-to-end
+    # line would cut through terrain (the "line in the forest" bug).
+    assert "end" not in clo and "path" not in clo
     chain = next(m for m in out["markers"] if m["kind"] == "chain_control")
     assert "Chains required" in chain["label"]
     assert "No restrictions" not in chain["label"]
@@ -209,24 +257,21 @@ async def test_or_fetch_rewrites_http_camera_urls(monkeypatch):
     cam = next(m for m in out["markers"] if m["kind"] == "camera")
     assert cam["image"].startswith("https://")   # mixed-content rewrite
     clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
-    assert clo["route"] == "I205" and clo["end"] == [45.37, -122.6]
+    assert clo["route"] == "I205"
+    assert "end" not in clo and "path" not in clo   # dot only, no fake line
 
 
-async def test_nc_wzdx_relabels_source(monkeypatch):
+async def test_wzdx_fetch_labels_source(monkeypatch):
     import httpx
     import respx
 
-    payload = {"features": [{"properties": {
-        "core_details": {"event_type": "work-zone", "road_names": ["I-40"],
-                         "description": "Lane closed"},
-        "vehicle_impact": "some-lanes-closed"},
-        "geometry": {"type": "LineString",
-                     "coordinates": [[-78.9, 35.9], [-78.8, 35.95]]}}]}
+    payload = {"features": [
+        _wz_feature("Live work", None, None)]}   # no dates = assumed active
     with respx.mock:
         respx.get(states.NC_WZDX_URL).mock(
             return_value=httpx.Response(200, json=payload))
         async with httpx.AsyncClient() as client:
-            out = await states._fetch_nc(client)
+            out = await states._fetch_wzdx(client, states.NC_WZDX_URL, "NCDOT")
     assert out["markers"][0]["src"] == "NCDOT"
 
 
