@@ -1647,27 +1647,55 @@ const COVERED = new Set(['California', 'Nevada', 'Maine', 'New Hampshire',
   'Vermont', 'Iowa', 'North Carolina', 'Washington', 'Oregon', 'Ohio',
   'Utah', 'Arizona', 'Idaho', 'Wisconsin', 'New York', 'Indiana',
   'Minnesota', 'Kansas', 'New Jersey', 'Maryland', 'Missouri',
-  'Illinois', 'Alabama']);
+  'Illinois']);
 // rIC takes an options dict, not a delay: passing a number throws a
 // synchronous TypeError in Chromium and kills every handler below.
 const idle = (cb) => window.requestIdleCallback
   ? requestIdleCallback(cb, { timeout: 1500 }) : setTimeout(cb, 1200);
+// Partial-coverage states have real data but not the default layers,
+// so they get an outline and an honest note instead of a gray wash.
+const PARTIAL = {
+  Alabama: 'live traffic cameras (turn on the Cameras layer and zoom '
+    + 'in). Incident and closure feeds need ALDOT credentials and are '
+    + 'in progress.',
+};
 idle(async () => {
   try {
     const res = await fetch('/static/us-states.json');
     if (!res.ok) return;
     const geo = await res.json();
+    // Stays in the default overlay pane: a lower pane would sit under
+    // the marker canvas and never receive clicks. The wash is faint
+    // enough that nationwide dots (wildfires) remain readable, and the
+    // popup text explains them.
     const missing = { type: 'FeatureCollection',
-      features: geo.features.filter((f) => !COVERED.has(f.properties.NAME)) };
+      features: geo.features.filter((f) => !COVERED.has(f.properties.NAME)
+        && !PARTIAL[f.properties.NAME]) };
     L.geoJSON(missing, {
       style: { color: '#8b98a7', weight: 1, dashArray: '4 5',
-        fillColor: '#8b98a7', fillOpacity: 0.10, interactive: true,
+        fillColor: '#8b98a7', fillOpacity: 0.07, interactive: true,
         className: 'nocov' },
       onEachFeature: (f, layer) => layer.bindPopup(
         '<div class="pop"><div class="t">' + esc(f.properties.NAME) +
-        '</div><div class="d">Sorry, ' + esc(f.properties.NAME) +
-        ' is not supported yet. Road data for this state is coming as ' +
-        'its feeds come online.</div></div>', { maxWidth: 260 }),
+        '</div><div class="d">Sorry, state road data (incidents, ' +
+        'closures, cameras, signs) is not available for ' +
+        esc(f.properties.NAME) + ' yet - it is coming as its feeds ' +
+        'come online. Wildfires, weather alerts, and the live traffic ' +
+        'overlay already cover the whole country, so you may still ' +
+        'see some dots here.</div></div>', { maxWidth: 270 }),
+    }).addTo(map);
+    const partial = { type: 'FeatureCollection',
+      features: geo.features.filter((f) => PARTIAL[f.properties.NAME]) };
+    L.geoJSON(partial, {
+      style: { color: '#9aa7b5', weight: 1.5, dashArray: '2 6',
+        fill: true, fillOpacity: 0.02, interactive: true,
+        className: 'nocov' },
+      onEachFeature: (f, layer) => layer.bindPopup(
+        '<div class="pop"><div class="t">' + esc(f.properties.NAME) +
+        '</div><div class="d">' + esc(f.properties.NAME) +
+        ' has partial coverage today: ' +
+        esc(PARTIAL[f.properties.NAME]) + '</div></div>',
+        { maxWidth: 270 }),
     }).addTo(map);
   } catch (e) { /* cosmetic layer; ignore */ }
 });
