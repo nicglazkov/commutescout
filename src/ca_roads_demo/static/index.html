@@ -961,7 +961,8 @@ function drawGeo(geo) {
       }).bindPopup(camHtml, { maxWidth: 320 }).addTo(layerPrimary);
       continue;
     }
-    if (m.kind === 'wildfire' && Array.isArray(m.poly) && m.poly.length > 2) {
+    if (m.kind === 'wildfire' && Array.isArray(m.poly) && m.poly.length > 0
+        && (Array.isArray(m.poly[0] && m.poly[0][0]) || m.poly.length > 2)) {
       chipCounts.wildfire = (chipCounts.wildfire || 0) + 1;
       L.polygon(m.poly, {
         color: '#d97706', weight: 1.5, fillColor: '#d97706', fillOpacity: 0.22,
@@ -1421,7 +1422,7 @@ function popupFor(m, g) {
   const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : 'size unknown';
   const cont = (m.contained || m.contained === 0) ? m.contained + '% contained' : '';
   const disc = agoTxt(m.discovered);
-  const hasShape = Array.isArray(m.poly) && m.poly.length > 2;
+  const hasShape = drawablePoly(m.poly);
   return popHead(g || 'fire_pt', (m.name || 'Wildfire') + ' fire') +
     '<div class="d">' + [size, cont].filter(Boolean).join(' · ') + '</div>' +
     histBlock([
@@ -1453,10 +1454,15 @@ function pointMarker(m, g) {
 // data itself is still fetched once and never re-queried on pan.
 const items = {};
 Object.keys(GROUP_DOT).forEach((g) => { items[g] = []; });
+// poly ships either as one ring of [lat,lon] pairs (legacy shape) or
+// as a MultiPolygon (array of rings); Leaflet renders both, this only
+// decides whether there is enough to draw.
+const drawablePoly = (poly) => Array.isArray(poly) && poly.length > 0
+  && (Array.isArray(poly[0] && poly[0][0]) || poly.length > 2);
 function layerForItem(it) {
   if (it.layer) return it.layer;
   const m = it.m;
-  if (it.g === 'fire_pt' && Array.isArray(m.poly) && m.poly.length > 2) {
+  if (it.g === 'fire_pt' && drawablePoly(m.poly)) {
     it.layer = L.polygon(m.poly, { color: '#d97706', weight: 2,
       fillColor: '#d97706', fillOpacity: 0.28 })
       .bindPopup(() => popupFor(m, 'fire_pt'), { maxWidth: 320 });

@@ -795,7 +795,15 @@ async def api_mapdata(request: Request):
             for m in fire_markers:
                 perim = by_name.get(
                     calfire_feed.normalize_fire_name(m["name"] or ""))
-                if perim:
+                if not perim:
+                    continue
+                # Rings stay separate polygons: flattening a multi-lobed
+                # fire into one list drew spaghetti lines between lobes.
+                shaped = states.fire_rings(perim.get("rings") or [],
+                                           pts_per_ring=200)
+                if shaped:
+                    m["poly"] = shaped
+                else:
                     pts = perim["points"]
                     step = max(1, len(pts) // 400)
                     m["poly"] = [[round(a, 4), round(b, 4)]

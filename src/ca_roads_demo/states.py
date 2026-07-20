@@ -1132,6 +1132,50 @@ def _norm_fire(name: str) -> str:
     return re.sub(r"[^A-Z0-9]", "", cleaned.upper())
 
 
+def _ring_area(ring: list) -> float:
+    """Signed shoelace area of a (lat, lon) ring in squared degrees.
+    Sign encodes winding, which is how ArcGIS marks outer rings vs
+    holes."""
+    a = 0.0
+    for i in range(len(ring)):
+        y1, x1 = ring[i - 1]
+        y2, x2 = ring[i]
+        a += x1 * y2 - x2 * y1
+    return a / 2
+
+
+def fire_rings(rings: list, max_rings: int = 12,
+               pts_per_ring: int = 120) -> list[list[list[float]]]:
+    """Perimeter rings as a decimated MultiPolygon (list of rings of
+    [lat, lon]).
+
+    A large fire's perimeter arrives as MANY rings: separate burn
+    lobes, spot fires, and unburned holes. Flattening them into one
+    point list draws a single thread through all of them (the
+    spaghetti-polygon bug), so each ring stays its own polygon.
+    Hole rings (opposite winding from the biggest ring) are dropped:
+    unburned islands are not worth double-drawn patches."""
+    converted = []
+    for ring in rings or []:
+        pts = [(pt[1], pt[0]) for pt in ring
+               if isinstance(pt, list) and len(pt) >= 2]
+        if len(pts) >= 4:
+            converted.append((pts, _ring_area(pts)))
+    if not converted:
+        return []
+    converted.sort(key=lambda t: abs(t[1]), reverse=True)
+    outer_sign = converted[0][1] >= 0
+    out = []
+    for pts, area in converted[:max_rings]:
+        if (area >= 0) != outer_sign:
+            continue
+        step = max(1, len(pts) // pts_per_ring)
+        dec = [[round(a, 4), round(b, 4)] for a, b in pts[::step]]
+        if len(dec) >= 4:
+            out.append(dec)
+    return out
+
+
 async def _fetch_us_fires(client) -> dict:
     """Active wildfires OUTSIDE California from the same national WFIGS
     layer the CA feed queries (CA fires keep their richer pipeline with
@@ -1189,22 +1233,21 @@ async def _fetch_us_fires(client) -> dict:
         if "error" in ppay:
             raise RuntimeError(f"WFIGS perimeters: {ppay['error']}")
         by_name: dict[str, list] = {}
+        sizes: dict[str, int] = {}
         for feat in ppay.get("features") or []:
             attrs = feat.get("attributes") or {}
             key = _norm_fire(attrs.get("poly_IncidentName") or "")
-            rings = (feat.get("geometry") or {}).get("rings") or []
-            pts = [(pt[1], pt[0]) for ring in rings for pt in ring
-                   if isinstance(pt, list) and len(pt) >= 2]
+            shaped = fire_rings((feat.get("geometry") or {}).get("rings"))
+            n = sum(len(r) for r in shaped)
             # Keep the largest footprint when a name repeats
             # (YearToDate holds successive uploads).
-            if key and pts and len(pts) > len(by_name.get(key) or []):
-                by_name[key] = pts
+            if key and shaped and n > sizes.get(key, 0):
+                by_name[key] = shaped
+                sizes[key] = n
         for m in markers:
-            pts = by_name.get(_norm_fire(m["name"] or ""))
-            if pts:
-                step = max(1, len(pts) // 300)
-                m["poly"] = [[round(a, 4), round(b, 4)]
-                             for a, b in pts[::step]]
+            shaped = by_name.get(_norm_fire(m["name"] or ""))
+            if shaped:
+                m["poly"] = shaped
     return {"markers": markers}
 
 

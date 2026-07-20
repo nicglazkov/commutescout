@@ -356,10 +356,28 @@ async def test_us_fires_attach_perimeters_by_name():
         async with httpx.AsyncClient() as client:
             out = await states._fetch_us_fires(client)
     fires = {m["name"]: m for m in out["markers"]}
-    # "Moxee Orchard" joins "Moxee Orchard Fire" via name normalization.
-    assert fires["Moxee Orchard"]["poly"][0] == [46.49, -120.51]
+    # "Moxee Orchard" joins "Moxee Orchard Fire" via name normalization;
+    # poly is a MultiPolygon (list of rings).
+    assert fires["Moxee Orchard"]["poly"][0][0] == [46.49, -120.51]
     # Fires without a perimeter record honestly stay dots.
     assert "poly" not in fires["No Shape"]
+
+
+def test_fire_rings_keep_lobes_separate_and_drop_holes():
+    # Two burn lobes plus a hole (reverse winding) inside the first.
+    lobe1 = [[-120.5, 46.5], [-120.4, 46.5], [-120.4, 46.6],
+             [-120.5, 46.6], [-120.5, 46.5]]
+    lobe2 = [[-120.2, 46.5], [-120.15, 46.5], [-120.15, 46.55],
+             [-120.2, 46.55], [-120.2, 46.5]]
+    hole = list(reversed([[-120.48, 46.52], [-120.44, 46.52],
+                          [-120.44, 46.56], [-120.48, 46.56],
+                          [-120.48, 46.52]]))
+    shaped = states.fire_rings([lobe1, hole, lobe2])
+    # Two separate polygons, no thread connecting them, hole dropped.
+    assert len(shaped) == 2
+    assert all(len(r) >= 4 for r in shaped)
+    ring_starts = {tuple(r[0]) for r in shaped}
+    assert (46.5, -120.5) in ring_starts and (46.5, -120.2) in ring_starts
 
 
 async def test_mi_fetch_closures_carry_real_geometry():

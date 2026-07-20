@@ -213,6 +213,11 @@ async def perimeters_in_bbox(
                     "name": (attrs.get("poly_IncidentName") or "").strip().upper(),
                     "acres": attrs.get("poly_GISAcres"),
                     "points": points,
+                    # Raw rings too: flattened points serve distance
+                    # estimation, but drawing needs rings kept separate
+                    # (a multi-lobed fire flattened into one list draws
+                    # as connected spaghetti).
+                    "rings": rings,
                 })
         return out
     except Exception:  # noqa: BLE001
