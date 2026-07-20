@@ -420,9 +420,10 @@ async def test_de_tmc_signs_advisories_weather():
 
 
 async def test_tn_events_filter_dates_and_classify():
+    import time as _t
+
     import httpx
     import respx
-    import time as _t
 
     now = _t.time() * 1000
     feats = {"features": [

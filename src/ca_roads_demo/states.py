@@ -1195,11 +1195,10 @@ async def _fetch_us_fires(client) -> dict:
             rings = (feat.get("geometry") or {}).get("rings") or []
             pts = [(pt[1], pt[0]) for ring in rings for pt in ring
                    if isinstance(pt, list) and len(pt) >= 2]
-            if key and pts:
-                # Keep the largest footprint when a name repeats
-                # (YearToDate holds successive uploads).
-                if len(pts) > len(by_name.get(key) or []):
-                    by_name[key] = pts
+            # Keep the largest footprint when a name repeats
+            # (YearToDate holds successive uploads).
+            if key and pts and len(pts) > len(by_name.get(key) or []):
+                by_name[key] = pts
         for m in markers:
             pts = by_name.get(_norm_fire(m["name"] or ""))
             if pts:
@@ -1256,9 +1255,10 @@ async def markers_for_bbox(client, box, want) -> list[dict]:
                 lambda c=code: _fetch_nec_cameras(client, c)))
     for code, (_st, src, bounds, url) in WZDX_FEEDS.items():
         if _overlaps(box, bounds):
+            cap = WZDX_CAPS.get(code, 2000)
             lookups.append(_cache.get(
                 f"wzdx:{code}", WZDX_TTL, MAX_SERVE,
-                lambda u=url, s=src, k=WZDX_CAPS.get(code, 2000):
+                lambda u=url, s=src, k=cap:
                 _fetch_wzdx(client, u, s, cap=k)))
     for code, (_st, bounds, fetcher) in KEYLESS_STATES.items():
         if _overlaps(box, bounds):
@@ -1299,12 +1299,13 @@ async def prewarm(client) -> None:
         # concurrent JSON parses cannot spike the container's memory.
         codes = list(WZDX_FEEDS)
         for i in range(0, len(codes), 3):
+            batch = [(c, WZDX_CAPS.get(c, 2000)) for c in codes[i:i + 3]]
             await asyncio.gather(*[
                 _cache.get(f"wzdx:{c}", WZDX_TTL, MAX_SERVE,
                            lambda u=WZDX_FEEDS[c][3], s=WZDX_FEEDS[c][1],
-                           k=WZDX_CAPS.get(c, 2000):
+                           k=cap:
                            _fetch_wzdx(client, u, s, cap=k))
-                for c in codes[i:i + 3]
+                for c, cap in batch
             ], return_exceptions=True)
         # Camera bundles are ~20 MB each; warm them after the light feeds.
         await asyncio.gather(*[
