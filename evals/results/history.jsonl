@@ -28,8 +28,6 @@
 {"ts": "2026-07-12T00:02:50+00:00", "source_ref": "v2.11.0", "judge": "claude-opus-4-8", "questions": 91, "results": {"claude-haiku-4-5": "58/91 (64%)", "claude-sonnet-5": "64/91 (70%)"}}
 {"ts": "2026-07-12T01:01:09+00:00", "source_ref": "v2.12.0", "judge": "claude-opus-4-8", "questions": 91, "results": {"claude-haiku-4-5": "55/91 (60%)", "claude-sonnet-5": "57/91 (63%)"}}
 {"ts": "2026-07-12T06:00:13+00:00", "source_ref": "v2.13.0", "judge": "claude-opus-4-8", "questions": 91, "results": {"claude-haiku-4-5": "45/91 (49%)", "claude-sonnet-5": "61/91 (67%)"}}
-{"ts": "2026-07-12T07:32:29+00:00", "source_ref": "v2.15.0", "judge": "claude-opus-4-8", "questions": 91, "results": {"claude-haiku-4-5": "0/91 (0%)", "claude-sonnet-5": "0/91 (0%)"}}
-{"ts": "2026-07-12T07:40:26+00:00", "source_ref": "v2.15.1", "judge": "claude-opus-4-8", "questions": 91, "results": {"claude-haiku-4-5": "0/91 (0%)", "claude-sonnet-5": "0/91 (0%)"}}
 {"ts": "2026-07-12T07:56:36+00:00", "source_ref": "v2.15.2", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "68/91 (75%)"}}
 {"ts": "2026-07-12T08:14:41+00:00", "source_ref": "v2.16.0", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "65/91 (71%)"}}
 {"ts": "2026-07-12T09:03:30+00:00", "source_ref": "v2.17.0", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "63/91 (69%)"}}
@@ -50,5 +48,3 @@
 {"ts": "2026-07-18T11:06:57+00:00", "source_ref": "v2.26.0", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "68/91 (75%)"}}
 {"ts": "2026-07-19T08:22:47+00:00", "source_ref": "v2.27.0", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "67/91 (74%)"}}
 {"ts": "2026-07-19T08:48:04+00:00", "source_ref": "v2.28.0", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "66/91 (73%)"}}
-{"ts": "2026-07-20T09:34:03+00:00", "source_ref": "v2.32.1", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "0/91 (0%)"}}
-{"ts": "2026-07-20T17:27:57+00:00", "source_ref": "v2.32.2", "judge": "claude-sonnet-4-6", "questions": 91, "results": {"claude-sonnet-5": "0/91 (0%)"}}
