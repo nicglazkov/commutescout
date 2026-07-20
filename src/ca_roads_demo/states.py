@@ -419,6 +419,117 @@ def _oh_key() -> str:
     return os.environ.get("OHGO_API_KEY", "")
 
 
+def _ut_key() -> str:
+    import os
+    return os.environ.get("UT511_API_KEY", "")
+
+
+UT_BOUNDS = (36.9, -114.1, 42.1, -109.0)
+
+
+async def _fetch_ut(client) -> dict:
+    """Utah full coverage via the UDOT Travel-IQ API (same family as
+    the Nevada client): events, cameras, live sign text, and road
+    weather. Supersedes the WZDx-only Utah feed when the key is set."""
+    key = _ut_key()
+    base = "https://www.udottraffic.utah.gov/api/v2/get"
+
+    async def get(res):
+        r = await client.get(f"{base}/{res}", headers=UA, timeout=30.0,
+                             params={"key": key, "format": "json"})
+        r.raise_for_status()
+        return r.json() or []
+
+    events, cams, signs, wx = await asyncio.gather(
+        get("event"), get("cameras"), get("messagesigns"),
+        get("weatherstations"))
+    now = time.time()
+    markers: list[dict] = []
+    for e in events:
+        try:
+            lat, lon = float(e.get("Latitude")), float(e.get("Longitude"))
+        except (TypeError, ValueError):
+            continue
+        if not lat or not lon:
+            continue
+        start = e.get("StartDate")
+        # Future-scheduled work stays off the map. Lapsed planned end
+        # dates are NOT trusted: UDOT keeps them on live work (the same
+        # quirk their WZDx feed has).
+        if isinstance(start, (int, float)) and start > now:
+            continue
+        desc = re.sub(r"\s+", " ", (e.get("Description") or "")).strip()
+        road = (e.get("RoadwayName") or "").strip()
+        label = (f"{road}: {desc}" if road and desc else desc or road
+                 or "Reported event")[:220]
+        if (e.get("EventType") or "") == "accidentsAndIncidents":
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon,
+                "type": e.get("EventSubType") or "Incident",
+                "label": label, "src": "UDOT"})
+        else:
+            lanes = (e.get("LanesAffected") or "").lower()
+            cls = ("full-roadway"
+                   if re.search(r"all lanes|full closure", lanes)
+                   else "lane")
+            markers.append({
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "cls": cls, "label": label, "route": road or None,
+                "src": "UDOT"})
+    for c in cams:
+        try:
+            lat, lon = float(c.get("Latitude")), float(c.get("Longitude"))
+        except (TypeError, ValueError):
+            continue
+        views = c.get("Views") or []
+        url = (views[0] or {}).get("Url") if views else None
+        if not lat or not lon or not url:
+            continue
+        markers.append({
+            "kind": "camera", "lat": lat, "lon": lon,
+            "name": c.get("Location") or c.get("Roadway"),
+            "route": c.get("Roadway"), "direction": c.get("Direction"),
+            "near": c.get("Location"), "image": url, "src": "UDOT"})
+    for s in signs:
+        try:
+            lat, lon = float(s.get("Latitude")), float(s.get("Longitude"))
+        except (TypeError, ValueError):
+            continue
+        # Message pages are list entries; lines break on \n and tab
+        # columns (travel-time boards) flatten to spaces.
+        lines = [re.sub(r"[\t ]+", " ", ln).strip()
+                 for msg in (s.get("Messages") or [])
+                 if isinstance(msg, str) and msg != "NO_MESSAGE"
+                 for ln in re.split(r"\n|<[^>]+>|\[nl\]|\[np\]", msg)
+                 if ln.strip() and re.search(r"[A-Za-z0-9]", ln)][:6]
+        m = {"kind": "sign", "lat": lat, "lon": lon,
+             "route": s.get("Roadway"),
+             "direction": s.get("DirectionOfTravel"),
+             "near": s.get("Name") or "Message sign",
+             "message": " / ".join(lines), "lines": lines, "src": "UDOT"}
+        if not lines:
+            m["blank"] = True
+        markers.append(m)
+    for w in wx:
+        try:
+            lat, lon = float(w.get("Latitude")), float(w.get("Longitude"))
+        except (TypeError, ValueError):
+            continue
+        marker = {"kind": "rwis", "lat": lat, "lon": lon,
+                  "name": w.get("StationName") or "Weather station",
+                  "src": "UDOT"}
+        with contextlib.suppress(TypeError, ValueError):
+            marker["air_c"] = round(
+                (float(w.get("AirTemperature")) - 32) * 5 / 9, 1)
+        with contextlib.suppress(TypeError, ValueError):
+            marker["gust"] = float(w.get("WindSpeedAvg"))
+        surface = w.get("SurfaceStatus")
+        if surface and surface not in ("None", "Unknown"):
+            marker["surface"] = surface
+        markers.append(marker)
+    return {"markers": markers}
+
+
 async def _fetch_wa(client) -> dict:
     key = _wa_key()
     base = "https://wsdot.wa.gov/Traffic/api"
@@ -676,7 +787,17 @@ KEYED_STATES = {
     "wa": ("Washington", WA_BOUNDS, _fetch_wa, _wa_key),
     "or": ("Oregon", OR_BOUNDS, _fetch_or, _or_key),
     "oh": ("Ohio", OH_BOUNDS, _fetch_oh, _oh_key),
+    "utk": ("Utah", UT_BOUNDS, _fetch_ut, _ut_key),
 }
+
+# A ready keyed state replaces its WZDx-only feed so roadwork is not
+# drawn twice. keyed code -> wzdx code.
+SUPERSEDES = {"utk": "ut"}
+
+
+def _wzdx_superseded(wzdx_code: str) -> bool:
+    return any(w == wzdx_code and KEYED_STATES[k][3]()
+               for k, w in SUPERSEDES.items())
 
 
 # ── Wave 3: the WZDx registry + remaining keyless states ─────────────
@@ -1297,7 +1418,7 @@ async def markers_for_bbox(client, box, want) -> list[dict]:
                 f"neccam:{code}", CAM_TTL, MAX_SERVE,
                 lambda c=code: _fetch_nec_cameras(client, c)))
     for code, (_st, src, bounds, url) in WZDX_FEEDS.items():
-        if _overlaps(box, bounds):
+        if _overlaps(box, bounds) and not _wzdx_superseded(code):
             cap = WZDX_CAPS.get(code, 2000)
             lookups.append(_cache.get(
                 f"wzdx:{code}", WZDX_TTL, MAX_SERVE,
@@ -1340,7 +1461,7 @@ async def prewarm(client) -> None:
         await asyncio.gather(*lookups, return_exceptions=True)
         # WZDx feeds run up to 16 MB each; warm them in small batches so
         # concurrent JSON parses cannot spike the container's memory.
-        codes = list(WZDX_FEEDS)
+        codes = [c for c in WZDX_FEEDS if not _wzdx_superseded(c)]
         for i in range(0, len(codes), 3):
             batch = [(c, WZDX_CAPS.get(c, 2000)) for c in codes[i:i + 3]]
             await asyncio.gather(*[
@@ -1406,6 +1527,8 @@ def source_status() -> list[dict]:
             f"nec:{code}", "All feeds (NE Compass)", agency,
             _STATE_NAMES[code]))
     for code, (st, src, _b, _u) in WZDX_FEEDS.items():
+        if _wzdx_superseded(code):
+            continue
         out.append(_status_entry(f"wzdx:{code}", "Roadwork (WZDx)", src, st))
     for code, (st, _b, _f) in KEYLESS_STATES.items():
         out.append(_status_entry(f"{code}:all", "Live feeds",

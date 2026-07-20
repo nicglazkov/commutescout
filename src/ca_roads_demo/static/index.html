@@ -5,15 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b1f33">
 <title>CommuteScout - live road conditions, traffic map, and route planner</title>
-<meta name="description" content="Live traffic map and route planner across 23 states: incidents, lane closures, chain controls, wildfires, live highway cameras, and message signs from official DOT feeds. Deepest coverage in California.">
+<meta name="description" content="Live traffic map and route planner across 32 states: incidents, lane closures, chain controls, wildfires, live highway cameras, and message signs from official DOT feeds. Deepest coverage in California.">
 <link rel="canonical" href="https://commutescout.com/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="CommuteScout - live road conditions across 23 states">
+<meta property="og:title" content="CommuteScout - live road conditions across 32 states">
 <meta property="og:description" content="Incidents, closures, chain controls, wildfires, live cameras, and message signs from official DOT feeds on one map. Plan a route or ask an assistant about your drive.">
 <meta property="og:url" content="https://commutescout.com/">
 <meta property="og:image" content="https://commutescout.com/static/shots/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="CommuteScout - live road conditions across 23 states">
+<meta name="twitter:title" content="CommuteScout - live road conditions across 32 states">
 <meta name="twitter:description" content="Live traffic map, route planner, and AI assistant for US roads.">
 <meta name="twitter:image" content="https://commutescout.com/static/shots/og.png">
 <script type="application/ld+json">
@@ -21,7 +21,7 @@
  "name":"CommuteScout","applicationCategory":"TravelApplication",
  "operatingSystem":"Web",
  "url":"https://commutescout.com/",
- "description":"Live road conditions across 23 states: incidents, closures, chain controls, wildfires, cameras, and message signs from official DOT feeds on a map, with a route planner and an AI assistant.",
+ "description":"Live road conditions across 32 states: incidents, closures, chain controls, wildfires, cameras, and message signs from official DOT feeds on a map, with a route planner and an AI assistant.",
  "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
 </script>
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
@@ -537,8 +537,8 @@ aside { background:var(--card); border-right:1px solid var(--line);
         <h3>Ask about your drive</h3>
         <p>Type a question the way you'd say it out loud. An assistant reads
         the live feeds above and answers in a few seconds - nothing to
-        install or sign up for. Answers currently cover California routes;
-        more states are coming.</p>
+        install or sign up for. It answers anywhere the map has coverage,
+        with the deepest detail in California.</p>
       </div>
     <form id="form">
       <div class="searchrow">
@@ -2996,14 +2996,9 @@ function buildRouteAsks() {
   clearPickMarks();  // the planned route now carries its own markers
   const wrap = document.getElementById('routeasks');
   wrap.innerHTML = '';
-  // The assistant's tools cover California; suggesting questions about
-  // an Ohio route would produce confidently wrong answers.
-  const mid = plannedRoute.route.latlngs[
-    Math.floor(plannedRoute.route.latlngs.length / 2)];
-  const inCA = mid[0] >= 32.0 && mid[0] <= 42.5
-    && mid[1] >= -125.0 && mid[1] <= -113.5;
+  // The assistant answers nationwide now (get_nearby_events serves the
+  // multi-state feeds); route chips work for any US route.
   const wrapOuter = document.getElementById('routeasks-wrap');
-  if (!inCA) { if (wrapOuter) wrapOuter.style.display = 'none'; return; }
   if (wrapOuter) wrapOuter.style.display = '';
   const a = plannedRoute.fromName.split(',')[0];
   const b = plannedRoute.toName.split(',')[0];

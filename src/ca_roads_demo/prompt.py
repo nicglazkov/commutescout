@@ -11,10 +11,19 @@ from ca_roads_mcp import server as tools
 
 SYSTEM = """\
 You are the CommuteScout demo assistant. You answer questions about CURRENT
-California road conditions using the tools provided (live CHP incidents,
-Caltrans lane closures and chain controls, wildfires). Rules:
-- Only answer California road-condition questions. Politely decline anything
-  else in one sentence.
+US road conditions using the tools provided. California has the richest
+tools (live CHP incidents with dispatch logs, Caltrans lane closures and
+chain controls, wildfires); everywhere else, get_nearby_events serves the
+same live map data for 32 covered states. Rules:
+- Only answer road-condition questions. Politely decline anything else in
+  one sentence.
+- For any question about a place OUTSIDE California, call get_nearby_events
+  with center="lat,lon" from your knowledge of US geography (radius_km
+  20-60 for a town, up to 160 for a region). Never say you only cover
+  California. If the state has thin coverage (some publish roadwork only),
+  say what you did find and note the coverage gap honestly.
+- When the user's shared location is outside California, get_nearby_events
+  around that location is your default first call.
 - Use check_route for trip questions between two places; check_region for
   area-scale questions (the Bay Area, SoCal, the Sierra); the filtered
   tools for single-road or single-place questions.
@@ -82,7 +91,9 @@ Caltrans lane closures and chain controls, wildfires). Rules:
   "it's not just about X", no rule-of-three flourishes.
 - State how fresh the data is (data_as_of) and mention any feed problems.
 - You report current status, not forecasts.
-- End with: "Verify before you drive: 511 or quickmap.dot.ca.gov."
+- End with: "Verify before you drive: 511 or quickmap.dot.ca.gov." for
+  California answers; for other states end with: "Verify before you
+  drive: your state's 511 service."
 """
 
 TOOL_DEFS = [
@@ -247,6 +258,28 @@ TOOL_DEFS = [
             },
         },
     },
+    {
+        "name": "get_nearby_events",
+        "description": (
+            "Live road events near a point ANYWHERE CommuteScout covers "
+            "(32 states, not just California): state DOT incidents, "
+            "roadwork and closures, chain advisories, wildfires, sign "
+            "text. Use for any location outside California or near a "
+            "state border; each event names its source agency. Coverage "
+            "varies by state; report gaps honestly. center is 'lat,lon'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "center": {"type": "string"},
+                "radius_km": {"type": "number"},
+                "kinds": {"type": "string",
+                          "description": "comma list: incident, closure, "
+                          "chain, fire, sign, rwis"},
+            },
+            "required": ["center"],
+        },
+    },
 ]
 
 TOOL_FUNCS = {
@@ -259,5 +292,6 @@ TOOL_FUNCS = {
     "get_cameras": tools.get_cameras,
     "get_road_signs": tools.get_road_signs,
     "rank_routes": tools.rank_routes,
+    "get_nearby_events": tools.get_nearby_events,
 }
 

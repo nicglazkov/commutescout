@@ -24,7 +24,7 @@ state's WZDx roadwork feed.
 | Missouri | - (8) | Y (wz) | - (8) | Y | - (8) | n/a | Y* |
 | Iowa | - (9) | Y (wz) | - (9) | - (9) | - (9) | n/a | Y* |
 | North Carolina | - (10) | Y (wz) | - (10) | - (10) | - (10) | n/a | Y* |
-| Utah | - (11) | Y (wz) | - (11) | - (11) | - (11) | - (11) | Y* |
+| Utah | Y | Y | Y | Y | Y | - (22) | Y* |
 | Arizona | - (11) | Y (wz) | - (11) | - (11) | - (11) | n/a | Y* |
 | Idaho | - (11) | Y (wz) | - (11) | - (11) | - (11) | - (11) | Y* |
 | Wisconsin | - (11) | Y (wz) | Y** | - (11) | - (11) | n/a | Y* |
@@ -86,10 +86,10 @@ state.
 10. **NC beyond closures**: DriveNC's full API needs the key Nic
     holds, but its endpoint paths are only documented inside their SPA;
     discovery pending.
-11. **Travel-IQ states (UT, AZ, ID, WI, NY)**: full incidents,
-    cameras, signs, and weather exist behind the free developer key;
-    requests are submitted and each state upgrades the moment its key
-    arrives.
+11. **Travel-IQ states (AZ, ID, WI, NY)**: full incidents, cameras,
+    signs, and weather exist behind the free developer key; requests
+    are submitted and each state upgrades the moment its key arrives
+    (Utah upgraded this way in v2.34.0).
 12. **IN, KS**: full data is in the credentialed Castle Rock CARS
     feeds (request-form access).
 13. **MN**: metro-area IRIS XML dumps (incidents, signs, RWIS,
@@ -119,3 +119,5 @@ state.
     stable key means a full upgrade.
 21. **MS beyond alerts**: sign and camera endpoints exist on
     mdottraffic.com but are not yet resolved to stable URLs.
+22. **UT chains**: UDOT publishes seasonal chain-law state inside the
+    roadconditions resource; a winter parser is queued for the season.

@@ -486,3 +486,63 @@ async def test_ms_alerts_split_construction_and_incidents():
             out = await states._fetch_ms(client)
     kinds = sorted(m["kind"] for m in out["markers"])
     assert kinds == ["incident", "lane_closure"]
+
+
+async def test_ut_travel_iq_full_coverage(monkeypatch):
+    import httpx
+    import respx
+
+    monkeypatch.setenv("UT511_API_KEY", "k")
+    events = [{"ID": "1", "EventType": "accidentsAndIncidents",
+               "EventSubType": "crash", "RoadwayName": "I-15",
+               "Description": "Crash near 600 N", "LanesAffected": "1 Lane",
+               "Latitude": "40.78", "Longitude": "-111.9"},
+              {"ID": "2", "EventType": "roadwork", "RoadwayName": "SR-30",
+               "Description": "Resurfacing",
+               "LanesAffected": "All Lanes Closed",
+               "Latitude": "41.75", "Longitude": "-111.98"}]
+    cams = [{"Id": "9", "Location": "I-15 @ 600 N", "Roadway": "I-15",
+             "Direction": "North", "Latitude": "40.78",
+             "Longitude": "-111.91",
+             "Views": [{"Id": 9, "Url":
+                        "https://www.udottraffic.utah.gov/map/Cctv/9"}]}]
+    signs = [{"Id": "s1", "Name": "I-80 EB @ Parleys",
+              "Roadway": "I-80", "DirectionOfTravel": "Eastbound",
+              "Messages": ["TIME TO\nDAN SUMMIT\t17min"],
+              "Latitude": "40.7", "Longitude": "-111.8"},
+             {"Id": "s2", "Name": "Idle board", "Roadway": "I-15",
+              "Messages": ["NO_MESSAGE"],
+              "Latitude": "40.6", "Longitude": "-111.9"}]
+    wx = [{"Id": "w1", "StationName": "I-15 @ 6200 S",
+           "AirTemperature": "99.2", "WindSpeedAvg": "9.28",
+           "SurfaceStatus": "Dry", "Latitude": "40.63",
+           "Longitude": "-111.9"}]
+    with respx.mock:
+        respx.get(url__regex=r".*get/event.*").mock(
+            return_value=httpx.Response(200, json=events))
+        respx.get(url__regex=r".*get/cameras.*").mock(
+            return_value=httpx.Response(200, json=cams))
+        respx.get(url__regex=r".*get/messagesigns.*").mock(
+            return_value=httpx.Response(200, json=signs))
+        respx.get(url__regex=r".*get/weatherstations.*").mock(
+            return_value=httpx.Response(200, json=wx))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_ut(client)
+    kinds = sorted(m["kind"] for m in out["markers"])
+    assert kinds == ["camera", "incident", "lane_closure", "rwis",
+                     "sign", "sign"]
+    clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
+    assert clo["cls"] == "full-roadway"
+    live = next(m for m in out["markers"]
+                if m["kind"] == "sign" and not m.get("blank"))
+    # \n splits lines; the tab column flattens to a space.
+    assert live["lines"] == ["TIME TO", "DAN SUMMIT 17min"]
+    idle = next(m for m in out["markers"]
+                if m["kind"] == "sign" and m.get("blank"))
+    assert idle["message"] == ""
+    wxm = next(m for m in out["markers"] if m["kind"] == "rwis")
+    assert wxm["air_c"] == 37.3 and wxm["surface"] == "Dry"
+    # The keyed feed supersedes the WZDx-only Utah feed.
+    assert states._wzdx_superseded("ut") is True
+    monkeypatch.delenv("UT511_API_KEY")
+    assert states._wzdx_superseded("ut") is False

@@ -1272,6 +1272,79 @@ async def get_road_signs(
     }
 
 
+@mcp.tool()
+async def get_nearby_events(
+    center: str,
+    radius_km: float = 40,
+    kinds: str = "incident,closure,chain,fire",
+) -> dict:
+    """Live road events near a point anywhere CommuteScout covers, not
+    just California: 32 states today, growing.
+
+    Data: the same multi-state feeds the live map shows, normalized -
+    state DOT incidents, roadwork and closures, chain and traction
+    advisories, and nationwide wildfires. Every event names its
+    publishing agency in the source field. Coverage varies by state
+    (some publish roadwork only; docs/state-coverage.md has the
+    matrix); states added later appear here automatically.
+
+    For CALIFORNIA questions prefer the dedicated tools above (richer
+    detail: dispatch logs, lane counts, chain levels). Use THIS tool
+    for any location outside California, near a state border, or as a
+    supplement when a California tool comes back empty.
+
+    center is "lat,lon". kinds is a comma list from: incident, closure,
+    chain, fire, sign, rwis, camera. radius_km caps at 160.
+    """
+    import math
+
+    point = parse_center(center)
+    if point is None:
+        return {"error": CENTER_FORMAT_ERROR}
+    radius_km = min(max(radius_km, 1.0), 160.0)
+    lat, lon = point
+    dlat = radius_km / 111.0
+    dlon = radius_km / max(20.0, 111.0 * math.cos(math.radians(lat)))
+    box = (lat - dlat, lon - dlon, lat + dlat, lon + dlon)
+    want = {k.strip() for k in kinds.split(",") if k.strip()}
+    from ca_roads_demo import states as expansion
+
+    markers = await expansion.markers_for_bbox(get_road().client, box, want)
+    events = []
+    for m in markers:
+        dist = haversine_meters(lat, lon, m["lat"], m["lon"])
+        if dist > radius_km * 1000:
+            continue
+        events.append({
+            "kind": m.get("kind"),
+            "lat": round(m["lat"], 4), "lon": round(m["lon"], 4),
+            "miles_away": round(dist * MILES_PER_METER, 1),
+            "type": m.get("type"),
+            "summary": m.get("label") or m.get("name")
+            or m.get("message"),
+            "route": m.get("route"),
+            "closure_class": m.get("cls"),
+            "source": m.get("src"),
+        })
+    events.sort(key=lambda e: e["miles_away"])
+    trimmed = events[:80]
+    payload = {
+        "count": len(trimmed),
+        "total_in_radius": len(events),
+        "filters": {"center": center, "radius_km": radius_km,
+                    "kinds": sorted(want)},
+        "events": trimmed,
+        "data_as_of": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
+    if not trimmed:
+        payload["message"] = (
+            "No live events in the covered feeds within this radius. "
+            "If this state only publishes roadwork, quiet is normal; "
+            "coverage notes: docs/state-coverage.md."
+        )
+    return payload
+
+
 @mcp.prompt()
 def road_trip_check(from_place: str, to_place: str) -> str:
     """Check road conditions for a trip between two California places."""

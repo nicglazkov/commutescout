@@ -769,3 +769,33 @@ async def test_push_subs_fetched_once_per_user(checker, monkeypatch):
     assert stats["alerts"] == 6
     # Six alerts, but push subscriptions read exactly once.
     assert calls["n"] == 1
+
+
+async def test_expansion_events_are_stable_and_mapped(monkeypatch):
+    from ca_roads_demo import states as expansion
+
+    markers = [
+        {"kind": "lane_closure", "lat": 42.2352683, "lon": -83.4380411,
+         "cls": "full-roadway", "label": "SB I-275: Total Closure",
+         "route": "I-275", "src": "MDOT MiDrive"},
+        {"kind": "wildfire", "lat": 46.5, "lon": -120.5,
+         "name": "Moxee Orchard", "src": "WFIGS"},
+        {"kind": "camera", "lat": 40.0, "lon": -100.0, "src": "X"},
+    ]
+
+    async def fake_markers(client, box, want):
+        return [m for m in markers
+                if m["kind"] != "camera" or "camera" in want]
+
+    monkeypatch.setattr(expansion, "markers_for_bbox", fake_markers)
+    events = await watch._collect_expansion_events(None)
+    assert len(events) == 2   # cameras are not watchable events
+    clo = next(e for e in events if e["kind"] == "closure")
+    assert clo["id"].startswith("st:")
+    assert clo["payload"]["source"] == "MDOT MiDrive"
+    fire = next(e for e in events if e["kind"] == "fire")
+    assert fire["title"] == "Wildfire: Moxee Orchard"
+    # Same marker, edited title: the id must not change (seen-state).
+    markers[0]["label"] = "SB I-275: reopened soon"
+    events2 = await watch._collect_expansion_events(None)
+    assert next(e for e in events2 if e["kind"] == "closure")["id"] == clo["id"]

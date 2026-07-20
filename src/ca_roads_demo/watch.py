@@ -958,7 +958,56 @@ async def _collect_events() -> list[dict]:
                 "contained_pct": f.percent_contained,
             },
         })
+    # Expansion states: everything the nationwide map shows outside the
+    # CA pipeline joins the watchable pool (and the archive) here.
+    # Registry-driven, so a new state in states.py starts alerting
+    # without another code change.
+    with contextlib.suppress(Exception):
+        events.extend(await _collect_expansion_events(road.client))
     return events
+
+
+_EXPANSION_KINDS = {"incident": "incident", "lane_closure": "closure",
+                    "chain_control": "chain", "wildfire": "fire"}
+
+
+def _expansion_id(m: dict) -> str:
+    """Stable event id for markers that carry none: source, kind, and
+    rounded location. Titles mutate as agencies edit text; positions
+    hold for an event's lifetime."""
+    raw = (f"{m.get('src')}|{m.get('kind')}|"
+           f"{round(m['lat'], 4)}|{round(m['lon'], 4)}")
+    return "st:" + hashlib.sha1(raw.encode()).hexdigest()[:16]
+
+
+async def _collect_expansion_events(client) -> list[dict]:
+    from ca_roads_demo import states as expansion
+
+    markers = await expansion.markers_for_bbox(
+        client, expansion.US_BOUNDS, {"incident", "closure", "chain",
+                                      "fire"})
+    out: list[dict] = []
+    for m in markers:
+        kind = _EXPANSION_KINDS.get(m.get("kind"))
+        if not kind or not m.get("lat") or not m.get("lon"):
+            continue
+        src = m.get("src") or "state feed"
+        title = (m.get("type") or m.get("name")
+                 or {"closure": "Roadwork / closure",
+                     "chain": "Traction advisory",
+                     "fire": "Wildfire"}.get(kind, "Reported event"))
+        if kind == "fire" and m.get("name"):
+            title = f"Wildfire: {m['name']}"
+        out.append({
+            "id": _expansion_id(m), "kind": kind,
+            "lat": m["lat"], "lon": m["lon"],
+            "title": str(title)[:120],
+            "body": str(m.get("label") or m.get("name") or "")[:300],
+            "meta": f"Reported by {src}",
+            "payload": {"source": src, "route": m.get("route"),
+                        "class": m.get("cls")},
+        })
+    return out
 
 
 async def _push_to_subs(subs: list[dict], payload: dict) -> int:

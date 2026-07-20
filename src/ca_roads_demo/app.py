@@ -393,9 +393,9 @@ async def ask(request: Request):
             return JSONResponse(
                 {"error": "location must be {lat, lon}"}, status_code=400
             )
-        if not (32.0 <= lat <= 42.5 and -125.0 <= lon <= -113.5):
+        if not (17.5 <= lat <= 72.0 and -180.0 <= lon <= -60.0):
             return JSONResponse(
-                {"error": "location looks outside California"}, status_code=400
+                {"error": "location looks outside the US"}, status_code=400
             )
         location = (lat, lon)
     prior = None
@@ -1292,7 +1292,8 @@ class SecurityHeaders:
         # TravelMidwest aggregates cameras from neighboring states' hosts.
         "https://*.lakecountypassage.com https://content.trafficwise.org "
         "https://511wi.gov https://*.trimarc.org "
-        "https://atmsqf.iowadot.gov; "
+        "https://atmsqf.iowadot.gov "
+        "https://www.udottraffic.utah.gov; "
         "connect-src 'self' https://router.project-osrm.org "
         "https://valhalla1.openstreetmap.de https://*.googleapis.com "
         "https://*.google.com https://cloudflareinsights.com "
