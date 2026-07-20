@@ -684,6 +684,10 @@ KEYED_STATES = {
 # listed here are keyless (verified live 2026-07-19).
 
 MD_BOUNDS = (37.9, -79.5, 39.8, -74.9)
+MI_BOUNDS = (41.6, -90.5, 48.4, -82.0)
+DE_BOUNDS = (38.4, -75.8, 39.9, -74.9)
+TN_BOUNDS = (34.9, -90.4, 36.7, -81.6)
+MS_BOUNDS = (30.1, -91.7, 35.1, -88.0)
 # TravelMidwest aggregates the upper midwest (IL plus IN/WI/IA/KY
 # cameras), so its fetch gate covers the region, not just Illinois.
 IL_BOUNDS = (36.5, -97.5, 47.5, -84.5)
@@ -924,6 +928,192 @@ async def _fetch_mo_dms(client) -> dict:
     return {"markers": markers}
 
 
+async def _fetch_mi(client) -> dict:
+    """Michigan MiDrive (keyless MDOT JSON): incidents plus roadwork
+    with real road geometry. Cameras carry no still URL and signs no
+    message text in the list feeds, so those wait for detail-call
+    support rather than shipping empty markers."""
+    base = "https://mdotjboss.state.mi.us/MiDrive"
+    inc = (await client.get(f"{base}/incidents/AllForMap/", headers=UA,
+                            timeout=30.0)).json()
+    con = (await client.get(f"{base}/construction/AllForMap/", headers=UA,
+                            timeout=30.0)).json()
+    markers: list[dict] = []
+    for e in inc or []:
+        lat, lon = e.get("latitude"), e.get("longitude")
+        if not lat or not lon:
+            continue
+        text = re.sub(r"\s+", " ",
+                      _TAG_RE.sub(" ", e.get("message") or "")).strip()
+        markers.append({
+            "kind": "incident", "lat": lat, "lon": lon,
+            "type": e.get("title") or "Incident",
+            "label": text[:220] or e.get("title") or "Incident",
+            "src": "MDOT MiDrive",
+        })
+    for c in con or []:
+        lat, lon = c.get("latitude"), c.get("longitude")
+        if not lat or not lon:
+            continue
+        title = (c.get("title") or "Roadwork").strip()
+        cls = ("full-roadway"
+               if re.search(r"total closure|closed", title, re.I) else "lane")
+        m = {"kind": "lane_closure", "lat": lat, "lon": lon, "cls": cls,
+             "label": title, "src": "MDOT MiDrive"}
+        pts = c.get("coordinatePoints") or []
+        if isinstance(pts, list) and len(pts) > 1:
+            step = max(1, len(pts) // 150)
+            path = [[p[1], p[0]] for p in pts[::step]
+                    if isinstance(p, list) and len(p) >= 2]
+            if len(path) > 1:
+                m["path"] = path
+                m["end"] = path[-1]
+        markers.append(m)
+    return {"markers": markers}
+
+
+async def _fetch_de_tmc(client) -> dict:
+    """Delaware TMC (keyless DelDOT JSON): advisories (incidents and
+    construction with coordinates), live message signs, and weather
+    stations. Cameras are HLS streams with no still URL, so they wait
+    for stream support."""
+    base = "https://tmc.deldot.gov/json"
+    adv = (await client.get(f"{base}/advisory.json", headers=UA,
+                            timeout=30.0)).json().get("advisories") or []
+    vms = (await client.get(f"{base}/vmsg-vms.json", headers=UA,
+                            timeout=30.0)).json().get("signTypes") or []
+    wx = (await client.get(f"{base}/weatherstation.json", headers=UA,
+                           timeout=30.0)).json().get("stations") or []
+    markers: list[dict] = []
+    for a in adv:
+        w = a.get("where") or {}
+        lat, lon = w.get("lat"), w.get("lon")
+        if not lat or not lon:
+            continue
+        typ = a.get("type") or {}
+        name = typ.get("name") or "Advisory"
+        loc = re.sub(r"\s+", " ", (w.get("location") or "")).strip()
+        if (typ.get("code") or "").upper() == "C":
+            markers.append({
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "cls": "lane", "label": loc or name, "src": "DelDOT"})
+        else:
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon, "type": name,
+                "label": loc or name, "src": "DelDOT"})
+    for group in vms:
+        for s in group.get("signs") or []:
+            lat, lon = s.get("lat"), s.get("lon")
+            if not lat or not lon:
+                continue
+            lines = [ln.strip()
+                     for ln in re.split(r"<[^>]+>", s.get("message") or "")
+                     if ln.strip() and re.search(r"[A-Za-z0-9]", ln)][:6]
+            m = {"kind": "sign", "lat": lat, "lon": lon,
+                 "route": None, "direction": None,
+                 "near": s.get("title") or "Message sign",
+                 "message": " / ".join(lines), "lines": lines,
+                 "src": "DelDOT"}
+            if not lines or not s.get("enable", True):
+                m["blank"] = True
+            markers.append(m)
+    for s in wx:
+        lat, lon = s.get("lat"), s.get("lon")
+        if not lat or not lon:
+            continue
+        markers.append({
+            "kind": "rwis", "lat": lat, "lon": lon,
+            "name": s.get("title") or "Weather station", "src": "DelDOT"})
+    return {"markers": markers}
+
+
+TN_EVENTS_URL = (
+    "https://spatial.tdot.tn.gov/ArcGIS/rest/services/Smartway/"
+    "Smartway_Events/FeatureServer/0/query"
+)
+
+
+async def _fetch_tn(client) -> dict:
+    """Tennessee SmartWay events from TDOT's keyless ArcGIS layer.
+    Fields mirror WZDx closure details; date-window filtered the same
+    way."""
+    resp = await client.get(TN_EVENTS_URL, headers=UA, timeout=30.0, params={
+        "where": "1=1",
+        "outFields": "CD_EVENT_TYPE,CD_ROAD_NAMES,CD_DIRECTION,"
+                     "VEHICLE_IMPACT,START_DATE,END_DATE",
+        "returnGeometry": "true", "outSR": 4326, "f": "json",
+    })
+    resp.raise_for_status()
+    payload = resp.json()
+    if "error" in payload:
+        raise RuntimeError(f"TDOT: {payload['error']}")
+    now_ms = time.time() * 1000
+    markers: list[dict] = []
+    for feat in payload.get("features") or []:
+        geom, attrs = feat.get("geometry") or {}, feat.get("attributes") or {}
+        lat, lon = geom.get("y"), geom.get("x")
+        if not lat or not lon:
+            continue
+        start, end = attrs.get("START_DATE"), attrs.get("END_DATE")
+        if isinstance(start, (int, float)) and start > now_ms:
+            continue
+        if isinstance(end, (int, float)) and end < now_ms:
+            continue
+        etype = (attrs.get("CD_EVENT_TYPE") or "").replace("-", " ").strip()
+        road = (attrs.get("CD_ROAD_NAMES") or "").strip()
+        direction = (attrs.get("CD_DIRECTION") or "").strip()
+        impact = (attrs.get("VEHICLE_IMPACT") or "").lower()
+        label = " ".join(x for x in (road, direction, etype or "roadwork")
+                         if x)
+        if re.search(r"incident|crash|obstruct|debris", etype, re.I):
+            # "Hazard" prefix keeps the client's classifier honest for
+            # obstruction and debris reports.
+            typ = (f"Hazard - {etype}"
+                   if re.search(r"obstruct|debris", etype, re.I) else etype)
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon,
+                "type": typ or "Incident", "label": label,
+                "src": "TDOT SmartWay"})
+        else:
+            cls = ("full-roadway" if "all-lanes-closed" in impact
+                   else "lane")
+            markers.append({
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "cls": cls, "label": label, "route": road or None,
+                "src": "TDOT SmartWay"})
+    return {"markers": markers}
+
+
+async def _fetch_ms(client) -> dict:
+    """Mississippi MDOT Traffic alerts (keyless WebMethod POST):
+    construction and incident markers with human tooltips."""
+    resp = await client.post(
+        "https://www.mdottraffic.com/default.aspx/LoadAlertData",
+        headers={**UA, "Content-Type": "application/json; charset=utf-8"},
+        content="{}", timeout=30.0)
+    resp.raise_for_status()
+    markers: list[dict] = []
+    for a in resp.json().get("d") or []:
+        lat, lon = a.get("lat"), a.get("lon")
+        if not lat or not lon:
+            continue
+        tip = re.sub(r"\s+", " ", (a.get("tooltip") or "")).strip()
+        itype = (a.get("icontype") or "").lower()
+        if "construction" in itype or "construction" in (
+                a.get("markergroup") or ""):
+            markers.append({
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "cls": "lane", "label": tip or "Roadwork",
+                "src": "MDOT Traffic (MS)"})
+        else:
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon,
+                "type": itype.title() or "Incident",
+                "label": tip or "Traffic alert",
+                "src": "MDOT Traffic (MS)"})
+    return {"markers": markers}
+
+
 WFIGS_QUERY_URL = (
     "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
     "WFIGS_Incident_Locations_Current/FeatureServer/0/query"
@@ -1025,6 +1215,10 @@ KEYLESS_STATES = {
     "il": ("Illinois", IL_BOUNDS, _fetch_il),
     "al": ("Alabama", AL_BOUNDS, _fetch_al),
     "mod": ("Missouri", MO_BOUNDS, _fetch_mo_dms),
+    "mi": ("Michigan", MI_BOUNDS, _fetch_mi),
+    "det": ("Delaware", DE_BOUNDS, _fetch_de_tmc),
+    "tn": ("Tennessee", TN_BOUNDS, _fetch_tn),
+    "ms": ("Mississippi", MS_BOUNDS, _fetch_ms),
     "usf": ("Nationwide", US_BOUNDS, _fetch_us_fires),
 }
 
@@ -1175,6 +1369,10 @@ def source_status() -> list[dict]:
                                   "il": "TravelMidwest (IDOT)",
                                   "al": "ALGO Traffic (ALDOT)",
                                   "mod": "MoDOT",
+                                  "mi": "MDOT MiDrive",
+                                  "det": "DelDOT TMC",
+                                  "tn": "TDOT SmartWay",
+                                  "ms": "MDOT Traffic (MS)",
                                   "usf": "WFIGS wildfires"}[code], st))
     for code, (name, _bounds, _fetcher, ready) in KEYED_STATES.items():
         if not ready():

@@ -360,3 +360,110 @@ async def test_us_fires_attach_perimeters_by_name():
     assert fires["Moxee Orchard"]["poly"][0] == [46.49, -120.51]
     # Fires without a perimeter record honestly stay dots.
     assert "poly" not in fires["No Shape"]
+
+
+async def test_mi_fetch_closures_carry_real_geometry():
+    import httpx
+    import respx
+
+    con = [{"latitude": 42.23, "longitude": -83.43, "id": "ETX-1",
+            "title": "SB I-275: Total Closure",
+            "coordinatePoints": [[-83.44, 42.24], [-83.43, 42.23]]}]
+    inc = [{"latitude": 42.35, "longitude": -83.05, "id": 7,
+            "title": "Crash",
+            "message": "<b>Location:</b> I-75 <b>Event:</b> Crash"}]
+    with respx.mock:
+        respx.get(url__regex=r".*construction/AllForMap.*").mock(
+            return_value=httpx.Response(200, json=con))
+        respx.get(url__regex=r".*incidents/AllForMap.*").mock(
+            return_value=httpx.Response(200, json=inc))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_mi(client)
+    clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
+    assert clo["cls"] == "full-roadway"
+    assert clo["path"][0] == [42.24, -83.44] and clo["end"] == [42.23, -83.43]
+    i = next(m for m in out["markers"] if m["kind"] == "incident")
+    assert "<b>" not in i["label"] and "I-75" in i["label"]
+
+
+async def test_de_tmc_signs_advisories_weather():
+    import httpx
+    import respx
+
+    adv = {"advisories": [
+        {"type": {"code": "C", "name": "Construction"},
+         "where": {"lat": 39.7, "lon": -75.68,
+                   "location": "DE-2 WB RIGHT LANE CLOSED"}},
+        {"type": {"code": "I", "name": "Incident"},
+         "where": {"lat": 39.1, "lon": -75.5, "location": "CRASH ON US 13"}},
+    ]}
+    vms = {"signTypes": [{"signs": [
+        {"lat": 38.97, "lon": -75.43, "enable": True,
+         "title": "DE 1 @ THOMPSONVILLE",
+         "message": "MOVE OVER<br/>OR<br/>SLOW DOWN<br/>---------<br/>FOR"},
+    ]}]}
+    wx = {"stations": [{"lat": 38.92, "lon": -75.56, "title": "US 13 @ DE 14"}]}
+    with respx.mock:
+        respx.get(url__regex=r".*advisory\.json.*").mock(
+            return_value=httpx.Response(200, json=adv))
+        respx.get(url__regex=r".*vmsg-vms\.json.*").mock(
+            return_value=httpx.Response(200, json=vms))
+        respx.get(url__regex=r".*weatherstation\.json.*").mock(
+            return_value=httpx.Response(200, json=wx))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_de_tmc(client)
+    kinds = sorted(m["kind"] for m in out["markers"])
+    assert kinds == ["incident", "lane_closure", "rwis", "sign"]
+    sign = next(m for m in out["markers"] if m["kind"] == "sign")
+    # br tags split into lines; the dash separator row is not a line.
+    assert sign["lines"] == ["MOVE OVER", "OR", "SLOW DOWN", "FOR"]
+
+
+async def test_tn_events_filter_dates_and_classify():
+    import httpx
+    import respx
+    import time as _t
+
+    now = _t.time() * 1000
+    feats = {"features": [
+        {"geometry": {"x": -86.7, "y": 36.1},
+         "attributes": {"CD_EVENT_TYPE": "work-zone",
+                        "CD_ROAD_NAMES": "I-40", "CD_DIRECTION": "westbound",
+                        "VEHICLE_IMPACT": "all-lanes-closed",
+                        "START_DATE": now - 1000, "END_DATE": now + 100000}},
+        {"geometry": {"x": -86.5, "y": 36.0},
+         "attributes": {"CD_EVENT_TYPE": "obstruction",
+                        "START_DATE": now - 1000, "END_DATE": now + 100000}},
+        {"geometry": {"x": -86.4, "y": 35.9},
+         "attributes": {"CD_EVENT_TYPE": "work-zone",
+                        "START_DATE": now - 5000, "END_DATE": now - 1000}},
+    ]}
+    with respx.mock:
+        respx.get(url__regex=r".*Smartway_Events.*").mock(
+            return_value=httpx.Response(200, json=feats))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_tn(client)
+    assert len(out["markers"]) == 2   # the lapsed one is dropped
+    clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
+    assert clo["cls"] == "full-roadway" and clo["route"] == "I-40"
+    haz = next(m for m in out["markers"] if m["kind"] == "incident")
+    assert haz["type"].startswith("Hazard")
+
+
+async def test_ms_alerts_split_construction_and_incidents():
+    import httpx
+    import respx
+
+    d = {"d": [
+        {"lat": 34.9, "lon": -88.5, "tooltip": "US 72 between A and B",
+         "icontype": "construction", "markergroup": "map-construction"},
+        {"lat": 32.3, "lon": -90.2, "tooltip": "Crash on I-20",
+         "icontype": "accident", "markergroup": "map-incident"},
+    ]}
+    with respx.mock:
+        respx.post(url__regex=r".*LoadAlertData.*").mock(
+            return_value=httpx.Response(200, json=d))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_ms(client)
+    kinds = sorted(m["kind"] for m in out["markers"])
+    assert kinds == ["incident", "lane_closure"]

@@ -37,7 +37,10 @@ state's WZDx roadwork feed.
 | Oklahoma | - (17) | Y (wz) | - (17) | - (17) | - (17) | n/a | Y* |
 | Hawaii | - (17) | Y (wz) | - (17) | - (17) | - (17) | n/a | Y* |
 | Louisiana | - (17) | Y (wz) | - (17) | - (17) | - (17) | n/a | Y* |
-| Delaware | - (17) | Y (wz) | - (17) | - (17) | - (17) | n/a | Y* |
+| Delaware | Y | Y (wz) | - (18) | Y | Y | n/a | Y* |
+| Michigan | Y | Y | - (19) | - (19) | - (19) | n/a | Y* |
+| Tennessee | Y | Y | - (20) | - (20) | - (20) | n/a | Y* |
+| Mississippi | Y | Y | - (21) | - (21) | - (21) | n/a | Y* |
 | Texas (Austin metro) | - (16) | Y (wz) | - (16) | - (16) | - (16) | n/a | Y* |
 | Nevada | traffic flow continuations only (15) | | | | | | Y* |
 
@@ -100,10 +103,19 @@ state.
 16. **TX**: TxDOT's statewide feed terms prohibit third-party reuse,
     so only the City of Austin's CC0 open-data roadwork feed ships
     (Austin metro coverage).
-17. **KY, OK, HI, LA, DE**: the WZDx roadwork feed is the only thing
+17. **KY, OK, HI, LA**: the WZDx roadwork feed is the only thing
     these states publish keylessly (all CC0 per the federal registry;
     Oklahoma's access token is published verbatim in the registry
     entry). Kentucky's Louisville-area cameras already arrive through
-    the TravelMidwest aggregation. Delaware's feed is live but
-    currently carries zero events; DelDOT's app JSON endpoints are a
-    candidate upgrade.
+    the TravelMidwest aggregation.
+18. **DE cameras**: DelDOT publishes HLS video streams with no still
+    URL; snapshot popups need stream support first.
+19. **MI cameras, signs, weather**: MiDrive's camera list carries no
+    still image URL and its sign list no message text (both need
+    per-item detail calls); no RWIS feed exists.
+20. **TN beyond events**: cameras, live sign text, and roadway weather
+    sit behind SmartWay's embedded site key, which TDOT could rotate
+    at any time; the keyless ArcGIS events layer ships instead. A
+    stable key means a full upgrade.
+21. **MS beyond alerts**: sign and camera endpoints exist on
+    mdottraffic.com but are not yet resolved to stable URLs.
