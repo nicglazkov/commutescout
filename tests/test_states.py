@@ -293,3 +293,178 @@ def test_bbox_gating():
     maine_box = (43.0, -71.0, 46.0, -67.0)
     assert states._overlaps(maine_box, me_bounds)
     assert not states._overlaps(maine_box, states.IA_BOUNDS)
+
+
+def test_wzdx_cap_limits_markers():
+    payload = {"features": [
+        _wz_feature(f"Job {i}", "2020-01-01T00:00:00Z",
+                    "2030-01-01T00:00:00Z")
+        for i in range(5)]}
+    markers = states._parse_ia_wzdx(payload, src="City of Austin", cap=2)
+    assert len(markers) == 2
+
+
+def test_dms_lines_drop_placeholder_junk():
+    # Idle boards park "." or "-" as the message; those are not messages.
+    assert states._dms_lines("[jl3].") == []
+    assert states._dms_lines(".[nl]-") == []
+    assert states._dms_lines("CRASH AHEAD[nl].") == ["CRASH AHEAD"]
+
+
+async def test_mo_signs_split_br_tags_and_drop_junk():
+    import httpx
+    import respx
+
+    dms = [{"x": "-94.5", "y": "39.1", "dev": "DMS-1",
+            "msg": "I-35 4 MIN<br />4 MILES AHEAD"},
+           {"x": "-94.6", "y": "39.2", "dev": "DMS-2", "msg": "."}]
+    with respx.mock:
+        respx.get(url__regex=r".*MsgBrdV1.*").mock(
+            return_value=httpx.Response(200, json=dms))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_mo_dms(client)
+    live = out["markers"][0]
+    assert live["lines"] == ["I-35 4 MIN", "4 MILES AHEAD"]
+    assert "<br" not in live["message"]
+    assert out["markers"][1].get("blank") is True
+
+
+async def test_us_fires_attach_perimeters_by_name():
+    import httpx
+    import respx
+
+    incidents = {"features": [
+        {"geometry": {"x": -120.5, "y": 46.5},
+         "attributes": {"IncidentName": "Moxee Orchard",
+                        "IncidentSize": 5918, "PercentContained": 40,
+                        "FireDiscoveryDateTime": 1752000000000}},
+        {"geometry": {"x": -105.0, "y": 35.0},
+         "attributes": {"IncidentName": "No Shape",
+                        "IncidentSize": 12, "PercentContained": 0,
+                        "FireDiscoveryDateTime": 1752000000000}},
+    ]}
+    perims = {"features": [
+        {"attributes": {"poly_IncidentName": "Moxee Orchard Fire"},
+         "geometry": {"rings": [[[-120.51, 46.49], [-120.49, 46.49],
+                                 [-120.49, 46.51], [-120.51, 46.51]]]}},
+    ]}
+    with respx.mock:
+        respx.get(url__regex=r".*Incident_Locations.*").mock(
+            return_value=httpx.Response(200, json=incidents))
+        respx.get(url__regex=r".*Perimeters.*").mock(
+            return_value=httpx.Response(200, json=perims))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_us_fires(client)
+    fires = {m["name"]: m for m in out["markers"]}
+    # "Moxee Orchard" joins "Moxee Orchard Fire" via name normalization.
+    assert fires["Moxee Orchard"]["poly"][0] == [46.49, -120.51]
+    # Fires without a perimeter record honestly stay dots.
+    assert "poly" not in fires["No Shape"]
+
+
+async def test_mi_fetch_closures_carry_real_geometry():
+    import httpx
+    import respx
+
+    con = [{"latitude": 42.23, "longitude": -83.43, "id": "ETX-1",
+            "title": "SB I-275: Total Closure",
+            "coordinatePoints": [[-83.44, 42.24], [-83.43, 42.23]]}]
+    inc = [{"latitude": 42.35, "longitude": -83.05, "id": 7,
+            "title": "Crash",
+            "message": "<b>Location:</b> I-75 <b>Event:</b> Crash"}]
+    with respx.mock:
+        respx.get(url__regex=r".*construction/AllForMap.*").mock(
+            return_value=httpx.Response(200, json=con))
+        respx.get(url__regex=r".*incidents/AllForMap.*").mock(
+            return_value=httpx.Response(200, json=inc))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_mi(client)
+    clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
+    assert clo["cls"] == "full-roadway"
+    assert clo["path"][0] == [42.24, -83.44] and clo["end"] == [42.23, -83.43]
+    i = next(m for m in out["markers"] if m["kind"] == "incident")
+    assert "<b>" not in i["label"] and "I-75" in i["label"]
+
+
+async def test_de_tmc_signs_advisories_weather():
+    import httpx
+    import respx
+
+    adv = {"advisories": [
+        {"type": {"code": "C", "name": "Construction"},
+         "where": {"lat": 39.7, "lon": -75.68,
+                   "location": "DE-2 WB RIGHT LANE CLOSED"}},
+        {"type": {"code": "I", "name": "Incident"},
+         "where": {"lat": 39.1, "lon": -75.5, "location": "CRASH ON US 13"}},
+    ]}
+    vms = {"signTypes": [{"signs": [
+        {"lat": 38.97, "lon": -75.43, "enable": True,
+         "title": "DE 1 @ THOMPSONVILLE",
+         "message": "MOVE OVER<br/>OR<br/>SLOW DOWN<br/>---------<br/>FOR"},
+    ]}]}
+    wx = {"stations": [{"lat": 38.92, "lon": -75.56, "title": "US 13 @ DE 14"}]}
+    with respx.mock:
+        respx.get(url__regex=r".*advisory\.json.*").mock(
+            return_value=httpx.Response(200, json=adv))
+        respx.get(url__regex=r".*vmsg-vms\.json.*").mock(
+            return_value=httpx.Response(200, json=vms))
+        respx.get(url__regex=r".*weatherstation\.json.*").mock(
+            return_value=httpx.Response(200, json=wx))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_de_tmc(client)
+    kinds = sorted(m["kind"] for m in out["markers"])
+    assert kinds == ["incident", "lane_closure", "rwis", "sign"]
+    sign = next(m for m in out["markers"] if m["kind"] == "sign")
+    # br tags split into lines; the dash separator row is not a line.
+    assert sign["lines"] == ["MOVE OVER", "OR", "SLOW DOWN", "FOR"]
+
+
+async def test_tn_events_filter_dates_and_classify():
+    import time as _t
+
+    import httpx
+    import respx
+
+    now = _t.time() * 1000
+    feats = {"features": [
+        {"geometry": {"x": -86.7, "y": 36.1},
+         "attributes": {"CD_EVENT_TYPE": "work-zone",
+                        "CD_ROAD_NAMES": "I-40", "CD_DIRECTION": "westbound",
+                        "VEHICLE_IMPACT": "all-lanes-closed",
+                        "START_DATE": now - 1000, "END_DATE": now + 100000}},
+        {"geometry": {"x": -86.5, "y": 36.0},
+         "attributes": {"CD_EVENT_TYPE": "obstruction",
+                        "START_DATE": now - 1000, "END_DATE": now + 100000}},
+        {"geometry": {"x": -86.4, "y": 35.9},
+         "attributes": {"CD_EVENT_TYPE": "work-zone",
+                        "START_DATE": now - 5000, "END_DATE": now - 1000}},
+    ]}
+    with respx.mock:
+        respx.get(url__regex=r".*Smartway_Events.*").mock(
+            return_value=httpx.Response(200, json=feats))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_tn(client)
+    assert len(out["markers"]) == 2   # the lapsed one is dropped
+    clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
+    assert clo["cls"] == "full-roadway" and clo["route"] == "I-40"
+    haz = next(m for m in out["markers"] if m["kind"] == "incident")
+    assert haz["type"].startswith("Hazard")
+
+
+async def test_ms_alerts_split_construction_and_incidents():
+    import httpx
+    import respx
+
+    d = {"d": [
+        {"lat": 34.9, "lon": -88.5, "tooltip": "US 72 between A and B",
+         "icontype": "construction", "markergroup": "map-construction"},
+        {"lat": 32.3, "lon": -90.2, "tooltip": "Crash on I-20",
+         "icontype": "accident", "markergroup": "map-incident"},
+    ]}
+    with respx.mock:
+        respx.post(url__regex=r".*LoadAlertData.*").mock(
+            return_value=httpx.Response(200, json=d))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_ms(client)
+    kinds = sorted(m["kind"] for m in out["markers"])
+    assert kinds == ["incident", "lane_closure"]

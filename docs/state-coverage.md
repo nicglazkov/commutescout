@@ -1,7 +1,7 @@
 # State coverage matrix
 
 What each live state actually has on the map, and why the gaps exist.
-Updated 2026-07-19 (v2.30.0). See
+Updated 2026-07-20 (v2.32.0). See
 [state-expansion-audit.md](state-expansion-audit.md) for states not yet
 integrated.
 
@@ -33,14 +33,26 @@ state's WZDx roadwork feed.
 | Minnesota | - (13) | Y (wz) | - (13) | - (13) | - (13) | n/a | Y* |
 | Kansas | - (12) | Y (wz) | - (12) | - (12) | - (12) | n/a | Y* |
 | New Jersey | - (14) | Y (wz) | - (14) | - (14) | - (14) | n/a | Y* |
+| Kentucky | - (17) | Y (wz) | Y** | - (17) | - (17) | n/a | Y* |
+| Oklahoma | - (17) | Y (wz) | - (17) | - (17) | - (17) | n/a | Y* |
+| Hawaii | - (17) | Y (wz) | - (17) | - (17) | - (17) | n/a | Y* |
+| Louisiana | - (17) | Y (wz) | - (17) | - (17) | - (17) | n/a | Y* |
+| Delaware | Y | Y (wz) | - (18) | Y | Y | n/a | Y* |
+| Michigan | Y | Y | - (19) | - (19) | - (19) | n/a | Y* |
+| Tennessee | Y | Y | - (20) | - (20) | - (20) | n/a | Y* |
+| Mississippi | Y | Y | - (21) | - (21) | - (21) | n/a | Y* |
+| Texas (Austin metro) | - (16) | Y (wz) | - (16) | - (16) | - (16) | n/a | Y* |
 | Nevada | traffic flow continuations only (15) | | | | | | Y* |
 
 `Y*` Wildfires come from the national WFIGS interagency layer, so
-every state has active-fire dots; only California additionally gets
-CAL FIRE merging and mapped burn perimeters today.
+every state has active-fire dots, and fires with a mapped perimeter in
+the WFIGS year-to-date layer render their real burn footprint as a
+polygon (nationwide since v2.32.0); fires without a perimeter record
+stay dots and the popup says the shape is unknown. California
+additionally merges CAL FIRE data.
 
-`Y**` A subset of Wisconsin and Indiana cameras arrive via the
-TravelMidwest aggregation.
+`Y**` A subset of Wisconsin, Indiana, and Louisville-area Kentucky
+cameras arrive via the TravelMidwest aggregation.
 
 Live traffic overlay (TomTom tiles) and NWS weather alerts and USGS
 quakes are nationwide by nature; the traffic overlay works over any
@@ -88,3 +100,22 @@ state.
 15. **NV**: the nvroads key unlocks the full Travel-IQ dataset; the
     integration predates the multi-state layer and currently feeds the
     route-flow features. Uplift to full map coverage is queued.
+16. **TX**: TxDOT's statewide feed terms prohibit third-party reuse,
+    so only the City of Austin's CC0 open-data roadwork feed ships
+    (Austin metro coverage).
+17. **KY, OK, HI, LA**: the WZDx roadwork feed is the only thing
+    these states publish keylessly (all CC0 per the federal registry;
+    Oklahoma's access token is published verbatim in the registry
+    entry). Kentucky's Louisville-area cameras already arrive through
+    the TravelMidwest aggregation.
+18. **DE cameras**: DelDOT publishes HLS video streams with no still
+    URL; snapshot popups need stream support first.
+19. **MI cameras, signs, weather**: MiDrive's camera list carries no
+    still image URL and its sign list no message text (both need
+    per-item detail calls); no RWIS feed exists.
+20. **TN beyond events**: cameras, live sign text, and roadway weather
+    sit behind SmartWay's embedded site key, which TDOT could rotate
+    at any time; the keyless ArcGIS events layer ships instead. A
+    stable key means a full upgrade.
+21. **MS beyond alerts**: sign and camera endpoints exist on
+    mdottraffic.com but are not yet resolved to stable URLs.

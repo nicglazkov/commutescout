@@ -128,7 +128,7 @@ def make_app():
 USERS = {
     "tok-sam": {"sub": "sam", "email": "sam@example.com",
                 "email_verified": True, "iss": watch.ISSUER},
-    "tok-admin": {"sub": "boss", "email": "nic@glazkov.com",
+    "tok-admin": {"sub": "boss", "email": "admin@example.com",
                   "email_verified": True, "iss": watch.ISSUER},
 }
 
@@ -137,6 +137,7 @@ USERS = {
 def store(monkeypatch):
     mem = MemoryStore()
     monkeypatch.setattr(watch, "get_store", lambda: mem)
+    monkeypatch.setattr(watch, "ADMIN_EMAILS", {"admin@example.com"})
 
     async def fake_verify(request):
         header = request.headers.get("authorization") or ""
@@ -267,7 +268,7 @@ def test_watch_count_cap(approved_client):
 def test_delete_is_owner_only(approved_client, store):
     wid = approved_client.post("/api/watch/create", json=CIRCLE,
                                headers=auth()).json()["id"]
-    store.users["boss"] = {"email": "nic@glazkov.com", "status": "approved"}
+    store.users["boss"] = {"email": "admin@example.com", "status": "approved"}
     assert approved_client.delete(f"/api/watch/{wid}",
                                   headers=auth("tok-admin")).status_code == 404
     assert approved_client.delete(f"/api/watch/{wid}",
@@ -466,7 +467,7 @@ def test_update_pause_and_resume(approved_client, store):
 def test_update_is_owner_only_and_validates(approved_client, store):
     wid = approved_client.post("/api/watch/create", json=CIRCLE,
                                headers=auth()).json()["id"]
-    store.users["boss"] = {"email": "nic@glazkov.com", "status": "approved"}
+    store.users["boss"] = {"email": "admin@example.com", "status": "approved"}
     assert approved_client.patch("/api/watch/" + wid,
                                  json={"active": False},
                                  headers=auth("tok-admin")).status_code == 404

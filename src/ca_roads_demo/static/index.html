@@ -462,7 +462,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
     <a href="https://github.com/nicglazkov/commutescout#add-to-claude" target="_blank" rel="noopener">Add to Claude</a>
     <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
   </nav>
-  <span class="sysok" id="sysok" title="Click for live data-source status"><i></i><span id="feedsok">live from CHP · Caltrans · WFIGS + 11 more</span></span>
+  <span class="sysok" id="sysok" title="Click for live data-source status"><i></i><span id="feedsok">checking live feeds&hellip;</span></span>
   <span id="ver"></span>
 </header>
 <div class="kpis" id="kpis">
@@ -1701,7 +1701,8 @@ const COVERED = new Set(['California', 'Nevada', 'Maine', 'New Hampshire',
   'Vermont', 'Iowa', 'North Carolina', 'Washington', 'Oregon', 'Ohio',
   'Utah', 'Arizona', 'Idaho', 'Wisconsin', 'New York', 'Indiana',
   'Minnesota', 'Kansas', 'New Jersey', 'Maryland', 'Missouri',
-  'Illinois']);
+  'Illinois', 'Kentucky', 'Oklahoma', 'Hawaii', 'Louisiana',
+  'Delaware', 'Michigan', 'Tennessee', 'Mississippi']);
 // rIC takes an options dict, not a delay: passing a number throws a
 // synchronous TypeError in Chromium and kills every handler below.
 const idle = (cb) => window.requestIdleCallback
@@ -1712,6 +1713,8 @@ const PARTIAL = {
   Alabama: 'live traffic cameras (turn on the Cameras layer and zoom '
     + 'in). Incident and closure feeds need ALDOT credentials and are '
     + 'in progress.',
+  Texas: 'Austin-area roadwork from the City of Austin open data feed. '
+    + 'Statewide TxDOT data has licensing terms that block reuse here.',
 };
 // Filled by the loader below; drives the map-click hit test.
 let nocovFeatures = [];

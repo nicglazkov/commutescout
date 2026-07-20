@@ -33,7 +33,8 @@ from ca_roads.cache import TTLCache
 
 NEC_URL = "https://nec-por.ne-compass.com/NEC.XmlDataPortal/api/c2c"
 IA_WZDX_URL = "https://iowa-atms.cloud-q-free.com/api/rest/dataprism/wzdx/wzdxfeed"
-UA = {"User-Agent": "commutescout.com feed client (nic@glazkov.com)"}
+UA = {"User-Agent":
+      "commutescout.com feed client (https://commutescout.com)"}
 
 TTL = 180.0
 MAX_SERVE = 1800.0
@@ -129,7 +130,9 @@ _DMS_NOISE = re.compile(r"\[[a-z]{2}[^\]]*\]", re.IGNORECASE)
 def _dms_lines(message: str) -> list[str]:
     parts = _DMS_BREAK.split(message or "")
     lines = [_DMS_NOISE.sub("", p).strip() for p in parts]
-    return [ln for ln in lines if ln]
+    # Some agencies park placeholder junk like "." or "-" on idle
+    # boards; a line with no letters or digits is not a message.
+    return [ln for ln in lines if re.search(r"[A-Za-z0-9]", ln)]
 
 
 def _closure_cls(el) -> str:
@@ -681,6 +684,10 @@ KEYED_STATES = {
 # listed here are keyless (verified live 2026-07-19).
 
 MD_BOUNDS = (37.9, -79.5, 39.8, -74.9)
+MI_BOUNDS = (41.6, -90.5, 48.4, -82.0)
+DE_BOUNDS = (38.4, -75.8, 39.9, -74.9)
+TN_BOUNDS = (34.9, -90.4, 36.7, -81.6)
+MS_BOUNDS = (30.1, -91.7, 35.1, -88.0)
 # TravelMidwest aggregates the upper midwest (IL plus IN/WI/IA/KY
 # cameras), so its fetch gate covers the region, not just Illinois.
 IL_BOUNDS = (36.5, -97.5, 47.5, -84.5)
@@ -713,13 +720,36 @@ WZDX_FEEDS = {
             "https://filter.ritis.org/wzdx_v4.1/mdot.geojson"),
     "mow": ("Missouri", "MoDOT", MO_BOUNDS,
             "https://traveler.modot.org/timconfig/feed/desktop/mo_wzdx.json"),
+    # 2026-07-20 wave. All CC0 per the FHWA registry. The Oklahoma
+    # access token is PUBLISHED verbatim in the public registry entry
+    # (intentionally public, not a secret).
+    "ky": ("Kentucky", "KYTC", (36.4, -89.6, 39.2, -81.9),
+           "https://storage.googleapis.com/kytc-its-2020-openrecords/"
+           "public/feeds/WZDx/kytc_wzdx_v4.1.geojson"),
+    "ok": ("Oklahoma", "ODOT (OK)", (33.6, -103.1, 37.1, -94.4),
+           "https://oktraffic.org/api/Geojsons/workzones?access_token="
+           "feOPynfHRJ5sdx8tf3IN5yOsGz89TAUuzHsN3V0jo1Fg41LcpoLhIRltaTPm"
+           "DngD"),
+    "hi": ("Hawaii", "HDOT", (18.5, -160.6, 22.6, -154.7),
+           "https://ai.blyncsy.io/wzdx/hidot/feed"),
+    "la": ("Louisiana", "Louisiana DOTD", (28.8, -94.1, 33.1, -88.7),
+           "https://wzdx.e-dot.com/la_dot_d_feed_wzdx_v4.1.geojson"),
+    "de": ("Delaware", "DelDOT", (38.4, -75.8, 39.9, -74.9),
+           "https://wzdx.e-dot.com/del_dot_feed_wzdx_v4.1.geojson"),
+    "txa": ("Texas (Austin)", "City of Austin", (30.0, -98.2, 30.7, -97.4),
+            "https://data.austintexas.gov/download/d9mm-cjw9"),
 }
 
 
-async def _fetch_wzdx(client, url: str, src: str) -> dict:
+# Per-feed marker caps where the default (2000) misfits: Austin is one
+# metro whose permit feed would otherwise outweigh entire states.
+WZDX_CAPS = {"txa": 400}
+
+
+async def _fetch_wzdx(client, url: str, src: str, cap: int = 2000) -> dict:
     resp = await client.get(url, headers=UA, timeout=45.0)
     resp.raise_for_status()
-    return {"markers": _parse_ia_wzdx(resp.json(), src)}
+    return {"markers": _parse_ia_wzdx(resp.json(), src, cap=cap)}
 
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -882,8 +912,10 @@ async def _fetch_mo_dms(client) -> dict:
             continue
         if not lat or not lon:
             continue
-        lines = [ln.strip() for ln in re.split(r"[\n|]+", s.get("msg") or "")
-                 if ln.strip()][:6]
+        # The feed embeds literal <br /> tags between lines.
+        lines = [ln.strip()
+                 for ln in re.split(r"(?:<[^>]+>|[\n|])+", s.get("msg") or "")
+                 if ln.strip() and re.search(r"[A-Za-z0-9]", ln)][:6]
         marker = {
             "kind": "sign", "lat": lat, "lon": lon,
             "route": None, "direction": None,
@@ -896,18 +928,217 @@ async def _fetch_mo_dms(client) -> dict:
     return {"markers": markers}
 
 
+async def _fetch_mi(client) -> dict:
+    """Michigan MiDrive (keyless MDOT JSON): incidents plus roadwork
+    with real road geometry. Cameras carry no still URL and signs no
+    message text in the list feeds, so those wait for detail-call
+    support rather than shipping empty markers."""
+    base = "https://mdotjboss.state.mi.us/MiDrive"
+    inc = (await client.get(f"{base}/incidents/AllForMap/", headers=UA,
+                            timeout=30.0)).json()
+    con = (await client.get(f"{base}/construction/AllForMap/", headers=UA,
+                            timeout=30.0)).json()
+    markers: list[dict] = []
+    for e in inc or []:
+        lat, lon = e.get("latitude"), e.get("longitude")
+        if not lat or not lon:
+            continue
+        text = re.sub(r"\s+", " ",
+                      _TAG_RE.sub(" ", e.get("message") or "")).strip()
+        markers.append({
+            "kind": "incident", "lat": lat, "lon": lon,
+            "type": e.get("title") or "Incident",
+            "label": text[:220] or e.get("title") or "Incident",
+            "src": "MDOT MiDrive",
+        })
+    for c in con or []:
+        lat, lon = c.get("latitude"), c.get("longitude")
+        if not lat or not lon:
+            continue
+        title = (c.get("title") or "Roadwork").strip()
+        cls = ("full-roadway"
+               if re.search(r"total closure|closed", title, re.I) else "lane")
+        m = {"kind": "lane_closure", "lat": lat, "lon": lon, "cls": cls,
+             "label": title, "src": "MDOT MiDrive"}
+        pts = c.get("coordinatePoints") or []
+        if isinstance(pts, list) and len(pts) > 1:
+            step = max(1, len(pts) // 150)
+            path = [[p[1], p[0]] for p in pts[::step]
+                    if isinstance(p, list) and len(p) >= 2]
+            if len(path) > 1:
+                m["path"] = path
+                m["end"] = path[-1]
+        markers.append(m)
+    return {"markers": markers}
+
+
+async def _fetch_de_tmc(client) -> dict:
+    """Delaware TMC (keyless DelDOT JSON): advisories (incidents and
+    construction with coordinates), live message signs, and weather
+    stations. Cameras are HLS streams with no still URL, so they wait
+    for stream support."""
+    base = "https://tmc.deldot.gov/json"
+    adv = (await client.get(f"{base}/advisory.json", headers=UA,
+                            timeout=30.0)).json().get("advisories") or []
+    vms = (await client.get(f"{base}/vmsg-vms.json", headers=UA,
+                            timeout=30.0)).json().get("signTypes") or []
+    wx = (await client.get(f"{base}/weatherstation.json", headers=UA,
+                           timeout=30.0)).json().get("stations") or []
+    markers: list[dict] = []
+    for a in adv:
+        w = a.get("where") or {}
+        lat, lon = w.get("lat"), w.get("lon")
+        if not lat or not lon:
+            continue
+        typ = a.get("type") or {}
+        name = typ.get("name") or "Advisory"
+        loc = re.sub(r"\s+", " ", (w.get("location") or "")).strip()
+        if (typ.get("code") or "").upper() == "C":
+            markers.append({
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "cls": "lane", "label": loc or name, "src": "DelDOT"})
+        else:
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon, "type": name,
+                "label": loc or name, "src": "DelDOT"})
+    for group in vms:
+        for s in group.get("signs") or []:
+            lat, lon = s.get("lat"), s.get("lon")
+            if not lat or not lon:
+                continue
+            lines = [ln.strip()
+                     for ln in re.split(r"<[^>]+>", s.get("message") or "")
+                     if ln.strip() and re.search(r"[A-Za-z0-9]", ln)][:6]
+            m = {"kind": "sign", "lat": lat, "lon": lon,
+                 "route": None, "direction": None,
+                 "near": s.get("title") or "Message sign",
+                 "message": " / ".join(lines), "lines": lines,
+                 "src": "DelDOT"}
+            if not lines or not s.get("enable", True):
+                m["blank"] = True
+            markers.append(m)
+    for s in wx:
+        lat, lon = s.get("lat"), s.get("lon")
+        if not lat or not lon:
+            continue
+        markers.append({
+            "kind": "rwis", "lat": lat, "lon": lon,
+            "name": s.get("title") or "Weather station", "src": "DelDOT"})
+    return {"markers": markers}
+
+
+TN_EVENTS_URL = (
+    "https://spatial.tdot.tn.gov/ArcGIS/rest/services/Smartway/"
+    "Smartway_Events/FeatureServer/0/query"
+)
+
+
+async def _fetch_tn(client) -> dict:
+    """Tennessee SmartWay events from TDOT's keyless ArcGIS layer.
+    Fields mirror WZDx closure details; date-window filtered the same
+    way."""
+    resp = await client.get(TN_EVENTS_URL, headers=UA, timeout=30.0, params={
+        "where": "1=1",
+        "outFields": "CD_EVENT_TYPE,CD_ROAD_NAMES,CD_DIRECTION,"
+                     "VEHICLE_IMPACT,START_DATE,END_DATE",
+        "returnGeometry": "true", "outSR": 4326, "f": "json",
+    })
+    resp.raise_for_status()
+    payload = resp.json()
+    if "error" in payload:
+        raise RuntimeError(f"TDOT: {payload['error']}")
+    now_ms = time.time() * 1000
+    markers: list[dict] = []
+    for feat in payload.get("features") or []:
+        geom, attrs = feat.get("geometry") or {}, feat.get("attributes") or {}
+        lat, lon = geom.get("y"), geom.get("x")
+        if not lat or not lon:
+            continue
+        start, end = attrs.get("START_DATE"), attrs.get("END_DATE")
+        if isinstance(start, (int, float)) and start > now_ms:
+            continue
+        if isinstance(end, (int, float)) and end < now_ms:
+            continue
+        etype = (attrs.get("CD_EVENT_TYPE") or "").replace("-", " ").strip()
+        road = (attrs.get("CD_ROAD_NAMES") or "").strip()
+        direction = (attrs.get("CD_DIRECTION") or "").strip()
+        impact = (attrs.get("VEHICLE_IMPACT") or "").lower()
+        label = " ".join(x for x in (road, direction, etype or "roadwork")
+                         if x)
+        if re.search(r"incident|crash|obstruct|debris", etype, re.I):
+            # "Hazard" prefix keeps the client's classifier honest for
+            # obstruction and debris reports.
+            typ = (f"Hazard - {etype}"
+                   if re.search(r"obstruct|debris", etype, re.I) else etype)
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon,
+                "type": typ or "Incident", "label": label,
+                "src": "TDOT SmartWay"})
+        else:
+            cls = ("full-roadway" if "all-lanes-closed" in impact
+                   else "lane")
+            markers.append({
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "cls": cls, "label": label, "route": road or None,
+                "src": "TDOT SmartWay"})
+    return {"markers": markers}
+
+
+async def _fetch_ms(client) -> dict:
+    """Mississippi MDOT Traffic alerts (keyless WebMethod POST):
+    construction and incident markers with human tooltips."""
+    resp = await client.post(
+        "https://www.mdottraffic.com/default.aspx/LoadAlertData",
+        headers={**UA, "Content-Type": "application/json; charset=utf-8"},
+        content="{}", timeout=30.0)
+    resp.raise_for_status()
+    markers: list[dict] = []
+    for a in resp.json().get("d") or []:
+        lat, lon = a.get("lat"), a.get("lon")
+        if not lat or not lon:
+            continue
+        tip = re.sub(r"\s+", " ", (a.get("tooltip") or "")).strip()
+        itype = (a.get("icontype") or "").lower()
+        if "construction" in itype or "construction" in (
+                a.get("markergroup") or ""):
+            markers.append({
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "cls": "lane", "label": tip or "Roadwork",
+                "src": "MDOT Traffic (MS)"})
+        else:
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon,
+                "type": itype.title() or "Incident",
+                "label": tip or "Traffic alert",
+                "src": "MDOT Traffic (MS)"})
+    return {"markers": markers}
+
+
 WFIGS_QUERY_URL = (
     "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
     "WFIGS_Incident_Locations_Current/FeatureServer/0/query"
 )
+WFIGS_PERIM_URL = (
+    "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
+    "WFIGS_Interagency_Perimeters_YearToDate/FeatureServer/0/query"
+)
 US_BOUNDS = (18.0, -170.0, 72.0, -60.0)
+
+
+def _norm_fire(name: str) -> str:
+    """Same normalization the CA pipeline uses to join the incident and
+    perimeter layers: drop a trailing 'Fire', keep alphanumerics."""
+    cleaned = re.sub(r"\s+fire\s*$", "", (name or "").strip(), flags=re.I)
+    return re.sub(r"[^A-Z0-9]", "", cleaned.upper())
 
 
 async def _fetch_us_fires(client) -> dict:
     """Active wildfires OUTSIDE California from the same national WFIGS
     layer the CA feed queries (CA fires keep their richer pipeline with
-    CAL FIRE merge and perimeters, so exclude them here to avoid
-    duplicates). No mapped perimeters yet; popups say so honestly."""
+    CAL FIRE merge, so exclude them here to avoid duplicates). Mapped
+    burn footprints join from the YearToDate perimeter layer by
+    normalized name; fires without a perimeter record stay dots and the
+    popup says so."""
     resp = await client.get(WFIGS_QUERY_URL, headers=UA, timeout=25.0, params={
         "where": "POOState<>'US-CA' AND IncidentTypeCategory='WF' "
                  "AND ActiveFireCandidate=1",
@@ -935,6 +1166,45 @@ async def _fetch_us_fires(client) -> dict:
                            if isinstance(disc, (int, float)) else None),
             "src": "WFIGS",
         })
+    with contextlib.suppress(Exception):
+        # Perimeters refine the picture but never gate the dots. One
+        # nationwide query, server-simplified (~200m) and decimated to
+        # keep the cached mapdata payload phone-friendly.
+        presp = await client.get(
+            WFIGS_PERIM_URL, headers=UA, timeout=25.0, params={
+                # Not-out fires only: YearToDate otherwise carries every
+                # perimeter since January. Biggest first so the record
+                # cap sheds the least visible footprints.
+                "where": "attr_POOState<>'US-CA' "
+                         "AND attr_FireOutDateTime IS NULL "
+                         "AND attr_IncidentTypeCategory='WF'",
+                "outFields": "poly_IncidentName",
+                "orderByFields": "poly_GISAcres DESC",
+                "resultRecordCount": 1000,
+                "maxAllowableOffset": 0.002,
+                "returnGeometry": "true", "outSR": "4326", "f": "json",
+            })
+        presp.raise_for_status()
+        ppay = presp.json()
+        if "error" in ppay:
+            raise RuntimeError(f"WFIGS perimeters: {ppay['error']}")
+        by_name: dict[str, list] = {}
+        for feat in ppay.get("features") or []:
+            attrs = feat.get("attributes") or {}
+            key = _norm_fire(attrs.get("poly_IncidentName") or "")
+            rings = (feat.get("geometry") or {}).get("rings") or []
+            pts = [(pt[1], pt[0]) for ring in rings for pt in ring
+                   if isinstance(pt, list) and len(pt) >= 2]
+            # Keep the largest footprint when a name repeats
+            # (YearToDate holds successive uploads).
+            if key and pts and len(pts) > len(by_name.get(key) or []):
+                by_name[key] = pts
+        for m in markers:
+            pts = by_name.get(_norm_fire(m["name"] or ""))
+            if pts:
+                step = max(1, len(pts) // 300)
+                m["poly"] = [[round(a, 4), round(b, 4)]
+                             for a, b in pts[::step]]
     return {"markers": markers}
 
 
@@ -944,6 +1214,10 @@ KEYLESS_STATES = {
     "il": ("Illinois", IL_BOUNDS, _fetch_il),
     "al": ("Alabama", AL_BOUNDS, _fetch_al),
     "mod": ("Missouri", MO_BOUNDS, _fetch_mo_dms),
+    "mi": ("Michigan", MI_BOUNDS, _fetch_mi),
+    "det": ("Delaware", DE_BOUNDS, _fetch_de_tmc),
+    "tn": ("Tennessee", TN_BOUNDS, _fetch_tn),
+    "ms": ("Mississippi", MS_BOUNDS, _fetch_ms),
     "usf": ("Nationwide", US_BOUNDS, _fetch_us_fires),
 }
 
@@ -981,9 +1255,11 @@ async def markers_for_bbox(client, box, want) -> list[dict]:
                 lambda c=code: _fetch_nec_cameras(client, c)))
     for code, (_st, src, bounds, url) in WZDX_FEEDS.items():
         if _overlaps(box, bounds):
+            cap = WZDX_CAPS.get(code, 2000)
             lookups.append(_cache.get(
                 f"wzdx:{code}", WZDX_TTL, MAX_SERVE,
-                lambda u=url, s=src: _fetch_wzdx(client, u, s)))
+                lambda u=url, s=src, k=cap:
+                _fetch_wzdx(client, u, s, cap=k)))
     for code, (_st, bounds, fetcher) in KEYLESS_STATES.items():
         if _overlaps(box, bounds):
             lookups.append(_cache.get(
@@ -1023,11 +1299,13 @@ async def prewarm(client) -> None:
         # concurrent JSON parses cannot spike the container's memory.
         codes = list(WZDX_FEEDS)
         for i in range(0, len(codes), 3):
+            batch = [(c, WZDX_CAPS.get(c, 2000)) for c in codes[i:i + 3]]
             await asyncio.gather(*[
                 _cache.get(f"wzdx:{c}", WZDX_TTL, MAX_SERVE,
-                           lambda u=WZDX_FEEDS[c][3], s=WZDX_FEEDS[c][1]:
-                           _fetch_wzdx(client, u, s))
-                for c in codes[i:i + 3]
+                           lambda u=WZDX_FEEDS[c][3], s=WZDX_FEEDS[c][1],
+                           k=cap:
+                           _fetch_wzdx(client, u, s, cap=k))
+                for c, cap in batch
             ], return_exceptions=True)
         # Camera bundles are ~20 MB each; warm them after the light feeds.
         await asyncio.gather(*[
@@ -1092,6 +1370,10 @@ def source_status() -> list[dict]:
                                   "il": "TravelMidwest (IDOT)",
                                   "al": "ALGO Traffic (ALDOT)",
                                   "mod": "MoDOT",
+                                  "mi": "MDOT MiDrive",
+                                  "det": "DelDOT TMC",
+                                  "tn": "TDOT SmartWay",
+                                  "ms": "MDOT Traffic (MS)",
                                   "usf": "WFIGS wildfires"}[code], st))
     for code, (name, _bounds, _fetcher, ready) in KEYED_STATES.items():
         if not ready():

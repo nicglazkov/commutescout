@@ -1,12 +1,73 @@
 # Multi-state expansion audit
 
-Researched 2026-07-18 across all 50 states plus DC. Goal: rank every
-state by how turn-key its road data is against the California baseline
-(live incidents, closures/roadwork, cameras, message signs, road
-weather, chain controls). Findings were verified by live endpoint
-fetches and the USDOT WZDx feed registry where possible; anything
-marked UNVERIFIED could not be confirmed from official sources and
-must be checked at key signup before commercial use.
+Researched 2026-07-18 across all 50 states plus DC; statuses re-probed
+live and updated 2026-07-20. Goal: rank every state by how turn-key
+its road data is against the California baseline (live incidents,
+closures/roadwork, cameras, message signs, road weather, chain
+controls). Findings were verified by live endpoint fetches and the
+USDOT WZDx feed registry where possible; anything marked UNVERIFIED
+could not be confirmed from official sources and must be checked at
+key signup before commercial use.
+
+## TLDR status board (2026-07-20)
+
+What is live on the map today, what one credential would unlock, and
+what stays blocked. Per-category detail lives in
+[state-coverage.md](state-coverage.md).
+
+**Live now (31 jurisdictions).**
+CA (full baseline), ME NH VT (full via NE Compass), WA OR OH (keyed,
+live), MD DE (multi-feed keyless), MI TN MS (new 2026-07-20: MiDrive,
+SmartWay events, MDOT Traffic), IL AL (cameras via
+TravelMidwest/ALGO), MO (signs + WZDx), IA NC UT AZ ID WI NY IN MN KS
+NJ KY OK HI LA (WZDx roadwork), TX-Austin (city CC0 feed), NV (route
+flow). Wildfires, weather alerts, quakes, and the traffic overlay are
+nationwide.
+
+**One credential away (Nic: see the shopping list below).**
+UT AZ ID NY GA CT LA AK FL (Travel-IQ developer keys, one shared
+client), CO (self-serve key portal, instant), VA (SmarterRoads
+registration), NC (full DriveNC API), OH-WZDx (already keyed via
+OHGO), MI-WZDx (form), MN IA IN KS MA NE (Castle Rock CARS credential
+forms), ALDOT (contact for AL incidents), MT (contact MDT for the
+road-weather API), WY (Trihydro SDX agreement).
+
+**Reachable but unlicensed, holding.** The public map backends of
+cotrip.org (CO), mass511.com (MA), 511.nebraska.gov (NE), 511mn.org
+(MN), 511pa.com (PA), fl511.com (FL), ctroads.org (CT), and
+mdottraffic.com sibling endpoints publish no data license; CO also has
+a sanctioned keyed portal, which means the state channels developers
+there on purpose. PA's icon feeds additionally carry no event text at
+all. These stay out until terms are reviewed or keys arrive. TN's full
+SmartWay API uses a site-embedded key that TDOT could rotate; only
+their keyless ArcGIS events layer ships.
+
+**Blocked.** AR (terms ban third-party apps), ND (non-commercial),
+TX statewide (non-commercial mirror), SC WV NM WY RI (no usable public
+feed found; details in the regional notes).
+
+## Credentials shopping list for Nic
+
+Exact steps, and the Secret Manager name to use so each state lights
+up on deploy. All are free.
+
+| Priority | State(s) | Where | Steps | Secret name |
+|---|---|---|---|---|
+| 1 | CO | manage-api.cotrip.org | Create account, request key (self-serve, instant); feeds at data.cotrip.org/api/v1 | `cotrip-api-key` |
+| 2 | FL | fl511.com/my511/register | Register, then request Developer key under fl511.com/developers/doc | `fl511-api-key` |
+| 3 | GA | 511ga.org/my511/register | Same Travel-IQ flow | `ga511-api-key` |
+| 4 | CT | ctroads.org/my511/register | Same Travel-IQ flow | `ct511-api-key` |
+| 5 | LA | 511la.org/my511/register | Same Travel-IQ flow (upgrades the WZDx-only coverage) | `la511-api-key` |
+| 6 | AK | 511.alaska.gov/my511/register | Same Travel-IQ flow | `ak511-api-key` |
+| 7 | VA | smarterroads.vdot.virginia.gov | Register, accept the usage agreement, subscribe to cameras/incidents/closures/signs datasets | `smarterroads-token` |
+| 8 | UT AZ ID NY | Already requested 2026-07-19 | Watch email for approvals | `ut511-api-key`, `az511-api-key`, `id511-api-key`, `ny511-api-key` |
+| 9 | MI | michigan.gov/mdot ITS data page | Request the WZDx/RIDE data key (adds work zones beyond MiDrive) | `mi-ride-api-key` |
+| 10 | AL | ALDOT / ALGO Traffic contact | Ask for API credentials for incidents and signs | `algo-api-key` |
+| 11 | MT | MDT (app.mdt.mt.gov/atms Swagger contact) | Ask for the ATMS road-weather API key | `mdt-api-key` |
+| 12 | MA NE MN IA IN KS | Castle Rock CARS request forms per state | Credential request form; slowest of the bunch | `{st}cars-user` / `{st}cars-pass` |
+
+When any of these land in Secret Manager (project ca-roads-mcp),
+say so and the matching adapter ships within a release.
 
 Coverage notation: Y = available in a public machine-readable feed,
 ~ = partial or unverified, N = not available programmatically,
