@@ -27,6 +27,12 @@
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" as="fetch" crossorigin="anonymous"
       href="/api/mapdata?bbox=-85.000,-180.000,85.000,180.000&kinds=incident,closure,chain,fire">
+<!-- Map tiles are the LCP element (measured via Web Analytics); warming
+     the tile CDN connections shaves the TLS handshake off first paint. -->
+<link rel="preconnect" href="https://a.basemaps.cartocdn.com">
+<link rel="preconnect" href="https://b.basemaps.cartocdn.com">
+<link rel="preconnect" href="https://c.basemaps.cartocdn.com">
+<link rel="preconnect" href="https://d.basemaps.cartocdn.com">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
@@ -780,8 +786,29 @@ function ensureMap() {
   // canvas renderer (canvasR), and adding the map-default canvas on top
   // created a second overlapping canvas that swallowed tap hit-testing
   // on iOS WebKit (dots became unclickable on phones).
+  // No location permission needed: the IANA timezone narrows a visitor
+  // to a region of the country, which is enough for a friendly first
+  // view. Anything unrecognized gets the lower 48.
+  const TZ_VIEWS = {
+    'America/Los_Angeles': [[37.5, -120.0], 6],
+    'America/Phoenix': [[34.2, -111.7], 7],
+    'America/Denver': [[39.5, -106.0], 6],
+    'America/Boise': [[44.4, -114.6], 6],
+    'America/Chicago': [[38.5, -92.5], 5],
+    'America/New_York': [[39.8, -77.5], 6],
+    'America/Detroit': [[43.0, -84.5], 7],
+    'America/Indiana/Indianapolis': [[39.9, -86.3], 7],
+    'America/Kentucky/Louisville': [[37.8, -85.7], 7],
+    'America/Anchorage': [[61.2, -149.5], 6],
+    'Pacific/Honolulu': [[20.9, -157.3], 7],
+  };
+  let view0 = [[39.3, -97.5], 5];
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    if (TZ_VIEWS[tz]) view0 = TZ_VIEWS[tz];
+  } catch (e) { /* default view */ }
   map = L.map('map', { scrollWheelZoom: true })
-    .setView([39.3, -97.5], 5);   // lower 48 in view by default
+    .setView(view0[0], view0[1]);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     keepBuffer: 4,
     maxZoom: 17,
@@ -1420,23 +1447,59 @@ function pointMarker(m, g) {
   return mk;
 }
 
+// Viewport culling: every group's markers live in items[] with only the
+// ones near the current view attached to the map. Someone looking at
+// California never pays render cost for a dense east-coast state; the
+// data itself is still fetched once and never re-queried on pan.
+const items = {};
+Object.keys(GROUP_DOT).forEach((g) => { items[g] = []; });
+function layerForItem(it) {
+  if (it.layer) return it.layer;
+  const m = it.m;
+  if (it.g === 'fire_pt' && Array.isArray(m.poly) && m.poly.length > 2) {
+    it.layer = L.polygon(m.poly, { color: '#d97706', weight: 2,
+      fillColor: '#d97706', fillOpacity: 0.28 })
+      .bindPopup(() => popupFor(m, 'fire_pt'), { maxWidth: 320 });
+  } else if (it.g === 'sign' && m.blank) {
+    it.layer = L.circleMarker([m.lat, m.lon], {
+      renderer: canvasR, radius: 5, color: '#fff', weight: 1,
+      fillColor: '#b9b3a0', fillOpacity: 0.7,
+    }).bindPopup(() => popupFor(m, 'sign'), { maxWidth: 320 });
+  } else {
+    it.layer = pointMarker(m, it.g);
+  }
+  return it.layer;
+}
+function cullSync() {
+  const view = map.getBounds().pad(0.6);
+  for (const g of Object.keys(items)) {
+    const grp = ambient[g];
+    for (const it of items[g]) {
+      const inView = view.contains([it.m.lat, it.m.lon]);
+      if (inView && !it.on) { grp.addLayer(layerForItem(it)); it.on = true; }
+      else if (!inView && it.on) { grp.removeLayer(it.layer); it.on = false; }
+    }
+  }
+}
+let cullTimer = null;
+map.on('moveend zoomend', () => {
+  clearTimeout(cullTimer);
+  cullTimer = setTimeout(cullSync, 120);
+});
+
 function rebuildSigns() {
   ambient.sign.clearLayers();
+  items.sign = [];
   const withBlank = document.getElementById('signblank').checked;
-  let shown = 0, blanks = 0;
+  let blanks = 0;
   for (const m of signCache) {
     if (m.blank) {
       blanks++;
       if (!withBlank) continue;
-      ambient.sign.addLayer(L.circleMarker([m.lat, m.lon], {
-        renderer: canvasR, radius: 5, color: '#fff', weight: 1,
-        fillColor: '#b9b3a0', fillOpacity: 0.7,
-      }).bindPopup(popupFor(m, 'sign'), { maxWidth: 320 }));
-    } else {
-      ambient.sign.addLayer(pointMarker(m, 'sign'));
     }
-    shown++;
+    items.sign.push({ m, g: 'sign', layer: null, on: false });
   }
+  cullSync();
   const el = document.getElementById('n-sign');
   if (el) el.textContent = signCache.length - blanks;
   const bl = document.getElementById('n-signblank');
@@ -1445,13 +1508,15 @@ function rebuildSigns() {
 
 function rebuildCameras() {
   ambient.camera.clearLayers();
+  items.camera = [];
   const videoOnly = document.getElementById('camvideo').checked;
   let n = 0;
   for (const m of cameraCache) {
     if (videoOnly && !m.stream) continue;
-    ambient.camera.addLayer(pointMarker(m, 'camera'));
+    items.camera.push({ m, g: 'camera', layer: null, on: false });
     n++;
   }
+  cullSync();
   const el = document.getElementById('n-camera');
   if (el) el.textContent = n;
   const nv = document.getElementById('n-camvideo');
@@ -1481,6 +1546,9 @@ function tryFocus() {
   focusDone = true;
   const at = [focusReq.lat, focusReq.lon];
   map.setView(at, Math.max(map.getZoom(), 12));
+  // Attach any culled markers around the focus point before searching
+  // for the one to open.
+  cullSync();
   const ring = L.circleMarker(at, {
     radius: 18, color: '#2f81f7', weight: 3, fill: false,
   }).addTo(map);
@@ -1540,42 +1608,28 @@ map.on('zoomend', syncStrips);
 
 function renderBatch(markers, groups) {
   const counts = {};
-  for (const g of groups) ambient[g].clearLayers();
+  for (const g of groups) { ambient[g].clearLayers(); items[g] = []; }
   if (groups.includes('camera')) { cameraCache = []; signCache = []; }
   if (groups.some((g) => g.startsWith('clo_'))) pendingStrips = [];
   for (const m of markers) {
     const g = classify(m);
-    if (!g || !m.lat || !groups.includes(g === 'sign' || g === 'camera' ? g : g)) continue;
-    if (!groups.includes(g)) continue;
+    if (!g || !m.lat || !groups.includes(g)) continue;
     if (g === 'camera') { cameraCache.push(m); continue; }
     if (g === 'sign') { signCache.push(m); continue; }
-    if (g === 'fire_pt') {
-      counts.fire_pt = (counts.fire_pt || 0) + 1;
-      if (Array.isArray(m.poly) && m.poly.length > 2) {
-        // The burn footprint is the fire; a dot only stands in when
-        // WFIGS has no perimeter for it. Popup content is built lazily
-        // on open, never per-render.
-        ambient.fire_pt.addLayer(
-          L.polygon(m.poly, { color: '#d97706', weight: 2,
-            fillColor: '#d97706', fillOpacity: 0.28 })
-            .bindPopup(() => popupFor(m, 'fire_pt'), { maxWidth: 320 }));
-      } else {
-        ambient.fire_pt.addLayer(pointMarker(m, 'fire_pt'));
-      }
-      continue;
-    }
+    counts[g] = (counts[g] || 0) + 1;
     // Closures with a distinct endpoint get the affected stretch drawn
     // under their dot. With thousands of nationwide closures the strips
     // are sub-pixel at country zoom, so they build lazily the first
-    // time the user zooms in far enough to see them.
+    // time the user zooms in far enough to see them. Fire perimeter
+    // polygons and blank signs get their shape from layerForItem.
     if (g.startsWith('clo_') && Array.isArray(m.end)) {
       pendingStrips.push([m, g]);
     }
-    ambient[g].addLayer(pointMarker(m, g));
-    counts[g] = (counts[g] || 0) + 1;
+    items[g].push({ m, g, layer: null, on: false });
   }
   stripsBuilt = false;
   syncStrips();
+  cullSync();
   if (groups.includes('camera')) { rebuildCameras(); rebuildSigns(); }
   if (groups.includes('inc_collision')) tryFocus();
   for (const g of groups) {
@@ -1659,45 +1713,88 @@ const PARTIAL = {
     + 'in). Incident and closure feeds need ALDOT credentials and are '
     + 'in progress.',
 };
+// Filled by the loader below; drives the map-click hit test.
+let nocovFeatures = [];
 idle(async () => {
   try {
     const res = await fetch('/static/us-states.json');
     if (!res.ok) return;
     const geo = await res.json();
-    // Stays in the default overlay pane: a lower pane would sit under
-    // the marker canvas and never receive clicks. The wash is faint
-    // enough that nationwide dots (wildfires) remain readable, and the
-    // popup text explains them.
+    // The wash lives in a pane UNDER the marker canvas so nationwide
+    // dots (wildfires, alerts) render crisply above it and stay
+    // clickable. That pane never receives clicks itself, so the
+    // coverage popups are opened by the map-click hit test below.
+    map.createPane('nocov');
+    map.getPane('nocov').style.zIndex = 250;
     const missing = { type: 'FeatureCollection',
       features: geo.features.filter((f) => !COVERED.has(f.properties.NAME)
         && !PARTIAL[f.properties.NAME]) };
     L.geoJSON(missing, {
+      pane: 'nocov', interactive: false,
       style: { color: '#8b98a7', weight: 1, dashArray: '4 5',
-        fillColor: '#8b98a7', fillOpacity: 0.07, interactive: true,
-        className: 'nocov' },
-      onEachFeature: (f, layer) => layer.bindPopup(
-        '<div class="pop"><div class="t">' + esc(f.properties.NAME) +
-        '</div><div class="d">Sorry, state road data (incidents, ' +
-        'closures, cameras, signs) is not available for ' +
-        esc(f.properties.NAME) + ' yet - it is coming as its feeds ' +
-        'come online. Wildfires, weather alerts, and the live traffic ' +
-        'overlay already cover the whole country, so you may still ' +
-        'see some dots here.</div></div>', { maxWidth: 270 }),
+        fillColor: '#8b98a7', fillOpacity: 0.07 },
     }).addTo(map);
     const partial = { type: 'FeatureCollection',
       features: geo.features.filter((f) => PARTIAL[f.properties.NAME]) };
     L.geoJSON(partial, {
+      pane: 'nocov', interactive: false,
       style: { color: '#9aa7b5', weight: 1.5, dashArray: '2 6',
-        fill: true, fillOpacity: 0.02, interactive: true,
-        className: 'nocov' },
-      onEachFeature: (f, layer) => layer.bindPopup(
-        '<div class="pop"><div class="t">' + esc(f.properties.NAME) +
-        '</div><div class="d">' + esc(f.properties.NAME) +
-        ' has partial coverage today: ' +
-        esc(PARTIAL[f.properties.NAME]) + '</div></div>',
-        { maxWidth: 270 }),
+        fill: true, fillOpacity: 0.02 },
     }).addTo(map);
+    nocovFeatures = geo.features.filter(
+      (f) => !COVERED.has(f.properties.NAME));
   } catch (e) { /* cosmetic layer; ignore */ }
+});
+// Ray-cast point-in-polygon over the decimated state outlines. Outer
+// rings only; the coverage note does not need hole accuracy.
+function nocovStateAt(latlng) {
+  const x = latlng.lng, y = latlng.lat;
+  for (const f of nocovFeatures) {
+    const geom = f.geometry;
+    const polys = geom.type === 'Polygon'
+      ? [geom.coordinates] : geom.coordinates;
+    for (const poly of polys) {
+      const ring = poly[0];
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1];
+        const xj = ring[j][0], yj = ring[j][1];
+        if ((yi > y) !== (yj > y)
+            && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+      }
+      if (inside) return f.properties.NAME;
+    }
+  }
+  return null;
+}
+// A click that opened a dot popup, armed a route pick, or dismissed an
+// open popup should never surface the coverage note; only a click that
+// landed on nothing does.
+let nocovHadPopup = false;
+map.on('preclick', () => {
+  nocovHadPopup = !!(map._popup && map._popup.isOpen());
+});
+map.on('click', (e) => {
+  if (pickMode || nocovHadPopup || !nocovFeatures.length) return;
+  const at = e.latlng;
+  setTimeout(() => {
+    if (map._popup && map._popup.isOpen()) return;
+    const name = nocovStateAt(at);
+    if (!name) return;
+    const html = PARTIAL[name]
+      ? '<div class="pop"><div class="t">' + esc(name) +
+        '</div><div class="d">' + esc(name) +
+        ' has partial coverage today: ' + esc(PARTIAL[name]) +
+        '</div></div>'
+      : '<div class="pop"><div class="t">' + esc(name) +
+        '</div><div class="d">Sorry, state road data (incidents, ' +
+        'closures, cameras, signs) is not available for ' + esc(name) +
+        ' yet - it is coming as its feeds come online. Wildfires, ' +
+        'weather alerts, and the live traffic overlay already cover ' +
+        'the whole country, so dots you see here are live and ' +
+        'clickable.</div></div>';
+    L.popup({ maxWidth: 270 }).setLatLng(at).setContent(html).openOn(map);
+  }, 150);
 });
 document.getElementById('camvideo').addEventListener('change', rebuildCameras);
 
