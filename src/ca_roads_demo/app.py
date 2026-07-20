@@ -337,6 +337,29 @@ def _log_question(visitor, question, location, prior, tool_calls, tokens,
     )
 
 
+async def _safe_answer_stream(gen):
+    """Never end the answer stream silently: if the model call fails
+    (budget cap, outage), the user gets a plain-language note instead
+    of a blank answer box."""
+    try:
+        async for chunk in gen:
+            yield chunk
+    except Exception as exc:  # noqa: BLE001 - degrade, never blank
+        capped = "usage limits" in str(exc)
+        log_event("ask_error", error=type(exc).__name__, budget_cap=capped)
+        friendly = (
+            "The assistant is paused: it has used up its monthly "
+            "compute budget and comes back on the 1st. Everything else "
+            "here keeps working - the live map, route planner, and "
+            "alerts do not use the assistant."
+            if capped else
+            "The assistant hit a temporary error reaching its language "
+            "model. Please try again in a minute."
+        )
+        yield _sse({"text": friendly})
+        yield _sse({"done": True})
+
+
 async def _capped_json(request: Request):
     body = b""
     async for chunk in request.stream():
@@ -387,8 +410,9 @@ async def ask(request: Request):
         return JSONResponse({"error": blocked}, status_code=429)
     tz = body.get("tz")
     return StreamingResponse(
-        answer_stream(question, location, prior,
-                      visitor_hash(client_ip(request)), tz=tz),
+        _safe_answer_stream(
+            answer_stream(question, location, prior,
+                          visitor_hash(client_ip(request)), tz=tz)),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
