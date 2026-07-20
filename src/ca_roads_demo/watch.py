@@ -45,10 +45,10 @@ FIREBASE_APP_ID = os.environ.get(
     "FIREBASE_APP_ID", "1:15002631928:web:25ce2ed159cda9ea35050d")
 ADMIN_EMAILS = {
     e.strip().lower()
-    for e in os.environ.get("ADMIN_EMAILS", "nic@glazkov.com").split(",")
+    for e in os.environ.get("ADMIN_EMAILS", "").split(",")
     if e.strip()
 }
-VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:nic@glazkov.com")
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "https://commutescout.com")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 ALERT_FROM_EMAIL = os.environ.get("ALERT_FROM_EMAIL", "")
 # OIDC audience + caller for the Cloud Scheduler push. Empty disables the

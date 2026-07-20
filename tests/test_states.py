@@ -293,3 +293,70 @@ def test_bbox_gating():
     maine_box = (43.0, -71.0, 46.0, -67.0)
     assert states._overlaps(maine_box, me_bounds)
     assert not states._overlaps(maine_box, states.IA_BOUNDS)
+
+
+def test_wzdx_cap_limits_markers():
+    payload = {"features": [
+        _wz_feature(f"Job {i}", "2020-01-01T00:00:00Z",
+                    "2030-01-01T00:00:00Z")
+        for i in range(5)]}
+    markers = states._parse_ia_wzdx(payload, src="City of Austin", cap=2)
+    assert len(markers) == 2
+
+
+def test_dms_lines_drop_placeholder_junk():
+    # Idle boards park "." or "-" as the message; those are not messages.
+    assert states._dms_lines("[jl3].") == []
+    assert states._dms_lines(".[nl]-") == []
+    assert states._dms_lines("CRASH AHEAD[nl].") == ["CRASH AHEAD"]
+
+
+async def test_mo_signs_split_br_tags_and_drop_junk():
+    import httpx
+    import respx
+
+    dms = [{"x": "-94.5", "y": "39.1", "dev": "DMS-1",
+            "msg": "I-35 4 MIN<br />4 MILES AHEAD"},
+           {"x": "-94.6", "y": "39.2", "dev": "DMS-2", "msg": "."}]
+    with respx.mock:
+        respx.get(url__regex=r".*MsgBrdV1.*").mock(
+            return_value=httpx.Response(200, json=dms))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_mo_dms(client)
+    live = out["markers"][0]
+    assert live["lines"] == ["I-35 4 MIN", "4 MILES AHEAD"]
+    assert "<br" not in live["message"]
+    assert out["markers"][1].get("blank") is True
+
+
+async def test_us_fires_attach_perimeters_by_name():
+    import httpx
+    import respx
+
+    incidents = {"features": [
+        {"geometry": {"x": -120.5, "y": 46.5},
+         "attributes": {"IncidentName": "Moxee Orchard",
+                        "IncidentSize": 5918, "PercentContained": 40,
+                        "FireDiscoveryDateTime": 1752000000000}},
+        {"geometry": {"x": -105.0, "y": 35.0},
+         "attributes": {"IncidentName": "No Shape",
+                        "IncidentSize": 12, "PercentContained": 0,
+                        "FireDiscoveryDateTime": 1752000000000}},
+    ]}
+    perims = {"features": [
+        {"attributes": {"poly_IncidentName": "Moxee Orchard Fire"},
+         "geometry": {"rings": [[[-120.51, 46.49], [-120.49, 46.49],
+                                 [-120.49, 46.51], [-120.51, 46.51]]]}},
+    ]}
+    with respx.mock:
+        respx.get(url__regex=r".*Incident_Locations.*").mock(
+            return_value=httpx.Response(200, json=incidents))
+        respx.get(url__regex=r".*Perimeters.*").mock(
+            return_value=httpx.Response(200, json=perims))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_us_fires(client)
+    fires = {m["name"]: m for m in out["markers"]}
+    # "Moxee Orchard" joins "Moxee Orchard Fire" via name normalization.
+    assert fires["Moxee Orchard"]["poly"][0] == [46.49, -120.51]
+    # Fires without a perimeter record honestly stay dots.
+    assert "poly" not in fires["No Shape"]

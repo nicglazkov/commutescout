@@ -33,7 +33,8 @@ from ca_roads.cache import TTLCache
 
 NEC_URL = "https://nec-por.ne-compass.com/NEC.XmlDataPortal/api/c2c"
 IA_WZDX_URL = "https://iowa-atms.cloud-q-free.com/api/rest/dataprism/wzdx/wzdxfeed"
-UA = {"User-Agent": "commutescout.com feed client (nic@glazkov.com)"}
+UA = {"User-Agent":
+      "commutescout.com feed client (https://commutescout.com)"}
 
 TTL = 180.0
 MAX_SERVE = 1800.0
@@ -129,7 +130,9 @@ _DMS_NOISE = re.compile(r"\[[a-z]{2}[^\]]*\]", re.IGNORECASE)
 def _dms_lines(message: str) -> list[str]:
     parts = _DMS_BREAK.split(message or "")
     lines = [_DMS_NOISE.sub("", p).strip() for p in parts]
-    return [ln for ln in lines if ln]
+    # Some agencies park placeholder junk like "." or "-" on idle
+    # boards; a line with no letters or digits is not a message.
+    return [ln for ln in lines if re.search(r"[A-Za-z0-9]", ln)]
 
 
 def _closure_cls(el) -> str:
@@ -713,13 +716,36 @@ WZDX_FEEDS = {
             "https://filter.ritis.org/wzdx_v4.1/mdot.geojson"),
     "mow": ("Missouri", "MoDOT", MO_BOUNDS,
             "https://traveler.modot.org/timconfig/feed/desktop/mo_wzdx.json"),
+    # 2026-07-20 wave. All CC0 per the FHWA registry. The Oklahoma
+    # access token is PUBLISHED verbatim in the public registry entry
+    # (intentionally public, not a secret).
+    "ky": ("Kentucky", "KYTC", (36.4, -89.6, 39.2, -81.9),
+           "https://storage.googleapis.com/kytc-its-2020-openrecords/"
+           "public/feeds/WZDx/kytc_wzdx_v4.1.geojson"),
+    "ok": ("Oklahoma", "ODOT (OK)", (33.6, -103.1, 37.1, -94.4),
+           "https://oktraffic.org/api/Geojsons/workzones?access_token="
+           "feOPynfHRJ5sdx8tf3IN5yOsGz89TAUuzHsN3V0jo1Fg41LcpoLhIRltaTPm"
+           "DngD"),
+    "hi": ("Hawaii", "HDOT", (18.5, -160.6, 22.6, -154.7),
+           "https://ai.blyncsy.io/wzdx/hidot/feed"),
+    "la": ("Louisiana", "Louisiana DOTD", (28.8, -94.1, 33.1, -88.7),
+           "https://wzdx.e-dot.com/la_dot_d_feed_wzdx_v4.1.geojson"),
+    "de": ("Delaware", "DelDOT", (38.4, -75.8, 39.9, -74.9),
+           "https://wzdx.e-dot.com/del_dot_feed_wzdx_v4.1.geojson"),
+    "txa": ("Texas (Austin)", "City of Austin", (30.0, -98.2, 30.7, -97.4),
+            "https://data.austintexas.gov/download/d9mm-cjw9"),
 }
 
 
-async def _fetch_wzdx(client, url: str, src: str) -> dict:
+# Per-feed marker caps where the default (2000) misfits: Austin is one
+# metro whose permit feed would otherwise outweigh entire states.
+WZDX_CAPS = {"txa": 400}
+
+
+async def _fetch_wzdx(client, url: str, src: str, cap: int = 2000) -> dict:
     resp = await client.get(url, headers=UA, timeout=45.0)
     resp.raise_for_status()
-    return {"markers": _parse_ia_wzdx(resp.json(), src)}
+    return {"markers": _parse_ia_wzdx(resp.json(), src, cap=cap)}
 
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -882,8 +908,10 @@ async def _fetch_mo_dms(client) -> dict:
             continue
         if not lat or not lon:
             continue
-        lines = [ln.strip() for ln in re.split(r"[\n|]+", s.get("msg") or "")
-                 if ln.strip()][:6]
+        # The feed embeds literal <br /> tags between lines.
+        lines = [ln.strip()
+                 for ln in re.split(r"(?:<[^>]+>|[\n|])+", s.get("msg") or "")
+                 if ln.strip() and re.search(r"[A-Za-z0-9]", ln)][:6]
         marker = {
             "kind": "sign", "lat": lat, "lon": lon,
             "route": None, "direction": None,
@@ -900,14 +928,27 @@ WFIGS_QUERY_URL = (
     "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
     "WFIGS_Incident_Locations_Current/FeatureServer/0/query"
 )
+WFIGS_PERIM_URL = (
+    "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
+    "WFIGS_Interagency_Perimeters_YearToDate/FeatureServer/0/query"
+)
 US_BOUNDS = (18.0, -170.0, 72.0, -60.0)
+
+
+def _norm_fire(name: str) -> str:
+    """Same normalization the CA pipeline uses to join the incident and
+    perimeter layers: drop a trailing 'Fire', keep alphanumerics."""
+    cleaned = re.sub(r"\s+fire\s*$", "", (name or "").strip(), flags=re.I)
+    return re.sub(r"[^A-Z0-9]", "", cleaned.upper())
 
 
 async def _fetch_us_fires(client) -> dict:
     """Active wildfires OUTSIDE California from the same national WFIGS
     layer the CA feed queries (CA fires keep their richer pipeline with
-    CAL FIRE merge and perimeters, so exclude them here to avoid
-    duplicates). No mapped perimeters yet; popups say so honestly."""
+    CAL FIRE merge, so exclude them here to avoid duplicates). Mapped
+    burn footprints join from the YearToDate perimeter layer by
+    normalized name; fires without a perimeter record stay dots and the
+    popup says so."""
     resp = await client.get(WFIGS_QUERY_URL, headers=UA, timeout=25.0, params={
         "where": "POOState<>'US-CA' AND IncidentTypeCategory='WF' "
                  "AND ActiveFireCandidate=1",
@@ -935,6 +976,46 @@ async def _fetch_us_fires(client) -> dict:
                            if isinstance(disc, (int, float)) else None),
             "src": "WFIGS",
         })
+    with contextlib.suppress(Exception):
+        # Perimeters refine the picture but never gate the dots. One
+        # nationwide query, server-simplified (~200m) and decimated to
+        # keep the cached mapdata payload phone-friendly.
+        presp = await client.get(
+            WFIGS_PERIM_URL, headers=UA, timeout=25.0, params={
+                # Not-out fires only: YearToDate otherwise carries every
+                # perimeter since January. Biggest first so the record
+                # cap sheds the least visible footprints.
+                "where": "attr_POOState<>'US-CA' "
+                         "AND attr_FireOutDateTime IS NULL "
+                         "AND attr_IncidentTypeCategory='WF'",
+                "outFields": "poly_IncidentName",
+                "orderByFields": "poly_GISAcres DESC",
+                "resultRecordCount": 1000,
+                "maxAllowableOffset": 0.002,
+                "returnGeometry": "true", "outSR": "4326", "f": "json",
+            })
+        presp.raise_for_status()
+        ppay = presp.json()
+        if "error" in ppay:
+            raise RuntimeError(f"WFIGS perimeters: {ppay['error']}")
+        by_name: dict[str, list] = {}
+        for feat in ppay.get("features") or []:
+            attrs = feat.get("attributes") or {}
+            key = _norm_fire(attrs.get("poly_IncidentName") or "")
+            rings = (feat.get("geometry") or {}).get("rings") or []
+            pts = [(pt[1], pt[0]) for ring in rings for pt in ring
+                   if isinstance(pt, list) and len(pt) >= 2]
+            if key and pts:
+                # Keep the largest footprint when a name repeats
+                # (YearToDate holds successive uploads).
+                if len(pts) > len(by_name.get(key) or []):
+                    by_name[key] = pts
+        for m in markers:
+            pts = by_name.get(_norm_fire(m["name"] or ""))
+            if pts:
+                step = max(1, len(pts) // 300)
+                m["poly"] = [[round(a, 4), round(b, 4)]
+                             for a, b in pts[::step]]
     return {"markers": markers}
 
 
@@ -983,7 +1064,8 @@ async def markers_for_bbox(client, box, want) -> list[dict]:
         if _overlaps(box, bounds):
             lookups.append(_cache.get(
                 f"wzdx:{code}", WZDX_TTL, MAX_SERVE,
-                lambda u=url, s=src: _fetch_wzdx(client, u, s)))
+                lambda u=url, s=src, k=WZDX_CAPS.get(code, 2000):
+                _fetch_wzdx(client, u, s, cap=k)))
     for code, (_st, bounds, fetcher) in KEYLESS_STATES.items():
         if _overlaps(box, bounds):
             lookups.append(_cache.get(
@@ -1025,8 +1107,9 @@ async def prewarm(client) -> None:
         for i in range(0, len(codes), 3):
             await asyncio.gather(*[
                 _cache.get(f"wzdx:{c}", WZDX_TTL, MAX_SERVE,
-                           lambda u=WZDX_FEEDS[c][3], s=WZDX_FEEDS[c][1]:
-                           _fetch_wzdx(client, u, s))
+                           lambda u=WZDX_FEEDS[c][3], s=WZDX_FEEDS[c][1],
+                           k=WZDX_CAPS.get(c, 2000):
+                           _fetch_wzdx(client, u, s, cap=k))
                 for c in codes[i:i + 3]
             ], return_exceptions=True)
         # Camera bundles are ~20 MB each; warm them after the light feeds.
