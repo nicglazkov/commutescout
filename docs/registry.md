@@ -21,23 +21,26 @@ deploy, once the service URL exists.
 Submission form asks for a name, the connector URL, and a description.
 
 - Name: `CommuteScout`
-- URL: `https://<service-url>/mcp`
+- URL: `https://mcp.commutescout.com/mcp`
 - Short description:
 
-  > Live California road conditions. Ask about a route and get current CHP
-  > incidents, Caltrans lane closures, chain controls, and wildfires near
-  > the road, straight from the official feeds.
+  > Live US road conditions across 32 states. Ask about a route or a place
+  > and get current incidents, closures, chain controls, and wildfires
+  > straight from official state DOT feeds, with the deepest coverage in
+  > California.
 
 - Longer description:
 
-  > CommuteScout gives your assistant live California road intelligence. Ask
-  > "do I need chains to get to Tahoe?", "is 17 clear right now?", or "how
-  > is the Bay Area?" and it answers from the same feeds Caltrans and CHP
-  > publish: real-time incidents, closures that are physically in place
-  > (with lane closures, ramp closures, and full roadway closures told
-  > apart), chain-control levels, and active wildfires near major highways.
-  > Route checks cover 17 major corridors; region reports cover the Bay
-  > Area, SoCal, the Sierra, and five more. Every answer carries per-source
-  > timestamps so the assistant can tell you how fresh the data is.
-  > Read-only public data, no account needed. Not affiliated with any
+  > CommuteScout gives your assistant live road intelligence across 32 US
+  > states. Ask "do I need chains to get to Tahoe?", "is 17 clear right
+  > now?", or "any roadwork near Salt Lake City?" and it answers from the
+  > same feeds state transportation agencies publish: real-time incidents,
+  > closures that are physically in place (with lane, ramp, and full
+  > roadway closures told apart), chain controls, live sign text, road
+  > weather, and active wildfires with mapped burn footprints. California
+  > has the richest detail (CHP dispatch logs, 17 route corridors, region
+  > reports); everywhere else a nearby-events tool serves the same live
+  > map data, and each event names its source agency. Every answer carries
+  > per-source timestamps so the assistant can tell you how fresh the data
+  > is. Read-only public data, no account needed. Not affiliated with any
   > government agency; verify before you drive.
