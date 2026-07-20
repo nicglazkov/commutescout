@@ -163,6 +163,9 @@ aside { background:var(--card); border-right:1px solid var(--line);
   box-shadow:0 4px 14px rgba(0,0,0,.25); transition:opacity .35s;
   max-width:88%; white-space:nowrap; overflow:hidden }
 .maploading.gone { opacity:0 }
+.maploading.clickable { pointer-events:auto; cursor:pointer }
+.maploading.clickable span { text-decoration:underline;
+  text-underline-offset:3px }
 .maploading i { flex:none; width:12px; height:12px; border-radius:50%;
   border:2px solid #7fb1f9; border-top-color:transparent;
   animation:mlspin .8s linear infinite }
@@ -1671,18 +1674,17 @@ function mapLoadingDone() {
   mapLoadingEl.classList.add('gone');
   setTimeout(() => mapLoadingEl.remove(), 450);
 }
+// After 5 seconds the pill turns into a clickable refresh prompt; a
+// reload restarts the preload fetch, which is the fastest recovery
+// when the first request got a bad instance.
+let mapRefreshPrompt = false;
 setTimeout(() => {
-  if (!mapDataShown) {
-    mapLoadingText.textContent =
-      'Still loading - waking up the live data feeds…';
-  }
-}, 6000);
-setTimeout(() => {
-  if (!mapDataShown) {
-    mapLoadingText.textContent =
-      'Almost there - gathering reports from 40+ live sources…';
-  }
-}, 20000);
+  if (mapDataShown) return;
+  mapRefreshPrompt = true;
+  mapLoadingText.textContent = 'Still loading? Try refreshing the page';
+  mapLoadingEl.classList.add('clickable');
+  mapLoadingEl.addEventListener('click', () => location.reload());
+}, 5000);
 
 async function refreshAmbient(force) {
   const view = map.getBounds();
@@ -1725,7 +1727,11 @@ async function refreshAmbient(force) {
   } else if (!mapDataShown) {
     // The page is useless without the first batch: keep retrying with
     // backoff instead of sitting blank until the 3-minute refresh.
-    mapLoadingText.textContent = 'Connection hiccup - retrying…';
+    // The clickable refresh prompt, once shown, is more actionable
+    // than the hiccup note, so it stays.
+    if (!mapRefreshPrompt) {
+      mapLoadingText.textContent = 'Connection hiccup - retrying…';
+    }
     setTimeout(() => refreshAmbient(true), mapRetryDelay);
     mapRetryDelay = Math.min(mapRetryDelay * 2, 30000);
   }
