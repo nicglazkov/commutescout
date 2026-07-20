@@ -1,17 +1,14 @@
 name: Evals
 
 # The suite is 91 questions answered by the production model plus a
-# Sonnet 4.6 judge per answer - roughly a dollar per run. It runs
-# monthly and on demand; a
-# release only triggers it when the release changed something a model
-# can notice (feeds, tools, prompts, or the evals themselves). A week
-# of rapid-fire docs/UI releases once burned ~$100 re-scoring identical
-# behavior; the gate below is what prevents that.
+# Sonnet 4.6 judge per answer. MANUAL DISPATCH ONLY: the release
+# trigger (even diff-gated) burned through the workspace's entire
+# monthly API budget twice - a week of rapid releases that touch feed
+# code fires a full multi-turn run every time, and each run costs far
+# more than the demo assistant serves in a month. Run it by hand from
+# the Actions tab when a prompt or tool change actually warrants
+# re-scoring.
 on:
-  release:
-    types: [published]
-  schedule:
-    - cron: "7 14 1 * *" # first of the month; dispatch for ad-hoc runs
   workflow_dispatch:
 
 jobs:

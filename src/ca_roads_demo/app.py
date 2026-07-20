@@ -61,7 +61,7 @@ MAX_TOKENS_PER_TURN = 1024
 # Cost guards. The dollar cap is computed from actual usage at list pricing
 # (standard rates, not intro discounts, so the cap errs on the early side).
 PER_IP_DAILY_QUESTIONS = int(os.environ.get("DEMO_PER_IP_DAILY", "20"))
-GLOBAL_DAILY_DOLLARS = float(os.environ.get("DEMO_DAILY_DOLLARS", "3.0"))
+GLOBAL_DAILY_DOLLARS = float(os.environ.get("DEMO_DAILY_DOLLARS", "1.5"))
 # (input $/MTok, output $/MTok); unknown models assume Sonnet pricing.
 PRICING_PER_MTOK = {
     "claude-haiku-4-5": (1.00, 5.00),
