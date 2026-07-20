@@ -1491,6 +1491,7 @@ function layerForItem(it) {
   }
   return it.layer;
 }
+let lastCullBounds = null;
 function cullSync() {
   const view = map.getBounds().pad(0.6);
   for (const g of Object.keys(items)) {
@@ -1501,11 +1502,25 @@ function cullSync() {
       else if (!inView && it.on) { grp.removeLayer(it.layer); it.on = false; }
     }
   }
+  lastCullBounds = view;
 }
 let cullTimer = null;
 map.on('moveend zoomend', () => {
   clearTimeout(cullTimer);
-  cullTimer = setTimeout(cullSync, 120);
+  // Leaving the last culled area (a big zoom-out, a long pan) means
+  // real attach work is coming: say so instead of a frozen beat.
+  if (mapDataShown && lastCullBounds
+      && !lastCullBounds.contains(map.getBounds())) {
+    showPill('Updating the map…');
+  }
+  cullTimer = setTimeout(() => {
+    // One painted frame between showing the pill and the synchronous
+    // attach work, so the pill is actually visible during it.
+    requestAnimationFrame(() => {
+      cullSync();
+      if (mapDataShown) hidePill();
+    });
+  }, 120);
 });
 
 function rebuildSigns() {
@@ -1668,11 +1683,20 @@ const mapLoadingEl = document.getElementById('maploading');
 const mapLoadingText = document.getElementById('maploadingtext');
 let mapDataShown = false;
 let mapRetryDelay = 4000;
+// The pill is reusable: first data load, failed-fetch retries, and the
+// re-attach work when a zoom-out pulls thousands of culled markers
+// back onto the canvas all share it.
+function showPill(text) {
+  mapLoadingEl.classList.remove('gone');
+  mapLoadingText.textContent = text;
+}
+function hidePill() { mapLoadingEl.classList.add('gone'); }
 function mapLoadingDone() {
-  if (mapDataShown) return;
-  mapDataShown = true;
-  mapLoadingEl.classList.add('gone');
-  setTimeout(() => mapLoadingEl.remove(), 450);
+  if (!mapDataShown) {
+    mapDataShown = true;
+    mapLoadingEl.classList.remove('clickable');
+  }
+  hidePill();
 }
 // After 5 seconds the pill turns into a clickable refresh prompt; a
 // reload restarts the preload fetch, which is the fastest recovery
