@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from ca_roads.dedupe import dedupe
 from ca_roads.feeds import bay511 as bay511_feed
@@ -64,6 +65,12 @@ def get_road() -> RoadData:
     return _road
 
 
+
+def _read_only(title: str) -> ToolAnnotations:
+    """Directory-required annotations: every tool here reads public
+    data and mutates nothing."""
+    return ToolAnnotations(title=title, readOnlyHint=True,
+                           openWorldHint=True)
 MILES_PER_METER = 1 / 1609.344
 
 
@@ -256,7 +263,7 @@ REGION_CLOSURE_CAP = 12
 REGION_FIRE_CAP = 10
 
 
-@mcp.tool()
+@mcp.tool(annotations=_read_only("Check a route"))
 async def check_route(
     from_place: str,
     to_place: str,
@@ -599,7 +606,7 @@ async def check_route(
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=_read_only("Check a region"))
 async def check_region(region: str) -> dict:
     """Full current-conditions report for a California region.
 
@@ -742,7 +749,7 @@ async def check_region(region: str) -> dict:
     return payload
 
 
-@mcp.tool()
+@mcp.tool(annotations=_read_only("Live incidents"))
 async def get_incidents(
     highway: str | None = None,
     area: str | None = None,
@@ -817,7 +824,7 @@ async def get_incidents(
     return payload
 
 
-@mcp.tool()
+@mcp.tool(annotations=_read_only("Lane closures"))
 async def get_lane_closures(
     route: str | None = None,
     district: int | None = None,
@@ -885,7 +892,7 @@ async def get_lane_closures(
     return payload
 
 
-@mcp.tool()
+@mcp.tool(annotations=_read_only("Chain controls"))
 async def get_chain_controls(
     route: str | None = None,
     center: str | None = None,
@@ -940,7 +947,7 @@ async def get_chain_controls(
     return payload
 
 
-@mcp.tool()
+@mcp.tool(annotations=_read_only("Wildfires"))
 async def get_wildfires(
     near_route: str | None = None,
     center: str | None = None,
@@ -1037,7 +1044,7 @@ async def get_wildfires(
 
 
 
-@mcp.tool()
+@mcp.tool(annotations=_read_only("Rank busiest routes"))
 async def rank_routes(by: str = "activity", limit: int = 5) -> dict:
     """Which major corridors have the most going on right now.
 
@@ -1174,7 +1181,7 @@ async def _live_cameras(candidates, limit: int):
     return live, dropped
 
 
-@mcp.tool()
+@mcp.tool(annotations=_read_only("Highway cameras"))
 async def get_cameras(
     center: str | None = None,
     route: str | None = None,
@@ -1230,7 +1237,7 @@ async def get_cameras(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_read_only("Message signs"))
 async def get_road_signs(
     route: str | None = None,
     center: str | None = None,
@@ -1272,7 +1279,7 @@ async def get_road_signs(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_read_only("Nearby events (nationwide)"))
 async def get_nearby_events(
     center: str,
     radius_km: float = 40,
