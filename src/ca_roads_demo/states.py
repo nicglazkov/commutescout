@@ -426,13 +426,37 @@ def _ut_key() -> str:
 
 UT_BOUNDS = (36.9, -114.1, 42.1, -109.0)
 
+# Travel-IQ platform states: one client, per-state host and key.
+# code: (state, bounds, api base, key env var, source label)
+TRAVELIQ = {
+    "utk": ("Utah", UT_BOUNDS, "https://www.udottraffic.utah.gov",
+            "UT511_API_KEY", "UDOT"),
+    "azk": ("Arizona", (31.3, -114.9, 37.1, -109.0), "https://az511.gov",
+            "AZ511_API_KEY", "ADOT"),
+    "akk": ("Alaska", (54.5, -170.0, 71.5, -129.9),
+            "https://511.alaska.gov", "AK511_API_KEY", "Alaska DOT&PF"),
+}
+
+
+def _tiq_ready(code):
+    import os
+    env = TRAVELIQ[code][3]
+    return lambda: os.environ.get(env, "")
+
 
 async def _fetch_ut(client) -> dict:
-    """Utah full coverage via the UDOT Travel-IQ API (same family as
-    the Nevada client): events, cameras, live sign text, and road
-    weather. Supersedes the WZDx-only Utah feed when the key is set."""
-    key = _ut_key()
-    base = "https://www.udottraffic.utah.gov/api/v2/get"
+    """Kept for tests and as the template call: Utah via Travel-IQ."""
+    return await _fetch_traveliq(client, "utk")
+
+
+async def _fetch_traveliq(client, code: str) -> dict:
+    """Full coverage for a Travel-IQ state (same API family as the
+    Nevada client): events, cameras, live sign text, and road weather.
+    A ready key supersedes the state's WZDx-only feed."""
+    import os
+    _st, _bounds, host, env, src = TRAVELIQ[code]
+    key = os.environ.get(env, "")
+    base = f"{host}/api/v2/get"
 
     async def get(res):
         r = await client.get(f"{base}/{res}", headers=UA, timeout=30.0,
@@ -453,9 +477,9 @@ async def _fetch_ut(client) -> dict:
         if not lat or not lon:
             continue
         start = e.get("StartDate")
-        # Future-scheduled work stays off the map. Lapsed planned end
-        # dates are NOT trusted: UDOT keeps them on live work (the same
-        # quirk their WZDx feed has).
+        # Future-scheduled work stays off the map. Lapsed planned
+        # end dates are NOT trusted: these agencies keep them on
+        # live work (the same quirk UDOT's WZDx feed has).
         if isinstance(start, (int, float)) and start > now:
             continue
         desc = re.sub(r"\s+", " ", (e.get("Description") or "")).strip()
@@ -466,16 +490,18 @@ async def _fetch_ut(client) -> dict:
             markers.append({
                 "kind": "incident", "lat": lat, "lon": lon,
                 "type": e.get("EventSubType") or "Incident",
-                "label": label, "src": "UDOT"})
+                "label": label, "src": src})
         else:
+            etype = (e.get("EventType") or "")
             lanes = (e.get("LanesAffected") or "").lower()
             cls = ("full-roadway"
-                   if re.search(r"all lanes|full closure", lanes)
+                   if etype == "closures"
+                   or re.search(r"all lanes|full closure", lanes)
                    else "lane")
             markers.append({
                 "kind": "lane_closure", "lat": lat, "lon": lon,
                 "cls": cls, "label": label, "route": road or None,
-                "src": "UDOT"})
+                "src": src})
     for c in cams:
         try:
             lat, lon = float(c.get("Latitude")), float(c.get("Longitude"))
@@ -489,7 +515,7 @@ async def _fetch_ut(client) -> dict:
             "kind": "camera", "lat": lat, "lon": lon,
             "name": c.get("Location") or c.get("Roadway"),
             "route": c.get("Roadway"), "direction": c.get("Direction"),
-            "near": c.get("Location"), "image": url, "src": "UDOT"})
+            "near": c.get("Location"), "image": url, "src": src})
     for s in signs:
         try:
             lat, lon = float(s.get("Latitude")), float(s.get("Longitude"))
@@ -506,7 +532,7 @@ async def _fetch_ut(client) -> dict:
              "route": s.get("Roadway"),
              "direction": s.get("DirectionOfTravel"),
              "near": s.get("Name") or "Message sign",
-             "message": " / ".join(lines), "lines": lines, "src": "UDOT"}
+             "message": " / ".join(lines), "lines": lines, "src": src}
         if not lines:
             m["blank"] = True
         markers.append(m)
@@ -517,7 +543,7 @@ async def _fetch_ut(client) -> dict:
             continue
         marker = {"kind": "rwis", "lat": lat, "lon": lon,
                   "name": w.get("StationName") or "Weather station",
-                  "src": "UDOT"}
+                  "src": src}
         with contextlib.suppress(TypeError, ValueError):
             marker["air_c"] = round(
                 (float(w.get("AirTemperature")) - 32) * 5 / 9, 1)
@@ -782,17 +808,136 @@ async def _fetch_oh(client) -> dict:
     return {"markers": markers}
 
 
+def _co_key() -> str:
+    import os
+    return os.environ.get("COTRIP_API_KEY", "")
+
+
+CO_BOUNDS = (36.9, -109.1, 41.1, -102.0)
+
+
+def _co_when(iso: str | None) -> float | None:
+    if not iso:
+        return None
+    with contextlib.suppress(ValueError):
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+    return None
+
+
+async def _fetch_co(client) -> dict:
+    """Colorado via CDOT's sanctioned data.cotrip.org API: incidents,
+    roadwork, live sign text, and weather stations. The API publishes
+    no still-camera resource; cameras wait."""
+    key = _co_key()
+    base = "https://data.cotrip.org/api/v1"
+
+    async def get(res):
+        r = await client.get(f"{base}/{res}", headers=UA, timeout=30.0,
+                             params={"apiKey": key})
+        r.raise_for_status()
+        return (r.json() or {}).get("features") or []
+
+    inc, planned, signs, wx = await asyncio.gather(
+        get("incidents"), get("plannedEvents"), get("signs"),
+        get("weatherStations"))
+    now = time.time()
+    markers: list[dict] = []
+
+    def point(feat):
+        geom = feat.get("geometry") or {}
+        coords = geom.get("coordinates") or []
+        if geom.get("type") == "MultiPoint" and coords:
+            coords = coords[0]
+        if isinstance(coords, list) and len(coords) >= 2:
+            return coords[1], coords[0]
+        return None, None
+
+    for f in inc:
+        lat, lon = point(f)
+        p = f.get("properties") or {}
+        if not lat or not lon:
+            continue
+        label = re.sub(r"\s+", " ",
+                       (p.get("travelerInformationMessage") or "")).strip()
+        markers.append({
+            "kind": "incident", "lat": lat, "lon": lon,
+            "type": p.get("type") or "Incident",
+            "label": (label or p.get("type") or "Incident")[:220],
+            "src": "CDOT"})
+    for f in planned:
+        lat, lon = point(f)
+        p = f.get("properties") or {}
+        if not lat or not lon:
+            continue
+        start = _co_when(p.get("startTime"))
+        clear = _co_when(p.get("clearTime"))
+        if (start and start > now) or (clear and clear < now):
+            continue
+        label = re.sub(r"\s+", " ",
+                       (p.get("travelerInformationMessage") or "")).strip()
+        cls = "lane"
+        for imp in p.get("laneImpacts") or []:
+            types = [t.lower() for t in imp.get("closedLaneTypes") or []]
+            closed = str(imp.get("laneClosures") or "0")
+            if (closed.isdigit() and imp.get("laneCount")
+                    and int(closed) >= imp["laneCount"]
+                    and not all("shoulder" in t for t in types)):
+                cls = "full-roadway"
+        markers.append({
+            "kind": "lane_closure", "lat": lat, "lon": lon, "cls": cls,
+            "label": (label or p.get("type") or "Roadwork")[:220],
+            "route": p.get("routeName"), "src": "CDOT"})
+    for f in signs:
+        lat, lon = point(f)
+        p = f.get("properties") or {}
+        if not lat or not lon:
+            continue
+        lines = (_dms_lines(p.get("messageMarkup") or "")[:6]
+                 if (p.get("displayStatus") or "") == "on" else [])
+        m = {"kind": "sign", "lat": lat, "lon": lon,
+             "route": p.get("routeName"), "direction": p.get("direction"),
+             "near": p.get("publicName") or "Message sign",
+             "message": " / ".join(lines), "lines": lines, "src": "CDOT"}
+        if not lines:
+            m["blank"] = True
+        markers.append(m)
+    for f in wx:
+        lat, lon = point(f)
+        p = f.get("properties") or {}
+        if not lat or not lon:
+            continue
+        marker = {"kind": "rwis", "lat": lat, "lon": lon,
+                  "name": p.get("publicName") or p.get("name")
+                  or "Weather station", "src": "CDOT"}
+        for sensor in p.get("sensors") or []:
+            stype = (sensor.get("type") or "").lower()
+            reading = sensor.get("currentReading")
+            if ("surface status" in stype and reading
+                    and str(reading).lower() not in ("none", "unknown")):
+                marker["surface"] = str(reading)
+                break
+        markers.append(marker)
+    return {"markers": markers}
+
+
 KEYED_STATES = {
     # code: (display state, bounds, fetcher, ready-check)
     "wa": ("Washington", WA_BOUNDS, _fetch_wa, _wa_key),
     "or": ("Oregon", OR_BOUNDS, _fetch_or, _or_key),
     "oh": ("Ohio", OH_BOUNDS, _fetch_oh, _oh_key),
-    "utk": ("Utah", UT_BOUNDS, _fetch_ut, _ut_key),
+    "cok": ("Colorado", CO_BOUNDS, _fetch_co, _co_key),
 }
+# Travel-IQ states share one fetcher; the registry entries are built
+# from the TRAVELIQ table so a new state there is one line.
+for _c in TRAVELIQ:
+    KEYED_STATES[_c] = (
+        TRAVELIQ[_c][0], TRAVELIQ[_c][1],
+        (lambda client, cc=_c: _fetch_traveliq(client, cc)),
+        _tiq_ready(_c))
 
 # A ready keyed state replaces its WZDx-only feed so roadwork is not
 # drawn twice. keyed code -> wzdx code.
-SUPERSEDES = {"utk": "ut"}
+SUPERSEDES = {"utk": "ut", "azk": "az"}
 
 
 def _wzdx_superseded(wzdx_code: str) -> bool:
@@ -859,6 +1004,11 @@ WZDX_FEEDS = {
            "https://wzdx.e-dot.com/del_dot_feed_wzdx_v4.1.geojson"),
     "txa": ("Texas (Austin)", "City of Austin", (30.0, -98.2, 30.7, -97.4),
             "https://data.austintexas.gov/download/d9mm-cjw9"),
+    # The app_key below is published in the public FHWA registry entry
+    # (FDOT's one.network WZDx distribution), not a private secret.
+    "flw": ("Florida", "FDOT (WZDx)", (24.3, -87.7, 31.1, -79.8),
+            "https://us-datacloud.one.network/fdot/feed.json?app_key="
+            "c4090b04-26de-c9ee-873b2bd9a38c"),
 }
 
 
@@ -1235,6 +1385,100 @@ async def _fetch_ms(client) -> dict:
     return {"markers": markers}
 
 
+FL_BOUNDS = (24.3, -87.7, 31.1, -79.8)
+FL_DIVAS_BASE = "https://gis.fdot.gov/arcgis/rest/services"
+
+
+async def _fl_layer(client, service: str, cap: int = 6000) -> list[dict]:
+    """One DIVAS FeatureServer layer, paged (server max is below the
+    camera count)."""
+    out: list[dict] = []
+    for offset in range(0, cap, 2000):
+        resp = await client.get(
+            f"{FL_DIVAS_BASE}/{service}/FeatureServer/0/query",
+            headers=UA, timeout=30.0, params={
+                "where": "1=1", "outFields": "*", "returnGeometry": "true",
+                "outSR": 4326, "f": "json",
+                "resultRecordCount": 2000, "resultOffset": offset,
+            })
+        resp.raise_for_status()
+        payload = resp.json()
+        if "error" in payload:
+            raise RuntimeError(f"DIVAS {service}: {payload['error']}")
+        feats = payload.get("features") or []
+        out.extend(feats)
+        if len(feats) < 2000:
+            break
+    return out
+
+
+async def _fetch_fl(client) -> dict:
+    """Florida via FDOT's keyless DIVAS ArcGIS layers: the same live
+    events FL511 shows, 4,900+ cameras with still images, and message
+    boards. FL511's own API is agreement-gated; this is FDOT's public
+    distribution of the same SunGuide data."""
+    events, cams, dms = await asyncio.gather(
+        _fl_layer(client, "DIVAS_GetEvent", cap=2000),
+        _fl_layer(client, "DIVAS_Cameras"),
+        _fl_layer(client, "DIVAS_MessageBoard", cap=2000))
+    markers: list[dict] = []
+    for f in events:
+        geom, a = f.get("geometry") or {}, f.get("attributes") or {}
+        lat, lon = geom.get("y"), geom.get("x")
+        if not lat or not lon:
+            continue
+        if (a.get("status") or "").lower() == "resolved":
+            continue
+        desc = re.sub(r"\s+", " ", (a.get("descriptionen") or "")).strip()
+        etype = (a.get("eventtypesae") or a.get("eventtypedesc")
+                 or "").strip()
+        lanes = (a.get("affectedlanes") or "").strip()
+        if re.search(r"construction|road work|maintenance", etype, re.I):
+            cls = ("full-roadway"
+                   if re.search(r"all lanes|closed to traffic", lanes, re.I)
+                   else "lane")
+            markers.append({
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "cls": cls, "label": (desc or etype)[:220],
+                "route": a.get("highway"), "src": "FDOT"})
+        else:
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon,
+                "type": etype or "Incident",
+                "label": (desc or etype or "Incident")[:220],
+                "src": "FDOT"})
+    for f in cams:
+        geom, a = f.get("geometry") or {}, f.get("attributes") or {}
+        lat, lon = geom.get("y"), geom.get("x")
+        url = (a.get("imagefilename") or "").strip()
+        if not lat or not lon or not url.startswith("https://"):
+            continue
+        if (a.get("blockedimage") or "").lower() == "true":
+            continue
+        markers.append({
+            "kind": "camera", "lat": lat, "lon": lon,
+            "name": a.get("description") or a.get("highway"),
+            "route": a.get("highway"), "direction": a.get("direction"),
+            "near": a.get("description"), "image": url, "src": "FDOT"})
+    for f in dms:
+        geom, a = f.get("geometry") or {}, f.get("attributes") or {}
+        lat, lon = geom.get("y"), geom.get("x")
+        if not lat or not lon:
+            continue
+        lines = [ln.strip() for ln in
+                 re.split(r"\n|<[^>]+>|\[nl\]|\[np\]",
+                          a.get("message") or "")
+                 if ln.strip() and re.search(r"[A-Za-z0-9]", ln)][:6]
+        m = {"kind": "sign", "lat": lat, "lon": lon,
+             "route": a.get("highway"), "direction": a.get("direction"),
+             "near": a.get("description") or "Message sign",
+             "message": " / ".join(lines), "lines": lines, "src": "FDOT"}
+        if not lines:
+            m["blank"] = True
+        markers.append(m)
+    return {"markers": markers}
+
+
 WFIGS_QUERY_URL = (
     "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
     "WFIGS_Incident_Locations_Current/FeatureServer/0/query"
@@ -1382,6 +1626,7 @@ KEYLESS_STATES = {
     "det": ("Delaware", DE_BOUNDS, _fetch_de_tmc),
     "tn": ("Tennessee", TN_BOUNDS, _fetch_tn),
     "ms": ("Mississippi", MS_BOUNDS, _fetch_ms),
+    "fl": ("Florida", FL_BOUNDS, _fetch_fl),
     "usf": ("Nationwide", US_BOUNDS, _fetch_us_fires),
 }
 
@@ -1540,6 +1785,7 @@ def source_status() -> list[dict]:
                                   "det": "DelDOT TMC",
                                   "tn": "TDOT SmartWay",
                                   "ms": "MDOT Traffic (MS)",
+                                  "fl": "FDOT DIVAS",
                                   "usf": "WFIGS wildfires"}[code], st))
     for code, (name, _bounds, _fetcher, ready) in KEYED_STATES.items():
         if not ready():
@@ -1547,6 +1793,7 @@ def source_status() -> list[dict]:
                         "enabled": False})
             continue
         agency = {"wa": "WSDOT", "or": "Oregon DOT (TripCheck)",
-                  "oh": "OHGO", "utk": "UDOT"}.get(code, name)
+                  "oh": "OHGO", "utk": "UDOT", "azk": "ADOT",
+                  "akk": "Alaska DOT&PF", "cok": "CDOT"}.get(code, name)
         out.append(_status_entry(f"{code}:all", "All feeds", agency, name))
     return out

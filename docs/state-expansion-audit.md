@@ -15,9 +15,10 @@ What is live on the map today, what one credential would unlock, and
 what stays blocked. Per-category detail lives in
 [state-coverage.md](state-coverage.md).
 
-**Live now (31 jurisdictions).**
-CA (full baseline), ME NH VT (full via NE Compass), WA OR OH (keyed,
-live), MD DE (multi-feed keyless), MI TN MS (new 2026-07-20: MiDrive,
+**Live now (35 jurisdictions, updated 2026-07-21).**
+CA (full baseline), ME NH VT (full via NE Compass), WA OR OH UT AZ AK
+CO (keyed, full), FL (keyless DIVAS + WZDx: events, 4,900 cameras,
+signs), MD DE (multi-feed keyless), MI TN MS (MiDrive,
 SmartWay events, MDOT Traffic), IL AL (cameras via
 TravelMidwest/ALGO), MO (signs + WZDx), IA NC UT AZ ID WI NY IN MN KS
 NJ KY OK HI LA (WZDx roadwork), TX-Austin (city CC0 feed), NV (route
@@ -25,8 +26,8 @@ flow). Wildfires, weather alerts, quakes, and the traffic overlay are
 nationwide.
 
 **One credential away (Nic: see the shopping list below).**
-UT AZ ID NY GA CT LA AK FL (Travel-IQ developer keys, one shared
-client), CO (self-serve key portal, instant), VA (SmarterRoads
+ID NY GA CT LA (Travel-IQ developer keys, one shared
+client), VA (SmarterRoads
 registration), NC (full DriveNC API), OH-WZDx (already keyed via
 OHGO), MI-WZDx (form), MN IA IN KS MA NE (Castle Rock CARS credential
 forms), ALDOT (contact for AL incidents), MT (contact MDT for the
@@ -53,8 +54,8 @@ up on deploy. All are free.
 
 | Priority | State(s) | Where | Steps | Secret name |
 |---|---|---|---|---|
-| 1 | CO | manage-api.cotrip.org | Create account, request key (self-serve, instant); feeds at data.cotrip.org/api/v1 | `cotrip-api-key` |
-| 2 | FL | fl511.com/my511/register | Register, then request Developer key under fl511.com/developers/doc | `fl511-api-key` |
+| 1 | CO | DONE (key live 2026-07-21) | `cotrip-api-key` |
+| 2 | FL | DONE keylessly (FDOT DIVAS + WZDx, 2026-07-21). Optional richer FL511 API: email James.Landini@dot.state.fl.us (no self-serve portal exists) | `fl511-api-key` (only if FDOT grants one) |
 | 3 | GA | 511ga.org/my511/register | Same Travel-IQ flow | `ga511-api-key` |
 | 4 | CT | ctroads.org/my511/register | Same Travel-IQ flow | `ct511-api-key` |
 | 5 | LA | 511la.org/my511/register | Same Travel-IQ flow (upgrades the WZDx-only coverage) | `la511-api-key` |

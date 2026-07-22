@@ -25,7 +25,10 @@ state's WZDx roadwork feed.
 | Iowa | - (9) | Y (wz) | - (9) | - (9) | - (9) | n/a | Y* |
 | North Carolina | - (10) | Y (wz) | - (10) | - (10) | - (10) | n/a | Y* |
 | Utah | Y | Y | Y | Y | Y | - (22) | Y* |
-| Arizona | - (11) | Y (wz) | - (11) | - (11) | - (11) | n/a | Y* |
+| Arizona | Y | Y | Y | Y | Y | n/a | Y* |
+| Alaska | Y | Y | Y | Y | Y | - (22) | Y* |
+| Colorado | Y | Y | - (23) | Y | Y | - (22) | Y* |
+| Florida | Y | Y | Y | Y | - (24) | n/a | Y* |
 | Idaho | - (11) | Y (wz) | - (11) | - (11) | - (11) | - (11) | Y* |
 | Wisconsin | - (11) | Y (wz) | Y** | - (11) | - (11) | n/a | Y* |
 | New York | - (11) | Y (wz) | - (11) | - (11) | - (11) | n/a | Y* |
@@ -86,10 +89,10 @@ state.
 10. **NC beyond closures**: DriveNC's full API needs the key Nic
     holds, but its endpoint paths are only documented inside their SPA;
     discovery pending.
-11. **Travel-IQ states (AZ, ID, WI, NY)**: full incidents, cameras,
+11. **Travel-IQ states (ID, WI, NY)**: full incidents, cameras,
     signs, and weather exist behind the free developer key; requests
     are submitted and each state upgrades the moment its key arrives
-    (Utah upgraded this way in v2.34.0).
+    (Utah, Arizona, and Alaska upgraded this way).
 12. **IN, KS**: full data is in the credentialed Castle Rock CARS
     feeds (request-form access).
 13. **MN**: metro-area IRIS XML dumps (incidents, signs, RWIS,
@@ -119,5 +122,11 @@ state.
     stable key means a full upgrade.
 21. **MS beyond alerts**: sign and camera endpoints exist on
     mdottraffic.com but are not yet resolved to stable URLs.
-22. **UT chains**: UDOT publishes seasonal chain-law state inside the
-    roadconditions resource; a winter parser is queued for the season.
+22. **UT, AK, CO chains**: chain and traction law state lives inside
+    each API's road-conditions resource; a winter parser is queued for
+    the season.
+23. **CO cameras**: CDOT's data API publishes no camera resource;
+    their camera platform is separate.
+24. **FL road weather**: FDOT's keyless DIVAS layers carry events,
+    cameras, and message boards but no RWIS; the FL511 API behind
+    FDOT's data agreement would add it.
