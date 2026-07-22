@@ -29,6 +29,7 @@ state's WZDx roadwork feed.
 | Alaska | Y | Y | Y | Y | Y | - (22) | Y* |
 | Colorado | Y | Y | - (23) | Y | Y | - (22) | Y* |
 | Florida | Y | Y | Y | Y | - (24) | n/a | Y* |
+| Virginia | Y | Y (wz) | - (25) | Y | Y | n/a | Y* |
 | Idaho | - (11) | Y (wz) | - (11) | - (11) | - (11) | - (11) | Y* |
 | Wisconsin | - (11) | Y (wz) | Y** | - (11) | - (11) | n/a | Y* |
 | New York | - (11) | Y (wz) | - (11) | - (11) | - (11) | n/a | Y* |
@@ -130,3 +131,6 @@ state.
 24. **FL road weather**: FDOT's keyless DIVAS layers carry events,
     cameras, and message boards but no RWIS; the FL511 API behind
     FDOT's data agreement would add it.
+25. **VA cameras**: SmarterRoads has no camera dataset; VDOT 511
+    video access is a separate free program (email
+    511_videosubscription@iteris.com).
