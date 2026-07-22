@@ -561,3 +561,136 @@ def test_source_status_covers_every_keyed_registry_entry(monkeypatch):
         assert name in named
     cov = states.coverage_summary()
     assert cov["states"] >= 30 and cov["sources"] >= 35
+
+
+async def test_traveliq_registry_builds_keyed_states(monkeypatch):
+    # One table drives all Travel-IQ states: entries exist, ready
+    # checks read the right env vars, supersede maps hold.
+    for code, (_st, _b, _host, env, _src) in states.TRAVELIQ.items():
+        assert code in states.KEYED_STATES
+        monkeypatch.delenv(env, raising=False)
+        assert not states.KEYED_STATES[code][3]()
+        monkeypatch.setenv(env, "k")
+        assert states.KEYED_STATES[code][3]()
+    assert states._wzdx_superseded("az") is True
+    monkeypatch.delenv("AZ511_API_KEY")
+    assert states._wzdx_superseded("az") is False
+
+
+async def test_co_adapter_parses_all_kinds(monkeypatch):
+    import httpx
+    import respx
+
+    monkeypatch.setenv("COTRIP_API_KEY", "k")
+    inc = {"features": [{
+        "geometry": {"type": "MultiPoint",
+                     "coordinates": [[-104.6, 40.4]]},
+        "properties": {"type": "Crash",
+                       "travelerInformationMessage": "Crash on US-34"}}]}
+    planned = {"features": [
+        {"geometry": {"type": "MultiPoint",
+                      "coordinates": [[-104.7, 38.3]]},
+         "properties": {"startTime": "2020-01-01T00:00:00Z",
+                        "clearTime": "2030-01-01T00:00:00Z",
+                        "travelerInformationMessage": "All lanes closed",
+                        "routeName": "CO-45N",
+                        "laneImpacts": [{"direction": "north",
+                                         "laneCount": 2,
+                                         "laneClosures": "2",
+                                         "closedLaneTypes": ["left lane",
+                                                             "right lane"]}]}},
+        {"geometry": {"type": "MultiPoint",
+                      "coordinates": [[-105.0, 39.0]]},
+         "properties": {"startTime": "2029-01-01T00:00:00Z",
+                        "clearTime": "2030-01-01T00:00:00Z",
+                        "travelerInformationMessage": "Future work"}}]}
+    signs = {"features": [{
+        "geometry": {"type": "Point", "coordinates": [-104.98, 39.87]},
+        "properties": {"displayStatus": "on", "routeName": "I-25S",
+                       "publicName": "I-25 at Thornton Pkwy",
+                       "messageMarkup":
+                       "[jp3][fo13]TOLL[nl3][fo13]LANE[nl3]CLOSED"}}]}
+    wx = {"features": [{
+        "geometry": {"type": "Point", "coordinates": [-106.9, 39.2]},
+        "properties": {"publicName": "CO-82 at Snowmass",
+                       "sensors": [{"type": "road surface status",
+                                    "currentReading": "Dry"}]}}]}
+    with respx.mock:
+        respx.get(url__regex=r".*api/v1/incidents.*").mock(
+            return_value=httpx.Response(200, json=inc))
+        respx.get(url__regex=r".*api/v1/plannedEvents.*").mock(
+            return_value=httpx.Response(200, json=planned))
+        respx.get(url__regex=r".*api/v1/signs.*").mock(
+            return_value=httpx.Response(200, json=signs))
+        respx.get(url__regex=r".*api/v1/weatherStations.*").mock(
+            return_value=httpx.Response(200, json=wx))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_co(client)
+    kinds = sorted(m["kind"] for m in out["markers"])
+    assert kinds == ["incident", "lane_closure", "rwis", "sign"]
+    clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
+    # Future-scheduled work filtered; both-lanes closure reads full.
+    assert clo["cls"] == "full-roadway" and "All lanes" in clo["label"]
+    sign = next(m for m in out["markers"] if m["kind"] == "sign")
+    assert sign["lines"] == ["TOLL", "LANE", "CLOSED"]
+    wxm = next(m for m in out["markers"] if m["kind"] == "rwis")
+    assert wxm["surface"] == "Dry"
+
+
+async def test_fl_divas_parses_events_cameras_signs():
+    import httpx
+    import respx
+
+    ev = {"features": [
+        {"geometry": {"x": -87.33, "y": 30.53},
+         "attributes": {"status": "unresolved",
+                        "eventtypesae": "Planned construction",
+                        "descriptionen": "Roadwork on I-10 West",
+                        "affectedlanes": "Right shoulder blocked",
+                        "highway": "I-10"}},
+        {"geometry": {"x": -80.2, "y": 26.1},
+         "attributes": {"status": "unresolved", "eventtypesae": "Crash",
+                        "descriptionen": "Crash on I-95 North",
+                        "highway": "I-95"}},
+        {"geometry": {"x": -81.0, "y": 27.0},
+         "attributes": {"status": "resolved", "eventtypesae": "Crash",
+                        "descriptionen": "Old crash"}},
+    ]}
+    cams = {"features": [
+        {"geometry": {"x": -80.17, "y": 26.01},
+         "attributes": {"description": "Hollywood Blvd at Park Road",
+                        "highway": "Hollywood Blvd", "direction": "E",
+                        "blockedimage": "False",
+                        "imagefilename":
+                        "https://images-dis.divas.cloud/DGI/c.jpg"}},
+        {"geometry": {"x": -80.3, "y": 26.2},
+         "attributes": {"description": "Blocked cam",
+                        "blockedimage": "True",
+                        "imagefilename":
+                        "https://images-dis.divas.cloud/DGI/x.jpg"}},
+    ]}
+    dms = {"features": [
+        {"geometry": {"x": -82.43, "y": 27.96},
+         "attributes": {"description": "I-4 EB E of I-275",
+                        "highway": "I-4", "direction": "e",
+                        "message": "LEFT LANE BLOCKED\n9 MI AHEAD"}},
+        {"geometry": {"x": -82.5, "y": 28.0},
+         "attributes": {"description": "Idle board", "message": " "}},
+    ]}
+    with respx.mock:
+        respx.get(url__regex=r".*DIVAS_GetEvent.*").mock(
+            return_value=httpx.Response(200, json=ev))
+        respx.get(url__regex=r".*DIVAS_Cameras.*").mock(
+            return_value=httpx.Response(200, json=cams))
+        respx.get(url__regex=r".*DIVAS_MessageBoard.*").mock(
+            return_value=httpx.Response(200, json=dms))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_fl(client)
+    kinds = sorted(m["kind"] for m in out["markers"])
+    # Resolved events and blocked cameras are dropped.
+    assert kinds == ["camera", "incident", "lane_closure", "sign", "sign"]
+    live = next(m for m in out["markers"]
+                if m["kind"] == "sign" and not m.get("blank"))
+    assert live["lines"] == ["LEFT LANE BLOCKED", "9 MI AHEAD"]
+    cam = next(m for m in out["markers"] if m["kind"] == "camera")
+    assert cam["image"].endswith("c.jpg")
