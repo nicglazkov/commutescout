@@ -694,3 +694,74 @@ async def test_fl_divas_parses_events_cameras_signs():
     assert live["lines"] == ["LEFT LANE BLOCKED", "9 MI AHEAD"]
     cam = next(m for m in out["markers"] if m["kind"] == "camera")
     assert cam["image"].endswith("c.jpg")
+
+
+async def test_va_smarterroads_login_tokens_and_parsing(monkeypatch):
+    import httpx
+    import respx
+
+    monkeypatch.setenv("SMARTERROADS_USER", "u")
+    monkeypatch.setenv("SMARTERROADS_PASS", "p")
+    states._sr_tokens.clear()
+    inc = [{"orci:type_event": "Vehicle Accident",
+            "orci:route_name": "I-95N",
+            "orci:public_free_text": "Crash near exit 84",
+            "orci:the_geom": {"gml:Point": {"gml:pos": "37.63 -77.35"}}},
+           {"orci:type_event": "Closed", "orci:route_name": "Rt. 642N",
+            "orci:template_511_text": "Road closed at Pole Green Rd",
+            "orci:the_geom": {"gml:Point": {"gml:pos": "37.66 -77.30"}}}]
+    wz = {"road_event_feed_info": {}, "type": "FeatureCollection",
+          "features": [_wz_feature("I-64 work zone",
+                                   "2020-01-01T00:00:00Z",
+                                   "2030-01-01T00:00:00Z")]}
+    # Unescaped ampersand on purpose: the live feed ships them.
+    dms = ("<?xml version='1.0'?><wfs:FC xmlns:wfs='w' xmlns:orci='o'"
+           " xmlns:gml='g'><gml:featureMembers>"
+           "<orci:geoserver_dms_active>"
+           "<orci:device_status>on</orci:device_status>"
+           "<orci:current_message>[jl3]EXIT 126[nl][jl3]40 MILES & 34 MIN"
+           "</orci:current_message>"
+           "<orci:route_name>I-95N</orci:route_name>"
+           "<orci:travel_direction>NORTH</orci:travel_direction>"
+           "<orci:device_id>Sign-1</orci:device_id>"
+           "<orci:the_geom><gml:Point><gml:pos>37.67 -77.44</gml:pos>"
+           "</gml:Point></orci:the_geom>"
+           "</orci:geoserver_dms_active></gml:featureMembers></wfs:FC>")
+    wx = ("<?xml version='1.0'?><wfs:FC xmlns:wfs='w' xmlns:orci='o'"
+          " xmlns:gml='g'><gml:featureMembers><orci:geoserver_ess>"
+          "<orci:device_name>NRO-ESS-1</orci:device_name>"
+          "<orci:air_temperature>22.1</orci:air_temperature>"
+          "<orci:max_wind_gust_speed>5.0</orci:max_wind_gust_speed>"
+          "<orci:the_geom><gml:Point><gml:pos>38.8 -77.1</gml:pos>"
+          "</gml:Point></orci:the_geom>"
+          "</orci:geoserver_ess></gml:featureMembers></wfs:FC>")
+    with respx.mock:
+        respx.get(url__regex=r".*services/auth/token").mock(
+            return_value=httpx.Response(
+                200, headers={"set-cookie": "XSRF-TOKEN=x"}))
+        respx.post(url__regex=r".*services/auth/login").mock(
+            return_value=httpx.Response(200, json={"user": {}}))
+        respx.get(url__regex=r".*services/users/token/\d+").mock(
+            return_value=httpx.Response(200, json={"data": "tok"}))
+        respx.get(url__regex=r".*incidentFiltered_wfs\.json.*").mock(
+            return_value=httpx.Response(200, json=inc))
+        respx.get(url__regex=r".*workZone\.json.*").mock(
+            return_value=httpx.Response(200, json=wz))
+        respx.get(url__regex=r".*dms_active_wfs\.xml.*").mock(
+            return_value=httpx.Response(200, content=dms.encode()))
+        respx.get(url__regex=r".*rwis_wfs\.xml.*").mock(
+            return_value=httpx.Response(200, content=wx.encode()))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_va(client)
+    kinds = sorted(m["kind"] for m in out["markers"])
+    assert kinds == ["incident", "lane_closure", "lane_closure",
+                     "rwis", "sign"]
+    closed = next(m for m in out["markers"]
+                  if m["kind"] == "lane_closure" and m.get("cls"))
+    assert closed["cls"] in ("full-roadway", "lane")
+    sign = next(m for m in out["markers"] if m["kind"] == "sign")
+    # Bare ampersand sanitized, DMS codes stripped into lines.
+    assert sign["lines"] == ["EXIT 126", "40 MILES & 34 MIN"]
+    wxm = next(m for m in out["markers"] if m["kind"] == "rwis")
+    assert wxm["air_c"] == 22.1
+    states._sr_tokens.clear()

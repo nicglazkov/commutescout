@@ -920,12 +920,159 @@ async def _fetch_co(client) -> dict:
     return {"markers": markers}
 
 
+VA_BOUNDS = (36.5, -83.7, 39.5, -75.2)
+SR_SERVICES = "https://smarterroads.vdot.virginia.gov/services"
+SR_GATEWAY = "https://data.511-atis-ttrip-prod.iteriscloud.com"
+# dataset id -> gateway path (tokens are per dataset)
+SR_PATHS = {
+    3: ("/smarterRoads/incidentFiltered/incidentFilteredWFS/current/"
+        "incidentFiltered_wfs.json"),
+    38: "/smarterRoads/workzone/workZoneJSON/current/workZone.json",
+    16: "/smarterRoads/sign/dmsActiveWFS/current/dms_active_wfs.xml",
+    19: "/smarterRoads/weather/rwisWFS/current/rwis_wfs.xml",
+}
+_sr_tokens: dict[int, str] = {}
+
+
+def _va_ready() -> str:
+    import os
+    return (os.environ.get("SMARTERROADS_USER", "")
+            and os.environ.get("SMARTERROADS_PASS", ""))
+
+
+async def _sr_refresh_tokens(client) -> None:
+    """Login and cache one token per dataset. Tokens are long-lived;
+    a 401 on the gateway triggers one refresh."""
+    import os
+    await client.get(f"{SR_SERVICES}/auth/token", headers=UA, timeout=30.0)
+    xsrf = client.cookies.get("XSRF-TOKEN") or ""
+    resp = await client.post(
+        f"{SR_SERVICES}/auth/login", timeout=30.0,
+        json={"username": os.environ.get("SMARTERROADS_USER", ""),
+              "password": os.environ.get("SMARTERROADS_PASS", "")},
+        headers={**UA, "X-XSRF-TOKEN": xsrf})
+    resp.raise_for_status()
+    for ds in SR_PATHS:
+        r = await client.get(f"{SR_SERVICES}/users/token/{ds}",
+                             headers=UA, timeout=30.0)
+        r.raise_for_status()
+        _sr_tokens[ds] = r.json()["data"]
+
+
+async def _sr_fetch(client, ds: int):
+    if ds not in _sr_tokens:
+        await _sr_refresh_tokens(client)
+    url = f"{SR_GATEWAY}{SR_PATHS[ds]}"
+    r = await client.get(url, params={"token": _sr_tokens[ds]},
+                         headers=UA, timeout=60.0)
+    if r.status_code in (401, 403):
+        await _sr_refresh_tokens(client)
+        r = await client.get(url, params={"token": _sr_tokens[ds]},
+                             headers=UA, timeout=60.0)
+    r.raise_for_status()
+    return r
+
+
+def _va_pos(geom: dict | None) -> tuple[float | None, float | None]:
+    pos = ((geom or {}).get("gml:Point") or {}).get("gml:pos") or ""
+    parts = str(pos).split()
+    if len(parts) >= 2:
+        with contextlib.suppress(ValueError):
+            return float(parts[0]), float(parts[1])
+    return None, None
+
+
+def _va_xml(content: bytes):
+    """SmarterRoads WFS XML ships with unescaped ampersands and stray
+    control characters inside message text; sanitize before parsing."""
+    text = content.decode("utf-8", errors="replace")
+    text = re.sub(r"&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9A-Fa-f]+;)",
+                  "&amp;", text)
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", text)
+    return ElementTree.fromstring(text)
+
+
+async def _fetch_va(client) -> dict:
+    """Virginia via VDOT SmarterRoads (username/password login, per
+    dataset tokens): live incidents, statewide WZDx work zones, active
+    sign text, and weather stations. Cameras are a separate VDOT video
+    program. Attribution: plain-text 'Data: VDOT', no logo (their
+    agreement)."""
+    inc_r, wz_r, dms_r, wx_r = await asyncio.gather(
+        _sr_fetch(client, 3), _sr_fetch(client, 38),
+        _sr_fetch(client, 16), _sr_fetch(client, 19))
+    markers: list[dict] = []
+    for r in inc_r.json() or []:
+        lat, lon = _va_pos(r.get("orci:the_geom"))
+        if not lat or not lon:
+            continue
+        te = (r.get("orci:type_event") or "").strip()
+        route = (r.get("orci:route_name") or "").strip()
+        label = re.sub(r"\s+", " ", (r.get("orci:public_free_text")
+                                     or r.get("orci:template_511_text")
+                                     or "")).strip()[:220]
+        if te == "Closed":
+            markers.append({
+                "kind": "lane_closure", "lat": lat, "lon": lon,
+                "cls": "full-roadway",
+                "label": label or f"{route} closed",
+                "route": route or None, "src": "VDOT"})
+        else:
+            markers.append({
+                "kind": "incident", "lat": lat, "lon": lon,
+                "type": te or "Incident",
+                "label": label or te or "Incident", "src": "VDOT"})
+    markers.extend(_parse_ia_wzdx(wz_r.json(), "VDOT", cap=2000))
+    for el in _va_xml(dms_r.content).iter():
+        if _strip_ns(el.tag) != "geoserver_dms_active":
+            continue
+        f = {_strip_ns(c.tag): (c.text or "").strip() for c in el.iter()}
+        lat, lon = None, None
+        parts = (f.get("pos") or "").split()
+        if len(parts) >= 2:
+            with contextlib.suppress(ValueError):
+                lat, lon = float(parts[0]), float(parts[1])
+        if not lat or not lon:
+            continue
+        lines = (_dms_lines(f.get("current_message") or "")[:6]
+                 if f.get("device_status") == "on" else [])
+        m = {"kind": "sign", "lat": lat, "lon": lon,
+             "route": f.get("route_name"),
+             "direction": (f.get("travel_direction") or "").title() or None,
+             "near": f.get("device_id") or "Message sign",
+             "message": " / ".join(lines), "lines": lines, "src": "VDOT"}
+        if not lines:
+            m["blank"] = True
+        markers.append(m)
+    for el in _va_xml(wx_r.content).iter():
+        if _strip_ns(el.tag) != "geoserver_ess":
+            continue
+        f = {_strip_ns(c.tag): (c.text or "").strip() for c in el.iter()}
+        lat, lon = None, None
+        parts = (f.get("pos") or "").split()
+        if len(parts) >= 2:
+            with contextlib.suppress(ValueError):
+                lat, lon = float(parts[0]), float(parts[1])
+        if not lat or not lon:
+            continue
+        marker = {"kind": "rwis", "lat": lat, "lon": lon,
+                  "name": f.get("device_name") or "Weather station",
+                  "src": "VDOT"}
+        with contextlib.suppress(ValueError):
+            marker["air_c"] = float(f.get("air_temperature") or "")
+        with contextlib.suppress(ValueError):
+            marker["gust"] = float(f.get("max_wind_gust_speed") or "")
+        markers.append(marker)
+    return {"markers": markers}
+
+
 KEYED_STATES = {
     # code: (display state, bounds, fetcher, ready-check)
     "wa": ("Washington", WA_BOUNDS, _fetch_wa, _wa_key),
     "or": ("Oregon", OR_BOUNDS, _fetch_or, _or_key),
     "oh": ("Ohio", OH_BOUNDS, _fetch_oh, _oh_key),
     "cok": ("Colorado", CO_BOUNDS, _fetch_co, _co_key),
+    "vak": ("Virginia", VA_BOUNDS, _fetch_va, _va_ready),
 }
 # Travel-IQ states share one fetcher; the registry entries are built
 # from the TRAVELIQ table so a new state there is one line.
@@ -1794,6 +1941,7 @@ def source_status() -> list[dict]:
             continue
         agency = {"wa": "WSDOT", "or": "Oregon DOT (TripCheck)",
                   "oh": "OHGO", "utk": "UDOT", "azk": "ADOT",
-                  "akk": "Alaska DOT&PF", "cok": "CDOT"}.get(code, name)
+                  "akk": "Alaska DOT&PF", "cok": "CDOT",
+                  "vak": "VDOT SmarterRoads"}.get(code, name)
         out.append(_status_entry(f"{code}:all", "All feeds", agency, name))
     return out
