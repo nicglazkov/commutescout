@@ -1659,9 +1659,11 @@ function syncStrips() {
   if (stripsBuilt || map.getZoom() < STRIP_ZOOM) return;
   stripsBuilt = true;
   for (const [m, g] of pendingStrips) {
-    const stretch = (Array.isArray(m.path) && m.path.length > 1)
-      ? m.path : [[m.lat, m.lon], m.end];
-    const strip = L.polyline(stretch, {
+    // Real road geometry ONLY. A straight begin-to-end segment cuts
+    // corners on any curved road (most Caltrans closures carry no
+    // geometry), so feeds without a path stay dots.
+    if (!Array.isArray(m.path) || m.path.length < 2) continue;
+    const strip = L.polyline(m.path, {
       renderer: canvasR, color: GROUP_DOT[g], weight: 4, opacity: 0.45,
     }).bindPopup(() => popupFor(m, g), { maxWidth: 320 });
     strip.__m = m; strip.__g = g;
@@ -1706,12 +1708,12 @@ function renderBatch(markers, groups) {
     if (g === 'camera') { cameraCache.push(m); continue; }
     if (g === 'sign') { signCache.push(m); continue; }
     counts[g] = (counts[g] || 0) + 1;
-    // Closures with a distinct endpoint get the affected stretch drawn
-    // under their dot. With thousands of nationwide closures the strips
-    // are sub-pixel at country zoom, so they build lazily the first
-    // time the user zooms in far enough to see them. Fire perimeter
-    // polygons and blank signs get their shape from layerForItem.
-    if (g.startsWith('clo_') && Array.isArray(m.end)) {
+    // Closures with REAL road geometry get the affected stretch drawn
+    // under their dot (endpoint-only feeds stay dots: a straight line
+    // between endpoints is not the road). Strips build lazily the
+    // first time the user zooms in far enough to see them. Fire
+    // perimeter polygons and blank signs shape via layerForItem.
+    if (g.startsWith('clo_') && Array.isArray(m.path) && m.path.length > 1) {
       pendingStrips.push([m, g]);
     }
     items[g].push({ m, g, layer: null, on: false });
@@ -2133,10 +2135,14 @@ map.on('popupopen', (e) => {
       // appendMeasured above). The .dets box scrolls within max-height.
       box.innerHTML = h || '<div class="drow">No shared entries yet.</div>';
       // A timeline reads badly at 320px: widen the popup while the log
-      // is open (styling only; popup.update() would wipe the log).
+      // is open, then recompute layout and position so the tip stays
+      // anchored on the dot (skipping _updateContent keeps the
+      // injected log; popup.update() would wipe it).
       const cw = el.querySelector('.leaflet-popup-content');
       if (cw && h) {
         cw.style.width = Math.min(500, window.innerWidth - 70) + 'px';
+        e.popup._updateLayout();
+        e.popup._updatePosition();
       }
       if (h) {
         const xb = document.createElement('button');
