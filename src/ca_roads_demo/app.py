@@ -35,7 +35,7 @@ from ca_roads.feeds import calfire as calfire_feed
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
-from ca_roads_demo import analytics, states, trips, watch
+from ca_roads_demo import analytics, roadsnap, states, trips, watch
 from ca_roads_demo.prompt import SYSTEM, TOOL_DEFS, TOOL_FUNCS  # noqa: F401
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_suggest
@@ -878,6 +878,13 @@ async def api_mapdata(request: Request):
     with contextlib.suppress(Exception):  # expansion states never break CA
         markers.extend(await states.markers_for_bbox(road.client, box, want))
 
+    # Closures whose feeds publish endpoints but no geometry get their
+    # cached road-snapped shape attached (and unknown pairs queued for
+    # the background snapper). Lines must follow the road, everywhere.
+    if "closure" in want:
+        with contextlib.suppress(Exception):
+            roadsnap.apply(markers)
+
     # Everything, gzipped: the whole state is ~4k markers and compresses
     # roughly 10:1. No caps - the map IS the product.
     body = json.dumps({"markers": markers}).encode()
@@ -1089,6 +1096,10 @@ async def _prewarm() -> None:
     # view lands on hot caches for every region.
     with contextlib.suppress(Exception):
         await states.prewarm(road.client)
+    # The closure snapper drains its queue politely in the background
+    # for the life of the process.
+    with contextlib.suppress(Exception):
+        roadsnap.start_worker(road.client)
 
 
 # Road-following geometry for closure stretches, keyed by rounded

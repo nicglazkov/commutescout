@@ -573,6 +573,13 @@ async def _fetch_traveliq(client, code: str) -> dict:
             if path:
                 m["path"] = path
                 m["end"] = path[-1]
+            else:
+                # Endpoint pair for the road snapper.
+                with contextlib.suppress(TypeError, ValueError):
+                    la2 = float(e.get("LatitudeSecondary"))
+                    lo2 = float(e.get("LongitudeSecondary"))
+                    if la2 and lo2:
+                        m["end"] = [la2, lo2]
             markers.append(m)
     for c in cams:
         try:
@@ -650,10 +657,12 @@ async def _fetch_wa(client) -> dict:
         where = ", ".join(x for x in (loc.get("RoadName"),
                                       loc.get("Description")) if x)
         if a.get("EventCategory") in _WA_WORK:
-            # No end/stretch here: WSDOT gives endpoints but no road
-            # geometry, and a straight begin-to-end line cuts through
-            # terrain. A dot beats a line in the forest.
-            markers.append({
+            # WSDOT gives endpoints, no geometry: the endpoint ships
+            # for the road snapper. The client never draws raw
+            # begin-to-end lines, so this cannot regress the "line
+            # in the forest" bug.
+            end_loc = a.get("EndRoadwayLocation") or {}
+            wam = {
                 "kind": "lane_closure", "lat": lat, "lon": lon,
                 "label": headline, "cls": "lane"
                 if a.get("EventCategory") != "Closure" else "full-roadway",
@@ -661,7 +670,11 @@ async def _fetch_wa(client) -> dict:
                 "src": "WSDOT", "lanes": None, "work": a.get("EventCategory"),
                 "facility": None, "delay_min": None,
                 "since": None, "until": None,
-            })
+            }
+            if end_loc.get("Latitude") and end_loc.get("Longitude"):
+                wam["end"] = [end_loc["Latitude"],
+                              end_loc["Longitude"]]
+            markers.append(wam)
         else:
             markers.append({
                 "kind": "incident", "lat": lat, "lon": lon,
@@ -965,10 +978,16 @@ async def _fetch_co(client) -> dict:
                     and int(closed) >= imp["laneCount"]
                     and not all("shoulder" in t for t in types)):
                 cls = "full-roadway"
-        markers.append({
+        m2 = {
             "kind": "lane_closure", "lat": lat, "lon": lon, "cls": cls,
             "label": (label or p.get("type") or "Roadwork")[:220],
-            "route": p.get("routeName"), "src": "CDOT"})
+            "route": p.get("routeName"), "src": "CDOT"}
+        geom2 = f.get("geometry") or {}
+        pts2 = geom2.get("coordinates") or []
+        if (geom2.get("type") == "MultiPoint" and len(pts2) > 1
+                and isinstance(pts2[-1], list) and len(pts2[-1]) >= 2):
+            m2["end"] = [pts2[-1][1], pts2[-1][0]]
+        markers.append(m2)
     for f in signs:
         lat, lon = point(f)
         p = f.get("properties") or {}

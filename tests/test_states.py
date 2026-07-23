@@ -231,9 +231,11 @@ async def test_wa_fetch_maps_alerts_cameras_passes(monkeypatch):
     assert wx["air_c"] == 15.0 and wx["gust"] == 12
     clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
     assert clo["cls"] == "full-roadway"
-    # No road geometry from WSDOT, so no stretch: a straight begin-to-end
-    # line would cut through terrain (the "line in the forest" bug).
-    assert "end" not in clo and "path" not in clo
+    # WSDOT has no road geometry: the endpoint ships for the road
+    # snapper, but never a raw path (the client only draws real
+    # geometry, so a straight line in the forest cannot regress).
+    assert clo["end"] == [47.25, -122.5]
+    assert "path" not in clo
     chain = next(m for m in out["markers"] if m["kind"] == "chain_control")
     assert "Chains required" in chain["label"]
     assert "No restrictions" not in chain["label"]
