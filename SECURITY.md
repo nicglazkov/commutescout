@@ -3,9 +3,10 @@
 ## Reporting a vulnerability
 
 Please report vulnerabilities privately via
-[GitHub Security Advisories](https://github.com/nicglazkov/commutescout/security/advisories/new),
-not in a public issue. You'll normally get a first response within a
-few days, and a fix for confirmed issues ships as a priority release.
+[GitHub Security Advisories](https://github.com/nicglazkov/commutescout/security/advisories/new)
+or by email to security@commutescout.com, not in a public issue.
+You'll normally get a first response within a few days, and a fix for
+confirmed issues ships as a priority release.
 
 There is no bug bounty, but reporters are credited in the release notes
 if they want to be.
