@@ -68,6 +68,12 @@ MIN_BUFFER_KM = 1.0
 MAX_BUFFER_KM = 12.0
 MAX_ALERTS_PER_WATCH_CYCLE = 8
 MAX_SEEN_IDS = 1500
+# An event id stays in seen-state this long after vanishing from the
+# feeds. CHP's mirrors flap (an incident disappears for a cycle and
+# returns); replacing seen with "what is present now" re-alerted the
+# same event on every flap. A genuine reopen after the grace window
+# still alerts.
+SEEN_GRACE_SECONDS = 6 * 3600
 CA_LAT = (31.0, 43.5)
 CA_LON = (-126.5, -112.5)
 # Simplified California outline for watch geometry: generous into the
@@ -325,18 +331,31 @@ class FirestoreStore:
         snap = await self.db.collection("trips").document(trip_id).get()
         return snap.to_dict() if snap.exists else None
 
-    async def get_seen(self, watch_id: str) -> set[str] | None:
-        """None means the watch has never completed a cycle; an empty
-        set means it has, and everything since cleared."""
+    async def get_seen(self, watch_id: str):
+        """None means the watch has never completed a cycle. Returns a
+        dict of id -> last-seen epoch; legacy list documents (pre
+        grace-window) surface as-is and the checker normalizes."""
         snap = await self.db.collection("watch_state").document(watch_id).get()
         if not snap.exists:
             return None
-        return set((snap.to_dict() or {}).get("seen", []))
+        raw = (snap.to_dict() or {}).get("seen", [])
+        if isinstance(raw, dict):
+            out = {}
+            for k, v in raw.items():
+                with contextlib.suppress(TypeError, ValueError):
+                    out[k] = float(v)
+            return out
+        return set(raw)
 
-    async def set_seen(self, watch_id: str, seen: set[str]) -> None:
-        ids = sorted(seen)[-MAX_SEEN_IDS:]
+    async def set_seen(self, watch_id: str, seen) -> None:
+        if isinstance(seen, dict):
+            top = dict(sorted(seen.items(),
+                              key=lambda kv: -kv[1])[:MAX_SEEN_IDS])
+        else:
+            now_ts = time.time()
+            top = {i: now_ts for i in sorted(seen)[-MAX_SEEN_IDS:]}
         await self.db.collection("watch_state").document(watch_id).set(
-            {"seen": ids, "updated_at": datetime.now(UTC).isoformat()})
+            {"seen": top, "updated_at": datetime.now(UTC).isoformat()})
 
 
 _store: FirestoreStore | None = None
@@ -1254,11 +1273,19 @@ async def run_check_cycle() -> dict:
         matched = [e for e in events
                    if e["kind"] in (watch.get("kinds") or [])
                    and watch_matches(watch, e["lat"], e["lon"])]
-        seen = await store.get_seen(watch["id"])
-        first_run = seen is None
-        seen = seen or set()
+        raw_seen = await store.get_seen(watch["id"])
+        first_run = raw_seen is None
+        now_ts = time.time()
+        if isinstance(raw_seen, dict):
+            # Age out at read time too: an id past the grace window is
+            # forgotten, so its reopen counts as fresh news.
+            seen = {i: ts for i, ts in raw_seen.items()
+                    if now_ts - ts < SEEN_GRACE_SECONDS}
+        elif raw_seen:
+            seen = {i: now_ts for i in raw_seen}
+        else:
+            seen = {}
         fresh = [e for e in matched if e["id"] not in seen]
-        current_ids = {e["id"] for e in matched}
 
         if not first_run and fresh:
             batch = fresh[:MAX_ALERTS_PER_WATCH_CYCLE]
@@ -1285,10 +1312,16 @@ async def run_check_cycle() -> dict:
                                         body_html, body_text)
                 stats["emails"] += 1 if ok else 0
 
-        # Advance state to exactly what is present now: an id that
-        # clears and later returns is absent here and re-alerts on
-        # return, which is the behavior people want for reopened events.
-        await store.set_seen(watch["id"], current_ids)
+        # Union with a grace window instead of replacing: flapping
+        # feeds (CHP mirrors disagree cycle to cycle) must not
+        # re-alert the same event every time it blinks back. Ids
+        # absent longer than the grace window age out, so a genuine
+        # reopen still alerts.
+        for e in matched:
+            seen[e["id"]] = now_ts
+        pruned = {i: ts for i, ts in seen.items()
+                  if now_ts - ts < SEEN_GRACE_SECONDS}
+        await store.set_seen(watch["id"], pruned)
     return stats
 
 

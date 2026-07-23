@@ -98,10 +98,15 @@ class MemoryStore:
     async def get_seen(self, watch_id):
         if watch_id not in self.seen:
             return None
-        return set(self.seen[watch_id])
+        return dict(self.seen[watch_id])
 
     async def set_seen(self, watch_id, seen):
-        self.seen[watch_id] = set(seen)
+        if isinstance(seen, dict):
+            self.seen[watch_id] = dict(seen)
+        else:
+            import time as _time
+            now = _time.time()
+            self.seen[watch_id] = {i: now for i in seen}
 
 
 def make_app():
@@ -405,7 +410,7 @@ async def test_new_event_alerts_once(checker):
     assert len(pushes) == 1
 
 
-async def test_cleared_event_can_realert(checker):
+async def test_cleared_event_realerts_after_grace(checker):
     store, events, pushes = checker
     wid = await seed_watch(store)
     await store.set_seen(wid, {"chp:0"})
@@ -413,7 +418,16 @@ async def test_cleared_event_can_realert(checker):
     await watch.run_check_cycle()
     events.clear()  # incident clears
     await watch.run_check_cycle()
-    events.append(EVENT)  # and returns
+    # Within the grace window a return is a feed flap: no alert.
+    events.append(EVENT)
+    await watch.run_check_cycle()
+    assert len(pushes) == 1
+    # A reopen AFTER the grace window is real news again.
+    events.clear()
+    await watch.run_check_cycle()
+    for k in list(store.seen[wid]):
+        store.seen[wid][k] -= watch.SEEN_GRACE_SECONDS + 60
+    events.append(EVENT)
     await watch.run_check_cycle()
     assert len(pushes) == 2
 
@@ -798,4 +812,19 @@ async def test_expansion_events_are_stable_and_mapped(monkeypatch):
     # Same marker, edited title: the id must not change (seen-state).
     markers[0]["label"] = "SB I-275: reopened soon"
     events2 = await watch._collect_expansion_events(None)
-    assert next(e for e in events2 if e["kind"] == "closure")["id"] == clo["id"]
+    assert next(e for e in events2
+                if e["kind"] == "closure")["id"] == clo["id"]
+
+
+async def test_flapping_event_alerts_only_once(checker):
+    store, events, pushes = checker
+    wid = await seed_watch(store)
+    await store.set_seen(wid, {"chp:0"})
+    events.append(EVENT)
+    await watch.run_check_cycle()      # first appearance: one alert
+    events.clear()                     # mirror flap: gone a cycle
+    await watch.run_check_cycle()
+    events.append(EVENT)               # back next cycle
+    await watch.run_check_cycle()
+    await watch.run_check_cycle()
+    assert len(pushes) == 1
