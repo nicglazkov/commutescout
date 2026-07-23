@@ -1608,6 +1608,12 @@ try {
 function tryFocus() {
   if (!focusReq || focusDone) return;
   focusDone = true;
+  // The focus link is consumed exactly once: clean the URL back to
+  // the base so a reload (or a share of the address bar) lands on
+  // the normal map instead of chasing an event that may be long gone.
+  if (window.history && history.replaceState) {
+    history.replaceState(null, '', location.pathname);
+  }
   const at = [focusReq.lat, focusReq.lon];
   map.setView(at, Math.max(map.getZoom(), 12));
   // Attach any culled markers around the focus point before searching
