@@ -1661,8 +1661,12 @@ function syncStrips() {
   for (const [m, g] of pendingStrips) {
     // Real road geometry ONLY. A straight begin-to-end segment cuts
     // corners on any curved road (most Caltrans closures carry no
-    // geometry), so feeds without a path stay dots.
+    // geometry), so feeds without a path stay dots. Some feeds dress
+    // a straight line as a 2-point LineString (UDOT's WZDx): those
+    // only draw when short enough that straight IS the road.
     if (!Array.isArray(m.path) || m.path.length < 2) continue;
+    if (m.path.length === 2
+        && map.distance(m.path[0], m.path[1]) > 800) continue;
     const strip = L.polyline(m.path, {
       renderer: canvasR, color: GROUP_DOT[g], weight: 4, opacity: 0.45,
     }).bindPopup(() => popupFor(m, g), { maxWidth: 320 });

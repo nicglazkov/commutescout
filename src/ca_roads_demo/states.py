@@ -455,6 +455,49 @@ TRAVELIQ = {
 }
 
 
+def _decode_gpoly(encoded: str) -> list[list[float]]:
+    """Google encoded polyline (precision 5) to [lat, lon] pairs.
+    Travel-IQ events carry road geometry this way."""
+    pts: list[list[float]] = []
+    index = lat = lon = 0
+    try:
+        while index < len(encoded):
+            deltas = []
+            for _ in range(2):
+                shift = result = 0
+                while True:
+                    b = ord(encoded[index]) - 63
+                    index += 1
+                    result |= (b & 0x1F) << shift
+                    shift += 5
+                    if b < 0x20:
+                        break
+                deltas.append(~(result >> 1) if result & 1 else result >> 1)
+            lat += deltas[0]
+            lon += deltas[1]
+            pts.append([lat / 1e5, lon / 1e5])
+    except (IndexError, TypeError):
+        return []
+    return pts
+
+
+def _road_path(pts: list, near_lat: float, near_lon: float,
+               cap: int = 80) -> list[list[float]] | None:
+    """Decimated, sanity-checked path: must start near the marker
+    (within ~2 degrees) or the geometry is judged garbage and the
+    closure stays a dot. Never ship a line that is not the road."""
+    if not pts or len(pts) < 2:
+        return None
+    if abs(pts[0][0] - near_lat) > 2 or abs(pts[0][1] - near_lon) > 2:
+        return None
+    step = max(1, len(pts) // cap)
+    path = [[round(a, 5), round(b, 5)] for a, b in pts[::step]]
+    tail = [round(pts[-1][0], 5), round(pts[-1][1], 5)]
+    if path[-1] != tail:
+        path.append(tail)
+    return path if len(path) > 1 else None
+
+
 def _tiq_ready(code):
     import os
     env = TRAVELIQ[code][3]
@@ -520,10 +563,17 @@ async def _fetch_traveliq(client, code: str) -> dict:
                    if etype == "closures"
                    or re.search(r"all lanes|full closure", lanes)
                    else "lane")
-            markers.append({
+            m = {
                 "kind": "lane_closure", "lat": lat, "lon": lon,
                 "cls": cls, "label": label, "route": road or None,
-                "src": src})
+                "src": src}
+            path = _road_path(
+                _decode_gpoly(e.get("EncodedPolyline") or ""),
+                lat, lon)
+            if path:
+                m["path"] = path
+                m["end"] = path[-1]
+            markers.append(m)
     for c in cams:
         try:
             lat, lon = float(c.get("Latitude")), float(c.get("Longitude"))
@@ -757,7 +807,7 @@ async def _fetch_oh(client) -> dict:
                     or (r.get("category") or "") == "Road Work":
                 is_ramp = desc.lower().startswith("ramp") \
                     or " ramp " in desc.lower()[:60]
-                markers.append({
+                m = {
                     "kind": "lane_closure", "lat": lat, "lon": lon,
                     "label": desc,
                     "cls": "ramp" if is_ramp else "full-roadway"
@@ -767,7 +817,17 @@ async def _fetch_oh(client) -> dict:
                     "src": "OHGO", "lanes": None,
                     "work": r.get("category"), "facility": None,
                     "delay_min": None, "since": None, "until": None,
-                })
+                }
+                # workZones carry real road polylines as [lon, lat].
+                zone = ((r.get("workZones") or [{}])[0]
+                        .get("polyline") or [])
+                pts = [[p[1], p[0]] for p in zone
+                       if isinstance(p, list) and len(p) >= 2]
+                path = _road_path(pts, lat, lon)
+                if path:
+                    m["path"] = path
+                    m["end"] = path[-1]
+                markers.append(m)
             else:
                 markers.append({
                     "kind": "incident", "lat": lat, "lon": lon,

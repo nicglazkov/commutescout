@@ -855,3 +855,19 @@ async def test_ntta_join_and_python_side_filter():
     m = out["markers"][0]
     # Two-axle rate joined by plaza code; class-4 row ignored.
     assert m["price"] == 0.81 and m["pricing"] == "fixed"
+
+
+def test_gpoly_decoder_reference_vector():
+    # Google's documented example polyline.
+    pts = states._decode_gpoly("_p~iF~ps|U_ulLnnqC_mqNvxq`@")
+    assert pts == [[38.5, -120.2], [40.7, -120.95], [43.252, -126.453]]
+    assert states._decode_gpoly("") == []
+    assert states._decode_gpoly("garbage{{{") in ([], states._decode_gpoly("garbage{{{"))
+
+
+def test_road_path_sanity_guard():
+    pts = [[38.5, -120.2], [38.6, -120.3]]
+    # Path near the marker passes; far-away garbage is refused.
+    assert states._road_path(pts, 38.5, -120.2) is not None
+    assert states._road_path(pts, 45.0, -90.0) is None
+    assert states._road_path([[38.5, -120.2]], 38.5, -120.2) is None
