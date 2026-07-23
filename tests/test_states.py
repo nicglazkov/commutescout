@@ -765,3 +765,93 @@ async def test_va_smarterroads_login_tokens_and_parsing(monkeypatch):
     wxm = next(m for m in out["markers"] if m["kind"] == "rwis")
     assert wxm["air_c"] == 22.1
     states._sr_tokens.clear()
+
+
+async def test_wsdot_tolls_cents_and_sentinel(monkeypatch):
+    import httpx
+    import respx
+
+    monkeypatch.setenv("WSDOT_API_KEY", "k")
+    rates = [{"StateRoute": "405", "TravelDirection": "S",
+              "StartLocationName": "NE 6th", "EndLocationName": "SR 527",
+              "StartLatitude": 47.61, "StartLongitude": -122.18,
+              "CurrentToll": 275, "CurrentMessage": "",
+              "TimeUpdated": "/Date(1784800000000-0700)/"},
+             {"StateRoute": "167", "TravelDirection": "N",
+              "StartLocationName": "X", "EndLocationName": "Y",
+              "StartLatitude": 47.3, "StartLongitude": -122.2,
+              "CurrentToll": 0,
+              "TimeUpdated": "/Date(-62135568000000-0800)/"}]
+    with respx.mock:
+        respx.get(url__regex=r".*GetTollRatesAsJson.*").mock(
+            return_value=httpx.Response(200, json=rates))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_wsdot_tolls(client)
+    live = out["markers"][0]
+    # Cents to dollars; the uninitialized-date sentinel maps to None.
+    assert live["price"] == 2.75 and live["pricing"] == "live"
+    assert live["updated"] is not None
+    assert out["markers"][1]["price"] is None
+    assert out["markers"][1]["updated"] is None
+
+
+async def test_bay_tolls_destinations(monkeypatch):
+    import httpx
+    import respx
+
+    monkeypatch.setenv("BAY511_API_KEY", "k")
+    body = {"toll-programs": [{
+        "toll-authority-info": {"toll-program-name": "I-680 SB"},
+        "toll-signs": [{
+            "name": "Alcosta - 4",
+            "geography": {"type": "Point",
+                          "coordinates": [-121.96, 37.75]},
+            "toll-destinations": [
+                {"name": "Alcosta - 5",
+                 "toll-rates": [{"toll-price": 4.25,
+                                 "last-updated": "2026-07-22T10:57:31"}]},
+                {"name": "SR-84",
+                 "toll-rates": [{"toll-price": 7.5,
+                                 "last-updated": "2026-07-22T10:57:31"}]},
+            ]}]}]}
+    import json as _json
+    content = ("﻿" + _json.dumps(body)).encode("utf-8")
+    with respx.mock:
+        respx.get(url__regex=r".*toll/programs.*").mock(
+            return_value=httpx.Response(200, content=content))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_bay_tolls(client)
+    m = out["markers"][0]
+    assert m["price"] == 4.25 and m["src"] == "511.org"
+    assert m["lines"] == ["to Alcosta - 5: $4.25", "to SR-84: $7.50"]
+
+
+async def test_ntta_join_and_python_side_filter():
+    import httpx
+    import respx
+
+    g = {"features": [{"geometry": {"x": -96.9, "y": 33.0},
+                       "attributes": {
+                           "DBO.TCAL_RDWY_Gantry.Gantry": "KELBD",
+                           "DBO.TCAL_RDWY_Gantry.NAME": "Kelly Blvd",
+                           "DBO.TCAL_RDWY_Gantry.ROADWAY_DESC":
+                               "PRESIDENT GEORGE BUSH TURNPIKE"}}]}
+    r = {"features": [
+        {"attributes": {"PlazaCode": "KELBD", "VehicleClass": "2",
+                        "ScheduleType": "STANDARD", "TagFare": "0.81",
+                        "StartEffectiveDate": 0,
+                        "EndEffectiveDate": 253402214400000}},
+        {"attributes": {"PlazaCode": "KELBD", "VehicleClass": "4",
+                        "ScheduleType": "STANDARD", "TagFare": "3.24",
+                        "StartEffectiveDate": 0,
+                        "EndEffectiveDate": 253402214400000}}]}
+    with respx.mock:
+        respx.get(url__regex=r".*MapServer/0/query.*").mock(
+            return_value=httpx.Response(200, json=g))
+        respx.get(url__regex=r".*MapServer/1/query.*").mock(
+            return_value=httpx.Response(200, json=r))
+        async with httpx.AsyncClient() as client:
+            out = await states._fetch_ntta_tolls(client)
+    m = out["markers"][0]
+    # Two-axle rate joined by plaza code; class-4 row ignored.
+    assert m["price"] == 0.81 and m["pricing"] == "fixed"

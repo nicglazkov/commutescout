@@ -26,7 +26,7 @@
 </script>
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" as="fetch" crossorigin="anonymous"
-      href="/api/mapdata?bbox=-85.000,-180.000,85.000,180.000&kinds=incident,closure,chain,fire">
+      href="/api/mapdata?bbox=-85.000,-180.000,85.000,180.000&kinds=incident,closure,chain,fire,toll">
 <!-- Map tiles are the LCP element (measured via Web Analytics); warming
      the tile CDN connections shaves the TLS handshake off first paint. -->
 <link rel="preconnect" href="https://a.basemaps.cartocdn.com">
@@ -238,6 +238,8 @@ aside { background:var(--card); border-right:1px solid var(--line);
   color:var(--sky); background:none; border:1px solid var(--line);
   border-radius:7px; padding:4px 10px; cursor:pointer }
 .pop .detbtn:hover { border-color:var(--sky) }
+.pop .tollprice { font:700 1.35rem Lora, serif; color:#7c3aed;
+  margin:4px 0 2px }
 .pop .dets { max-height:190px; overflow-y:auto; margin-top:6px }
 .pop .drow { font-size:.7rem; line-height:1.45; padding:3px 0;
   border-top:1px solid #efeadf }
@@ -608,6 +610,8 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <label><input type="checkbox" data-group="rwis" checked><i style="--dot:#2f9e6e"></i>Weather stations <em id="n-rwis"></em></label>
       <u>Wildfire</u>
       <label><input type="checkbox" data-group="fire_pt" checked><i style="--dot:#d97706"></i>Wildfires <em id="n-fire_pt"></em></label>
+      <u>Tolls</u>
+      <label><input type="checkbox" data-group="toll" checked><i style="--dot:#7c3aed"></i>Toll prices <em id="n-toll"></em></label>
       <u>Traffic</u>
       <label><input type="checkbox" id="trafficlayer"><i style="--dot:#7a4bd6"></i>Live traffic overlay</label>
       <u>Roadside</u>
@@ -1200,6 +1204,7 @@ const GROUP_DOT = {
   inc_other: '#c9611a', clo_full: '#7f1d1d', clo_lane: '#a02c2c',
   clo_oneway: '#a02c2c', clo_ramp: '#d9a0a0', chain: '#2b6cb0',
   rwis: '#2f9e6e', fire_pt: '#d97706', fire_poly: '#d97706',
+  toll: '#7c3aed',
   camera: '#2f81f7', sign: '#a16207',
 };
 const POP_LABEL = {
@@ -1207,6 +1212,7 @@ const POP_LABEL = {
   inc_other: 'INCIDENT', clo_full: 'FULL CLOSURE', clo_lane: 'LANE CLOSURE',
   clo_oneway: 'ONE-WAY / ROLLING WORK', clo_ramp: 'RAMP CLOSED',
   chain: 'CHAIN CONTROL', rwis: 'ROAD WEATHER', fire_pt: 'WILDFIRE',
+  toll: 'TOLL PRICE',
   fire_poly: 'BURN FOOTPRINT', camera: 'LIVE CAMERA', sign: 'MESSAGE SIGN',
 };
 const ambient = {};
@@ -1235,6 +1241,7 @@ function classify(m) {
   }
   if (m.kind === 'chain_control') return 'chain';
   if (m.kind === 'rwis') return 'rwis';
+  if (m.kind === 'toll') return 'toll';
   if (m.kind === 'wildfire') return 'fire_pt';
   if (m.kind === 'camera') return 'camera';
   if (m.kind === 'sign') return 'sign';
@@ -1370,6 +1377,22 @@ function popupFor(m, g) {
       histBlock([lines.length ? 'Live text as displayed on the sign' : null]) +
       '</div>';
   }
+  if (g === 'toll') {
+    const price = (m.price != null && m.price > 0)
+      ? '$' + m.price.toFixed(2) : null;
+    const badge = m.pricing === 'live' ? 'Live price, changes with traffic'
+      : m.pricing === 'fixed' ? 'Fixed rate (two-axle / tag)'
+      : 'Priced on roadside signs';
+    return popHead(g, m.name || 'Toll point') +
+      (price ? '<div class="tollprice">' + price + '</div>' : '') +
+      ((m.lines && m.lines.length)
+        ? '<div class="d">' + m.lines.map(esc).join('<br>') + '</div>' : '') +
+      (m.message ? '<div class="d">' + esc(m.message) + '</div>' : '') +
+      histBlock([badge,
+        m.updated ? 'Updated ' + (agoTxt(m.updated) || 'recently') : null,
+        m.src ? 'Prices provided by ' + esc(m.src) : null]) +
+      '</div>';
+  }
   if (g === 'rwis') {
     const bits = [];
     if (m.air_c != null) bits.push('air ' + Math.round(m.air_c * 9 / 5 + 32) + '&deg;F');
@@ -1377,7 +1400,7 @@ function popupFor(m, g) {
     if (m.wind != null) bits.push('wind ' + Math.round(m.wind) + ' mph');
     if (m.gust != null) bits.push('gusts ' + Math.round(m.gust) + ' mph');
     if (m.vis_m != null && m.vis_m < 5000) bits.push('visibility ' + Math.round(m.vis_m) + ' m');
-    return popHead(g, m.station || 'Weather station') +
+    return popHead(g, m.station || m.name || 'Weather station') +
       '<div class="d">' + esc(m.route || '') + '</div>' +
       '<div class="d">' + (bits.join(' · ') || 'no current readings') + '</div></div>';
   }
@@ -1491,6 +1514,9 @@ function layerForItem(it) {
   } else {
     it.layer = pointMarker(m, it.g);
   }
+  // Every layer carries its group so the popup-open refresh deferral
+  // recognizes it.
+  it.layer.__m = m; it.layer.__g = it.g;
   return it.layer;
 }
 let lastCullBounds = null;
@@ -1621,7 +1647,7 @@ function tryFocus() {
 
 const FAST_GROUPS = ['inc_collision', 'inc_fire', 'inc_hazard', 'inc_other',
   'clo_full', 'clo_lane', 'clo_oneway', 'clo_ramp', 'chain',
-  'fire_pt', 'fire_poly'];
+  'fire_pt', 'fire_poly', 'toll'];
 const HEAVY_GROUPS = ['camera', 'sign', 'rwis'];
 
 // Closure stretch polylines, deferred: built once, the first time the
@@ -1644,7 +1670,32 @@ function syncStrips() {
 }
 map.on('zoomend', syncStrips);
 
+// Refreshing a group rebuilds its layers, which CLOSES any popup a
+// user is reading (reported as "clicking the dispatch log took me away
+// from the incident": the 3-minute refresh landed mid-read). Defer the
+// rebuild until the popup closes; road data can be 3 minutes stale
+// while someone reads, a vanishing popup cannot.
+let pendingBatches = [];
+map.on('popupclose', () => {
+  if (!pendingBatches.length) return;
+  const todo = pendingBatches;
+  pendingBatches = [];
+  // Let the close finish before rebuilding (same-tick rebuild can
+  // re-trigger popup bookkeeping).
+  setTimeout(() => todo.forEach(([m, g]) => renderBatch(m, g)), 80);
+});
+function popupBlocksRefresh(groups) {
+  const src = map._popup && map._popup.isOpen() && map._popup._source;
+  return !!(src && src.__g && groups.includes(src.__g));
+}
+
 function renderBatch(markers, groups) {
+  if (popupBlocksRefresh(groups)) {
+    pendingBatches = pendingBatches.filter(([, g]) =>
+      g.join() !== groups.join());
+    pendingBatches.push([markers, groups]);
+    return;
+  }
   const counts = {};
   for (const g of groups) { ambient[g].clearLayers(); items[g] = []; }
   if (groups.includes('camera')) { cameraCache = []; signCache = []; }
@@ -1743,7 +1794,7 @@ async function refreshAmbient(force) {
     } catch (e) { return false; }
   };
   const [fastOk, heavyOk] = await Promise.all([
-    load('incident,closure,chain,fire', FAST_GROUPS, true),
+    load('incident,closure,chain,fire,toll', FAST_GROUPS, true),
     load('camera,sign,rwis', HEAVY_GROUPS, false),
   ]);
   if (mine !== ambientCycle) return;

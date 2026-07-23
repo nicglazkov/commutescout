@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import html as _html
+import json
 import re
 import time
 from base64 import b64decode
@@ -1827,6 +1828,209 @@ KEYLESS_STATES = {
 }
 
 
+# ── Toll pricing (marker kind "toll") ────────────────────────────────
+# Three honesty classes: live (a price feed), fixed (published rate
+# tables), schedule (priced on signs / published schedules only).
+
+def _bay_key() -> str:
+    import os
+    return os.environ.get("BAY511_API_KEY", "")
+
+
+_WS_DATE = re.compile(r"/Date\((-?\d+)")
+_WS_SENTINEL = -62135568000000
+
+
+def _ws_when(raw: str | None) -> str | None:
+    m = _WS_DATE.search(raw or "")
+    if not m or int(m.group(1)) == _WS_SENTINEL:
+        return None
+    return datetime.fromtimestamp(int(m.group(1)) / 1000).isoformat()
+
+
+async def _fetch_wsdot_tolls(client) -> dict:
+    """WSDOT dynamic toll rates (I-405, SR 167, SR 99, SR 520). The
+    CurrentToll field is CENTS here (their trip-rate endpoint uses
+    dollars; classic unit trap)."""
+    key = _wa_key()
+    resp = await client.get(
+        "https://wsdot.wa.gov/Traffic/api/TollRates/TollRatesREST.svc/"
+        f"GetTollRatesAsJson?AccessCode={key}", headers=UA, timeout=30.0)
+    resp.raise_for_status()
+    markers: list[dict] = []
+    for r in resp.json() or []:
+        lat, lon = r.get("StartLatitude"), r.get("StartLongitude")
+        if not lat or not lon:
+            continue
+        cents = r.get("CurrentToll")
+        price = (round(cents / 100.0, 2)
+                 if isinstance(cents, (int, float)) and cents > 0 else None)
+        name = " ".join(x for x in (r.get("StateRoute"),
+                                    r.get("TravelDirection"))
+                        if x).strip() or "Toll segment"
+        markers.append({
+            "kind": "toll", "lat": lat, "lon": lon,
+            "name": f"{name}: {r.get('StartLocationName') or ''} to "
+                    f"{r.get('EndLocationName') or ''}".strip(": "),
+            "price": price, "pricing": "live",
+            "message": (r.get("CurrentMessage") or "").strip() or None,
+            "updated": _ws_when(r.get("TimeUpdated")),
+            "src": "WSDOT"})
+    return {"markers": markers}
+
+
+async def _fetch_bay_tolls(client) -> dict:
+    """SF Bay bridges and express lanes via the 511 SF Bay toll API.
+    Attribution 'data provided by 511.org' is required next to the
+    data; the popup's source line carries it."""
+    key = _bay_key()
+    resp = await client.get("https://api.511.org/toll/programs",
+                            headers=UA, timeout=30.0,
+                            params={"api_key": key, "format": "json"})
+    resp.raise_for_status()
+    payload = json.loads(resp.content.decode("utf-8-sig"))
+    markers: list[dict] = []
+    for prog in payload.get("toll-programs") or []:
+        pname = ((prog.get("toll-authority-info") or {})
+                 .get("toll-program-name") or "")
+        for sign in prog.get("toll-signs") or []:
+            coords = ((sign.get("geography") or {}).get("coordinates")
+                      or [])
+            if len(coords) < 2:
+                continue
+            lines, price, updated = [], None, None
+            for dest in sign.get("toll-destinations") or []:
+                rate = (dest.get("toll-rates") or [{}])[0]
+                p = rate.get("toll-price")
+                if isinstance(p, (int, float)) and p > 0:
+                    lines.append(f"to {dest.get('name')}: ${p:.2f}")
+                    if price is None:
+                        price = round(p, 2)
+                    updated = rate.get("last-updated") or updated
+            markers.append({
+                "kind": "toll", "lat": coords[1], "lon": coords[0],
+                "name": f"{pname}: {sign.get('name') or 'toll sign'}",
+                "price": price, "pricing": "live", "lines": lines,
+                "updated": updated, "src": "511.org"})
+    return {"markers": markers}
+
+
+async def _arcgis_page(client, url: str, where: str = "1=1",
+                       geometry: bool = True) -> list[dict]:
+    """Query an ArcGIS layer. Older MapServers (NTTA's) reject the
+    pagination params outright, so the first request goes without
+    them; pagination only kicks in when the server reports it
+    truncated the result."""
+    base_params = {"where": where, "outFields": "*",
+                   "returnGeometry": str(geometry).lower(),
+                   "outSR": 4326, "f": "json"}
+    resp = await client.get(f"{url}/query", headers=UA, timeout=30.0,
+                            params=base_params)
+    resp.raise_for_status()
+    payload = resp.json()
+    if "error" in payload:
+        raise RuntimeError(f"arcgis: {payload['error']}")
+    out = list(payload.get("features") or [])
+    offset = len(out)
+    while payload.get("exceededTransferLimit") and offset < 12000:
+        resp = await client.get(f"{url}/query", headers=UA, timeout=30.0,
+                                params={**base_params,
+                                        "resultOffset": offset})
+        resp.raise_for_status()
+        payload = resp.json()
+        if "error" in payload:
+            break
+        feats = payload.get("features") or []
+        if not feats:
+            break
+        out.extend(feats)
+        offset += len(feats)
+    return out
+
+
+async def _fetch_ntta_tolls(client) -> dict:
+    """Dallas NTTA: gantry points plus the published two-axle standard
+    rate table, joined by plaza code where the codes line up."""
+    base = ("https://maps.ntta.org/waap1/rest/services/"
+            "TCAL_RDWY_Gantry_TollRates/MapServer")
+    gantries, rates = await asyncio.gather(
+        _arcgis_page(client, f"{base}/0"),
+        _arcgis_page(client, f"{base}/1", geometry=False))
+    now_ms = time.time() * 1000
+    by_code: dict[str, float] = {}
+    for f in rates:
+        a = f.get("attributes") or {}
+        # Their server 400s on typed WHERE clauses; filter here.
+        if (str(a.get("VehicleClass")) != "2"
+                or a.get("ScheduleType") != "STANDARD"):
+            continue
+        start, end = a.get("StartEffectiveDate"), a.get("EndEffectiveDate")
+        if isinstance(start, (int, float)) and start > now_ms:
+            continue
+        if isinstance(end, (int, float)) and end < now_ms:
+            continue
+        with contextlib.suppress(TypeError, ValueError):
+            by_code[a.get("PlazaCode") or ""] = float(a.get("TagFare"))
+    markers: list[dict] = []
+    for f in gantries:
+        geom = f.get("geometry") or {}
+        a = {k.rsplit(".", 1)[-1]: v
+             for k, v in (f.get("attributes") or {}).items()}
+        lat, lon = geom.get("y"), geom.get("x")
+        if not lat or not lon:
+            continue
+        price = by_code.get(a.get("Gantry") or "")
+        markers.append({
+            "kind": "toll", "lat": lat, "lon": lon,
+            "name": f"{a.get('ROADWAY_DESC') or 'NTTA'}: "
+                    f"{a.get('NAME') or 'toll gantry'}",
+            "price": price,
+            "pricing": "fixed" if price else "schedule",
+            "message": None if price else "Rates published at ntta.org",
+            "src": "NTTA"})
+    return {"markers": markers}
+
+
+async def _fetch_hctra_tolls(client) -> dict:
+    """Houston HCTRA (plus TxDOT SH 130 rows the same layer carries):
+    per-location EZ Tag and cash rates with geometry."""
+    feats = await _arcgis_page(
+        client,
+        "https://gismaps.hctra.org/arcgis/rest/services/"
+        "ExternalOnlineMap/HCTRASystemMap/MapServer/4")
+    markers: list[dict] = []
+    for f in feats:
+        geom, a = f.get("geometry") or {}, f.get("attributes") or {}
+        lat, lon = geom.get("y"), geom.get("x")
+        if not lat or not lon or (a.get("Tolled") or "").upper() != "Y":
+            continue
+        price = None
+        with contextlib.suppress(TypeError, ValueError):
+            price = round(float(a.get("EZ_Rate")), 2)
+        lines = []
+        with contextlib.suppress(TypeError, ValueError):
+            lines.append(f"cash / plate: ${float(a.get('Cash_Rate')):.2f}")
+        markers.append({
+            "kind": "toll", "lat": lat, "lon": lon,
+            "name": f"{a.get('Toll_Road') or 'Toll road'}: "
+                    f"{a.get('Name') or ''} ({a.get('Type') or 'toll'})",
+            "price": price, "pricing": "fixed" if price else "schedule",
+            "lines": lines, "src": "HCTRA"})
+    return {"markers": markers}
+
+
+# code: (state, bounds, fetcher, ready-check or None, cache ttl)
+TOLL_SOURCES = {
+    "wstoll": ("Washington", WA_BOUNDS, _fetch_wsdot_tolls, _wa_key, 300),
+    "baytoll": ("California", (36.8, -123.2, 38.6, -121.2),
+                _fetch_bay_tolls, _bay_key, 300),
+    "ntta": ("Texas", (32.4, -97.6, 33.4, -96.2),
+             _fetch_ntta_tolls, None, 3600),
+    "hctra": ("Texas", (28.9, -98.3, 30.4, -94.8),
+              _fetch_hctra_tolls, None, 3600),
+}
+
+
 def _clean_marker_text(m: dict) -> None:
     """Popup-facing text must never carry raw newlines, tabs, or HTML
     tags: agencies embed them freely (a marker-text audit found them in
@@ -1848,7 +2052,8 @@ async def markers_for_bbox(client, box, want) -> list[dict]:
     # Honor the same kinds filter the California feeds do.
     kind_group = {"incident": "incident", "lane_closure": "closure",
                   "chain_control": "chain", "wildfire": "fire",
-                  "camera": "camera", "sign": "sign", "rwis": "rwis"}
+                  "camera": "camera", "sign": "sign", "rwis": "rwis",
+                  "toll": "toll"}
 
     async def add(outcome):
         if outcome.value:
@@ -1888,6 +2093,12 @@ async def markers_for_bbox(client, box, want) -> list[dict]:
             continue
         lookups.append(_cache.get(
             f"{code}:all", TTL, MAX_SERVE, lambda f=fetcher: f(client)))
+    if "toll" in want:
+        for code, (_st, bounds, fetcher, ready, ttl) in TOLL_SOURCES.items():
+            if (ready and not ready()) or not _overlaps(box, bounds):
+                continue
+            lookups.append(_cache.get(
+                f"toll:{code}", ttl, MAX_SERVE, lambda f=fetcher: f(client)))
     # A nationwide viewport touches every state at once; fetch them
     # concurrently so cold latency is the slowest feed, not the sum.
     for outcome in await asyncio.gather(*lookups, return_exceptions=True):
@@ -1912,6 +2123,10 @@ async def prewarm(client) -> None:
         for code, (_n, _b, fetcher, ready) in KEYED_STATES.items():
             if ready():
                 lookups.append(_cache.get(f"{code}:all", TTL, MAX_SERVE,
+                                          lambda f=fetcher: f(client)))
+        for code, (_n, _b, fetcher, ready, ttl) in TOLL_SOURCES.items():
+            if not ready or ready():
+                lookups.append(_cache.get(f"toll:{code}", ttl, MAX_SERVE,
                                           lambda f=fetcher: f(client)))
         await asyncio.gather(*lookups, return_exceptions=True)
         # WZDx feeds run up to 16 MB each; warm them in small batches so
@@ -2009,4 +2224,11 @@ def source_status() -> list[dict]:
                   "idk": "ITD", "nvk": "NDOT",
                   "nck": "NCDOT"}.get(code, name)
         out.append(_status_entry(f"{code}:all", "All feeds", agency, name))
+    for code, (st, _b, _f, ready, _ttl) in TOLL_SOURCES.items():
+        if ready and not ready():
+            continue
+        agency = {"wstoll": "WSDOT toll rates",
+                  "baytoll": "511 SF Bay tolls", "ntta": "NTTA",
+                  "hctra": "HCTRA"}.get(code, code)
+        out.append(_status_entry(f"toll:{code}", "Toll pricing", agency, st))
     return out

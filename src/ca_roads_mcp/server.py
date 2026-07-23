@@ -1301,7 +1301,8 @@ async def get_nearby_events(
     supplement when a California tool comes back empty.
 
     center is "lat,lon". kinds is a comma list from: incident, closure,
-    chain, fire, sign, rwis, camera. radius_km caps at 160.
+    chain, fire, sign, rwis, camera, toll (toll adds live and fixed
+    toll prices where agencies publish them). radius_km caps at 160.
     """
     import math
 

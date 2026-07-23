@@ -275,7 +275,7 @@ TOOL_DEFS = [
                 "radius_km": {"type": "number"},
                 "kinds": {"type": "string",
                           "description": "comma list: incident, closure, "
-                          "chain, fire, sign, rwis"},
+                          "chain, fire, sign, rwis, toll"},
             },
             "required": ["center"],
         },
