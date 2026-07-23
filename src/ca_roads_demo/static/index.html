@@ -2138,7 +2138,20 @@ map.on('popupopen', (e) => {
         h += '<h5>Dispatch log</h5>' + rows(d.details);
       }
       if (d.units && d.units.length) {
-        h += '<h5>Units</h5>' + rows(d.units);
+        // CHP's public feed logs unit status changes without unit
+        // names, so several units interleave. Chronological order
+        // (oldest first) reads as the response story instead of a
+        // jumble of same-minute Assigned/Enroute/Cleared rows.
+        const unitRows = d.units.slice()
+          .map((en) => [en, Date.parse(en[0] || '') || 0])
+          .sort((x, y) => x[1] - y[1])
+          .map(([en]) => '<div class="drow"><b>' + esc(en[0] || '') +
+            '</b><span class="rw">' + esc(en[1] || '') + '</span></div>')
+          .join('');
+        h += '<h5>Unit activity (oldest first)</h5>' + unitRows +
+          '<div class="drow" style="border-top:0;color:var(--dim)">' +
+          'CHP does not name individual units in the public feed; ' +
+          'entries are per responding unit.</div>';
       }
       // No popup.update() here: it re-renders from the original content
       // string and would wipe this injected log (same rule as
