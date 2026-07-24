@@ -885,18 +885,29 @@ async def api_mapdata(request: Request):
         with contextlib.suppress(Exception):
             roadsnap.apply(markers)
 
-    # Everything, gzipped: the whole state is ~4k markers and compresses
-    # roughly 10:1. No caps - the map IS the product.
-    body = json.dumps({"markers": markers}).encode()
-    if "gzip" in (request.headers.get("accept-encoding") or ""):
-        import gzip as _gzip
+    # Everything, gzipped: compresses roughly 5:1. No caps - the map
+    # IS the product. Content-hash ETag lets the 180s interval refresh
+    # cost a 304 when nothing changed, and X-Raw-Length powers the
+    # client's byte-true download progress (Content-Length is the
+    # compressed size; fetch() readers see decompressed bytes).
+    import gzip as _gzip
+    import hashlib as _hashlib
 
+    body = json.dumps({"markers": markers}).encode()
+    etag = f'"{_hashlib.md5(body).hexdigest()}"'
+    common = {"ETag": etag, "Cache-Control": "public, max-age=30",
+              "Vary": "Accept-Encoding",
+              "X-Raw-Length": str(len(body))}
+    inm = request.headers.get("if-none-match") or ""
+    if etag in inm:
+        return Response(status_code=304, headers=common)
+    if "gzip" in (request.headers.get("accept-encoding") or ""):
         return Response(
             _gzip.compress(body, 6),
             media_type="application/json",
-            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+            headers={**common, "Content-Encoding": "gzip"},
         )
-    return Response(body, media_type="application/json")
+    return Response(body, media_type="application/json", headers=common)
 
 
 async def api_sources(request: Request):
@@ -1377,28 +1388,131 @@ class SoftLimit:
         await self.app(scope, receive, send)
 
 
+_COMPRESSIBLE = {"text/html", "text/css", "application/javascript",
+                 "text/javascript", "image/svg+xml", "application/json",
+                 "application/manifest+json"}
+_COMPRESS_BUFFER_CAP = 8 * 1024 * 1024
+
+
+def _etag_matches(inm: str, etag: str) -> bool:
+    tag = etag.strip().removeprefix("W/")
+    return any(part.strip().removeprefix("W/") in (tag, "*")
+               for part in inm.split(","))
+
+
 class StaticCacheHeaders:
-    """Vendored assets (Leaflet, fonts, icons) almost never change:
-    let browsers keep them for a week instead of revalidating every
-    page view. HTML and API responses are untouched."""
+    """Wire-level performance middleware (name kept for the runbook):
+
+    - gzips compressible text responses that are not already encoded
+      and are not event streams (the assistant's SSE must never be
+      buffered);
+    - sets cache policy by path class: vendored assets a week
+      immutable, other static an hour, HTML no-cache so every load
+      revalidates;
+    - converts any ETag hit into a 304 with no body, because this
+      Starlette version does not handle If-None-Match itself. An
+      uncompressed HTML+Leaflet critical path measured ~300 KB and
+      ~2 s to DOMContentLoaded before this existed.
+    """
 
     def __init__(self, app_):
         self.app = app_
 
     async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
         path = scope.get("path", "")
-        cacheable = scope["type"] == "http" and (
-            path.startswith(("/static/vendor/", "/static/fonts/"))
-            or path.startswith("/static/icon-"))
+        req = {k.decode("latin-1").lower(): v.decode("latin-1")
+               for k, v in scope.get("headers", [])}
+        wants_gzip = "gzip" in req.get("accept-encoding", "")
+        inm = req.get("if-none-match")
+        state = {"mode": "pass", "start": None, "buf": bytearray()}
 
-        async def send_with_cache(message):
-            if cacheable and message["type"] == "http.response.start":
-                headers = message.setdefault("headers", [])
-                headers.append((b"cache-control",
-                                b"public, max-age=604800, immutable"))
+        def cache_policy(hdict) -> bytes | None:
+            if (path.startswith(("/static/vendor/", "/static/fonts/"))
+                    or path.startswith("/static/icon-")):
+                return b"public, max-age=604800, immutable"
+            if path.startswith("/static/"):
+                return b"public, max-age=3600"
+            ctype = hdict.get(b"content-type", b"")
+            if ctype.startswith(b"text/html"):
+                return b"no-cache"
+            return None
+
+        async def flush_buffered():
+            message = state["start"]
+            headers = message["headers"]
+            hdict = {k.lower(): v for k, v in headers}
+            body = bytes(state["buf"])
+            if wants_gzip and len(body) >= 500:
+                import gzip as _gzip
+
+                raw_len = len(body)
+                body = _gzip.compress(body, 6)
+                headers = [(k, v) for k, v in headers
+                           if k.lower() not in (b"content-length",)]
+                headers.append((b"content-encoding", b"gzip"))
+                headers.append((b"content-length",
+                                str(len(body)).encode()))
+                headers.append((b"x-raw-length", str(raw_len).encode()))
+                if b"vary" not in hdict:
+                    headers.append((b"vary", b"Accept-Encoding"))
+            message["headers"] = headers
+            await send(message)
+            await send({"type": "http.response.body", "body": body})
+
+        async def send2(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                hdict = {k.lower(): v for k, v in headers}
+                cc = cache_policy(hdict)
+                if cc and b"cache-control" not in hdict:
+                    headers.append((b"cache-control", cc))
+                    hdict[b"cache-control"] = cc
+                etag = hdict.get(b"etag")
+                if (etag and inm and message.get("status") == 200
+                        and _etag_matches(inm, etag.decode("latin-1"))):
+                    state["mode"] = "skip"
+                    keep = [(k, v) for k, v in headers
+                            if k.lower() in (b"etag", b"cache-control",
+                                             b"vary", b"x-raw-length")]
+                    await send({"type": "http.response.start",
+                                "status": 304, "headers": keep})
+                    await send({"type": "http.response.body",
+                                "body": b""})
+                    return
+                ctype = hdict.get(b"content-type",
+                                  b"").split(b";")[0].decode("latin-1")
+                if (wants_gzip and ctype in _COMPRESSIBLE
+                        and b"content-encoding" not in hdict):
+                    state["mode"] = "buffer"
+                    message = dict(message)
+                    message["headers"] = headers
+                    state["start"] = message
+                    return
+                message = dict(message)
+                message["headers"] = headers
+                await send(message)
+                return
+            if message["type"] == "http.response.body":
+                if state["mode"] == "skip":
+                    return
+                if state["mode"] == "buffer":
+                    state["buf"].extend(message.get("body", b""))
+                    if len(state["buf"]) > _COMPRESS_BUFFER_CAP:
+                        # Too big to buffer: fall back to passthrough.
+                        state["mode"] = "pass"
+                        await send(state["start"])
+                        await send({"type": "http.response.body",
+                                    "body": bytes(state["buf"]),
+                                    "more_body": True})
+                        return
+                    if not message.get("more_body"):
+                        await flush_buffered()
+                    return
             await send(message)
 
-        await self.app(scope, receive, send_with_cache if cacheable else send)
+        await self.app(scope, receive, send2)
 
 
 app = BodyLimit(app)
