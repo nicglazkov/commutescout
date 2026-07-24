@@ -27,6 +27,9 @@
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" as="fetch" crossorigin="anonymous"
       href="/api/mapdata?bbox=-85.000,-180.000,85.000,180.000&kinds=incident,closure,chain,fire,toll&slim=1">
+<!-- GPU renderer bundle: default path for WebGL2 browsers, so start the
+     fetch alongside the map data instead of after the boot script runs. -->
+<link rel="preload" as="script" href="/static/vendor/deck-slim.min.js">
 <!-- Map tiles are the LCP element (measured via Web Analytics); warming
      the tile CDN connections shaves the TLS handshake off first paint. -->
 <link rel="preconnect" href="https://a.basemaps.cartocdn.com">
@@ -1602,7 +1605,7 @@ map.on('moveend zoomend', () => {
 });
 
 
-// ── GPU dot rendering (deck.gl, flag-gated: ?gl=1) ──────────────────
+// ── GPU dot rendering (deck.gl, default on; ?gl=0 opts out) ─────────
 // Point markers move to one ScatterplotLayer fed by binary typed
 // arrays; benchmarked at 4 ms/frame panning versus ~100 ms on the
 // canvas renderer, and immune to CPU throttling. Strips, fire
@@ -1613,7 +1616,7 @@ const GL = { on: false, deck: null, dirty: false, index: [],
 (() => {
   try {
     const qs = new URLSearchParams(location.search);
-    if (qs.get('gl') !== '1') return;
+    if (qs.get('gl') === '0') return;
     const probe = document.createElement('canvas');
     if (!probe.getContext('webgl2')) return;
     GL.on = true;
