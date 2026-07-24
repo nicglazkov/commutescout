@@ -26,7 +26,7 @@
 </script>
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" as="fetch" crossorigin="anonymous"
-      href="/api/mapdata?bbox=-85.000,-180.000,85.000,180.000&kinds=incident,closure,chain,fire,toll">
+      href="/api/mapdata?bbox=-85.000,-180.000,85.000,180.000&kinds=incident,closure,chain,fire,toll&slim=1">
 <!-- Map tiles are the LCP element (measured via Web Analytics); warming
      the tile CDN connections shaves the TLS handshake off first paint. -->
 <link rel="preconnect" href="https://a.basemaps.cartocdn.com">
@@ -1520,7 +1520,9 @@ function layerForItem(it) {
   return it.layer;
 }
 let lastCullBounds = null;
+let cullToken = 0;
 function cullSync() {
+  cullToken++;
   const view = map.getBounds().pad(0.6);
   for (const g of Object.keys(items)) {
     const grp = ambient[g];
@@ -1531,6 +1533,50 @@ function cullSync() {
     }
   }
   lastCullBounds = view;
+}
+// Boot-time variant: attaching 10k+ markers in one synchronous pass
+// blocks the first paint on slow hardware. Chunk the attach across
+// animation frames and let the pill count REAL progress.
+function cullBatched() {
+  const mine = ++cullToken;
+  const view = map.getBounds().pad(0.6);
+  const adds = [];
+  for (const g of Object.keys(items)) {
+    for (const it of items[g]) {
+      const inView = view.contains([it.m.lat, it.m.lon]);
+      if (inView && !it.on) adds.push(it);
+      else if (!inView && it.on) { ambient[it.g].removeLayer(it.layer); it.on = false; }
+    }
+  }
+  lastCullBounds = view;
+  if (adds.length < 3000) {
+    for (const it of adds) {
+      ambient[it.g].addLayer(layerForItem(it));
+      it.on = true;
+    }
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let i = 0;
+    const step = () => {
+      if (mine !== cullToken) { resolve(); return; }
+      const end = Math.min(i + 2500, adds.length);
+      for (; i < end; i++) {
+        const it = adds[i];
+        if (!it.on) {
+          ambient[it.g].addLayer(layerForItem(it));
+          it.on = true;
+        }
+      }
+      if (!mapDataShown && !mapRefreshPrompt) {
+        showPill('Showing ' + i.toLocaleString() + ' of ' +
+          adds.length.toLocaleString() + ' reports…');
+      }
+      if (i < adds.length) requestAnimationFrame(step);
+      else resolve();
+    };
+    requestAnimationFrame(step);
+  });
 }
 let cullTimer = null;
 map.on('moveend zoomend', () => {
@@ -1547,6 +1593,7 @@ map.on('moveend zoomend', () => {
     requestAnimationFrame(() => {
       cullSync();
       if (mapDataShown) hidePill();
+      fetchGeometry();
     });
   }, 120);
 });
@@ -1661,19 +1708,60 @@ const HEAVY_GROUPS = ['camera', 'sign', 'rwis'];
 let pendingStrips = [];
 let stripsBuilt = false;
 const STRIP_ZOOM = 8;
+// Closure stretch geometry ships separately from the slim boot
+// payload (it was 57% of boot bytes and is invisible below
+// STRIP_ZOOM). Fetched per 2-degree cell the first time the view
+// zooms in, keyed by marker coordinates, kept across data refreshes.
+const geoByKey = new Map();
+const geoCells = new Map();
+const GEO_CELL_TTL = 600000;
+const geoKey = (m) => m.lat.toFixed(5) + ',' + m.lon.toFixed(5);
+async function fetchGeometry() {
+  if (map.getZoom() < STRIP_ZOOM) return;
+  const b = map.getBounds().pad(0.3);
+  const cells = [];
+  for (let la = Math.floor(b.getSouth() / 2) * 2;
+       la <= b.getNorth(); la += 2) {
+    for (let lo = Math.floor(b.getWest() / 2) * 2;
+         lo <= b.getEast(); lo += 2) {
+      const key = la + '_' + lo;
+      const ts = geoCells.get(key);
+      if (!ts || Date.now() - ts > GEO_CELL_TTL) cells.push([key, la, lo]);
+    }
+  }
+  if (!cells.length) return;
+  cells.forEach(([k]) => geoCells.set(k, Date.now()));
+  await Promise.all(cells.map(async ([k, la, lo]) => {
+    try {
+      const res = await fetch('/api/mapdata?bbox=' + la + ',' + lo + ',' +
+        (la + 2) + ',' + (lo + 2) + '&kinds=closure&fields=geo');
+      if (!res.ok) { geoCells.delete(k); return; }
+      const d = await res.json();
+      for (const m of d.markers || []) {
+        geoByKey.set(geoKey(m), m.path);
+      }
+    } catch (e) { geoCells.delete(k); }
+  }));
+  stripsBuilt = false;
+  syncStrips();
+}
+
 function syncStrips() {
   if (stripsBuilt || map.getZoom() < STRIP_ZOOM) return;
   stripsBuilt = true;
   for (const [m, g] of pendingStrips) {
     // Real road geometry ONLY. A straight begin-to-end segment cuts
-    // corners on any curved road (most Caltrans closures carry no
-    // geometry), so feeds without a path stay dots. Some feeds dress
-    // a straight line as a 2-point LineString (UDOT's WZDx): those
-    // only draw when short enough that straight IS the road.
-    if (!Array.isArray(m.path) || m.path.length < 2) continue;
-    if (m.path.length === 2
-        && map.distance(m.path[0], m.path[1]) > 800) continue;
-    const strip = L.polyline(m.path, {
+    // corners on any curved road, so closures without geometry stay
+    // dots. Some feeds dress a straight line as a 2-point LineString
+    // (UDOT's WZDx): those only draw when short enough that straight
+    // IS the road. Geometry comes from the marker itself (native
+    // full-payload mode) or the lazily fetched geometry store.
+    const path = (Array.isArray(m.path) && m.path.length > 1)
+      ? m.path : geoByKey.get(geoKey(m));
+    if (!Array.isArray(path) || path.length < 2) continue;
+    if (path.length === 2
+        && map.distance(path[0], path[1]) > 800) continue;
+    const strip = L.polyline(path, {
       renderer: canvasR, color: GROUP_DOT[g], weight: 4, opacity: 0.45,
     }).bindPopup(() => popupFor(m, g), { maxWidth: 320 });
     strip.__m = m; strip.__g = g;
@@ -1718,19 +1806,20 @@ function renderBatch(markers, groups) {
     if (g === 'camera') { cameraCache.push(m); continue; }
     if (g === 'sign') { signCache.push(m); continue; }
     counts[g] = (counts[g] || 0) + 1;
-    // Closures with REAL road geometry get the affected stretch drawn
-    // under their dot (endpoint-only feeds stay dots: a straight line
-    // between endpoints is not the road). Strips build lazily the
-    // first time the user zooms in far enough to see them. Fire
-    // perimeter polygons and blank signs shape via layerForItem.
-    if (g.startsWith('clo_') && Array.isArray(m.path) && m.path.length > 1) {
+    // Every closure is a strip candidate: its road geometry either
+    // rode along (native feeds) or arrives lazily from the geometry
+    // endpoint once the user zooms past STRIP_ZOOM. syncStrips only
+    // draws real geometry either way. Fire perimeter polygons and
+    // blank signs shape via layerForItem.
+    if (g.startsWith('clo_')) {
       pendingStrips.push([m, g]);
     }
     items[g].push({ m, g, layer: null, on: false });
   }
   stripsBuilt = false;
   syncStrips();
-  cullSync();
+  const attach = mapDataShown ? (cullSync(), Promise.resolve())
+    : cullBatched();
   if (groups.includes('camera')) { rebuildCameras(); rebuildSigns(); }
   if (groups.includes('inc_collision')) tryFocus();
   for (const g of groups) {
@@ -1738,6 +1827,7 @@ function renderBatch(markers, groups) {
     const el = document.getElementById('n-' + g);
     if (el) el.textContent = counts[g] || 0;
   }
+  return attach;
 }
 
 // Loading pill: visible from page load until the first batch of dots
@@ -1795,13 +1885,42 @@ async function refreshAmbient(force) {
   // (3,300 cameras, 970 signs) follow without holding them up.
   const load = async (kinds, groups, isFast) => {
     try {
-      const res = await fetch('/api/mapdata?bbox=' + bbox + '&kinds=' + kinds);
+      const res = await fetch('/api/mapdata?bbox=' + bbox + '&kinds=' +
+        kinds + '&slim=1');
       if (mine !== ambientCycle) return true;
       if (!res.ok) return false;
-      const data = await res.json();
+      let data;
+      if (isFast && !mapDataShown && res.body) {
+        // Byte-true progress: X-Raw-Length is the decompressed size,
+        // which is what the reader actually counts. The percentage is
+        // literal bytes received, never a fake animation.
+        const total = +res.headers.get('X-Raw-Length') || 0;
+        const reader = res.body.getReader();
+        const chunks = [];
+        let received = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          if (total && !mapDataShown && !mapRefreshPrompt) {
+            showPill('Downloading live reports ' +
+              Math.min(99, Math.round(100 * received / total)) + '%');
+          }
+        }
+        const all = new Uint8Array(received);
+        let off = 0;
+        for (const c of chunks) { all.set(c, off); off += c.length; }
+        data = JSON.parse(new TextDecoder().decode(all));
+      } else {
+        data = await res.json();
+      }
       if (mine !== ambientCycle) return true;
-      renderBatch(data.markers || [], groups);
-      if (isFast) mapLoadingDone();
+      const done = renderBatch(data.markers || [], groups);
+      if (isFast) {
+        if (done && done.then) await done;
+        mapLoadingDone();
+      }
       return true;
     } catch (e) { return false; }
   };

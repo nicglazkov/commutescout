@@ -688,10 +688,21 @@ def _bbox_params(request: Request):
         return None
 
 
+# Built-response cache: every visitor's boot request is the identical
+# whole-world query, and serializing plus gzipping 11 MB on the event
+# loop was measured blocking concurrent static responses for ~1 s.
+# A 30 s TTL matches the response's Cache-Control.
+_MAPDATA_CACHE: dict = {}
+_MAPDATA_CACHE_TTL = 30
+_MAPDATA_CACHE_MAX = 6
+
+
 async def api_mapdata(request: Request):
     """Everything in the viewport, no AI involved: the map is a product
     on its own. Dense layers (cameras, signs) only ship when the client
-    asks for them (it gates them by zoom)."""
+    asks for them (it gates them by zoom). slim=1 drops closure stretch
+    geometry (57% of bytes, invisible below zoom 8); fields=geo returns
+    ONLY that geometry for a viewport, fetched lazily when zoomed in."""
     box = _bbox_params(request)
     if box is None:
         return JSONResponse(
@@ -701,6 +712,8 @@ async def api_mapdata(request: Request):
     lat_min, lon_min, lat_max, lon_max = box
     want = set((request.query_params.get("kinds") or
                 "incident,closure,chain,fire").split(","))
+    slim = request.query_params.get("slim") == "1"
+    geo_only = request.query_params.get("fields") == "geo"
     road = tools.get_road()
 
     def inside(lat, lon):
@@ -885,29 +898,67 @@ async def api_mapdata(request: Request):
         with contextlib.suppress(Exception):
             roadsnap.apply(markers)
 
+    # Shape the response: slim boot payloads drop closure stretch
+    # geometry and every null field; geo-only responses carry nothing
+    # BUT that geometry (matched client-side by coordinates).
+    if geo_only:
+        markers = [
+            {"kind": m["kind"], "lat": m["lat"], "lon": m["lon"],
+             "path": m["path"]}
+            for m in markers
+            if m.get("kind") == "lane_closure"
+            and isinstance(m.get("path"), list) and len(m["path"]) > 1
+        ]
+    elif slim:
+        markers = [
+            {k: v for k, v in m.items()
+             if v is not None
+             and not (m.get("kind") == "lane_closure"
+                      and k in ("path", "end"))}
+            for m in markers
+        ]
+
     # Everything, gzipped: compresses roughly 5:1. No caps - the map
-    # IS the product. Content-hash ETag lets the 180s interval refresh
-    # cost a 304 when nothing changed, and X-Raw-Length powers the
-    # client's byte-true download progress (Content-Length is the
-    # compressed size; fetch() readers see decompressed bytes).
+    # IS the product. Content-hash ETag lets the interval refresh cost
+    # a 304 when nothing changed; X-Raw-Length powers the client's
+    # byte-true download progress (fetch() readers see decompressed
+    # bytes, so Content-Length alone cannot drive a percentage).
+    # json.dumps + gzip of the big payloads run OFF the event loop and
+    # the finished bytes are cached: identical concurrent boot
+    # requests must not stack up compression work behind one another.
     import gzip as _gzip
     import hashlib as _hashlib
 
-    body = json.dumps({"markers": markers}).encode()
-    etag = f'"{_hashlib.md5(body).hexdigest()}"'
+    cache_key = (request.query_params.get("bbox") or "",
+                 request.query_params.get("kinds") or "", slim, geo_only)
+    now_mono = time.monotonic()
+    hit = _MAPDATA_CACHE.get(cache_key)
+    if hit and now_mono - hit[0] < _MAPDATA_CACHE_TTL:
+        _ts, etag, raw_len, gz_body, raw_body = hit
+    else:
+        def _build(ms):
+            raw = json.dumps({"markers": ms}).encode()
+            return raw, _gzip.compress(raw, 6)
+
+        raw_body, gz_body = await asyncio.to_thread(_build, markers)
+        etag = f'"{_hashlib.md5(raw_body).hexdigest()}"'
+        raw_len = len(raw_body)
+        _MAPDATA_CACHE[cache_key] = (now_mono, etag, raw_len, gz_body,
+                                     raw_body)
+        while len(_MAPDATA_CACHE) > _MAPDATA_CACHE_MAX:
+            _MAPDATA_CACHE.pop(next(iter(_MAPDATA_CACHE)))
+
     common = {"ETag": etag, "Cache-Control": "public, max-age=30",
               "Vary": "Accept-Encoding",
-              "X-Raw-Length": str(len(body))}
+              "X-Raw-Length": str(raw_len)}
     inm = request.headers.get("if-none-match") or ""
     if etag in inm:
         return Response(status_code=304, headers=common)
     if "gzip" in (request.headers.get("accept-encoding") or ""):
-        return Response(
-            _gzip.compress(body, 6),
-            media_type="application/json",
-            headers={**common, "Content-Encoding": "gzip"},
-        )
-    return Response(body, media_type="application/json", headers=common)
+        return Response(gz_body, media_type="application/json",
+                        headers={**common, "Content-Encoding": "gzip"})
+    return Response(raw_body, media_type="application/json",
+                    headers=common)
 
 
 async def api_sources(request: Request):
