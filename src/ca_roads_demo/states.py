@@ -298,7 +298,10 @@ async def _fetch_nec(client, code: str) -> dict:
                 "dataTypes": "incidentData,laneClosureData,dmsData,essData,"
                              "cctvStatusData"})
     resp.raise_for_status()
-    return {"markers": _parse_nec_bundle(resp.content, code, agency)}
+    # 20 MB XML parses off the event loop (TTFB-spike prevention).
+    markers = await asyncio.to_thread(
+        _parse_nec_bundle, resp.content, code, agency)
+    return {"markers": markers}
 
 
 async def _fetch_nec_cameras(client, code: str) -> dict:
@@ -307,7 +310,9 @@ async def _fetch_nec_cameras(client, code: str) -> dict:
         NEC_URL, headers=UA, timeout=60.0,
         params={"networks": net, "dataTypes": "cctvSnapshotData"})
     resp.raise_for_status()
-    return {"markers": _parse_nec_cameras(resp.content, code, agency)}
+    markers = await asyncio.to_thread(
+        _parse_nec_cameras, resp.content, code, agency)
+    return {"markers": markers}
 
 
 _IMPACT_CLS = {
@@ -1268,7 +1273,13 @@ WZDX_CAPS = {"txa": 400}
 async def _fetch_wzdx(client, url: str, src: str, cap: int = 2000) -> dict:
     resp = await client.get(url, headers=UA, timeout=45.0)
     resp.raise_for_status()
-    return {"markers": _parse_ia_wzdx(resp.json(), src, cap=cap)}
+    # Parsing a multi-megabyte feed on the event loop stalls any
+    # request that lands mid-parse (measured as multi-second TTFB
+    # spikes); decode and build markers in a worker thread.
+    content = resp.content
+    markers = await asyncio.to_thread(
+        lambda: _parse_ia_wzdx(json.loads(content), src, cap=cap))
+    return {"markers": markers}
 
 
 _TAG_RE = re.compile(r"<[^>]+>")
