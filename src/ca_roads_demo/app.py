@@ -418,7 +418,20 @@ async def ask(request: Request):
     )
 
 
+# Bounded: every distinct rounded viewport adds an entry holding full
+# perimeter geometry, and an uncapped dict grew for days (it was a
+# steady contributor to the instance creeping past its memory limit).
 _PERIM_CACHE: dict[tuple, tuple[float, list]] = {}
+_PERIM_CACHE_MAX = 12
+
+
+def _perim_cache_put(key: tuple, perims: list) -> None:
+    now = time.monotonic()
+    for k in [k for k, (ts, _) in _PERIM_CACHE.items() if now - ts >= 600]:
+        del _PERIM_CACHE[k]
+    _PERIM_CACHE[key] = (now, perims)
+    while len(_PERIM_CACHE) > _PERIM_CACHE_MAX:
+        del _PERIM_CACHE[min(_PERIM_CACHE, key=lambda k: _PERIM_CACHE[k][0])]
 
 
 async def api_suggest(request: Request):
@@ -826,7 +839,7 @@ async def api_mapdata(request: Request):
                 perims = await wildfire_feed.perimeters_in_bbox(
                     road.client, lat_min - 0.2, lon_min - 0.2,
                     lat_max + 0.2, lon_max + 0.2, max_offset=0.0008)
-                _PERIM_CACHE[key] = (time.monotonic(), perims)
+                _perim_cache_put(key, perims)
             by_name = {calfire_feed.normalize_fire_name(p["name"]): p
                        for p in perims if p["name"]}
             for m in fire_markers:
