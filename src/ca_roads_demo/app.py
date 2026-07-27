@@ -913,6 +913,18 @@ async def api_mapdata(request: Request):
             budget_seconds=2.5 if ready0 < total0 else None))
     warm_ready, warm_total = states.warm_progress()
     warming = warm_ready < warm_total
+    # A whole-world response with almost nothing in it means the feed
+    # layer is degraded (a starved connection pool once served only the
+    # 8 static bridge markers for hours), not that the world is quiet.
+    # Never let the CDN or the response cache pin that snapshot.
+    degraded = ((lat_max - lat_min) > 90 and not geo_only
+                and len(markers) < 200)
+    if degraded:
+        # Report warm-up as one short of done: open pages keep
+        # re-polling (bounded client-side) and pick up the recovery
+        # within seconds instead of waiting for the interval refresh.
+        warming = True
+        warm_ready = max(0, warm_total - 1)
 
     # Closures whose feeds publish endpoints but no geometry get their
     # cached road-snapped shape attached (and unknown pairs queued for
@@ -1217,7 +1229,7 @@ async def _prewarm() -> None:
         from ca_roads_demo import tollprices
         roadsnap.apply(tollprices.cached_toll_markers())
     with contextlib.suppress(Exception):
-        roadsnap.start_worker(road.client)
+        roadsnap.start_worker(lambda: tools.get_road().client)
 
 
 # Road-following geometry for closure stretches, keyed by rounded
