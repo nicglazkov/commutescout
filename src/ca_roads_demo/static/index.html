@@ -241,6 +241,43 @@ aside { background:var(--card); border-right:1px solid var(--line);
   color:var(--sky); background:none; border:1px solid var(--line);
   border-radius:7px; padding:4px 10px; cursor:pointer }
 .pop .detbtn:hover { border-color:var(--sky) }
+/* Toll corridor popup: compact card that expands to the rate table;
+   hovering a row highlights that stretch on the map. */
+.tpop { font-size:.92rem }
+.tpop .thead { display:flex; justify-content:space-between; gap:8px;
+  align-items:center; margin-bottom:2px }
+.tpop .tname { font:700 1.05rem Lora, serif }
+.tpop .chip { font-size:.62rem; font-weight:700; letter-spacing:.4px;
+  border-radius:99px; padding:2px 8px; white-space:nowrap }
+.tpop .chip.live { background:#dcfce7; color:#15803d }
+.tpop .chip.live i { display:inline-block; width:6px; height:6px;
+  background:#22c55e; border-radius:50%; margin-right:4px;
+  animation:tpulse 1.6s infinite }
+@keyframes tpulse { 50% { opacity:.35 } }
+.tpop .chip.fixed { background:#e2e8f0; color:#475569 }
+.tpop .chip.req { background:#fee2e2; color:#b91c1c }
+.tpop .chip.opt { background:#dbeafe; color:#1d4ed8 }
+.tpop .trange { font:800 1.55rem Lora, serif; color:#7c3aed;
+  margin:2px 0 1px }
+.tpop .trange small { font:400 .78rem Inter, sans-serif; color:#64748b }
+.tpop .tsave { font-size:.82rem; margin:2px 0 4px; color:#334155 }
+.tpop .tsave b { color:#15803d }
+.tpop details { border-top:1px solid #e2e8f0; margin-top:5px }
+.tpop summary { cursor:pointer; color:#1d4ed8; font-size:.8rem;
+  padding:6px 0 3px }
+.tpop .tbody { max-height:200px; overflow:auto }
+.tpop .tfrom { font-weight:700; font-size:.72rem; color:#475569;
+  text-transform:uppercase; letter-spacing:.4px; margin:7px 0 2px;
+  padding:1px 5px; border-radius:5px }
+.tpop .trow { display:flex; align-items:baseline; gap:6px;
+  padding:2px 5px; border-radius:5px }
+.tpop .trow .td { white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis }
+.tpop .trow .tdots { flex:1; border-bottom:2px dotted #cbd5e1;
+  min-width:14px }
+.tpop .trow .tp { font-weight:700; color:#7c3aed;
+  font-variant-numeric:tabular-nums }
+.tpop .tfrom:hover, .tpop .trow:hover { background:#ede9fe }
 .pop .tollprice { font:700 1.35rem Lora, serif; color:#7c3aed;
   margin:4px 0 2px }
 .pop .dets { max-height:190px; overflow-y:auto; margin-top:6px }
@@ -1391,20 +1428,70 @@ function popupFor(m, g) {
       '</div>';
   }
   if (g === 'toll') {
-    const price = (m.price != null && m.price > 0)
-      ? '$' + m.price.toFixed(2) : null;
-    const badge = m.pricing === 'live' ? 'Live price, changes with traffic'
-      : m.pricing === 'fixed' ? 'Fixed rate (two-axle / tag)'
-      : 'Priced on roadside signs';
-    return popHead(g, m.name || 'Toll point') +
-      (price ? '<div class="tollprice">' + price + '</div>' : '') +
-      ((m.lines && m.lines.length)
-        ? '<div class="d">' + m.lines.map(esc).join('<br>') + '</div>' : '') +
-      (m.message ? '<div class="d">' + esc(m.message) + '</div>' : '') +
-      histBlock([badge,
-        m.updated ? 'Updated ' + (agoTxt(m.updated) || 'recently') : null,
-        m.src ? 'Prices provided by ' + esc(m.src) : null]) +
-      '</div>';
+    const money = (v) => '$' + v.toFixed(2).replace(/\.00$/, '');
+    const req = m.toll_type === 'required';
+    const bridge = m.src === 'BATA' || m.src === 'GGB';
+    const typeChip = req
+      ? '<span class="chip req">' + (bridge ? 'TOLL BRIDGE' : 'ALL LANES TOLLED') + '</span>'
+      : '<span class="chip opt">OPTIONAL EXPRESS LANE</span>';
+    const liveChip = m.pricing === 'live'
+      ? '<span class="chip live"><i></i>LIVE</span>'
+      : '<span class="chip fixed">' + (m.as_of ? 'POSTED RATE' : 'FIXED RATE') + '</span>';
+    const range = (m.min === m.max) ? money(m.min)
+      : money(m.min) + '–' + money(m.max);
+    const entries = m.entries || [];
+    // Time saved, where the agency publishes lane-vs-lane travel
+    // times (WSDOT): the honest answer to "is the toll worth it".
+    let save = '';
+    if (m.gp_min != null && m.lane_min != null) {
+      const d = m.gp_min - m.lane_min;
+      save = d >= 2
+        ? '<div class="tsave">Express lanes ' + m.lane_min + ' min vs ' +
+          m.gp_min + ' min in regular lanes: <b>saves ~' + d + ' min now</b></div>'
+        : '<div class="tsave">Regular lanes moving freely right now (' +
+          m.gp_min + ' min)</div>';
+    }
+    const freshness = m.as_of
+      ? 'Posted rates, effective ' + esc(m.as_of)
+      : (m.updated ? (function () {
+          const mins = (Date.now() - Date.parse(m.updated)) / 60000;
+          if (!(mins >= 0)) return null;
+          if (mins < 120) return 'Updated ' + (agoTxt(m.updated) || 'recently');
+          // Express-lane signs stop updating when the lanes are open
+          // to everyone (nights, weekends): say when the rate is FROM
+          // instead of pretending it is current.
+          return 'Rates from ' + new Date(m.updated).toLocaleString([],
+            { weekday: 'short', hour: 'numeric', minute: '2-digit' }) +
+            (req ? '' : ' · lanes may be open to all right now');
+        })() : null);
+    const rows = entries.map((e, gi) => {
+      const head = req
+        ? '<div class="tfrom" data-tg="' + gi + '">' + esc(e.label) + '</div>'
+        : '<div class="tfrom" data-tg="' + gi + '">From ' + esc(e.label) + '</div>';
+      return head + (e.rows || []).map((r, ri) =>
+        '<div class="trow" data-tg="' + gi + '" data-td="' + ri + '">' +
+        '<span class="td">' + (r[0] ? (req ? esc(r[0]) : 'to ' + esc(r[0])) : 'per pass') +
+        '</span><span class="tdots"></span><span class="tp">' + money(r[1]) +
+        '</span></div>').join('');
+    }).join('');
+    return popHead(g, m.corridor || m.name || 'Toll') +
+      '<div class="tpop">' +
+      '<div class="thead">' + typeChip + liveChip + '</div>' +
+      '<div class="trange">' + range +
+      (entries.length > 1 ? ' <small>now · ' + entries.length +
+        ' entry points</small>' : '') + '</div>' + save +
+      (rows ? '<details open><summary>All rates' +
+        (entries.length > 1 ? ' (hover to see on the map)' : '') +
+        '</summary><div class="tbody">' + rows + '</div></details>' : '') +
+      histBlock([
+        req ? 'Required toll: every vehicle pays here'
+            : 'Optional: the regular lanes are free',
+        freshness,
+        m.src === '511.org' ? 'Toll data provided by 511.org'
+          : m.src === 'BATA' ? 'Posted schedule, Bay Area Toll Authority'
+          : m.src === 'GGB' ? 'Posted schedule, Golden Gate Bridge District'
+          : m.src ? 'Prices provided by ' + esc(m.src) : null]) +
+      '</div></div>';
   }
   if (g === 'rwis') {
     const bits = [];
@@ -1912,11 +1999,12 @@ async function fetchGeometry() {
   await Promise.all(cells.map(async ([k, la, lo]) => {
     try {
       const res = await fetch('/api/mapdata?bbox=' + la + ',' + lo + ',' +
-        (la + 2) + ',' + (lo + 2) + '&kinds=closure&fields=geo');
+        (la + 2) + ',' + (lo + 2) + '&kinds=closure,toll&fields=geo');
       if (!res.ok) { geoCells.delete(k); return; }
       const d = await res.json();
       for (const m of d.markers || []) {
-        geoByKey.set(geoKey(m), m.path);
+        if (m.kind === 'toll') geoByKey.set('t' + geoKey(m), m.segs);
+        else geoByKey.set(geoKey(m), m.path);
       }
     } catch (e) { geoCells.delete(k); }
   }));
@@ -1924,10 +2012,29 @@ async function fetchGeometry() {
   syncStrips();
 }
 
+// Corridor line color says "how expensive right now": green cheap,
+// red steep, purple for fixed-rate roads (no live signal to encode).
+function tollBand(m) {
+  if (m.pricing !== 'live') return '#8b5cf6';
+  if (m.max <= 3) return '#16a34a';
+  if (m.max <= 8) return '#d97706';
+  return '#dc2626';
+}
 function syncStrips() {
   if (stripsBuilt || map.getZoom() < STRIP_ZOOM) return;
   stripsBuilt = true;
   for (const [m, g] of pendingStrips) {
+    if (g === 'toll') {
+      const segs = (Array.isArray(m.segs) && m.segs.length)
+        ? m.segs : geoByKey.get('t' + geoKey(m));
+      if (!Array.isArray(segs) || !segs.length) continue;
+      const line = L.polyline(segs, {
+        renderer: canvasR, color: tollBand(m), weight: 5, opacity: 0.55,
+      }).bindPopup(() => popupFor(m, g), { maxWidth: 330 });
+      line.__m = m; line.__g = g;
+      ambient[g].addLayer(line);
+      continue;
+    }
     // Real road geometry ONLY. A straight begin-to-end segment cuts
     // corners on any curved road, so closures without geometry stay
     // dots. Some feeds dress a straight line as a 2-point LineString
@@ -1978,7 +2085,9 @@ function renderBatch(markers, groups) {
   const counts = {};
   for (const g of groups) { ambient[g].clearLayers(); items[g] = []; }
   if (groups.includes('camera')) { cameraCache = []; signCache = []; }
-  if (groups.some((g) => g.startsWith('clo_'))) pendingStrips = [];
+  if (groups.some((g) => g.startsWith('clo_') || g === 'toll')) {
+    pendingStrips = [];
+  }
   for (const m of markers) {
     const g = classify(m);
     if (!g || !m.lat || !groups.includes(g)) continue;
@@ -1990,7 +2099,7 @@ function renderBatch(markers, groups) {
     // endpoint once the user zooms past STRIP_ZOOM. syncStrips only
     // draws real geometry either way. Fire perimeter polygons and
     // blank signs shape via layerForItem.
-    if (g.startsWith('clo_')) {
+    if (g.startsWith('clo_') || g === 'toll') {
       pendingStrips.push([m, g]);
     }
     items[g].push({ m, g, layer: null, on: false });
@@ -2372,6 +2481,66 @@ map.on('popupopen', async (e) => {
     if (e.popup.isOpen()) appendMeasured(e.popup, mk.__measuredHtml);
   } catch (err) { /* no sample, no line */ }
 });
+
+// Toll corridor popups: hovering (or tapping, on touch) a rate row
+// lights up its entry point, destination, and the tolled stretch
+// between them, so a price maps to a piece of road at a glance.
+let tollHiLayers = [];
+function tollHiClear() {
+  tollHiLayers.forEach((l) => map.removeLayer(l));
+  tollHiLayers = [];
+}
+function tollHighlight(m, gi, di) {
+  tollHiClear();
+  const entries = m.entries || [];
+  const g = entries[gi];
+  if (!g) return;
+  const mark = (pt) => tollHiLayers.push(L.circleMarker(pt, {
+    renderer: canvasR, radius: 10, color: '#1d4ed8', weight: 3,
+    fillColor: '#93c5fd', fillOpacity: 0.85 }).addTo(map));
+  (g.pts || []).forEach(mark);
+  if (di == null) return;
+  const destLabel = ((g.rows || [])[di] || [])[0];
+  const destEntry = destLabel
+    && entries.find((x) => x.label === destLabel);
+  if (!destEntry || !destEntry.pts || !destEntry.pts.length) return;
+  mark(destEntry.pts[0]);
+  const segs = (Array.isArray(m.segs) && m.segs.length)
+    ? m.segs : geoByKey.get('t' + geoKey(m));
+  if (!Array.isArray(segs) || !segs.length) return;
+  const flat = segs.flat();
+  const near = (pt) => {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < flat.length; i++) {
+      const d = Math.hypot(flat[i][0] - pt[0], flat[i][1] - pt[1]);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  };
+  const a = near((g.pts || [])[0]), b = near(destEntry.pts[0]);
+  const piece = flat.slice(Math.min(a, b), Math.max(a, b) + 1);
+  if (piece.length > 1) {
+    tollHiLayers.push(L.polyline(piece, {
+      renderer: canvasR, color: '#1d4ed8', weight: 8, opacity: 0.8,
+    }).addTo(map));
+  }
+}
+map.on('popupopen', (e) => {
+  const mk = (e.popup && e.popup.__m) ? e.popup
+    : (e.popup && e.popup._source);
+  const m = mk && mk.__m;
+  if (!m || mk.__g !== 'toll' || !m.entries) return;
+  const el = e.popup.getElement();
+  if (!el) return;
+  el.querySelectorAll('[data-tg]').forEach((row) => {
+    const gi = +row.dataset.tg;
+    const di = row.dataset.td !== undefined ? +row.dataset.td : null;
+    row.addEventListener('mouseenter', () => tollHighlight(m, gi, di));
+    row.addEventListener('mouseleave', tollHiClear);
+    row.addEventListener('click', () => tollHighlight(m, gi, di));
+  });
+});
+map.on('popupclose', tollHiClear);
 
 function appendMeasured(popup, html) {
   const el = popup.getElement();

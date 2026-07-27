@@ -99,12 +99,47 @@ def path_for(lat1, lon1, lat2, lon2) -> list | None:
     return None
 
 
+def corridor_segments(points: list) -> list[list]:
+    """Road-following polyline parts through an ordered gantry chain.
+    Each consecutive pair snaps independently (cached forever, same
+    Firestore store as closures): adjacent signs closer than MIN_METERS
+    bridge directly (that short, straight IS the road), unresolved or
+    rejected pairs leave a gap rather than a guessed chord. The line
+    grows as the background worker drains the queue."""
+    segs: list[list] = []
+    for a, b in zip(points, points[1:], strict=False):
+        straight = _straight_meters(a[0], a[1], b[0], b[1])
+        if straight > MAX_METERS:
+            continue
+        if straight < MIN_METERS:
+            seg = [[round(a[0], 5), round(a[1], 5)],
+                   [round(b[0], 5), round(b[1], 5)]]
+        else:
+            seg = path_for(a[0], a[1], b[0], b[1])
+            if not seg:
+                continue
+        if segs and segs[-1][-1] == seg[0]:
+            segs[-1].extend(seg[1:])
+        else:
+            segs.append(list(seg))
+    return segs
+
+
 def apply(markers: list[dict]) -> list[dict]:
-    """Attach snapped paths to closures lacking usable native geometry.
+    """Attach snapped paths to closures lacking usable native geometry,
+    and road-following segment chains to toll corridors.
     Mutates the marker dicts (they are cache-shared, so a snap sticks
     for every later request). Closures whose feeds provide real
     geometry are never touched."""
     for m in markers:
+        if m.get("kind") == "toll" and isinstance(m.get("entries"), list):
+            chain = [pt for e in m["entries"]
+                     for pt in (e.get("pts") or [])]
+            if len(chain) > 1:
+                segs = corridor_segments(chain)
+                if segs:
+                    m["segs"] = segs
+            continue
         if m.get("kind") != "lane_closure":
             continue
         path = m.get("path")

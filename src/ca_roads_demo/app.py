@@ -916,8 +916,9 @@ async def api_mapdata(request: Request):
 
     # Closures whose feeds publish endpoints but no geometry get their
     # cached road-snapped shape attached (and unknown pairs queued for
-    # the background snapper). Lines must follow the road, everywhere.
-    if "closure" in want:
+    # the background snapper); toll corridors get their road-following
+    # segment chains. Lines must follow the road, everywhere.
+    if "closure" in want or "toll" in want:
         with contextlib.suppress(Exception):
             roadsnap.apply(markers)
 
@@ -931,13 +932,20 @@ async def api_mapdata(request: Request):
             for m in markers
             if m.get("kind") == "lane_closure"
             and isinstance(m.get("path"), list) and len(m["path"]) > 1
+        ] + [
+            {"kind": "toll", "lat": m["lat"], "lon": m["lon"],
+             "segs": m["segs"]}
+            for m in markers
+            if m.get("kind") == "toll"
+            and isinstance(m.get("segs"), list) and m["segs"]
         ]
     elif slim:
         markers = [
             {k: v for k, v in m.items()
              if v is not None
              and not (m.get("kind") == "lane_closure"
-                      and k in ("path", "end"))}
+                      and k in ("path", "end"))
+             and not (m.get("kind") == "toll" and k == "segs")}
             for m in markers
         ]
 
@@ -1202,7 +1210,12 @@ async def _prewarm() -> None:
     with contextlib.suppress(Exception):
         await states.prewarm(road.client)
     # The closure snapper drains its queue politely in the background
-    # for the life of the process.
+    # for the life of the process. Toll corridor pairs queue right
+    # away (not on the first request) so corridor lines are ready by
+    # the time anyone zooms into a metro.
+    with contextlib.suppress(Exception):
+        from ca_roads_demo import tollprices
+        roadsnap.apply(tollprices.cached_toll_markers())
     with contextlib.suppress(Exception):
         roadsnap.start_worker(road.client)
 
