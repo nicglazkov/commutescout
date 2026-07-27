@@ -1943,6 +1943,13 @@ def _ws_when(raw: str | None) -> str | None:
     return datetime.fromtimestamp(int(m.group(1)) / 1000).isoformat()
 
 
+# Express corridors paired with WSDOT travel-time routes: the "X-Y"
+# route is the general lanes, "X-Y HOV" the express/HOV twin. The
+# delta is the honest answer to "is the toll worth it right now".
+_WA_TIME_PAIRS = {"405 N": "Bellevue-Lynnwood", "405 S": "Lynnwood-Bellevue",
+                  "167 N": "Auburn-Renton", "167 S": "Renton-Auburn"}
+
+
 async def _fetch_wsdot_tolls(client) -> dict:
     """WSDOT dynamic toll rates (I-405, SR 167, SR 99, SR 520). The
     CurrentToll field is CENTS here (their trip-rate endpoint uses
@@ -1952,6 +1959,18 @@ async def _fetch_wsdot_tolls(client) -> dict:
         "https://wsdot.wa.gov/Traffic/api/TollRates/TollRatesREST.svc/"
         f"GetTollRatesAsJson?AccessCode={key}", headers=UA, timeout=30.0)
     resp.raise_for_status()
+    times: dict[str, dict] = {}
+    with contextlib.suppress(Exception):  # times are garnish, never fatal
+        tt = (await client.get(
+            "https://wsdot.wa.gov/Traffic/api/TravelTimes/"
+            f"TravelTimesREST.svc/GetTravelTimesAsJson?AccessCode={key}",
+            headers=UA, timeout=30.0)).json() or []
+        by_name = {r.get("Name"): r.get("CurrentTime") for r in tt}
+        for corridor, base in _WA_TIME_PAIRS.items():
+            gp, lane = by_name.get(base), by_name.get(base + " HOV")
+            if isinstance(gp, (int, float)) and gp > 0 \
+                    and isinstance(lane, (int, float)) and lane > 0:
+                times[corridor] = {"gp": int(gp), "lane": int(lane)}
     markers: list[dict] = []
     for r in resp.json() or []:
         lat, lon = r.get("StartLatitude"), r.get("StartLongitude")
@@ -1971,6 +1990,44 @@ async def _fetch_wsdot_tolls(client) -> dict:
             "message": (r.get("CurrentMessage") or "").strip() or None,
             "updated": _ws_when(r.get("TimeUpdated")),
             "src": "WSDOT"})
+    return {"markers": markers, "times": times}
+
+
+# BATA plazas (tolled one direction; posted schedule). Rates verified
+# against MTC/BATA announcements 2026-07-27: all seven state-owned
+# bridges charge a flat $8.50 for two-axle vehicles from 2026-01-01
+# (tiered FasTrak pricing starts 2027 - update then). Golden Gate rates
+# from the bridge district, effective 2026-07-01.
+_CA_BRIDGES = [
+    ("Bay Bridge", 37.8235, -122.3118),
+    ("San Mateo-Hayward Bridge", 37.6290, -122.1220),
+    ("Dumbarton Bridge", 37.5075, -122.0645),
+    ("Richmond-San Rafael Bridge", 37.9366, -122.4068),
+    ("Carquinez Bridge", 38.0538, -122.2210),
+    ("Benicia-Martinez Bridge", 38.0330, -122.1155),
+    ("Antioch Bridge", 38.0155, -121.7517),
+]
+
+
+async def _fetch_ca_bridges(client) -> dict:
+    """Bay Area toll bridges: required tolls, posted schedule (no live
+    feed exists; the schedule changes about once a year)."""
+    markers = [{
+        "kind": "toll", "lat": lat, "lon": lon,
+        "name": f"{name}: Toll plaza",
+        "price": 8.50, "pricing": "fixed",
+        "rates": [["All payment types (2-axle)", 8.50]],
+        "as_of": "January 2026", "src": "BATA",
+    } for name, lat, lon in _CA_BRIDGES]
+    markers.append({
+        "kind": "toll", "lat": 37.8065, "lon": -122.4753,
+        "name": "Golden Gate Bridge: Toll plaza",
+        "price": 10.25, "pricing": "fixed",
+        "rates": [["FasTrak (2-axle)", 10.25],
+                  ["License plate / one-time", 10.50],
+                  ["Carpool 3+ (FasTrak, peak hours)", 8.25]],
+        "as_of": "July 2026", "src": "GGB",
+    })
     return {"markers": markers}
 
 
@@ -2123,6 +2180,8 @@ TOLL_SOURCES = {
              _fetch_ntta_tolls, None, 3600),
     "hctra": ("Texas", (28.9, -98.3, 30.4, -94.8),
               _fetch_hctra_tolls, None, 3600),
+    "cabr": ("California", (37.4, -122.6, 38.2, -121.6),
+             _fetch_ca_bridges, None, 86400),
 }
 
 
@@ -2137,6 +2196,129 @@ def _clean_marker_text(m: dict) -> None:
             v2 = re.sub(r"\s+", " ", _TAG_RE.sub(" ", v)).strip()
             if v2 != v:
                 m[f] = v2
+
+
+def _toll_type(src: str | None, corridor: str) -> str:
+    """"express" = optional lanes beside free general lanes; "required"
+    = every lane or crossing is tolled (tollways, bridges, tunnels).
+    The distinction drives the popup's headline chip: an optional
+    express lane is a choice, a bridge toll is not."""
+    c = corridor.upper()
+    if src == "WSDOT":
+        # 405 and 167 are optional express toll lanes; the SR 99 tunnel
+        # and SR 520 bridge toll every vehicle.
+        return "express" if c.startswith(("405", "167")) else "required"
+    if src == "HCTRA":
+        # HCTRA's Katy corridor is managed lanes beside free I-10.
+        return "express" if "KATY" in c else "required"
+    if src in ("NTTA", "BATA", "GGB"):
+        return "required"
+    return "express"  # 511.org express lanes
+
+
+def toll_corridors(markers: list[dict]) -> list[dict]:
+    """Collapse per-gantry toll markers into one marker per corridor
+    and direction: the Bay Area's 92 express-lane signs become four
+    corridors. Entries stay ordered along the road (sign sequence
+    numbers where the source has them, dominant-axis otherwise), and
+    same-label signs merge; the first sign at an entry names the rates,
+    later signs only contribute destinations it did not list. The
+    parsing lives in tollprices so price history and the map share one
+    vocabulary."""
+    from ca_roads_demo import tollprices as tp
+
+    out = [m for m in markers if m.get("kind") != "toll"]
+    groups: dict[str, list[dict]] = {}
+    for m in markers:
+        if m.get("kind") == "toll":
+            groups.setdefault(tp.corridor_key(m), []).append(m)
+    for corridor, items in groups.items():
+        raw = []
+        for m in items:
+            if not (m.get("lat") and m.get("lon")):
+                continue
+            raw.append({
+                "label": tp.entry_label(m), "seq": tp.entry_seq(m),
+                "lat": m["lat"], "lon": m["lon"],
+                "rows": [[d or None, p] for d, p in tp.price_rows(m)],
+            })
+        if not raw:
+            continue
+        if any(e["seq"] is not None for e in raw):
+            raw.sort(key=lambda e: (e["seq"] is None, e["seq"] or 0))
+        else:
+            lats = [e["lat"] for e in raw]
+            lons = [e["lon"] for e in raw]
+            axis = "lat" if (max(lats) - min(lats)) >= \
+                (max(lons) - min(lons)) else "lon"
+            raw.sort(key=lambda e: e[axis])
+        entries: list[dict] = []
+        for e in raw:
+            prev = entries[-1] if entries and \
+                entries[-1]["label"] == e["label"] else None
+            if prev is None:
+                prev = {"label": e["label"], "pts": [], "rows": [],
+                        "_seen": set()}
+                entries.append(prev)
+            prev["pts"].append([round(e["lat"], 5), round(e["lon"], 5)])
+            for dest, price in e["rows"]:
+                # A destination matching the entry label is the short
+                # hop to that interchange's own exit: a real price,
+                # kept (dropping it once hid a corridor's minimum).
+                if dest in prev["_seen"]:
+                    continue
+                prev["_seen"].add(dest)
+                prev["rows"].append([dest, price])
+        for e in entries:
+            del e["_seen"]
+        prices = [r[1] for e in entries for r in e["rows"]
+                  if r[1] is not None]
+        if not prices:
+            continue
+        chain = [pt for e in entries for pt in e["pts"]]
+        mid = chain[len(chain) // 2]
+        lo, hi = min(prices), max(prices)
+
+        def _money(v: float) -> str:
+            return f"${v:.2f}".replace(".00", "")
+
+        rng = _money(lo) if lo == hi else f"{_money(lo)}-{_money(hi)}"
+        if items[0].get("pricing") == "live":
+            rng += " now"
+        src = items[0].get("src")
+        ttype = _toll_type(src, corridor)
+        as_of = items[0].get("as_of")
+        out.append({
+            **({"as_of": as_of} if as_of else {}),
+            "kind": "toll", "corridor": corridor, "src": src,
+            "lat": mid[0], "lon": mid[1],
+            "pricing": items[0].get("pricing"),
+            "toll_type": ttype,
+            "updated": max(m.get("updated") or "" for m in items) or None,
+            "min": lo, "max": hi, "n": len(chain),
+            # Keeps the assistant/MCP nearby-events summary meaningful.
+            "name": corridor,
+            "label": f"{corridor} "
+                     f"{'express lane (optional)' if ttype == 'express' else 'toll (all lanes)'}"
+                     f" {rng}",
+            "entries": [{"label": e["label"], "pts": e["pts"],
+                         "rows": e["rows"]}
+                        for e in entries if e["rows"] or len(entries) < 40],
+        })
+    return out
+
+
+async def _fetch_toll_grouped(fetcher, client) -> dict:
+    data = await fetcher(client)
+    markers = toll_corridors(data.get("markers") or [])
+    # Express-vs-general travel times, where the source publishes them
+    # (WSDOT does): the popup turns a price into "saves N minutes".
+    times = data.get("times") or {}
+    for m in markers:
+        t = times.get(m.get("corridor"))
+        if t:
+            m["gp_min"], m["lane_min"] = t["gp"], t["lane"]
+    return {"markers": markers}
 
 
 # Lookups that outlive a budgeted request keep running here so their
@@ -2223,7 +2405,7 @@ async def markers_for_bbox(client, box, want,
                 continue
             lookups.append(_cache.get(
                 f"toll:{code}", ttl, MAX_SERVE,
-                _capped(lambda f=fetcher: f(client))))
+                _capped(lambda f=fetcher: _fetch_toll_grouped(f, client))))
     # A nationwide viewport touches every state at once; fetch them
     # concurrently so cold latency is the slowest feed, not the sum.
     # There is ALWAYS a budget: one broken feed must never hold the
@@ -2280,7 +2462,8 @@ async def _prewarm_all(client) -> None:
             if not ready or ready():
                 lookups.append(_cache.get(
                     f"toll:{code}", ttl, MAX_SERVE,
-                    _capped(lambda f=fetcher: f(client))))
+                    _capped(lambda f=fetcher:
+                            _fetch_toll_grouped(f, client))))
         await asyncio.gather(*lookups, return_exceptions=True)
         # WZDx feeds run up to 16 MB each; warm them in small batches so
         # concurrent JSON parses cannot spike the container's memory.
@@ -2408,6 +2591,7 @@ def source_status() -> list[dict]:
             continue
         agency = {"wstoll": "WSDOT toll rates",
                   "baytoll": "511 SF Bay tolls", "ntta": "NTTA",
-                  "hctra": "HCTRA"}.get(code, code)
+                  "hctra": "HCTRA",
+                  "cabr": "Bay Area bridge tolls (posted)"}.get(code, code)
         out.append(_status_entry(f"toll:{code}", "Toll pricing", agency, st))
     return out

@@ -65,9 +65,21 @@ def entry_label(m: dict) -> str:
     return _SEQ_RE.sub("", _PLAZA_CODE_RE.sub("", rest))
 
 
+def entry_seq(m: dict) -> int | None:
+    """Sign sequence number when the source embeds one (511.org names
+    end in " - N"); orders gantries along the corridor."""
+    name = m.get("name") or ""
+    rest = name.split(":", 1)[1].strip() if ":" in name else name
+    got = _ENTRY_RE.match(rest)
+    return int(got.group(2)) if got else None
+
+
 def price_rows(m: dict) -> list[tuple[str, float]]:
-    """(destination, price) pairs for one marker. Sources without
-    per-destination rates yield a single pair with an empty dest."""
+    """(destination, price) pairs for one marker. Explicit rate tables
+    (bridge payment tiers) win; then per-destination sign lines; then
+    the single posted price with an empty dest."""
+    if m.get("rates"):
+        return [(str(lbl), float(p)) for lbl, p in m["rates"]]
     rows = []
     for ln in m.get("lines") or []:
         got = _LINE_RE.match(ln)
@@ -90,21 +102,35 @@ def _bq():
 def observe_sync(markers: list[dict]) -> dict:
     now_iso = datetime.now(UTC).isoformat()
     out = []
+
+    def note(src, corridor, entry, dest, price, pricing):
+        key = (src or "", corridor, entry, dest)
+        if _last.get(key) == price:
+            return
+        _last[key] = price
+        out.append({
+            "seen_at": now_iso, "src": key[0], "corridor": corridor,
+            "entry": entry, "dest": dest, "price": price,
+            "pricing": pricing or "",
+        })
+
     for m in markers:
         if m.get("kind") != "toll":
+            continue
+        if m.get("entries") is not None:
+            # Corridor marker (states.toll_corridors output): entries
+            # already carry parsed labels and destination rows.
+            for e in m["entries"]:
+                for dest, price in e.get("rows") or []:
+                    note(m.get("src"), m.get("corridor") or "",
+                         e.get("label") or "", dest or "", price,
+                         m.get("pricing"))
             continue
         corridor = corridor_key(m)
         entry = entry_label(m)
         for dest, price in price_rows(m):
-            key = (m.get("src") or "", corridor, entry, dest)
-            if _last.get(key) == price:
-                continue
-            _last[key] = price
-            out.append({
-                "seen_at": now_iso, "src": key[0], "corridor": corridor,
-                "entry": entry, "dest": dest, "price": price,
-                "pricing": m.get("pricing") or "",
-            })
+            note(m.get("src"), corridor, entry, dest, price,
+                 m.get("pricing"))
     if not out:
         return {"archived": 0}
     errors = _bq().insert_rows_json(f"{PROJECT}.{DATASET}.{TABLE}", out)
