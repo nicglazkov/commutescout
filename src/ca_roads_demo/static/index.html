@@ -409,6 +409,8 @@ aside { background:var(--card); border-right:1px solid var(--line);
   letter-spacing:.8px; text-transform:uppercase; color:#9aa8b6;
   margin:7px 0 2px }
 .filters label i.ring { background:transparent; border:2px solid var(--dot) }
+.filters label i.iline { width:16px; height:0; border-radius:0;
+  background:transparent; border-top:3px dashed var(--dot) }
 .filters label.subopt { padding-left:16px; font-size:.73rem; color:var(--dim) }
 .filters label.subopt i { width:0; height:0 }
 .filters { max-height:calc(100% - 28px); overflow-y:auto }
@@ -654,7 +656,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <u>Wildfire</u>
       <label><input type="checkbox" data-group="fire_pt" checked><i style="--dot:#d97706"></i>Wildfires <em id="n-fire_pt"></em></label>
       <u>Tolls</u>
-      <label><input type="checkbox" data-group="toll"><i style="--dot:#7c3aed"></i>Toll prices <em id="n-toll"></em></label>
+      <label><input type="checkbox" data-group="toll"><i class="iline" style="--dot:#7c3aed"></i>Toll prices <em id="n-toll"></em></label>
       <u>Traffic</u>
       <label><input type="checkbox" id="trafficlayer"><i style="--dot:#7a4bd6"></i>Live traffic overlay</label>
       <u>Roadside</u>
@@ -1271,9 +1273,12 @@ const POP_LABEL = {
 const ambient = {};
 Object.keys(GROUP_DOT).forEach(g => {
   ambient[g] = L.layerGroup();
-  // Cameras start hidden: ~3,300 markers dominate the map before anyone
-  // asks for them. The checkbox brings them back.
-  if (g !== 'camera') ambient[g].addTo(map);
+  // The checkbox is the single source of truth from boot onward. A
+  // group blindly added while its box was unchecked leaked toll
+  // corridor lines onto the map (GL gates dots by checkbox, but
+  // Leaflet line layers render the moment their group is on the map).
+  const box = document.querySelector('input[data-group="' + g + '"]');
+  if (!box || box.checked) ambient[g].addTo(map);
 });
 let cameraCache = [];
 let signCache = [];
@@ -1442,7 +1447,7 @@ function popupFor(m, g) {
       : '<span class="chip fixed">' + (m.as_of ? 'POSTED RATE' : 'FIXED RATE') + '</span>';
     const range = (m.min === m.max) ? money(m.min)
       : money(m.min) + '–' + money(m.max);
-    const entries = m.entries || [];
+    const entries = (m.entries || []).filter((e) => (e.rows || []).length);
     // Time saved, where the agency publishes lane-vs-lane travel
     // times (WSDOT): the honest answer to "is the toll worth it".
     let save = '';
@@ -2016,13 +2021,12 @@ async function fetchGeometry() {
   syncStrips();
 }
 
-// Corridor line color says "how expensive right now": green cheap,
-// red steep, purple for fixed-rate roads (no live signal to encode).
-function tollBand(m) {
-  if (m.pricing !== 'live') return '#8b5cf6';
-  if (m.max <= 3) return '#16a34a';
-  if (m.max <= 8) return '#d97706';
-  return '#dc2626';
+function tollRangeText(m) {
+  const money = (v) => '$' + v.toFixed(2).replace(/\.00$/, '');
+  const range = m.min === m.max ? money(m.min)
+    : money(m.min) + '–' + money(m.max);
+  return range + (m.pricing === 'live' ? ' now' : '')
+    + ' · ' + (m.toll_type === 'required' ? 'toll road' : 'express lane');
 }
 function syncStrips() {
   if (stripsBuilt || map.getZoom() < STRIP_ZOOM) return;
@@ -2032,11 +2036,22 @@ function syncStrips() {
       const segs = (Array.isArray(m.segs) && m.segs.length)
         ? m.segs : geoByKey.get('t' + geoKey(m));
       if (!Array.isArray(segs) || !segs.length) continue;
+      // Tolls are ALWAYS dashed purple: the dash pattern (no other
+      // line on the map is dashed) plus a color no closure class
+      // uses keeps a toll stretch readable even when a closure or
+      // incident sits on the same road. Price lives in the tooltip
+      // and popup, never in the line color.
       const line = L.polyline(segs, {
-        renderer: canvasR, color: tollBand(m), weight: 5, opacity: 0.55,
-      }).bindPopup(() => popupFor(m, g), { maxWidth: 330 });
+        renderer: canvasR, color: '#7c3aed', weight: 5, opacity: 0.6,
+        dashArray: '7 9',
+      }).bindPopup(() => popupFor(m, g), { maxWidth: 330 })
+        .bindTooltip(tollRangeText(m), { sticky: true });
       line.__m = m; line.__g = g;
       ambient[g].addLayer(line);
+      // Closure and incident geometry wins clicks where they overlap
+      // a toll corridor; the corridor stays reachable a few pixels
+      // to either side.
+      line.bringToBack();
       continue;
     }
     // Real road geometry ONLY. A straight begin-to-end segment cuts
@@ -2106,6 +2121,9 @@ function renderBatch(markers, groups) {
     if (g.startsWith('clo_') || g === 'toll') {
       pendingStrips.push([m, g]);
     }
+    // Tolls are lines-only: no dot in the point registries, so they
+    // can never be confused with incident or closure dots.
+    if (g === 'toll') continue;
     items[g].push({ m, g, layer: null, on: false });
   }
   stripsBuilt = false;
@@ -2316,6 +2334,13 @@ document.querySelectorAll('#filters input[data-group]').forEach(box => {
   box.addEventListener('change', () => {
     const layer = ambient[box.dataset.group];
     if (box.checked) map.addLayer(layer); else map.removeLayer(layer);
+    // Turning tolls on should not wait for the next idle geometry
+    // pass: fetch and build the corridor lines immediately.
+    if (box.dataset.group === 'toll' && box.checked) {
+      stripsBuilt = false;
+      fetchGeometry();
+      syncStrips();
+    }
     GL.rebuild();
   });
 });
@@ -2501,7 +2526,8 @@ function tollHiClear() {
 }
 function tollHighlight(m, gi, di) {
   tollHiClear();
-  const entries = m.entries || [];
+  // Same filter as the popup renderer: row indices must line up.
+  const entries = (m.entries || []).filter((e) => (e.rows || []).length);
   const g = entries[gi];
   if (!g) return;
   const mark = (pt) => tollHiLayers.push(L.circleMarker(pt, {
@@ -2510,8 +2536,10 @@ function tollHighlight(m, gi, di) {
   (g.pts || []).forEach(mark);
   if (di == null) return;
   const destLabel = ((g.rows || [])[di] || [])[0];
+  // Destination coords may live on a rowless entry (an exit that
+  // prices nothing itself): search the unfiltered list.
   const destEntry = destLabel
-    && entries.find((x) => x.label === destLabel);
+    && (m.entries || []).find((x) => x.label === destLabel);
   if (!destEntry || !destEntry.pts || !destEntry.pts.length) return;
   mark(destEntry.pts[0]);
   const segs = (Array.isArray(m.segs) && m.segs.length)
@@ -2534,6 +2562,62 @@ function tollHighlight(m, gi, di) {
     }).addTo(map));
   }
 }
+// A toll popup that sits ON the corridor it describes hides exactly
+// what the hover highlighting tries to show. After the popup renders,
+// measure the corridor's on-screen box and, if the popup overlaps it,
+// re-anchor the popup into the roomiest clear space beside or below.
+function repositionTollPopup(popup, m) {
+  const el = popup.getElement();
+  if (!el) return;
+  const segs = (Array.isArray(m.segs) && m.segs.length)
+    ? m.segs : geoByKey.get('t' + geoKey(m));
+  if (!Array.isArray(segs) || !segs.length) return;
+  const size = map.getSize();
+  let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9, any = false;
+  for (const seg of segs) {
+    for (const pt of seg) {
+      const p = map.latLngToContainerPoint(pt);
+      if (p.x < -40 || p.x > size.x + 40
+          || p.y < -40 || p.y > size.y + 40) continue;
+      any = true;
+      x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y);
+      x2 = Math.max(x2, p.x); y2 = Math.max(y2, p.y);
+    }
+  }
+  if (!any) return;
+  const pad = 22;
+  x1 -= pad; y1 -= pad; x2 += pad; y2 += pad;
+  const r = el.getBoundingClientRect();
+  const mr = map.getContainer().getBoundingClientRect();
+  const P = { w: r.width, h: r.height,
+    left: r.left - mr.left, top: r.top - mr.top };
+  if (P.left + P.w < x1 || P.left > x2
+      || P.top + P.h < y1 || P.top > y2) return; // already clear
+  const margin = 14, tip = 14;
+  const fits = {
+    right: size.x - x2 >= P.w + margin * 2,
+    left: x1 >= P.w + margin * 2,
+    below: size.y - y2 >= P.h + tip + margin * 2,
+    above: y1 >= P.h + tip + margin * 2,
+  };
+  const clampX = (x) => Math.max(margin + P.w / 2,
+    Math.min(size.x - margin - P.w / 2, x));
+  const clampY = (y) => Math.max(P.h + tip + margin,
+    Math.min(size.y - margin, y));
+  let anchor = null;
+  if (fits.right) {
+    anchor = [x2 + margin + P.w / 2, clampY((y1 + y2) / 2 + P.h / 2)];
+  } else if (fits.left) {
+    anchor = [x1 - margin - P.w / 2, clampY((y1 + y2) / 2 + P.h / 2)];
+  } else if (fits.below) {
+    anchor = [clampX((x1 + x2) / 2), clampY(y2 + margin + P.h + tip)];
+  } else if (fits.above) {
+    anchor = [clampX((x1 + x2) / 2), y1 - margin];
+  } else {
+    return; // corridor fills the screen: nowhere is better
+  }
+  popup.setLatLng(map.containerPointToLatLng(anchor));
+}
 map.on('popupopen', (e) => {
   const mk = (e.popup && e.popup.__m) ? e.popup
     : (e.popup && e.popup._source);
@@ -2548,6 +2632,10 @@ map.on('popupopen', (e) => {
     row.addEventListener('mouseleave', tollHiClear);
     row.addEventListener('click', () => tollHighlight(m, gi, di));
   });
+  // After Leaflet's own auto-pan settles, move the popup off the
+  // corridor if it landed on top of it.
+  requestAnimationFrame(() => requestAnimationFrame(() =>
+    repositionTollPopup(e.popup, m)));
 });
 map.on('popupclose', tollHiClear);
 

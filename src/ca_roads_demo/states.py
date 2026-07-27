@@ -2000,36 +2000,50 @@ async def _fetch_wsdot_tolls(client) -> dict:
 # bridges charge a flat $8.50 for two-axle vehicles from 2026-01-01
 # (tiered FasTrak pricing starts 2027 - update then). Golden Gate rates
 # from the bridge district, effective 2026-07-01.
+# (name, plaza lat, plaza lon, far-shore lat, far-shore lon): the far
+# shore gives the corridor a second point, so the road snapper draws
+# the line ACROSS the bridge deck instead of leaving a lone point.
 _CA_BRIDGES = [
-    ("Bay Bridge", 37.8235, -122.3118),
-    ("San Mateo-Hayward Bridge", 37.6290, -122.1220),
-    ("Dumbarton Bridge", 37.5075, -122.0645),
-    ("Richmond-San Rafael Bridge", 37.9366, -122.4068),
-    ("Carquinez Bridge", 38.0538, -122.2210),
-    ("Benicia-Martinez Bridge", 38.0330, -122.1155),
-    ("Antioch Bridge", 38.0155, -121.7517),
+    ("Bay Bridge", 37.8235, -122.3118, 37.7877, -122.3877),
+    ("San Mateo-Hayward Bridge", 37.6290, -122.1220, 37.5688, -122.2503),
+    ("Dumbarton Bridge", 37.5075, -122.0645, 37.4937, -122.1287),
+    ("Richmond-San Rafael Bridge", 37.9366, -122.4068, 37.9296, -122.4784),
+    ("Carquinez Bridge", 38.0525, -122.2136, 38.0745, -122.2255),
+    ("Benicia-Martinez Bridge", 38.0330, -122.1155, 38.0498, -122.1206),
+    ("Antioch Bridge", 38.0155, -121.7517, 38.0327, -121.7546),
+    ("Golden Gate Bridge", 37.8065, -122.4753, 37.8324, -122.4794),
 ]
+
+
+def _bridge_markers(name, lat, lon, flat, flon, rates, as_of, src):
+    return [
+        {"kind": "toll", "lat": lat, "lon": lon,
+         "name": f"{name}: Toll plaza",
+         "price": rates[0][1], "pricing": "fixed",
+         "rates": rates, "as_of": as_of, "src": src},
+        # Far shore: no rates of its own, exists so the corridor has a
+        # two-point chain for the deck-following line.
+        {"kind": "toll", "lat": flat, "lon": flon,
+         "name": f"{name}: Far shore", "price": None, "pricing": "fixed",
+         "as_of": as_of, "src": src},
+    ]
 
 
 async def _fetch_ca_bridges(client) -> dict:
     """Bay Area toll bridges: required tolls, posted schedule (no live
     feed exists; the schedule changes about once a year)."""
-    markers = [{
-        "kind": "toll", "lat": lat, "lon": lon,
-        "name": f"{name}: Toll plaza",
-        "price": 8.50, "pricing": "fixed",
-        "rates": [["All payment types (2-axle)", 8.50]],
-        "as_of": "January 2026", "src": "BATA",
-    } for name, lat, lon in _CA_BRIDGES]
-    markers.append({
-        "kind": "toll", "lat": 37.8065, "lon": -122.4753,
-        "name": "Golden Gate Bridge: Toll plaza",
-        "price": 10.25, "pricing": "fixed",
-        "rates": [["FasTrak (2-axle)", 10.25],
-                  ["License plate / one-time", 10.50],
-                  ["Carpool 3+ (FasTrak, peak hours)", 8.25]],
-        "as_of": "July 2026", "src": "GGB",
-    })
+    markers = []
+    for name, lat, lon, flat, flon in _CA_BRIDGES:
+        if name == "Golden Gate Bridge":
+            rates = [["FasTrak (2-axle)", 10.25],
+                     ["License plate / one-time", 10.50],
+                     ["Carpool 3+ (FasTrak, peak hours)", 8.25]]
+            markers += _bridge_markers(name, lat, lon, flat, flon,
+                                       rates, "July 2026", "GGB")
+        else:
+            rates = [["All payment types (2-axle)", 8.50]]
+            markers += _bridge_markers(name, lat, lon, flat, flon,
+                                       rates, "January 2026", "BATA")
     return {"markers": markers}
 
 
