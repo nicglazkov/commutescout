@@ -25,8 +25,11 @@
  "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
 </script>
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
-<link rel="preload" as="fetch" crossorigin="anonymous"
-      href="/api/mapdata?bbox=-85.000,-180.000,85.000,180.000&kinds=incident,closure,chain,fire,toll&slim=1">
+<!-- No data preload here: the boot fetch uses cache no-cache (see
+     refreshAmbient), and a preload with a different cache mode is not
+     reusable, so it only duplicated the 700KB download. The script
+     kicks the fetch off early enough, and the edge cache answers in
+     tens of milliseconds. -->
 <!-- GPU renderer bundle: default path for WebGL2 browsers, so start the
      fetch alongside the map data instead of after the boot script runs. -->
 <link rel="preload" as="script" href="/static/vendor/deck-slim.min.js">
