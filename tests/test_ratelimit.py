@@ -95,3 +95,23 @@ def test_security_headers_and_softlimit():
     assert r.headers["x-content-type-options"] == "nosniff"
     assert r.headers["x-frame-options"] == "DENY"
     assert "geolocation=(self)" in r.headers["permissions-policy"]
+
+
+def test_cf_connecting_ip_trusted_only_from_cloudflare():
+    from ca_roads_mcp.ratelimit import trusted_client_ip
+
+    # Request proxied by Cloudflare: Google vouches for a Cloudflare
+    # edge address, so the CF-Connecting-IP header is the real client.
+    assert trusted_client_ip(
+        "203.0.113.9, 172.68.1.2", None, "203.0.113.9") == "203.0.113.9"
+    # Direct hit on the origin with a forged header: the vouched peer
+    # is not Cloudflare, so the header is ignored.
+    assert trusted_client_ip(
+        "spoofed, 198.51.100.7", None, "10.0.0.1") == "198.51.100.7"
+    # No Cloudflare header: behavior unchanged.
+    assert trusted_client_ip("a, 198.51.100.7", None) == "198.51.100.7"
+    assert trusted_client_ip(None, "198.51.100.7") == "198.51.100.7"
+    # Transport peer itself is Cloudflare (no XFF, e.g. local proxy
+    # tests): header honored; garbage vouched value never matches.
+    assert trusted_client_ip(None, "172.68.1.2", "203.0.113.9") == "203.0.113.9"
+    assert trusted_client_ip("junk-not-an-ip", None, "10.0.0.1") == "junk-not-an-ip"

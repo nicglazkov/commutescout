@@ -123,6 +123,7 @@ def client_ip(request: Request) -> str:
     return trusted_client_ip(
         request.headers.get("x-forwarded-for"),
         request.client.host if request.client else None,
+        request.headers.get("cf-connecting-ip"),
     )
 
 
@@ -1470,8 +1471,9 @@ class SoftLimit:
                 and scope.get("path", "").startswith(self.PREFIXES)):
             headers = dict(scope.get("headers") or [])
             fwd = (headers.get(b"x-forwarded-for") or b"").decode() or None
+            cf_ip = (headers.get(b"cf-connecting-ip") or b"").decode() or None
             client = scope.get("client")
-            ip = trusted_client_ip(fwd, client[0] if client else None)
+            ip = trusted_client_ip(fwd, client[0] if client else None, cf_ip)
             if not self.limiter.allow(ip):
                 await send({"type": "http.response.start", "status": 429,
                             "headers": [(b"content-type",
