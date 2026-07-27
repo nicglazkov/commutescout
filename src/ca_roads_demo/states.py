@@ -1360,9 +1360,14 @@ async def _fetch_il(client) -> dict:
     inc_txt = (await client.get(
         "https://travelmidwest.com/lmiga/incidentInfo.csv",
         headers=UA, timeout=30.0)).text
-    cam_txt = (await client.get(
-        "https://travelmidwest.com/lmiga/cameraInfo.csv",
-        headers=UA, timeout=30.0)).text
+    # The camera CSV is served by a separate backend that has been
+    # observed spending a minute to answer 502 while incidents stay
+    # healthy; losing cameras for a cycle must not take incidents down.
+    cam_txt = ""
+    with contextlib.suppress(Exception):
+        cam_txt = (await client.get(
+            "https://travelmidwest.com/lmiga/cameraInfo.csv",
+            headers=UA, timeout=30.0)).text
     markers: list[dict] = []
     for row in csv.DictReader(io.StringIO(inc_txt)):
         try:
@@ -2138,6 +2143,22 @@ def _clean_marker_text(m: dict) -> None:
 # results still land in the cache for the next poll.
 _PENDING_LOOKUPS: set = set()
 
+# Even a budgeted response waits this long for stragglers; the request
+# path must never hang on one broken feed (a drip-feeding upstream can
+# outlive per-read HTTP timeouts indefinitely).
+DEFAULT_BUDGET_SECONDS = 8.0
+FETCH_CAP_SECONDS = 60.0
+
+
+def _capped(fetch, seconds: float = FETCH_CAP_SECONDS):
+    """Wall-clock cap around a feed fetch. Per-request HTTP timeouts are
+    per-read: an upstream that drips a byte every few seconds can hold a
+    fetch (and the cache key's lock) open for hours. TravelMidwest did
+    exactly that for 18 hours on 2026-07-26."""
+    async def run():
+        return await asyncio.wait_for(fetch(), seconds)
+    return run
+
 
 async def markers_for_bbox(client, box, want,
                            budget_seconds: float | None = None) -> list[dict]:
@@ -2173,40 +2194,43 @@ async def markers_for_bbox(client, box, want,
             continue
         lookups.append(_cache.get(
             f"nec:{code}", TTL, MAX_SERVE,
-            lambda c=code: _fetch_nec(client, c)))
+            _capped(lambda c=code: _fetch_nec(client, c))))
         if "camera" in want:
             lookups.append(_cache.get(
                 f"neccam:{code}", CAM_TTL, MAX_SERVE,
-                lambda c=code: _fetch_nec_cameras(client, c)))
+                _capped(lambda c=code: _fetch_nec_cameras(client, c), 120.0)))
     for code, (_st, src, bounds, url) in WZDX_FEEDS.items():
         if _overlaps(box, bounds) and not _wzdx_superseded(code):
             cap = WZDX_CAPS.get(code, 2000)
             lookups.append(_cache.get(
                 f"wzdx:{code}", WZDX_TTL, MAX_SERVE,
-                lambda u=url, s=src, k=cap:
-                _fetch_wzdx(client, u, s, cap=k)))
+                _capped(lambda u=url, s=src, k=cap:
+                        _fetch_wzdx(client, u, s, cap=k))))
     for code, (_st, bounds, fetcher) in KEYLESS_STATES.items():
         if _overlaps(box, bounds):
             lookups.append(_cache.get(
-                f"{code}:all", TTL, MAX_SERVE, lambda f=fetcher: f(client)))
+                f"{code}:all", TTL, MAX_SERVE,
+                _capped(lambda f=fetcher: f(client))))
     for code, (_name, bounds, fetcher, ready) in KEYED_STATES.items():
         if not ready() or not _overlaps(box, bounds):
             continue
         lookups.append(_cache.get(
-            f"{code}:all", TTL, MAX_SERVE, lambda f=fetcher: f(client)))
+            f"{code}:all", TTL, MAX_SERVE,
+            _capped(lambda f=fetcher: f(client))))
     if "toll" in want:
         for code, (_st, bounds, fetcher, ready, ttl) in TOLL_SOURCES.items():
             if (ready and not ready()) or not _overlaps(box, bounds):
                 continue
             lookups.append(_cache.get(
-                f"toll:{code}", ttl, MAX_SERVE, lambda f=fetcher: f(client)))
+                f"toll:{code}", ttl, MAX_SERVE,
+                _capped(lambda f=fetcher: f(client))))
     # A nationwide viewport touches every state at once; fetch them
     # concurrently so cold latency is the slowest feed, not the sum.
+    # There is ALWAYS a budget: one broken feed must never hold the
+    # map payload hostage (stragglers finish in the background and are
+    # served on the next poll or interval refresh).
     if budget_seconds is None:
-        for outcome in await asyncio.gather(*lookups, return_exceptions=True):
-            if not isinstance(outcome, BaseException):
-                await add(outcome)
-        return out
+        budget_seconds = DEFAULT_BUDGET_SECONDS
     tasks = [asyncio.ensure_future(lu) for lu in lookups]
     done, pending = await asyncio.wait(tasks, timeout=budget_seconds)
     for t in pending:
@@ -2241,20 +2265,22 @@ async def _prewarm_all(client) -> None:
     with contextlib.suppress(Exception):
         lookups = [
             _cache.get(f"nec:{c}", TTL, MAX_SERVE,
-                       lambda cc=c: _fetch_nec(client, cc))
+                       _capped(lambda cc=c: _fetch_nec(client, cc)))
             for c in NEC_STATES
         ]
         for code, (_n, _b, fetcher) in KEYLESS_STATES.items():
             lookups.append(_cache.get(f"{code}:all", TTL, MAX_SERVE,
-                                      lambda f=fetcher: f(client)))
+                                      _capped(lambda f=fetcher: f(client))))
         for code, (_n, _b, fetcher, ready) in KEYED_STATES.items():
             if ready():
-                lookups.append(_cache.get(f"{code}:all", TTL, MAX_SERVE,
-                                          lambda f=fetcher: f(client)))
+                lookups.append(_cache.get(
+                    f"{code}:all", TTL, MAX_SERVE,
+                    _capped(lambda f=fetcher: f(client))))
         for code, (_n, _b, fetcher, ready, ttl) in TOLL_SOURCES.items():
             if not ready or ready():
-                lookups.append(_cache.get(f"toll:{code}", ttl, MAX_SERVE,
-                                          lambda f=fetcher: f(client)))
+                lookups.append(_cache.get(
+                    f"toll:{code}", ttl, MAX_SERVE,
+                    _capped(lambda f=fetcher: f(client))))
         await asyncio.gather(*lookups, return_exceptions=True)
         # WZDx feeds run up to 16 MB each; warm them in small batches so
         # concurrent JSON parses cannot spike the container's memory.
@@ -2263,15 +2289,16 @@ async def _prewarm_all(client) -> None:
             batch = [(c, WZDX_CAPS.get(c, 2000)) for c in codes[i:i + 3]]
             await asyncio.gather(*[
                 _cache.get(f"wzdx:{c}", WZDX_TTL, MAX_SERVE,
-                           lambda u=WZDX_FEEDS[c][3], s=WZDX_FEEDS[c][1],
-                           k=cap:
-                           _fetch_wzdx(client, u, s, cap=k))
+                           _capped(lambda u=WZDX_FEEDS[c][3],
+                                   s=WZDX_FEEDS[c][1], k=cap:
+                                   _fetch_wzdx(client, u, s, cap=k)))
                 for c, cap in batch
             ], return_exceptions=True)
         # Camera bundles are ~20 MB each; warm them after the light feeds.
         await asyncio.gather(*[
             _cache.get(f"neccam:{c}", CAM_TTL, MAX_SERVE,
-                       lambda cc=c: _fetch_nec_cameras(client, cc))
+                       _capped(lambda cc=c: _fetch_nec_cameras(client, cc),
+                               120.0))
             for c in NEC_STATES
         ], return_exceptions=True)
 
