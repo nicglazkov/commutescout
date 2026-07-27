@@ -25,6 +25,9 @@
  "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
 </script>
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
+<!-- Approximate visitor location from the edge, filled in per request
+     when Cloudflare's visitor-location headers are available. A data
+     island, not executable script. --><!--BOOT_GEO-->
 <!-- No data preload here: the boot fetch uses cache no-cache (see
      refreshAmbient), and a preload with a different cache mode is not
      reusable, so it only duplicated the 700KB download. The script
@@ -869,11 +872,30 @@ function ensureMap() {
     'America/Anchorage': [[61.2, -149.5], 6],
     'Pacific/Honolulu': [[20.9, -157.3], 7],
   };
+  // Best signal first: where the visitor last left the map, then the
+  // edge's city-level guess from the request IP, then the timezone
+  // region, then the lower 48. None of these ask permission.
   let view0 = [[39.3, -97.5], 5];
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
     if (TZ_VIEWS[tz]) view0 = TZ_VIEWS[tz];
   } catch (e) { /* default view */ }
+  try {
+    const el = document.getElementById('bootgeo');
+    if (el) {
+      const g = JSON.parse(el.textContent);
+      if (typeof g.lat === 'number' && typeof g.lon === 'number') {
+        view0 = [[g.lat, g.lon], g.zoom || 10];
+      }
+    }
+  } catch (e) { /* fall through to the timezone view */ }
+  try {
+    const saved = JSON.parse(localStorage.getItem('lastview') || 'null');
+    if (saved && Date.now() - saved.t < 30 * 86400000
+        && Math.abs(saved.lat) <= 85 && Math.abs(saved.lon) <= 180) {
+      view0 = [[saved.lat, saved.lon], Math.min(13, Math.max(4, saved.z))];
+    }
+  } catch (e) { /* no stored view */ }
   map = L.map('map', { scrollWheelZoom: true })
     .setView(view0[0], view0[1]);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
@@ -2277,14 +2299,30 @@ async function refreshAmbient(force) {
   // before Leaflet even loads), and the containment check above then
   // holds for every pan and zoom a user can make. Dots never require
   // re-querying; data refreshes on the interval timer instead.
-  // Warm-up re-polls keep fetching the whole-world box: each one
-  // replaces the marker registry, and shrinking it to the viewport
-  // mid-warm-up would throw away every out-of-view state just loaded.
+  // A visitor who lands on their own metro should download their own
+  // metro, not the country: at zoom 8 and closer the boot fetch is a
+  // padded, GRID-SNAPPED viewport (snapping keeps everyone in a
+  // region on the same cache entry, so the edge still serves hits).
+  // Zoomed-out views still take the whole world in one request, and
+  // warm-up re-polls keep whatever box they started with: each fetch
+  // replaces the marker registry, so shrinking mid-warm-up would
+  // discard states that just finished loading.
   const first = ambientBounds === null
     || (warmTotal > 0 && warmReady < warmTotal);
-  const fetchBounds = first
-    ? L.latLngBounds([[-85.0, -180.0], [85.0, 180.0]])
-    : view.pad(0.35);
+  const snap = (v, step, dir) => (dir < 0 ? Math.floor(v / step)
+    : Math.ceil(v / step)) * step;
+  let fetchBounds;
+  if (first && map.getZoom() >= 8) {
+    const p = view.pad(0.6);
+    const s = 2;
+    fetchBounds = L.latLngBounds(
+      [snap(p.getSouth(), s, -1), snap(p.getWest(), s, -1)],
+      [snap(p.getNorth(), s, 1), snap(p.getEast(), s, 1)]);
+  } else if (first) {
+    fetchBounds = L.latLngBounds([[-85.0, -180.0], [85.0, 180.0]]);
+  } else {
+    fetchBounds = view.pad(0.35);
+  }
   const sw = fetchBounds.getSouthWest(), ne = fetchBounds.getNorthEast();
   const bbox = [sw.lat, sw.lng, ne.lat, ne.lng].map(v => v.toFixed(3)).join(',');
   // Two phases: the fast feeds paint in ~a quarter second; the heavy ones
@@ -2380,6 +2418,14 @@ async function refreshAmbient(force) {
 map.on('moveend zoomend', () => {
   clearTimeout(ambientTimer);
   ambientTimer = setTimeout(() => refreshAmbient(false), 450);
+  // Remember where the map was left: the strongest no-permission
+  // signal for where this visitor cares about next time.
+  try {
+    const c = map.getCenter();
+    localStorage.setItem('lastview', JSON.stringify({
+      lat: +c.lat.toFixed(3), lon: +c.lng.toFixed(3),
+      z: map.getZoom(), t: Date.now() }));
+  } catch (e) { /* private mode, storage full: not important */ }
 });
 refreshAmbient(true);
 setInterval(() => refreshAmbient(true), 180000);

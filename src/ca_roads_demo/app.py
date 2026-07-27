@@ -24,6 +24,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import (
     FileResponse,
+    HTMLResponse,
     JSONResponse,
     Response,
     StreamingResponse,
@@ -708,7 +709,9 @@ def _bbox_params(request: Request):
 # A 30 s TTL matches the response's Cache-Control.
 _MAPDATA_CACHE: dict = {}
 _MAPDATA_CACHE_TTL = 30
-_MAPDATA_CACHE_MAX = 6
+# Region-scoped boot payloads mean many more distinct bboxes than the
+# old one-world-fits-all request, but each is a fraction of the size.
+_MAPDATA_CACHE_MAX = 24
 
 
 async def api_mapdata(request: Request):
@@ -1159,8 +1162,57 @@ async def track(request: Request):
 STATIC_DIR = Path(__file__).parent / "static"
 
 
-async def index(_: Request):
-    return FileResponse(STATIC_DIR / "index.html")
+# The page opens on the visitor's own area, which is both friendlier
+# and much cheaper: a metro viewport loads a fraction of the markers a
+# nationwide view does. No permission prompt is involved. Cloudflare's
+# edge attaches approximate visitor location headers (city-level, from
+# the IP); we pass them into the page as a data island. Without them
+# the page falls back to its own timezone guess.
+_INDEX_CACHE: dict = {}
+_GEO_SLOT = "<!--BOOT_GEO-->"
+
+
+def _index_template() -> str:
+    path = STATIC_DIR / "index.html"
+    stamp = path.stat().st_mtime
+    if _INDEX_CACHE.get("stamp") != stamp:
+        _INDEX_CACHE["stamp"] = stamp
+        _INDEX_CACHE["text"] = path.read_text(encoding="utf-8")
+    return _INDEX_CACHE["text"]
+
+
+def _visitor_view(request: Request) -> dict | None:
+    """Approximate visitor location from edge headers. Coordinates are
+    rounded to about a kilometer: enough to open the map on the right
+    metro, far too coarse to identify anyone, and never logged."""
+    h = request.headers
+    try:
+        lat = float(h["cf-iplatitude"])
+        lon = float(h["cf-iplongitude"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (-85 <= lat <= 85 and -180 <= lon <= 180):
+        return None
+    if abs(lat) < 0.01 and abs(lon) < 0.01:
+        return None  # null island: the header is present but useless
+    return {"lat": round(lat, 2), "lon": round(lon, 2), "zoom": 10,
+            "src": "edge"}
+
+
+async def index(request: Request):
+    view = _visitor_view(request)
+    if view is None:
+        return FileResponse(STATIC_DIR / "index.html")
+    html = _index_template().replace(
+        _GEO_SLOT,
+        '<script type="application/json" id="bootgeo">'
+        + json.dumps(view) + "</script>", 1)
+    # This copy carries one visitor's approximate location, so no
+    # shared cache may store it: private + no-store, never merely
+    # no-cache (an edge that revalidates could still hand a stored
+    # copy to the next city).
+    return HTMLResponse(html, headers={
+        "Cache-Control": "private, no-store", "Vary": "CF-IPLatitude"})
 
 
 async def logo(_: Request):
