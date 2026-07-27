@@ -133,6 +133,8 @@ def apply(markers: list[dict]) -> list[dict]:
     geometry are never touched."""
     for m in markers:
         if m.get("kind") == "toll" and isinstance(m.get("entries"), list):
+            if m.get("segs"):
+                continue  # baked geometry (bridges) is never re-routed
             chain = [pt for e in m["entries"]
                      for pt in (e.get("pts") or [])]
             if len(chain) > 1:

@@ -58,6 +58,39 @@ def test_bridges_group_as_required_with_posted_rates():
     assert (c["min"], c["max"]) == (8.5, 8.5)
 
 
+def test_chain_is_geometric_not_sign_sequence():
+    # Sign numbers are per-entry ("Whipple - 2" is Whipple's second
+    # sign), so sorting the corridor by them interleaved entries and
+    # zigzagged the gantry chain up and down the freeway; the drawn
+    # line doubled over itself and hover highlights wrapped the wrong
+    # way. The chain must be monotone along the corridor axis.
+    out = states.toll_corridors([
+        bay("I-880 SB: I-880 SB - Alvarado - 1", 37.560, -122.050,
+            ["to Thornton - 3: $1.75"]),
+        bay("I-880 SB: I-880 SB - Thornton - 1", 37.540, -122.030,
+            ["to Fremont - 2: $2.00"]),
+        bay("I-880 SB: I-880 SB - Alvarado - 2", 37.555, -122.045,
+            ["to Thornton - 3: $1.75"]),
+        bay("I-880 SB: I-880 SB - Fremont - 1", 37.520, -122.010,
+            ["to Fremont - 2: $0.75"]),
+    ])
+    c = out[0]
+    # Southbound: driving order, north entry first.
+    assert [e["label"] for e in c["entries"]] ==         ["Alvarado", "Thornton", "Fremont"]
+    chain = [pt for e in c["entries"] for pt in e["pts"]]
+    lats = [p[0] for p in chain]
+    assert lats == sorted(lats, reverse=True)  # monotone, no zigzag
+
+
+def test_prebaked_corridors_pass_through_untouched():
+    baked = {"kind": "toll", "corridor": "Bay Bridge", "entries": [
+        {"label": "Toll plaza", "pts": [[37.82, -122.35]],
+         "rows": [["All", 8.5]]}], "segs": [[[37.82, -122.35],
+        [37.79, -122.38]]], "min": 8.5, "max": 8.5}
+    out = states.toll_corridors([baked])
+    assert out == [baked]
+
+
 def test_toll_type_table():
     assert states._toll_type("WSDOT", "405 S") == "express"
     assert states._toll_type("WSDOT", "099 S") == "required"

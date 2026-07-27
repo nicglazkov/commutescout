@@ -2000,50 +2000,38 @@ async def _fetch_wsdot_tolls(client) -> dict:
 # bridges charge a flat $8.50 for two-axle vehicles from 2026-01-01
 # (tiered FasTrak pricing starts 2027 - update then). Golden Gate rates
 # from the bridge district, effective 2026-07-01.
-# (name, plaza lat, plaza lon, far-shore lat, far-shore lon): the far
-# shore gives the corridor a second point, so the road snapper draws
-# the line ACROSS the bridge deck instead of leaving a lone point.
-_CA_BRIDGES = [
-    ("Bay Bridge", 37.8235, -122.3118, 37.7877, -122.3877),
-    ("San Mateo-Hayward Bridge", 37.6290, -122.1220, 37.5688, -122.2503),
-    ("Dumbarton Bridge", 37.5075, -122.0645, 37.4937, -122.1287),
-    ("Richmond-San Rafael Bridge", 37.9366, -122.4068, 37.9296, -122.4784),
-    ("Carquinez Bridge", 38.0525, -122.2136, 38.0745, -122.2255),
-    ("Benicia-Martinez Bridge", 38.0330, -122.1155, 38.0498, -122.1206),
-    ("Antioch Bridge", 38.0155, -121.7517, 38.0327, -121.7546),
-    ("Golden Gate Bridge", 37.8065, -122.4753, 37.8324, -122.4794),
-]
-
-
-def _bridge_markers(name, lat, lon, flat, flon, rates, as_of, src):
-    return [
-        {"kind": "toll", "lat": lat, "lon": lon,
-         "name": f"{name}: Toll plaza",
-         "price": rates[0][1], "pricing": "fixed",
-         "rates": rates, "as_of": as_of, "src": src},
-        # Far shore: no rates of its own, exists so the corridor has a
-        # two-point chain for the deck-following line.
-        {"kind": "toll", "lat": flat, "lon": flon,
-         "name": f"{name}: Far shore", "price": None, "pricing": "fixed",
-         "as_of": as_of, "src": src},
-    ]
-
-
 async def _fetch_ca_bridges(client) -> dict:
     """Bay Area toll bridges: required tolls, posted schedule (no live
-    feed exists; the schedule changes about once a year)."""
+    feed exists; the schedule changes about once a year). These come
+    PRE-GROUPED as corridor markers with baked deck geometry, so the
+    line is exactly the bridge span - it ends where the deck meets
+    land instead of wandering into surface streets like a routed
+    approach did."""
+    from ca_roads_demo.bridgedecks import DECKS
+
     markers = []
-    for name, lat, lon, flat, flon in _CA_BRIDGES:
+    for name, deck in DECKS.items():
         if name == "Golden Gate Bridge":
             rates = [["FasTrak (2-axle)", 10.25],
                      ["License plate / one-time", 10.50],
                      ["Carpool 3+ (FasTrak, peak hours)", 8.25]]
-            markers += _bridge_markers(name, lat, lon, flat, flon,
-                                       rates, "July 2026", "GGB")
+            as_of, src = "July 2026", "GGB"
         else:
             rates = [["All payment types (2-axle)", 8.50]]
-            markers += _bridge_markers(name, lat, lon, flat, flon,
-                                       rates, "January 2026", "BATA")
+            as_of, src = "January 2026", "BATA"
+        prices = [p for _, p in rates]
+        mid = deck[len(deck) // 2]
+        markers.append({
+            "kind": "toll", "corridor": name, "src": src,
+            "lat": mid[0], "lon": mid[1],
+            "pricing": "fixed", "toll_type": "required",
+            "as_of": as_of, "min": min(prices), "max": max(prices),
+            "n": 1, "name": name,
+            "label": f"{name} toll (all lanes) ${min(prices):.2f}",
+            "entries": [{"label": "Toll plaza", "pts": [deck[0]],
+                         "rows": [[lbl, p] for lbl, p in rates]}],
+            "segs": [deck],
+        })
     return {"markers": markers}
 
 
@@ -2243,10 +2231,11 @@ def toll_corridors(markers: list[dict]) -> list[dict]:
     vocabulary."""
     from ca_roads_demo import tollprices as tp
 
-    out = [m for m in markers if m.get("kind") != "toll"]
+    out = [m for m in markers if m.get("kind") != "toll"
+           or m.get("entries") is not None]  # pre-grouped pass through
     groups: dict[str, list[dict]] = {}
     for m in markers:
-        if m.get("kind") == "toll":
+        if m.get("kind") == "toll" and m.get("entries") is None:
             groups.setdefault(tp.corridor_key(m), []).append(m)
     for corridor, items in groups.items():
         raw = []
@@ -2254,37 +2243,49 @@ def toll_corridors(markers: list[dict]) -> list[dict]:
             if not (m.get("lat") and m.get("lon")):
                 continue
             raw.append({
-                "label": tp.entry_label(m), "seq": tp.entry_seq(m),
+                "label": tp.entry_label(m),
                 "lat": m["lat"], "lon": m["lon"],
                 "rows": [[d or None, p] for d, p in tp.price_rows(m)],
             })
         if not raw:
             continue
-        if any(e["seq"] is not None for e in raw):
-            raw.sort(key=lambda e: (e["seq"] is None, e["seq"] or 0))
-        else:
-            lats = [e["lat"] for e in raw]
-            lons = [e["lon"] for e in raw]
-            axis = "lat" if (max(lats) - min(lats)) >= \
-                (max(lons) - min(lons)) else "lon"
-            raw.sort(key=lambda e: e[axis])
-        entries: list[dict] = []
+        # Group signs by entry label FIRST, then order entries
+        # geometrically along the corridor's dominant axis. The
+        # trailing numbers in sign names are per-ENTRY sequence
+        # ("Whipple - 2" is the second sign approaching Whipple), so
+        # sorting the whole corridor by them interleaved entries and
+        # made the gantry chain zigzag the freeway; the drawn line
+        # doubled over itself and hover highlights wrapped the wrong
+        # way around the corridor.
+        by_label: dict[str, dict] = {}
         for e in raw:
-            prev = entries[-1] if entries and \
-                entries[-1]["label"] == e["label"] else None
-            if prev is None:
-                prev = {"label": e["label"], "pts": [], "rows": [],
-                        "_seen": set()}
-                entries.append(prev)
-            prev["pts"].append([round(e["lat"], 5), round(e["lon"], 5)])
+            grp = by_label.setdefault(e["label"], {
+                "label": e["label"], "pts": [], "rows": [],
+                "_seen": set()})
+            grp["pts"].append([round(e["lat"], 5), round(e["lon"], 5)])
             for dest, price in e["rows"]:
                 # A destination matching the entry label is the short
                 # hop to that interchange's own exit: a real price,
                 # kept (dropping it once hid a corridor's minimum).
-                if dest in prev["_seen"]:
+                if dest in grp["_seen"]:
                     continue
-                prev["_seen"].add(dest)
-                prev["rows"].append([dest, price])
+                grp["_seen"].add(dest)
+                grp["rows"].append([dest, price])
+        entries = list(by_label.values())
+        all_pts = [p for g in entries for p in g["pts"]]
+        lats = [p[0] for p in all_pts]
+        lons = [p[1] for p in all_pts]
+        ax = 0 if (max(lats) - min(lats)) >= (max(lons) - min(lons)) else 1
+        for grp in entries:
+            grp["pts"].sort(key=lambda p: p[ax])
+        entries.sort(key=lambda g: sum(p[ax] for p in g["pts"])
+                     / len(g["pts"]))
+        # Driving order where the name says so: southbound and
+        # westbound corridors read top entry first.
+        if re.search(r"\b(SB|WB|S|W)$", corridor):
+            entries.reverse()
+            for grp in entries:
+                grp["pts"].reverse()
         for e in entries:
             del e["_seen"]
         prices = [r[1] for e in entries for r in e["rows"]
