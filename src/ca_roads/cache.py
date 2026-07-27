@@ -47,12 +47,19 @@ class TTLCache:
     callers for the same key share the single in-flight fetch.
     """
 
+    # After a fetch fails, callers inside this window fail fast instead
+    # of re-fetching. Without it, a broken upstream turns the per-key
+    # lock into an unbounded queue: every caller waits its turn only to
+    # repeat the same slow failure (observed as an 18-hour map outage).
+    RETRY_AFTER_FAILURE_SECONDS = 60.0
+
     def __init__(self) -> None:
         self._entries: dict[object, _Entry] = {}
         self._locks: dict[object, asyncio.Lock] = {}
         self._refreshing: set[object] = set()
         self._tasks: set[asyncio.Task] = set()
         self._errors: dict[object, str] = {}
+        self._failed_at: dict[object, float] = {}
 
     def _lock(self, key: object) -> asyncio.Lock:
         lock = self._locks.get(key)
@@ -97,11 +104,23 @@ class TTLCache:
             now = time.monotonic()
             if entry is not None and now - entry.fetched_monotonic < ttl_seconds:
                 return CacheOutcome(entry.value, entry.fetched_at, served=True)
+            failed = self._failed_at.get(key)
+            if failed is not None and now - failed < self.RETRY_AFTER_FAILURE_SECONDS:
+                # Another caller just watched this fetch fail; repeating
+                # it immediately only grows the lock queue.
+                error = self._errors.get(key, "recent fetch failed")
+                if entry is not None and now - entry.fetched_monotonic <= max_serve_seconds:
+                    return CacheOutcome(
+                        entry.value, entry.fetched_at, served=True,
+                        stale=True, error=error,
+                    )
+                return CacheOutcome(None, None, served=False, error=error)
             try:
                 value = await fetch()
             except Exception as exc:  # noqa: BLE001 - any failure falls back to cache
                 error = f"{type(exc).__name__}: {exc}"
                 self._errors[key] = error
+                self._failed_at[key] = time.monotonic()
                 if entry is not None and now - entry.fetched_monotonic <= max_serve_seconds:
                     return CacheOutcome(
                         entry.value, entry.fetched_at, served=True,
@@ -109,6 +128,7 @@ class TTLCache:
                     )
                 return CacheOutcome(None, None, served=False, error=error)
             self._errors.pop(key, None)
+            self._failed_at.pop(key, None)
             entry = _Entry(value)
             self._entries[key] = entry
             return CacheOutcome(entry.value, entry.fetched_at, served=True)
@@ -133,8 +153,10 @@ class TTLCache:
                     value = await fetch()
                 except Exception as exc:  # noqa: BLE001 - keep serving the last good value
                     self._errors[key] = f"{type(exc).__name__}: {exc}"
+                    self._failed_at[key] = time.monotonic()
                     return
                 self._errors.pop(key, None)
+                self._failed_at.pop(key, None)
                 self._entries[key] = _Entry(value)
         finally:
             self._refreshing.discard(key)

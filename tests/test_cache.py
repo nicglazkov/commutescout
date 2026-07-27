@@ -99,6 +99,47 @@ async def test_stale_beyond_max_serve_is_failure():
     assert not outcome.served
 
 
+async def test_failure_backoff_prevents_retry_pileup():
+    """After a failed fetch, callers inside the retry window fail fast
+    instead of queueing on the lock to repeat the same slow failure."""
+    cache = TTLCache()
+    calls = 0
+
+    async def boom():
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("down")
+
+    first = await cache.get("k", ttl_seconds=60, max_serve_seconds=300,
+                            fetch=boom)
+    second = await cache.get("k", ttl_seconds=60, max_serve_seconds=300,
+                             fetch=boom)
+    assert not first.served and not second.served
+    assert "down" in second.error
+    assert calls == 1  # the second caller never re-fetched
+
+
+async def test_failure_backoff_expires_and_recovers():
+    import asyncio
+
+    cache = TTLCache()
+    cache.RETRY_AFTER_FAILURE_SECONDS = 0.05
+    state = {"fail": True}
+
+    async def fetch():
+        if state["fail"]:
+            raise RuntimeError("down")
+        return "good"
+
+    await cache.get("k", 60, 300, fetch)
+    state["fail"] = False
+    inside = await cache.get("k", 60, 300, fetch)
+    assert not inside.served  # still inside the backoff window
+    await asyncio.sleep(0.06)
+    after = await cache.get("k", 60, 300, fetch)
+    assert after.served and after.value == "good"
+
+
 @pytest.mark.parametrize("keys", [("a", "b")])
 async def test_keys_are_independent(keys):
     cache = TTLCache()

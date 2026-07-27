@@ -58,6 +58,25 @@ async def test_unbudgeted_call_waits_for_everything(registries):
     assert {m["src"] for m in out} == {"FastDOT", "SlowDOT"}
 
 
+async def test_default_budget_bounds_the_request_path(registries,
+                                                      monkeypatch):
+    # Without an explicit budget the default still applies: a wedged
+    # feed cannot hold the map payload hostage.
+    monkeypatch.setattr(states, "DEFAULT_BUDGET_SECONDS", 0.15)
+    out = await states.markers_for_bbox(None, WORLD, {"incident"})
+    assert [m["src"] for m in out] == ["FastDOT"]
+
+
+async def test_capped_fetch_times_out_dripping_upstream():
+    async def drip():
+        await asyncio.sleep(5)
+        return {"markers": []}
+
+    capped = states._capped(drip, 0.1)
+    with pytest.raises(asyncio.TimeoutError):
+        await capped()
+
+
 async def test_prewarm_done_ends_warmup_despite_failures(registries,
                                                          monkeypatch):
     # A feed that never succeeds must not keep warm-up open forever:
