@@ -1243,8 +1243,11 @@ async def run_check_cycle() -> dict:
     # Feed the historical archive every cycle: recording started long
     # before the features that read it, because history cannot be
     # backfilled. Failures are swallowed inside observe().
-    from ca_roads_demo import archive
+    from ca_roads_demo import archive, tollprices
     archive_stats = await archive.observe(events)
+    # Toll price history rides the same cycle: cached prices only, one
+    # row per changed (corridor, entry, destination). Never raises.
+    await tollprices.observe()
     watches = await store.list_watches()
     users: dict[str, dict | None] = {}
     # One push-subs read per user per cycle, not per matched event: a
