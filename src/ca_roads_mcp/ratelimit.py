@@ -8,11 +8,38 @@ single instance makes this good enough for v1 - no shared store needed).
 
 from __future__ import annotations
 
+import ipaddress
 import time
 
+# Cloudflare's published edge ranges (cloudflare.com/ips, vendored
+# 2026-07-27). They change rarely; refresh from the same URLs if
+# Cloudflare announces new blocks.
+_CLOUDFLARE_RANGES = tuple(ipaddress.ip_network(n) for n in (
+    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
+    "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18",
+    "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22",
+    "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+    "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+    "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32",
+    "2405:b500::/32", "2405:8100::/32", "2a06:98c0::/29",
+    "2c0f:f248::/32",
+))
 
-def trusted_client_ip(forwarded_for: str | None, peer: str | None) -> str:
-    """The client IP that Google's frontend vouches for.
+
+def _is_cloudflare(ip: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _CLOUDFLARE_RANGES)
+
+
+def trusted_client_ip(
+    forwarded_for: str | None,
+    peer: str | None,
+    cf_connecting_ip: str | None = None,
+) -> str:
+    """The client IP the fronting infrastructure vouches for.
 
     X-Forwarded-For arrives as "<whatever the client sent>, <real client>"
     on Cloud Run: the platform APPENDS the IP it actually saw. Trusting the
@@ -20,12 +47,23 @@ def trusted_client_ip(forwarded_for: str | None, peer: str | None) -> str:
     header and bypass per-IP limits; the last entry is the only one added
     by infrastructure we trust. Off Cloud Run there is usually no header
     and the transport peer is the answer.
+
+    Behind Cloudflare the platform-vouched address is a Cloudflare edge
+    and the real client rides in CF-Connecting-IP. That header is honored
+    ONLY when the vouched address really is Cloudflare's: anyone hitting
+    the origin directly can send the header, and trusting it blindly
+    would reopen the spoofing hole the last-entry rule closed.
     """
+    vouched = None
     if forwarded_for:
         entries = [e.strip() for e in forwarded_for.split(",") if e.strip()]
         if entries:
-            return entries[-1]
-    return peer or "unknown"
+            vouched = entries[-1]
+    if vouched is None:
+        vouched = peer or "unknown"
+    if cf_connecting_ip and _is_cloudflare(vouched):
+        return cf_connecting_ip.strip()
+    return vouched
 
 
 class TokenBucket:
@@ -105,11 +143,15 @@ class RateLimitMiddleware:
     @staticmethod
     def _client_key(scope) -> str:
         forwarded = None
+        cf_ip = None
         for name, value in scope.get("headers") or []:
             if name == b"x-forwarded-for":
                 forwarded = value.decode("latin-1")
+            elif name == b"cf-connecting-ip":
+                cf_ip = value.decode("latin-1")
         client = scope.get("client")
-        return trusted_client_ip(forwarded, client[0] if client else None)
+        return trusted_client_ip(forwarded, client[0] if client else None,
+                                 cf_ip)
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] != "http":
