@@ -13,6 +13,14 @@ import time
 
 import httpx
 
+from ca_roads.feeds import calfire as calfire_feed
+from ca_roads.feeds import chains as chains_feed
+from ca_roads.feeds import chp as chp_feed
+from ca_roads.feeds import lcs as lcs_feed
+from ca_roads.feeds import portal as portal_feed
+from ca_roads.feeds import wildfire as wildfire_feed
+from ca_roads.models import FeedResult
+
 
 def _new_client() -> httpx.AsyncClient:
     """Shared-pool client with explicit limits. The pool timeout is the
@@ -25,14 +33,6 @@ def _new_client() -> httpx.AsyncClient:
                             keepalive_expiry=30.0),
         timeout=httpx.Timeout(30.0, connect=10.0, pool=15.0),
     )
-
-from ca_roads.feeds import calfire as calfire_feed
-from ca_roads.feeds import chains as chains_feed
-from ca_roads.feeds import chp as chp_feed
-from ca_roads.feeds import lcs as lcs_feed
-from ca_roads.feeds import portal as portal_feed
-from ca_roads.feeds import wildfire as wildfire_feed
-from ca_roads.models import FeedResult
 
 
 class RoadData:
