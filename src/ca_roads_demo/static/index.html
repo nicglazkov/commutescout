@@ -1999,7 +1999,8 @@ async function fetchGeometry() {
   await Promise.all(cells.map(async ([k, la, lo]) => {
     try {
       const res = await fetch('/api/mapdata?bbox=' + la + ',' + lo + ',' +
-        (la + 2) + ',' + (lo + 2) + '&kinds=closure,toll&fields=geo');
+        (la + 2) + ',' + (lo + 2) + '&kinds=closure,toll&fields=geo',
+        { cache: 'no-cache' });
       if (!res.ok) { geoCells.delete(k); return; }
       const d = await res.json();
       for (const m of d.markers || []) {
@@ -2215,8 +2216,13 @@ async function refreshAmbient(force) {
   // (3,300 cameras, 970 signs) follow without holding them up.
   const load = async (kinds, groups, isFast) => {
     try {
+      // cache: no-cache = always revalidate with the server (ETag).
+      // Cloudflare's browser-TTL setting once stamped a 4-hour
+      // max-age onto this response, and a visitor who loaded during
+      // a degraded window replayed an empty map from disk for hours.
+      // Revalidation makes a stale local copy impossible.
       const res = await fetch('/api/mapdata?bbox=' + bbox + '&kinds=' +
-        kinds + '&slim=1');
+        kinds + '&slim=1', { cache: 'no-cache' });
       if (mine !== ambientCycle) return true;
       if (!res.ok) return false;
       if (isFast) {
