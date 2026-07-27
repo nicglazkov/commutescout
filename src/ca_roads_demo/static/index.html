@@ -2335,11 +2335,16 @@ document.querySelectorAll('#filters input[data-group]').forEach(box => {
     const layer = ambient[box.dataset.group];
     if (box.checked) map.addLayer(layer); else map.removeLayer(layer);
     // Turning tolls on should not wait for the next idle geometry
-    // pass: fetch and build the corridor lines immediately.
+    // pass: fetch and build the corridor lines immediately. Then
+    // push every toll line to the back of the canvas hit order:
+    // bringToBack is a no-op while the group is off the map, so
+    // without this, toll dashes added on toggle sat on TOP and
+    // swallowed clicks meant for closure lines beneath them.
     if (box.dataset.group === 'toll' && box.checked) {
       stripsBuilt = false;
       fetchGeometry();
       syncStrips();
+      ambient.toll.eachLayer((l) => { if (l.bringToBack) l.bringToBack(); });
     }
     GL.rebuild();
   });
@@ -2557,9 +2562,19 @@ function tollHighlight(m, gi, di) {
   const a = near((g.pts || [])[0]), b = near(destEntry.pts[0]);
   const piece = flat.slice(Math.min(a, b), Math.max(a, b) + 1);
   if (piece.length > 1) {
-    tollHiLayers.push(L.polyline(piece, {
-      renderer: canvasR, color: '#1d4ed8', weight: 8, opacity: 0.8,
-    }).addTo(map));
+    // Sanity gate: a slice much longer than the crow-flies distance
+    // means the flattened geometry is not monotone here (data quirk);
+    // endpoint markers alone beat drawing a misleading loop.
+    let plen = 0;
+    for (let i = 1; i < piece.length; i++) {
+      plen += map.distance(piece[i - 1], piece[i]);
+    }
+    const direct = map.distance(g.pts[0], destEntry.pts[0]);
+    if (plen <= direct * 3 + 500) {
+      tollHiLayers.push(L.polyline(piece, {
+        renderer: canvasR, color: '#1d4ed8', weight: 8, opacity: 0.8,
+      }).addTo(map));
+    }
   }
 }
 // A toll popup that sits ON the corridor it describes hides exactly
