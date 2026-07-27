@@ -411,6 +411,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .filters label i.ring { background:transparent; border:2px solid var(--dot) }
 .filters label i.iline { width:16px; height:0; border-radius:0;
   background:transparent; border-top:3px dashed var(--dot) }
+.stackdiv { border-top:2px solid #cbd5e1; margin:10px 0 8px }
 .filters label.subopt { padding-left:16px; font-size:.73rem; color:var(--dim) }
 .filters label.subopt i { width:0; height:0 }
 .filters { max-height:calc(100% - 28px); overflow-y:auto }
@@ -2021,6 +2022,59 @@ async function fetchGeometry() {
   syncStrips();
 }
 
+// One click, everything on that stretch: collect every line layer
+// within tolerance of the click and stack their popups in a single
+// window, urgent things (closures) first, the toll context last. No
+// more guessing which of two overlapping lines a click will hit.
+function lineHitsAt(containerPt) {
+  const hits = [];
+  const groups = Object.keys(ambient).filter((g) =>
+    (g.startsWith('clo_') || g === 'toll') && map.hasLayer(ambient[g]));
+  for (const g of groups) {
+    ambient[g].eachLayer((l) => {
+      if (!(l instanceof L.Polyline) || l instanceof L.Polygon) return;
+      const parts0 = l.getLatLngs();
+      const parts = Array.isArray(parts0[0]) ? parts0 : [parts0];
+      let best = Infinity;
+      for (const part of parts) {
+        for (let i = 1; i < part.length; i++) {
+          const a = map.latLngToContainerPoint(part[i - 1]);
+          const b = map.latLngToContainerPoint(part[i]);
+          const d = L.LineUtil.pointToSegmentDistance(containerPt, a, b);
+          if (d < best) best = d;
+        }
+      }
+      if (best <= (l.options.weight || 4) / 2 + 7) {
+        hits.push({ g, m: l.__m, d: best });
+      }
+    });
+  }
+  hits.sort((x, y) => (x.g === 'toll') - (y.g === 'toll') || x.d - y.d);
+  return hits;
+}
+function openStacked(latlng) {
+  const hits = lineHitsAt(map.latLngToContainerPoint(latlng));
+  if (!hits.length) return false;
+  const seen = new Set();
+  const parts = [];
+  for (const h of hits) {
+    if (seen.has(h.m)) continue;
+    seen.add(h.m);
+    if (parts.length >= 3) {
+      parts.push('<div class="pop"><div class="d">and ' +
+        (seen.size - parts.length) + ' more on this stretch</div></div>');
+      break;
+    }
+    parts.push(popupFor(h.m, h.g));
+  }
+  const pop = L.popup({ maxWidth: 330 }).setLatLng(latlng)
+    .setContent(parts.join('<div class="stackdiv"></div>')).openOn(map);
+  pop.__m = hits[0].m;
+  pop.__g = hits[0].g;
+  const toll = hits.find((h) => h.g === 'toll');
+  if (toll) pop.__tollm = toll.m;
+  return true;
+}
 function tollRangeText(m) {
   const money = (v) => '$' + v.toFixed(2).replace(/\.00$/, '');
   const range = m.min === m.max ? money(m.min)
@@ -2044,7 +2098,7 @@ function syncStrips() {
       const line = L.polyline(segs, {
         renderer: canvasR, color: '#7c3aed', weight: 5, opacity: 0.6,
         dashArray: '7 9',
-      }).bindPopup(() => popupFor(m, g), { maxWidth: 330 })
+      }).on('click', (e) => { openStacked(e.latlng); L.DomEvent.stop(e); })
         .bindTooltip(tollRangeText(m), { sticky: true });
       line.__m = m; line.__g = g;
       ambient[g].addLayer(line);
@@ -2067,7 +2121,7 @@ function syncStrips() {
         && map.distance(path[0], path[1]) > 800) continue;
     const strip = L.polyline(path, {
       renderer: canvasR, color: GROUP_DOT[g], weight: 4, opacity: 0.45,
-    }).bindPopup(() => popupFor(m, g), { maxWidth: 320 });
+    }).on('click', (e) => { openStacked(e.latlng); L.DomEvent.stop(e); });
     strip.__m = m; strip.__g = g;
     ambient[g].addLayer(strip);
   }
@@ -2636,8 +2690,11 @@ function repositionTollPopup(popup, m) {
 map.on('popupopen', (e) => {
   const mk = (e.popup && e.popup.__m) ? e.popup
     : (e.popup && e.popup._source);
-  const m = mk && mk.__m;
-  if (!m || mk.__g !== 'toll' || !m.entries) return;
+  // The toll marker is either the popup's own subject or the toll
+  // section of a stacked multi-line popup.
+  const m = (mk && mk.__g === 'toll' && mk.__m) ? mk.__m
+    : (e.popup && e.popup.__tollm);
+  if (!m || !m.entries) return;
   const el = e.popup.getElement();
   if (!el) return;
   el.querySelectorAll('[data-tg]').forEach((row) => {
@@ -2648,9 +2705,13 @@ map.on('popupopen', (e) => {
     row.addEventListener('click', () => tollHighlight(m, gi, di));
   });
   // After Leaflet's own auto-pan settles, move the popup off the
-  // corridor if it landed on top of it.
-  requestAnimationFrame(() => requestAnimationFrame(() =>
-    repositionTollPopup(e.popup, m)));
+  // corridor if it landed on top of it. Only when the popup is
+  // purely about the toll: in a stacked popup the closure on top is
+  // the primary context and jumping it around would be disorienting.
+  if (mk && mk.__g === 'toll') {
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      repositionTollPopup(e.popup, m)));
+  }
 });
 map.on('popupclose', tollHiClear);
 
