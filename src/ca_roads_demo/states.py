@@ -30,6 +30,8 @@ from urllib.parse import quote
 from xml.etree import ElementTree
 from zoneinfo import ZoneInfo
 
+import httpx
+
 from ca_roads.cache import TTLCache
 
 NEC_URL = "https://nec-por.ne-compass.com/NEC.XmlDataPortal/api/c2c"
@@ -2332,13 +2334,41 @@ DEFAULT_BUDGET_SECONDS = 8.0
 FETCH_CAP_SECONDS = 60.0
 
 
+# A burst of PoolTimeouts across feeds means the shared HTTP pool is
+# starved (leaked connections), not that upstreams broke: heal it by
+# swapping the pool. Production 2026-07-28: a poisoned pool killed
+# every networked feed for hours while /health stayed green.
+_POOL_ERRORS: list[float] = []
+_POOL_ERROR_WINDOW = 120.0
+_POOL_ERROR_LIMIT = 5
+
+
+def _note_pool_timeout() -> None:
+    now = time.monotonic()
+    _POOL_ERRORS.append(now)
+    del _POOL_ERRORS[:-_POOL_ERROR_LIMIT * 4]
+    if len([t for t in _POOL_ERRORS if now - t < _POOL_ERROR_WINDOW]) \
+            >= _POOL_ERROR_LIMIT:
+        _POOL_ERRORS.clear()
+        with contextlib.suppress(Exception):
+            from ca_roads_mcp import server as tools
+
+            tools.get_road().reset_client()
+            print(json.dumps({"event": "pool_reset",
+                              "reason": "pooltimeout burst"}))
+
+
 def _capped(fetch, seconds: float = FETCH_CAP_SECONDS):
     """Wall-clock cap around a feed fetch. Per-request HTTP timeouts are
     per-read: an upstream that drips a byte every few seconds can hold a
     fetch (and the cache key's lock) open for hours. TravelMidwest did
     exactly that for 18 hours on 2026-07-26."""
     async def run():
-        return await asyncio.wait_for(fetch(), seconds)
+        try:
+            return await asyncio.wait_for(fetch(), seconds)
+        except httpx.PoolTimeout:
+            _note_pool_timeout()
+            raise
     return run
 
 

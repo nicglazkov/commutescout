@@ -8,9 +8,23 @@ shutdown.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 
 import httpx
+
+
+def _new_client() -> httpx.AsyncClient:
+    """Shared-pool client with explicit limits. The pool timeout is the
+    tell for a poisoned pool (leaked connections starve it and every
+    fetch dies with PoolTimeout); reset_client() is the cure."""
+    return httpx.AsyncClient(
+        follow_redirects=True,
+        limits=httpx.Limits(max_connections=200,
+                            max_keepalive_connections=20,
+                            keepalive_expiry=30.0),
+        timeout=httpx.Timeout(30.0, connect=10.0, pool=15.0),
+    )
 
 from ca_roads.feeds import calfire as calfire_feed
 from ca_roads.feeds import chains as chains_feed
@@ -24,7 +38,7 @@ from ca_roads.models import FeedResult
 class RoadData:
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(follow_redirects=True)
+        self._client = client or _new_client()
         self.chp = chp_feed.ChpSource(self._client)
         self.lcs = lcs_feed.LcsSource(self._client)
         self.chains = chains_feed.ChainSource(self._client)
@@ -41,6 +55,22 @@ class RoadData:
     def client(self) -> httpx.AsyncClient:
         """The shared HTTP client, for consumers that make adjacent calls
         (e.g. geocoding) on the same connection pool."""
+        return self._client
+
+    def reset_client(self) -> httpx.AsyncClient:
+        """Swap in a fresh connection pool after the old one is starved
+        (observed in production: leaked connections turned every fetch
+        into PoolTimeout for hours, and the map served only feedless
+        static data). Every feed source moves to the new pool at once;
+        the old client closes in the background."""
+        old = self._client
+        self._client = _new_client()
+        self._owns_client = True
+        for src in (self.chp, self.lcs, self.chains, self.wildfires_source,
+                    self.calfire_source, self.cms, self.cctv, self.rwis):
+            src._client = self._client
+        with contextlib.suppress(Exception):
+            asyncio.get_running_loop().create_task(old.aclose())
         return self._client
 
     async def aclose(self) -> None:

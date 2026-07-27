@@ -197,7 +197,10 @@ async def _drain(client) -> None:
         if pair is None or key in _mem:
             continue
         try:
-            path = await _snap(client, *pair)
+            # A callable yields the CURRENT shared client, so a pool
+            # reset does not leave the worker on a dead pool forever.
+            cli = client() if callable(client) else client
+            path = await _snap(cli, *pair)
         except Exception:  # noqa: BLE001 - router hiccup: retry later
             _queued.add(key)
             _pairs[key] = pair
