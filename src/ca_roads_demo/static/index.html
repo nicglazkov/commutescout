@@ -2234,6 +2234,33 @@ function showPill(text) {
   mapLoadingText.textContent = text;
 }
 function hidePill() { mapLoadingEl.classList.add('gone'); }
+// Coverage: the map only holds the region it last fetched. Panning or
+// zooming past that edge means the view is showing SOME of what is
+// out there, not all of it, and the page says so with a live count
+// until the wider fetch lands.
+let coveragePill = false;
+function viewCovered() {
+  return !!(ambientBounds && ambientBounds.contains(map.getBounds()));
+}
+function coverageStatus(total, pct) {
+  const have = GL.on ? GL.index.length
+    : Object.keys(items).reduce((n, g) => n + items[g].length, 0);
+  if (total > 0) {
+    return 'Loading this area: ' + have.toLocaleString() + ' of ' +
+      total.toLocaleString() + ' reports' + (pct != null ? ' · ' + pct + '%' : '…');
+  }
+  return 'Loading more reports for this area…';
+}
+function showCoveragePill(total, pct) {
+  if (!mapDataShown || mapRefreshPrompt || warmPill) return;
+  coveragePill = true;
+  showPill(coverageStatus(total, pct));
+}
+function clearCoveragePill() {
+  if (!coveragePill) return;
+  coveragePill = false;
+  if (!warmPill) hidePill();
+}
 function mapLoadingDone() {
   if (!mapDataShown) {
     mapDataShown = true;
@@ -2271,6 +2298,7 @@ let lastLoadProgress = Date.now();
 let warmReady = -1, warmTotal = 0, warmTimer = null, warmPill = false;
 let warmPolls = 0;
 let bootBytes = false;
+let incomingCount = 0;
 // Before the first map response has produced a single byte there is no
 // download percentage to show, so poll the instant warm-up endpoint:
 // its climbing "X of Y feeds" counter is real progress (it also keeps
@@ -2342,9 +2370,14 @@ async function refreshAmbient(force) {
         warmTotal = +res.headers.get('X-Warm-Total') || 0;
         warmReady = +res.headers.get('X-Warm-Ready') || 0;
         lastLoadProgress = Date.now();
+        // The count header arrives with the response head, before a
+        // single body byte, so the status line has its denominator
+        // straight away.
+        incomingCount = +res.headers.get('X-Marker-Count') || 0;
+        if (coveragePill) showCoveragePill(incomingCount, 0);
       }
       let data;
-      if (isFast && !mapDataShown && res.body) {
+      if (isFast && res.body && (!mapDataShown || coveragePill)) {
         // Byte-true progress: X-Raw-Length is the decompressed size,
         // which is what the reader actually counts. The percentage is
         // literal bytes received, never a fake animation.
@@ -2359,9 +2392,12 @@ async function refreshAmbient(force) {
           received += value.length;
           bootBytes = true;
           lastLoadProgress = Date.now();
+          const pct = total
+            ? Math.min(99, Math.round(100 * received / total)) : null;
           if (total && !mapDataShown && !mapRefreshPrompt) {
-            showPill('Downloading live reports ' +
-              Math.min(99, Math.round(100 * received / total)) + '%');
+            showPill('Downloading live reports ' + pct + '%');
+          } else if (coveragePill && pct !== null) {
+            showCoveragePill(incomingCount, pct);
           }
         }
         const all = new Uint8Array(received);
@@ -2403,6 +2439,9 @@ async function refreshAmbient(force) {
   if (fastOk && heavyOk) {
     ambientBounds = fetchBounds;
     mapRetryDelay = 4000;
+    // Everything in view is now on the map (or the view moved on and
+    // another cycle owns the pill).
+    if (viewCovered()) clearCoveragePill();
   } else if (!mapDataShown) {
     // The page is useless without the first batch: keep retrying with
     // backoff instead of sitting blank until the 3-minute refresh.
@@ -2418,6 +2457,13 @@ async function refreshAmbient(force) {
 map.on('moveend zoomend', () => {
   clearTimeout(ambientTimer);
   ambientTimer = setTimeout(() => refreshAmbient(false), 450);
+  // Say it the instant the view leaves the loaded region, not when
+  // the debounced fetch finally starts: the user is looking at a
+  // partial picture right now and deserves to know.
+  // No denominator yet: the previous fetch counted a different
+  // region, and inventing a number here would be a lie. The real
+  // total arrives with the next response head a moment later.
+  if (mapDataShown && !viewCovered()) showCoveragePill(0, null);
   // Remember where the map was left: the strongest no-permission
   // signal for where this visitor cares about next time.
   try {
