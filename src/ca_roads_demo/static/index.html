@@ -889,13 +889,9 @@ function ensureMap() {
       }
     }
   } catch (e) { /* fall through to the timezone view */ }
-  try {
-    const saved = JSON.parse(localStorage.getItem('lastview') || 'null');
-    if (saved && Date.now() - saved.t < 30 * 86400000
-        && Math.abs(saved.lat) <= 85 && Math.abs(saved.lon) <= 180) {
-      view0 = [[saved.lat, saved.lon], Math.min(13, Math.max(4, saved.z))];
-    }
-  } catch (e) { /* no stored view */ }
+  // Deliberately NOT restoring the last view: someone who scrolled to
+  // Chicago yesterday still wants their own commute when they open
+  // the map today. Location wins every time.
   map = L.map('map', { scrollWheelZoom: true })
     .setView(view0[0], view0[1]);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
@@ -2456,22 +2452,20 @@ async function refreshAmbient(force) {
 }
 map.on('moveend zoomend', () => {
   clearTimeout(ambientTimer);
-  ambientTimer = setTimeout(() => refreshAmbient(false), 450);
+  // The debounce keeps the fetch from firing mid-gesture, but when
+  // the view has left the loaded region the user is staring at an
+  // incomplete map. Measured on production, that 450ms wait was three
+  // quarters of an entire warm refetch (22ms to first byte, 120ms to
+  // download, 2ms to render), so uncovered views get a short fuse.
+  const covered = viewCovered();
+  ambientTimer = setTimeout(() => refreshAmbient(false), covered ? 450 : 120);
   // Say it the instant the view leaves the loaded region, not when
   // the debounced fetch finally starts: the user is looking at a
-  // partial picture right now and deserves to know.
-  // No denominator yet: the previous fetch counted a different
-  // region, and inventing a number here would be a lie. The real
-  // total arrives with the next response head a moment later.
-  if (mapDataShown && !viewCovered()) showCoveragePill(0, null);
-  // Remember where the map was left: the strongest no-permission
-  // signal for where this visitor cares about next time.
-  try {
-    const c = map.getCenter();
-    localStorage.setItem('lastview', JSON.stringify({
-      lat: +c.lat.toFixed(3), lon: +c.lng.toFixed(3),
-      z: map.getZoom(), t: Date.now() }));
-  } catch (e) { /* private mode, storage full: not important */ }
+  // partial picture right now and deserves to know. No denominator
+  // yet - the previous fetch counted a different region, and
+  // inventing a number here would be a lie. The real total arrives
+  // with the next response head a moment later.
+  if (mapDataShown && !covered) showCoveragePill(0, null);
 });
 refreshAmbient(true);
 setInterval(() => refreshAmbient(true), 180000);

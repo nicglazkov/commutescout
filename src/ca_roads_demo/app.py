@@ -998,8 +998,14 @@ async def api_mapdata(request: Request):
                 _MAPDATA_CACHE.pop(next(iter(_MAPDATA_CACHE)))
 
     common = {"ETag": etag,
+              # stale-while-revalidate: rebuilding a nationwide payload
+              # costs seconds (measured 2.3s to first byte on a cold
+              # edge entry), and nobody should wait on it. Past 30s the
+              # cached copy is served instantly and refreshed behind
+              # the request; only data older than the window blocks.
               "Cache-Control": ("no-store" if warming
-                                else "public, max-age=30"),
+                                else "public, max-age=30, "
+                                     "stale-while-revalidate=180"),
               "Vary": "Accept-Encoding",
               "X-Raw-Length": str(raw_len),
               # Response headers land before the body streams, so the
