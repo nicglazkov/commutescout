@@ -1002,6 +1002,10 @@ async def api_mapdata(request: Request):
                                 else "public, max-age=30"),
               "Vary": "Accept-Encoding",
               "X-Raw-Length": str(raw_len),
+              # Response headers land before the body streams, so the
+              # page can say "loading N reports" from the first chunk
+              # instead of counting up from an unknown total.
+              "X-Marker-Count": str(len(markers)),
               "X-Warm-Ready": str(warm_ready),
               "X-Warm-Total": str(warm_total)}
     inm = request.headers.get("if-none-match") or ""
