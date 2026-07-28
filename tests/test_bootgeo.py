@@ -11,15 +11,23 @@ class FakeReq:
 
 
 def test_visitor_view_reads_and_rounds_edge_headers():
-    v = _visitor_view(FakeReq({"cf-iplatitude": "37.7749295",
-                               "cf-iplongitude": "-122.4194155"}))
+    # Transform-rule headers (what the zone actually sends)...
+    v = _visitor_view(FakeReq({"x-visitor-lat": "37.7749295",
+                               "x-visitor-lon": "-122.4194155"}))
     assert v == {"lat": 37.77, "lon": -122.42, "zoom": 10, "src": "edge"}
+    # ...and the managed-transform names, if those are ever enabled.
+    v = _visitor_view(FakeReq({"cf-iplatitude": "47.6062",
+                               "cf-iplongitude": "-122.3321"}))
+    assert v == {"lat": 47.61, "lon": -122.33, "zoom": 10, "src": "edge"}
 
 
 def test_visitor_view_rejects_missing_bogus_and_null_island():
     assert _visitor_view(FakeReq({})) is None
     assert _visitor_view(FakeReq({"cf-iplatitude": "nope",
                                   "cf-iplongitude": "-122.4"})) is None
+    # A visitor Cloudflare cannot place gets empty header values.
+    assert _visitor_view(FakeReq({"x-visitor-lat": "",
+                                  "x-visitor-lon": ""})) is None
     assert _visitor_view(FakeReq({"cf-iplatitude": "99.0",
                                   "cf-iplongitude": "-122.4"})) is None
     # 0,0 means "the header exists but the lookup failed"

@@ -1184,11 +1184,17 @@ def _index_template() -> str:
 def _visitor_view(request: Request) -> dict | None:
     """Approximate visitor location from edge headers. Coordinates are
     rounded to about a kilometer: enough to open the map on the right
-    metro, far too coarse to identify anyone, and never logged."""
+    metro, far too coarse to identify anyone, and never logged.
+
+    The x-visitor-* names come from a Cloudflare transform rule that
+    sets them from ip.src.lat/lon (Cloudflare reserves the cf-* prefix
+    for its own managed headers, so a rule cannot write those). The
+    cf-ip* names stay supported in case the managed transform is ever
+    enabled instead."""
     h = request.headers
     try:
-        lat = float(h["cf-iplatitude"])
-        lon = float(h["cf-iplongitude"])
+        lat = float(h.get("x-visitor-lat") or h["cf-iplatitude"])
+        lon = float(h.get("x-visitor-lon") or h["cf-iplongitude"])
     except (KeyError, TypeError, ValueError):
         return None
     if not (-85 <= lat <= 85 and -180 <= lon <= 180):
@@ -1212,7 +1218,8 @@ async def index(request: Request):
     # no-cache (an edge that revalidates could still hand a stored
     # copy to the next city).
     return HTMLResponse(html, headers={
-        "Cache-Control": "private, no-store", "Vary": "CF-IPLatitude"})
+        "Cache-Control": "private, no-store",
+        "Vary": "X-Visitor-Lat, CF-IPLatitude"})
 
 
 async def logo(_: Request):
