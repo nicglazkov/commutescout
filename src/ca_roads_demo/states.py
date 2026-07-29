@@ -2007,10 +2007,11 @@ async def _fetch_ca_bridges(client) -> dict:
     line is exactly the bridge span - it ends where the deck meets
     land instead of wandering into surface streets like a routed
     approach did."""
-    from ca_roads_demo.bridgedecks import DECKS
+    from ca_roads_demo.bridgedecks import DECKS, TOLLED
 
     markers = []
     for name, deck in DECKS.items():
+        toll_dir, toll_note = TOLLED.get(name, (None, None))
         if name == "Golden Gate Bridge":
             rates = [["FasTrak (2-axle)", 10.25],
                      ["License plate / one-time", 10.50],
@@ -2027,7 +2028,12 @@ async def _fetch_ca_bridges(client) -> dict:
             "pricing": "fixed", "toll_type": "required",
             "as_of": as_of, "min": min(prices), "max": max(prices),
             "n": 1, "name": name,
-            "label": f"{name} toll (all lanes) ${min(prices):.2f}",
+            # One-way tolls: the map draws arrows along the deck and the
+            # popup says which way pays, so nobody assumes both.
+            "toll_dir": toll_dir, "toll_note": toll_note,
+            "label": f"{name} toll (all lanes) ${min(prices):.2f} "
+                     f"{toll_dir}" if toll_dir else
+                     f"{name} toll (all lanes) ${min(prices):.2f}",
             "entries": [{"label": "Toll plaza", "pts": [deck[0]],
                          "rows": [[lbl, p] for lbl, p in rates]}],
             "segs": [deck],

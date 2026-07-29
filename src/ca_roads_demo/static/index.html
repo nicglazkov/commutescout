@@ -413,7 +413,17 @@ aside { background:var(--card); border-right:1px solid var(--line);
   margin:7px 0 2px }
 .filters label i.ring { background:transparent; border:2px solid var(--dot) }
 .filters label i.iline { width:16px; height:0; border-radius:0;
-  background:transparent; border-top:3px dashed var(--dot) }
+  background:transparent; border-top:3px solid var(--dot) }
+/* Toll price tag: pinned to its gantry by a stem and dot, so the
+   number reads as belonging to that point on the road. */
+.ttag { transform:translate(-50%,-100%); text-align:center; pointer-events:none;
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,.35)) }
+.ttag .tb { background:#fff; border:1.5px solid #334155; color:#0f172a;
+  font:800 11.5px Inter, system-ui, sans-serif; padding:3px 8px;
+  border-radius:6px; white-space:nowrap }
+.ttag .ts { width:1.5px; height:9px; background:#334155; margin:0 auto }
+.ttag .td { width:7px; height:7px; border-radius:50%; background:#334155;
+  margin:0 auto }
 .stackdiv { border-top:2px solid #cbd5e1; margin:10px 0 8px }
 .filters label.subopt { padding-left:16px; font-size:.73rem; color:var(--dim) }
 .filters label.subopt i { width:0; height:0 }
@@ -660,7 +670,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <u>Wildfire</u>
       <label><input type="checkbox" data-group="fire_pt" checked><i style="--dot:#d97706"></i>Wildfires <em id="n-fire_pt"></em></label>
       <u>Tolls</u>
-      <label><input type="checkbox" data-group="toll"><i class="iline" style="--dot:#7c3aed"></i>Toll prices <em id="n-toll"></em></label>
+      <label><input type="checkbox" data-group="toll"><i class="iline" style="--dot:#64748b"></i>Toll prices <em id="n-toll"></em></label>
       <u>Traffic</u>
       <label><input type="checkbox" id="trafficlayer"><i style="--dot:#7a4bd6"></i>Live traffic overlay</label>
       <u>Roadside</u>
@@ -1478,6 +1488,12 @@ function popupFor(m, g) {
         : '<div class="tsave">Regular lanes moving freely right now (' +
           m.gp_min + ' min)</div>';
     }
+    const dirLine = m.toll_dir
+      ? '<div class="d" style="margin-top:4px"><b>Charged ' +
+        esc(m.toll_dir) + '</b>' +
+        (m.toll_note ? ' (' + esc(m.toll_note) + ')' : '') +
+        '. The other direction is free.</div>'
+      : '';
     const freshness = m.as_of
       ? 'Posted rates, effective ' + esc(m.as_of)
       : (m.updated ? (function () {
@@ -1506,7 +1522,7 @@ function popupFor(m, g) {
       '<div class="thead">' + typeChip + liveChip + '</div>' +
       '<div class="trange">' + range +
       (entries.length > 1 ? ' <small>now · ' + entries.length +
-        ' entry points</small>' : '') + '</div>' + save +
+        ' entry points</small>' : '') + '</div>' + dirLine + save +
       (rows ? '<details open><summary>All rates' +
         (entries.length > 1 ? ' (hover to see on the map)' : '') +
         '</summary><div class="tbody">' + rows + '</div></details>' : '') +
@@ -2100,22 +2116,82 @@ function tollRangeText(m) {
   return range + (m.pricing === 'live' ? ' now' : '')
     + ' · ' + (m.toll_type === 'required' ? 'toll road' : 'express lane');
 }
+// Price tags and direction arrows live in their own group inside the
+// toll group, so they can be rebuilt on every zoom (both are placed in
+// screen space) without disturbing the corridor lines, and the layer
+// checkbox still hides everything at once.
+const tollLabels = L.layerGroup();
+function tollMoney(v) {
+  return '$' + Number(v).toFixed(2).replace(/\.00$/, '');
+}
+// Greedy declutter: a tag is kept only when it is far enough on screen
+// from every tag already placed, so dense interchanges thin out
+// instead of stacking into an unreadable pile.
+function syncTollLabels() {
+  tollLabels.clearLayers();
+  if (!map.hasLayer(ambient.toll) || map.getZoom() < STRIP_ZOOM) return;
+  const view = map.getBounds().pad(0.2);
+  const placed = [];
+  for (const [m, g] of pendingStrips) {
+    if (g !== 'toll') continue;
+    const segs = (Array.isArray(m.segs) && m.segs.length)
+      ? m.segs : geoByKey.get('t' + geoKey(m));
+    if (!Array.isArray(segs) || !segs.length) continue;
+    // Direction arrows: chevrons along the deck pointing the way the
+    // toll is charged. Only for one-way tolls (the bridges), where
+    // assuming both directions pay would be an expensive mistake.
+    if (m.toll_dir && map.getZoom() >= 11) {
+      const flat = segs.flat();
+      for (let f = 0.2; f < 0.95; f += 0.3) {
+        const i = Math.max(1, Math.round(f * (flat.length - 1)));
+        const a = map.latLngToContainerPoint(flat[i - 1]);
+        const b = map.latLngToContainerPoint(flat[i]);
+        const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;
+        const size = 9;
+        const tip = L.point(b.x, b.y);
+        const back = L.point(tip.x - ux * size, tip.y - uy * size);
+        const wing = size * 0.55;
+        const p1 = L.point(back.x - uy * wing, back.y + ux * wing);
+        const p2 = L.point(back.x + uy * wing, back.y - ux * wing);
+        tollLabels.addLayer(L.polyline([
+          map.containerPointToLatLng(p1), map.containerPointToLatLng(tip),
+          map.containerPointToLatLng(p2),
+        ], { renderer: canvasR, color: '#334155', weight: 2.5,
+             opacity: 0.95, interactive: false }));
+      }
+    }
+    for (const e of (m.entries || [])) {
+      const at = (e.pts || [])[0];
+      const row = (e.rows || [])[0];
+      if (!at || !row || row[1] == null) continue;
+      if (!view.contains(at)) continue;
+      const p = map.latLngToContainerPoint(at);
+      if (placed.some((q) => Math.abs(q.x - p.x) < 60
+                          && Math.abs(q.y - p.y) < 36)) continue;
+      placed.push(p);
+      tollLabels.addLayer(L.marker(at, { interactive: false,
+        icon: L.divIcon({ className: '', iconSize: null,
+          html: '<div class="ttag"><div class="tb">' + tollMoney(row[1]) +
+                '</div><div class="ts"></div><div class="td"></div></div>' }) }));
+    }
+  }
+}
 function syncStrips() {
   if (stripsBuilt || map.getZoom() < STRIP_ZOOM) return;
   stripsBuilt = true;
+  if (!ambient.toll.hasLayer(tollLabels)) ambient.toll.addLayer(tollLabels);
   for (const [m, g] of pendingStrips) {
     if (g === 'toll') {
       const segs = (Array.isArray(m.segs) && m.segs.length)
         ? m.segs : geoByKey.get('t' + geoKey(m));
       if (!Array.isArray(segs) || !segs.length) continue;
-      // Tolls are ALWAYS dashed purple: the dash pattern (no other
-      // line on the map is dashed) plus a color no closure class
-      // uses keeps a toll stretch readable even when a closure or
-      // incident sits on the same road. Price lives in the tooltip
-      // and popup, never in the line color.
+      // A quiet slate line that never competes with a red closure or
+      // an orange incident on the same road: the PRICES do the
+      // talking, on tags pinned to each gantry (syncTollLabels). The
+      // line colour carries no status meaning to misread.
       const line = L.polyline(segs, {
-        renderer: canvasR, color: '#7c3aed', weight: 5, opacity: 0.6,
-        dashArray: '7 9',
+        renderer: canvasR, color: '#64748b', weight: 4.5, opacity: 0.55,
       }).on('click', (e) => { openStacked(e.latlng); L.DomEvent.stop(e); })
         .bindTooltip(tollRangeText(m), { sticky: true });
       line.__m = m; line.__g = g;
@@ -2145,6 +2221,9 @@ function syncStrips() {
   }
 }
 map.on('zoomend', syncStrips);
+// Tags and arrows are positioned in screen space, so they follow every
+// pan and zoom rather than being built once.
+map.on('zoomend moveend', syncTollLabels);
 
 // Refreshing a group rebuilds its layers, which CLOSES any popup a
 // user is reading (reported as "clicking the dispatch log took me away
@@ -2200,6 +2279,7 @@ function renderBatch(markers, groups) {
   }
   stripsBuilt = false;
   syncStrips();
+  syncTollLabels();
   const attach = GL.on
     ? (cullPolysOnly(), GL.rebuild())
     : mapDataShown ? (cullSync(), Promise.resolve())
@@ -2480,11 +2560,14 @@ document.querySelectorAll('#filters input[data-group]').forEach(box => {
     // bringToBack is a no-op while the group is off the map, so
     // without this, toll dashes added on toggle sat on TOP and
     // swallowed clicks meant for closure lines beneath them.
-    if (box.dataset.group === 'toll' && box.checked) {
-      stripsBuilt = false;
-      fetchGeometry();
-      syncStrips();
-      ambient.toll.eachLayer((l) => { if (l.bringToBack) l.bringToBack(); });
+    if (box.dataset.group === 'toll') {
+      if (box.checked) {
+        stripsBuilt = false;
+        fetchGeometry();
+        syncStrips();
+        ambient.toll.eachLayer((l) => { if (l.bringToBack) l.bringToBack(); });
+      }
+      syncTollLabels();
     }
     GL.rebuild();
   });
