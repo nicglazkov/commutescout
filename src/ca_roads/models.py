@@ -183,6 +183,9 @@ class RwisStation:
     wind_gust_mph: float | None
     visibility_m: float | None
     precip_rate: float | None
+    wind_dir_deg: float | None = None
+    humidity_pct: float | None = None
+    precip: str | None = None
 
 
 @dataclass

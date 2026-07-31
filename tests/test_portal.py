@@ -75,9 +75,12 @@ def test_rwis_converts_ntcip_units_and_sentinels():
         "rwisData": {
             "temperatureData": {"essTemperatureSensorTable": [
                 {"essTemperatureSensorEntry": {"essAirTemperature": "246"}}]},
-            "windData": {"essAvgWindSpeed": "50", "essMaxWindGustSpeed": "65535"},
+            "windData": {"essAvgWindSpeed": "50", "essMaxWindGustSpeed": "65535",
+                         "essAvgWindDirection": "132"},
             "visibilityData": {"essVisibility": "38565"},
-            "humidityPrecipData": {"essPrecipRate": "0"},
+            "humidityPrecipData": {"essPrecipRate": "0",
+                                   "essRelativeHumidity": "38",
+                                   "essPrecipSituation": "10"},
         },
     }}]}
     stations = portal.parse_rwis(json.dumps(payload).encode(), 3)
@@ -86,6 +89,9 @@ def test_rwis_converts_ntcip_units_and_sentinels():
     assert w.wind_avg_mph == 11.2         # tenths of m/s -> mph
     assert w.wind_gust_mph is None        # 65535 sentinel dropped
     assert w.visibility_m == 3856.5       # decimeters -> meters
+    assert w.wind_dir_deg == 132          # whole degrees (361 = missing)
+    assert w.humidity_pct == 38
+    assert w.precip == "light rain"       # essPrecipSituation 10
 
 
 @pytest.mark.anyio

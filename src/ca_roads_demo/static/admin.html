@@ -335,7 +335,7 @@ async function loadAnalytics() {
     renderTop('an-refs', a.top_referrers);
     renderTop('an-countries', a.top_countries);
     msg('an-msg', (a.series && a.series.length) ? ''
-        : 'No data yet — check back once the site has some traffic.');
+        : 'No data yet. Check back once the site has some traffic.');
   } catch (e) { msg('an-msg', e.message, 'err'); }
 }
 
@@ -397,7 +397,7 @@ function renderTop(id, rows) {
     tb.append(tr);
   }
   if (!(rows || []).length) {
-    tb.innerHTML = '<tr><td style="color:var(--dim)">—</td></tr>';
+    tb.innerHTML = '<tr><td style="color:var(--dim)">No data yet</td></tr>';
   }
 }
 </script>
