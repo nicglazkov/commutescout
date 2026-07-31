@@ -25,7 +25,7 @@ import json
 import re
 import time
 from base64 import b64decode
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import quote
 from xml.etree import ElementTree
 from zoneinfo import ZoneInfo
@@ -585,7 +585,7 @@ async def _fetch_traveliq(client, code: str) -> dict:
                 "dir": dirn, "lanes": lanes,
                 "detail": detail or None,
                 "reported": (datetime.fromtimestamp(
-                    reported, tz=timezone.utc).isoformat()
+                    reported, tz=UTC).isoformat()
                     if isinstance(reported, (int, float)) and reported
                     else None)})
         else:
