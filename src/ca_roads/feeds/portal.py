@@ -51,6 +51,23 @@ def _float(value) -> float | None:
     return None if f in _SENTINELS else f
 
 
+def _int(value) -> int | None:
+    f = _float(value)
+    return int(f) if f is not None else None
+
+
+# NTCIP 1204 essPrecipSituation -> short human text. 1 (other),
+# 2 (unknown) and 3 (no precipitation) stay None: only actual weather
+# is worth a line in the popup.
+_PRECIP_SITUATION = {
+    4: "light precipitation", 5: "moderate precipitation",
+    6: "heavy precipitation", 7: "light snow", 8: "moderate snow",
+    9: "heavy snow", 10: "light rain", 11: "moderate rain",
+    12: "heavy rain", 13: "light freezing rain",
+    14: "moderate freezing rain", 15: "heavy freezing rain",
+}
+
+
 def _ntcip(value, scale: float, limit: float) -> float | None:
     """Convert a tenths-unit NTCIP value; drop sentinels and absurdities."""
     f = _float(value)
@@ -157,6 +174,12 @@ def parse_rwis(payload: bytes, district: int) -> list[RwisStation]:
             wind_gust_mph=_ntcip(wind.get("essMaxWindGustSpeed"), 0.2237, 200),
             visibility_m=_ntcip(vis.get("essVisibility"), 0.1, 100_000),
             precip_rate=_float(precip.get("essPrecipRate")),
+            # Direction is whole degrees (361 = missing, caught by the
+            # limit); humidity is whole percent (101 = missing).
+            wind_dir_deg=_ntcip(wind.get("essAvgWindDirection"), 1.0, 360),
+            humidity_pct=_ntcip(precip.get("essRelativeHumidity"), 1.0, 100),
+            precip=_PRECIP_SITUATION.get(
+                _int(precip.get("essPrecipSituation"))),
         ))
     return stations
 

@@ -497,11 +497,18 @@ async def test_ut_travel_iq_full_coverage(monkeypatch):
     monkeypatch.setenv("UT511_API_KEY", "k")
     events = [{"ID": "1", "EventType": "accidentsAndIncidents",
                "EventSubType": "crash", "RoadwayName": "I-15",
-               "Description": "Crash near 600 N", "LanesAffected": "1 Lane",
+               "Description": "Crash on I-15 near 600 N. "
+                              "Start time: 1/2/2026 8:00 AM.",
+               "Comment": "Left lane blocked",
+               "DirectionOfTravel": "Northbound",
+               "Reported": 1767340800, "LanesAffected": "1 Lane",
                "Latitude": "40.78", "Longitude": "-111.9"},
               {"ID": "2", "EventType": "roadwork", "RoadwayName": "SR-30",
+               "EventSubType": "roadMaintenanceOperations",
                "Description": "Resurfacing",
+               "DirectionOfTravel": "Unknown",
                "LanesAffected": "All Lanes Closed",
+               "PlannedEndDate": 4102444800,
                "Latitude": "41.75", "Longitude": "-111.98"}]
     cams = [{"Id": "9", "Location": "I-15 @ 600 N", "Roadway": "I-15",
              "Direction": "North", "Latitude": "40.78",
@@ -517,6 +524,8 @@ async def test_ut_travel_iq_full_coverage(monkeypatch):
               "Latitude": "40.6", "Longitude": "-111.9"}]
     wx = [{"Id": "w1", "StationName": "I-15 @ 6200 S",
            "AirTemperature": "99.2", "WindSpeedAvg": "9.28",
+           "WindGust": "14.1", "WindDirection": "NW",
+           "RelativeHumidity": "22",
            "SurfaceStatus": "Dry", "Latitude": "40.63",
            "Longitude": "-111.9"}]
     with respx.mock:
@@ -533,8 +542,20 @@ async def test_ut_travel_iq_full_coverage(monkeypatch):
     kinds = sorted(m["kind"] for m in out["markers"])
     assert kinds == ["camera", "incident", "lane_closure", "rwis",
                      "sign", "sign"]
+    inc = next(m for m in out["markers"] if m["kind"] == "incident")
+    # Structured fields the redesigned popups render: the templated
+    # Description tail is stripped, Comment wins as the detail line.
+    assert inc["location"] == "I-15 near 600 N"
+    assert inc["dir"] == "Northbound"
+    assert inc["lanes"] == "1 Lane"
+    assert inc["detail"] == "Left lane blocked"
+    assert inc["reported"].startswith("2026-01-02")
     clo = next(m for m in out["markers"] if m["kind"] == "lane_closure")
     assert clo["cls"] == "full-roadway"
+    assert clo["dir"] is None          # "Unknown" is not a direction
+    assert clo["lanes"] == "All Lanes Closed"
+    assert clo["work"] == "roadMaintenanceOperations"
+    assert clo["until"] == 4102444800
     live = next(m for m in out["markers"]
                 if m["kind"] == "sign" and not m.get("blank"))
     # \n splits lines; the tab column flattens to a space.
@@ -544,6 +565,12 @@ async def test_ut_travel_iq_full_coverage(monkeypatch):
     assert idle["message"] == ""
     wxm = next(m for m in out["markers"] if m["kind"] == "rwis")
     assert wxm["air_c"] == 37.3 and wxm["surface"] == "Dry"
+    # Average speed is "wind" (the old code mislabeled it as gust);
+    # NV-style Wind/WindGust and UT-style WindSpeedAvg both map in.
+    assert wxm["wind"] == 9.28
+    assert wxm["gust"] == 14.1
+    assert wxm["wind_dir"] == "NW"
+    assert wxm["rh"] == 22
     # The keyed feed supersedes the WZDx-only Utah feed.
     assert states._wzdx_superseded("ut") is True
     monkeypatch.delenv("UT511_API_KEY")

@@ -247,6 +247,83 @@ aside { background:var(--card); border-right:1px solid var(--line);
   color:var(--sky); background:none; border:1px solid var(--line);
   border-radius:7px; padding:4px 10px; cursor:pointer }
 .pop .detbtn:hover { border-color:var(--sky) }
+/* ============ v2 popup card (the 2026-07 redesign) ============
+   Neutral slate scale, 4px spacing grid, one accent per kind used
+   only in the header chip and left rail, 11px uppercase meta. */
+.p2 { font:13.5px/1.5 Inter, system-ui, sans-serif; color:#0f172a;
+  border-left:3px solid var(--acc, #64748b); padding-left:11px }
+.p2 .hd { display:flex; align-items:center; gap:7px; margin-bottom:3px }
+.p2 .kchip { font:700 10px Inter; letter-spacing:.7px;
+  text-transform:uppercase; color:var(--acc); display:flex;
+  align-items:center; gap:5px }
+.p2 .kchip i { width:8px; height:8px; border-radius:99px;
+  background:var(--acc); display:inline-block }
+.p2 .ago { margin-left:auto; font:600 11px Inter; color:#64748b;
+  white-space:nowrap }
+.p2 h4 { margin:0 0 1px; font:650 15.5px Inter; letter-spacing:-.01em }
+.p2 .sub { color:#475569; font-size:13px; margin-bottom:2px }
+.p2 .body { margin:6px 0 0; color:#1e293b }
+.p2 .body.gloss { color:#475569; font-size:12.5px }
+.p2 .facts { margin:8px 0 0; display:grid; gap:3px }
+.p2 .fact { display:flex; gap:8px; font-size:12.5px }
+.p2 .fact b { flex:none; width:74px; font-weight:600; color:#64748b }
+.p2 .fact span { color:#0f172a }
+/* Footer items each get their own line; the Source line always names
+   where the data came from. No middot separators anywhere. */
+.p2 .foot { margin-top:9px; padding-top:7px; border-top:1px solid #e2e8f0;
+  font-size:11.5px; color:#64748b; line-height:1.5 }
+.p2 .foot em { font-style:normal; display:block }
+.p2 .warnline { margin-top:6px; font:600 12.5px Inter; color:#b91c1c }
+/* Schedule: a quiet panel whose first line answers the question a
+   driver actually has ("when is this over?") in words, no symbols. */
+.p2 .sched { margin-top:8px; background:#f8fafc; border:1px solid #e2e8f0;
+  border-radius:8px; padding:7px 11px; font-size:12.5px; line-height:1.5 }
+.p2 .sched b { display:block; font-weight:650; color:#0f172a }
+.p2 .sched span { color:#64748b }
+.p2 .sched .tzl { display:block; margin-top:5px; padding-top:5px;
+  border-top:1px dashed #e2e8f0; color:#475569; font-size:12px }
+.p2 .detbtn { margin-top:8px; display:inline-block; font:600 12px Inter;
+  color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe;
+  border-radius:7px; padding:5px 10px; cursor:pointer }
+.p2 img { border-radius:8px; margin-top:6px; max-width:100% }
+.p2 .cmsboard { background:#161613; border-radius:9px; padding:10px 12px;
+  margin-top:7px; text-align:center }
+.p2 .cmsboard span { display:block; font:700 .8rem/1.6 'Courier New',
+  ui-monospace, monospace; color:#ffb400; letter-spacing:1.6px;
+  text-transform:uppercase; white-space:nowrap }
+.p2 .camnote { margin-top:6px; font-size:12px; line-height:1.45;
+  color:#64748b }
+.p2 .rleg { margin-top:8px; border:1px solid #e2e8f0; border-radius:8px;
+  overflow:hidden }
+.p2 .rleg .rrow { display:grid; grid-template-columns:34px 1fr; gap:8px;
+  padding:7px 10px; font-size:12px; line-height:1.45; color:#64748b;
+  border-top:1px solid #eef2f7 }
+.p2 .rleg .rrow:first-child { border-top:0 }
+.p2 .rleg .rrow b { color:#334155; font-size:12px }
+.p2 .mchip { font:700 10px Inter; letter-spacing:.6px;
+  text-transform:uppercase; border-radius:99px; padding:2px 8px;
+  background:#e2e8f0; color:#475569; margin-left:auto }
+.p2 .mchip.live { background:#dcfce7; color:#15803d }
+.p2 .hd .mchip + .ago { margin-left:8px }
+/* Dispatch log: time as an anchor column, the plain-language reading
+   directly under the raw entry (always on). */
+.p2 .dets { max-height:280px; overflow-y:auto; margin-top:4px }
+.p2 .lg { margin-top:8px; border-top:1px solid #e2e8f0 }
+.p2 .lg h5 { margin:9px 0 4px; font:700 10.5px Inter; letter-spacing:.6px;
+  text-transform:uppercase; color:#64748b }
+.p2 .lgrow { display:grid; grid-template-columns:64px 1fr; gap:10px;
+  padding:4px 0; border-top:1px solid #f1f5f9; font-size:12.5px }
+.p2 .lgrow time { font:600 11.5px Inter; color:#475569;
+  white-space:nowrap; padding-top:1px }
+.p2 .lgrow .raw { color:#0f172a }
+.p2 .lgrow .xpl { color:#0e7490; font-size:12px; margin-top:1px }
+.p2 .lgkey { font-size:11px; color:#94a3b8; margin:0 0 5px;
+  line-height:1.4 }
+.p2 .urow { display:grid; grid-template-columns:52px 1fr; gap:10px;
+  padding:5px 0; border-top:1px solid #f1f5f9; font-size:12.5px;
+  line-height:1.5 }
+.p2 .urow b { font:600 11.5px Inter; color:#475569; padding-top:1px }
+.p2 .fact svg.cmp { vertical-align:-3px; margin-right:5px }
 /* Toll corridor popup: compact card that expands to the rate table;
    hovering a row highlights that stretch on the map. */
 .tpop { font-size:.92rem }
@@ -639,9 +716,9 @@ aside { background:var(--card); border-right:1px solid var(--line);
       measured with cookieless Cloudflare Web Analytics.
       Map tiles come from CARTO; the route preview and place lookup use the
       OSRM, Valhalla, Nominatim, and Photon public OpenStreetMap services,
-      which see the coordinates involved. ·
-      <a href="/privacy">Privacy</a> ·
-      <a href="/terms">Terms</a> ·
+      which see the coordinates involved.
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
       <a href="https://github.com/nicglazkov/commutescout">GitHub</a>
     </p>
   </aside>
@@ -1132,9 +1209,9 @@ ensureMap();
     put('k-cam', s.cameras); put('k-st', s.states);
     if (s.sources && s.states) {
       document.getElementById('feedsok').textContent =
-        'live from ' + s.sources + ' sources · ' + s.states + ' states' +
+        'live from ' + s.sources + ' sources in ' + s.states + ' states' +
         (s.warm_total && s.warm_ready < s.warm_total
-          ? ' · warming ' + s.warm_ready + '/' + s.warm_total : '');
+          ? ', warming ' + s.warm_ready + '/' + s.warm_total : '');
     }
     if (s.warm_total && s.warm_ready < s.warm_total && attempt < 40) {
       setTimeout(() => pollStats(attempt + 1), 8000);
@@ -1143,7 +1220,7 @@ ensureMap();
 })(0);
 
 fetch('/health').then(r => r.json()).then(d => {
-  if (d.version) document.getElementById('ver').textContent = ' · v' + d.version;
+  if (d.version) document.getElementById('ver').textContent = ' v' + d.version;
 }).catch(() => {});
 
 document.querySelectorAll('.examples button').forEach(b => {
@@ -1340,20 +1417,23 @@ function popHead(group, title) {
     '"></i>' + POP_LABEL[group] + '</div><div class="t">' + esc(title) + '</div>';
 }
 // CHP dispatch codes, decoded for people who don't speak scanner.
+// Copy spec: warnings lead with the hazard noun, "can" for
+// possibility (never "may"), reported-frame preserved, max 3
+// sentences per string.
 const CHP_CODES = [
-  [/^1125/, 'A traffic hazard is on or near the roadway - debris, an animal, or a stalled vehicle. These usually clear quickly; expect brief slowing.'],
-  [/^1179/, 'Collision with an ambulance dispatched. Injuries are reported; lanes may be blocked while crews work the scene.'],
-  [/^1181/, 'Collision with minor injuries reported. Expect temporary lane blockage and slowing while CHP and medical clear the scene.'],
-  [/^1182/, 'Collision with property damage only - nobody reported hurt. Vehicles may be on the shoulder; watch for rubbernecking slowdowns.'],
+  [/^1125/, 'A traffic hazard is on or near the road: debris, an animal, or a stalled vehicle. These usually clear quickly. Expect brief slowing.'],
+  [/^1179/, 'Collision with injuries. An ambulance is on the way. Lanes can be blocked while crews work.'],
+  [/^1181/, 'Collision with minor injuries reported. Expect brief lane blockage while crews clear the scene.'],
+  [/^1182/, 'Collision, property damage only. No injuries are reported. Vehicles can be on the shoulder.'],
   [/^1183/, 'Collision reported, details still coming in. CHP has the call but no injury assessment yet.'],
-  [/^20001/, 'Hit and run with injuries (felony). CHP is investigating; the scene may block lanes.'],
+  [/^20001/, 'Hit and run with injuries (felony). CHP is investigating. The scene can block lanes.'],
   [/^20002/, 'Hit and run, property damage only. Usually a short stop on the shoulder.'],
-  [/^23114/, 'A load has spilled from a vehicle onto the roadway. Lanes may close briefly for cleanup.'],
+  [/^23114/, 'A load has spilled from a vehicle onto the road. Lanes can close briefly for cleanup.'],
   [/^1166/, 'A traffic signal is defective. Treat the intersection as an all-way stop.'],
   [/SIG/i, 'A SIG Alert: a major incident expected to block lanes for 30 minutes or more. Avoid the area if you can.'],
-  [/fire/i, 'A fire reported on or near the roadway. Smoke may cut visibility; crews and closures possible.'],
-  [/ped/i, 'A pedestrian is involved or on the roadway. Slow down and give the scene room.'],
-  [/animal/i, 'A live or struck animal on the roadway. Brief slowing likely.'],
+  [/fire/i, 'A fire reported on or near the road. Smoke can cut visibility. Expect crews and closures.'],
+  [/ped/i, 'A pedestrian is involved or on the road. Slow down and give the scene room.'],
+  [/animal/i, 'A live or struck animal on the road. Expect brief slowing.'],
 ];
 function chpGloss(type) {
   for (const [re, text] of CHP_CODES) {
@@ -1363,47 +1443,139 @@ function chpGloss(type) {
 }
 // Dispatch-log shorthand, decoded deterministically (no AI): only terms
 // we are confident about get translated; everything else stays verbatim.
+// Order matters: multi-word phrases first, then hyphenated codes and
+// unit callsigns, then bare codes (with lookarounds so codes embedded
+// in hyphenated labels or route numbers stay put), then word tokens.
+// Built from repeated sweeps of live logs (30 logs per pass).
 const CHP_TERMS = [
-  [/\b1125\b/g, 'traffic hazard'], [/\b1141\b/g, 'ambulance'],
-  [/\b1144\b/g, 'fatality'], [/\b1166\b/g, 'defective signal'],
-  [/\b1179\b/g, 'collision, ambulance en route'],
-  [/\b1180\b/g, 'collision, major injuries'],
-  [/\b1181\b/g, 'collision, minor injuries'],
-  [/\b1182\b/g, 'collision, property damage'],
-  [/\b1183\b/g, 'collision, unknown injuries'],
-  [/\b1185\b/g, 'tow requested'], [/\b1186\b/g, 'operator alerted'],
-  [/\b1097\b/g, 'unit on scene'], [/\b97\b/g, 'on scene'],
-  [/\b1098\b/g, 'assignment complete'], [/\b1039\b/g, 'notified'],
-  [/\b1022\b/g, 'disregard'], [/\b23103\b/g, 'reckless driving'],
-  [/\b23114\b/g, 'spilled load'], [/\b20001\b/g, 'hit and run, injuries'],
-  [/\b20002\b/g, 'hit and run, no injuries'],
+  // Multi-word phrases before their component tokens.
+  [/\bNEG 180\b/g, 'no major injuries'],
+  [/\bNEG 144\b/g, 'no fatalities'],
+  [/\bCODE 4\b/g, 'no further help needed'],
+  [/\bCODE 3\b/g, 'running lights and siren'],
+  [/\bVERBAL 415\b/g, 'verbal dispute'],
+  [/\bSOLO VEH\b/g, 'single vehicle'],
+  [/\bO\/TURNED\b/g, 'overturned'],
+  [/\bI\/S\b/g, 'intersection'],
+  // Hyphenated 11-code variants radio chatter uses. These MUST run
+  // before the callsign rule, which would read "11-10" as a unit.
+  [/\b11-10\b/g, 'take a report'],
+  [/\b11-24\b/g, 'abandoned vehicle'],
+  [/\b11-25\b/g, 'traffic hazard'],
+  [/\b11-41\b/g, 'ambulance requested'],
+  [/\b11-44\b/g, 'fatality'],
+  [/\b11-79\b/g, 'collision, ambulance en route'],
+  [/\b11-80\b/g, 'collision with major injuries'],
+  [/\b11-81\b/g, 'collision with minor injuries'],
+  [/\b11-82\b/g, 'collision, property damage only'],
+  [/\b11-83\b/g, 'collision, injuries unknown'],
+  [/\b11-85\b/g, 'tow truck requested'],
+  [/\b11-98\b/g, 'meet the officer'],
+  // Unit callsigns (A62-505 / 612-108 / 18-R1 shapes). The (?!-) tail
+  // keeps phone numbers out: their next segment starts with a hyphen.
+  [/\b([A-Z]\d{2,3}-\d{2,4}[A-Z]?|\d{2,3}-R?\d{1,3}[A-Z]?)\b(?!-)/g,
+   'unit $1'],
+  // Bare codes. Lookarounds keep codes inside hyphenated official
+  // labels ("1179-Trfc Collision-1141 Enrt") and route numbers
+  // (SR-180) verbatim.
+  [/(?<![-\d])1185R(?![-\d])/g, 'rotation tow requested'],
+  [/(?<![-\d])1185S(?![-\d])/g, 'tow trucks'],
+  [/(?<![-\d])1185(?![-\dA-Z])/g, 'tow truck'],
+  [/(?<![-\d])1186(?![-\d])/g, 'operator alerted'],
+  [/(?<![-\d])1179(?![-\d])/g, 'collision, ambulance en route'],
+  [/(?<![-\d])1180(?![-\d])/g, 'collision with major injuries'],
+  [/(?<![-\d])1181(?![-\d])/g, 'collision with minor injuries'],
+  [/(?<![-\d])1182(?![-\d])/g, 'collision, property damage only'],
+  [/(?<![-\d])1183(?![-\d])/g, 'collision, injuries unknown'],
+  [/(?<![-\d])1141(?![-\d])/g, 'ambulance requested'],
+  [/(?<![-\d])1144(?![-\d])/g, 'fatal collision'],
+  [/(?<![-\d])1124(?![-\d])/g, 'abandoned vehicle'],
+  [/(?<![-\d])1125A(?![-\d])/g, 'animal on the road'],
+  [/(?<![-\d])1125(?![-\dA])/g, 'traffic hazard'],
+  [/(?<![-\d])1166(?![-\d])/g, 'defective signal'],
+  [/(?<![-\d])1097(?![-\d])/g, 'unit on scene'],
+  [/(?<![-\d])1098(?![-\d])/g, 'assignment complete'],
+  [/(?<![-\d])1022(?![-\d])/g, 'disregard'],
+  [/(?<![-\d])1023(?![-\d])/g, 'stand by'],
+  [/(?<![-\d])1039(?![-\d])/g, 'notified'],
+  [/(?<![-\d])1021(?![-\d])/g, 'phone call'],
+  [/(?<![-\d])23103(?![-\d])/g, 'reckless driving'],
+  [/(?<![-\d])23114(?![-\d])/g, 'spilled load'],
+  [/(?<![-\d])20001(?![-\d])/g, 'felony hit and run'],
+  [/(?<![-\d])20002(?![-\d])/g, 'hit and run, property damage'],
+  [/(?<![-\d])23152(?![-\d])/g, 'possible DUI'],
+  [/(?<![-\d])22350(?![-\d])/g, 'unsafe speed'],
+  [/(?<![-\d])5150(?![-\d])/g, 'mental health hold'],
+  // Radio chatter drops the leading 11 from injury codes.
+  [/(?<![-\d])\b180\b(?![-\d])/g, 'major injuries'],
+  [/(?<![-\d])\b144\b(?![-\d])/g, 'fatality'],
+  [/(?<![-\d])\b415\b(?![-\d])/g, 'a dispute'],
+  [/\b97\b/g, 'on scene'],
+  // Word tokens.
   [/\bTC\b/g, 'collision'], [/\bVEHS\b/g, 'vehicles'], [/\bVEH\b/g, 'vehicle'],
   [/\bPED\b/g, 'pedestrian'], [/\bMC\b/g, 'motorcycle'],
   [/\bTRLR\b/g, 'trailer'], [/\bBLKG\b/g, 'blocking'],
-  [/\bO\/TURNED\b/g, 'overturned'], [/\bENRT\b/g, 'en route'],
-  [/\bNEG\b/g, 'no'], [/\bPOSS\b/g, 'possible'], [/\bUNK\b/g, 'unknown'],
+  [/\bENRT\b/g, 'en route'],
+  [/\bNEG\b/g, 'no'], [/\bPOSS\b/g, 'possible'], [/\bUNKN?\b/g, 'unknown'],
   [/\bRHS\b/g, 'right-hand shoulder'], [/\bLHS\b/g, 'left-hand shoulder'],
   [/\bCD\b/g, 'center divider'], [/\bOFR\b/g, 'off-ramp'],
   [/\bONR\b/g, 'on-ramp'], [/\bJSO\b/g, 'just south of'],
   [/\bJNO\b/g, 'just north of'], [/\bJEO\b/g, 'just east of'],
-  [/\bJWO\b/g, 'just west of'], [/\bNB\b/g, 'northbound'],
+  [/\bJWO\b/g, 'just west of'], [/\bIFO\b/g, 'in front of'],
+  [/\bNB\b/g, 'northbound'],
   [/\bSB\b/g, 'southbound'], [/\bEB\b/g, 'eastbound'],
   [/\bWB\b/g, 'westbound'], [/\bLNS\b/g, 'lanes'], [/\bLN\b/g, 'lane'],
-  [/\bPK\b/g, 'pickup'], [/\bTK\b/g, 'truck'], [/\bSD\b/g, 'sedan'],
-  [/\bFSP\b/g, 'Freeway Service Patrol'], [/\bI\/S\b/g, 'intersection'],
+  [/\bPK\b/g, 'pickup'], [/\bTK\b/g, 'truck'], [/\bTRK\b/g, 'truck'],
+  [/\bSD\b/g, 'sedan'], [/\bSEMI\b/g, 'semi-truck'],
+  [/\bFSP\b/g, 'Freeway Service Patrol'],
+  [/\bXFER\b/g, 'transferred to'],
+  [/\bADVSD\b/g, 'advised'], [/\bADVD\b/g, 'advised'],
+  [/\bADV\b/g, 'advised'], [/\bLL\b/g, 'landline call'],
+  [/\bREQ\b/g, 'requesting'], [/\bRESP\b/g, 'respond'],
+  [/\bINJS\b/g, 'injuries'], [/\bINJ\b/g, 'injuries'],
+  [/\bDMG\b/g, 'damage'], [/\bCONT\b/g, 'continued'],
+  [/\bRDWY\b/g, 'road'], [/\bDRVR\b/g, 'driver'],
+  [/\bDESC\b/g, 'description'], [/\bVICT\b/g, 'victim'],
+  [/\bSUSP\b/g, 'suspect'], [/\bINVLVD\b/g, 'involved'],
+  [/\bINVLD\b/g, 'involved'],
+  [/\bSV\b/g, 'the subject vehicle'], [/\bVV\b/g, 'the victim vehicle'],
+  [/\bWW\b/g, 'the wrong way'], [/\bXRAY\b/g, 'a female'],
+  [/\bOO\b/g, 'out of'],
+  [/\bUTL\b/g, 'unable to locate'], [/\bGOA\b/g, 'gone on arrival'],
+  [/\bHBD\b/g, 'had been drinking'], [/\bCDF\b/g, 'CAL FIRE'],
+  [/\bFB\b/g, 'flatbed'], [/\bCR ?(\d+)\b/g, 'County Road $1'],
+  [/\bW\//g, 'with '], [/\bFRM\b/g, 'from'],
+  [/\bRPS\b/g, "the caller's"], [/\bRP\b/g, 'the caller'],
+  [/\bTT\b/g, 'tow truck'], [/\bPLS\b/g, 'please'],
+  [/\bAPPRO[XZ]\b/g, 'approximately'],
+  [/\bPTYS\b/g, 'people'], [/\bPRTYS\b/g, 'people'],
+  [/\bPTY\b/g, 'person'], [/\bPRTY\b/g, 'person'],
+  [/\bRD\b/g, 'Road'],
+  // Vehicle makes and colors, as CHP abbreviates them.
   [/\bTOYT\b/g, 'Toyota'], [/\bHOND\b/g, 'Honda'], [/\bCHEV\b/g, 'Chevrolet'],
   [/\bNISS\b/g, 'Nissan'], [/\bFORD\b/g, 'Ford'], [/\bDODG\b/g, 'Dodge'],
   [/\bSUBA\b/g, 'Subaru'], [/\bHYUN\b/g, 'Hyundai'], [/\bVOLK\b/g, 'Volkswagen'],
   [/\bMERZ\b/g, 'Mercedes'], [/\bTESL\b/g, 'Tesla'], [/\bMAZD\b/g, 'Mazda'],
   [/\bLEXS\b/g, 'Lexus'], [/\bTOYO\b/g, 'Toyota'], [/\bVOLV\b/g, 'Volvo'],
+  [/\bToyota TAC\b/g, 'Toyota Tacoma'], [/\bToyota CAM\b/g, 'Toyota Camry'],
   [/\bWHI\b/g, 'white'], [/\bBLK\b/g, 'black'], [/\bGRY\b/g, 'gray'],
   [/\bSIL\b/g, 'silver'], [/\bBLU\b/g, 'blue'], [/\bGRN\b/g, 'green'],
   [/\bYEL\b/g, 'yellow'], [/\bORG\b/g, 'orange'], [/\bBRO\b/g, 'brown'],
 ];
 function explainLine(text) {
-  let out = text;
+  // Official hyphenated labels ("1179-Trfc Collision-1141 Enrt") must
+  // survive verbatim: translating codes inside them garbles the
+  // label, so mask them before translating and restore after.
+  const keep = [];
+  const masked = (text || '').replace(/\d{4}[A-Z]?-\S[^,\[\]]*/g, (s) => {
+    keep.push(s);
+    return '\u0001' + (keep.length - 1) + '\u0001';
+  });
+  let out = masked;
   for (const [re, plain] of CHP_TERMS) out = out.replace(re, plain);
-  return out === text ? null : out;
+  const changed = out !== masked;
+  out = out.replace(/\u0001(\d+)\u0001/g, (x, i) => keep[+i]);
+  return changed ? out : null;
 }
 function fmtNowDay() {
   return new Date().toLocaleString([], {
@@ -1440,29 +1612,240 @@ function histBlock(bits) {
   return keep.length ? '<div class="hist">' + keep.join('<br>') + '</div>' : '';
 }
 
+// ============ v2 popup card system (2026-07 redesign) ============
+// One accent color per kind, used only in the header chip and rail.
+const ACC = { inc: '#c9611a', clo: '#a02c2c', clo_full: '#7f1d1d',
+  chain: '#2b6cb0', rwis: '#2f9e6e', fire: '#d97706', camera: '#2f81f7',
+  sign: '#a16207' };
+const humanize = (t) => {
+  if (!t) return null;
+  let s = String(t).replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (s === s.toUpperCase()) s = s.toLowerCase();
+  else s = s.charAt(0).toLowerCase() + s.slice(1);
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+// ALL-CAPS operator dumps ("CLOSED DUE TO X//USE Y/ STAY ALERT") read
+// as shouting: sentence-case them and split the slash chains into
+// real sentences. Route numbers stay caps.
+function shapeShout(t) {
+  if (!t) return t;
+  const letters = t.replace(/[^A-Za-z]/g, '');
+  const caps = letters.replace(/[^A-Z]/g, '');
+  if (!letters.length || caps.length / letters.length < 0.8) return t;
+  return t.split(/\s*\/{1,2}\s*/).filter(Boolean).map((seg) => {
+    seg = seg.toLowerCase().trim();
+    seg = seg.replace(/\b(us|i|sr|nv|ca|az|ut|wa|or|id|co|nm|mt|wy|nd|sd)-?(\d+[a-z]*)\b/g,
+      (x, p, n) => p.toUpperCase() + '-' + n.toUpperCase());
+    return seg.charAt(0).toUpperCase() + seg.slice(1) +
+      (/[.!?]$/.test(seg) ? '' : '.');
+  }).join(' ');
+}
+// "US 89: Emergency Maintenance, NB State St..." -> road + rest
+const splitRoad = (label) => {
+  const m = /^([A-Z]{1,3}[- ]?\d+[A-Z]?(?:\/[A-Z0-9-]+)?)\s*[:-]\s*(.+)$/.exec(label || '');
+  return m ? { road: m[1], rest: m[2] } : { road: null, rest: label };
+};
+function v2(acc, kindLabel, ago, title, sub, bodyRows, facts, foot, extraHtml) {
+  return '<div class="p2" style="--acc:' + acc + '">' +
+    '<div class="hd"><span class="kchip"><i></i>' + kindLabel + '</span>' +
+    (ago ? '<span class="ago">' + ago + '</span>' : '') + '</div>' +
+    (title ? '<h4>' + title + '</h4>' : '') +
+    (sub ? '<div class="sub">' + sub + '</div>' : '') +
+    (bodyRows || []).filter(Boolean).map((b) =>
+      '<div class="body' + (b.gloss ? ' gloss' : '') + '">' +
+      (b.text || b) + '</div>').join('') +
+    ((facts || []).filter((f) => f && f[1]).length
+      ? '<div class="facts">' + facts.filter((f) => f && f[1]).map((f) =>
+        '<div class="fact"><b>' + f[0] + '</b><span>' + f[1] + '</span></div>')
+        .join('') + '</div>' : '') +
+    (extraHtml || '') +
+    ((foot || []).filter(Boolean).length
+      ? '<div class="foot">' + foot.filter(Boolean).map((x) =>
+        '<em>' + x + '</em>').join('') + '</div>' : '') +
+    '</div>';
+}
+// Times render in the ROAD's timezone; when that differs from the
+// viewer's, the schedule panel adds an auto-converted line. Every
+// marker source maps to its state's zone (states that span zones get
+// the zone covering most of their road network).
+const VIEWER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const TZ_BY_SRC = {
+  'WSDOT': 'America/Los_Angeles',
+  'Oregon DOT (TripCheck)': 'America/Los_Angeles',
+  'NDOT': 'America/Los_Angeles',
+  '511.org': 'America/Los_Angeles', 'BATA': 'America/Los_Angeles',
+  'GGB': 'America/Los_Angeles',
+  'Alaska DOT&PF': 'America/Anchorage',
+  'HDOT': 'Pacific/Honolulu',
+  'ITD': 'America/Boise',
+  'UDOT': 'America/Denver', 'CDOT': 'America/Denver',
+  'ADOT': 'America/Phoenix',
+  'WisDOT': 'America/Chicago', 'MnDOT': 'America/Chicago',
+  'KDOT': 'America/Chicago', 'MoDOT': 'America/Chicago',
+  'ODOT (OK)': 'America/Chicago', 'Louisiana DOTD': 'America/Chicago',
+  'City of Austin': 'America/Chicago', 'Iowa DOT': 'America/Chicago',
+  'TravelMidwest (IDOT)': 'America/Chicago',
+  'MDOT Traffic (MS)': 'America/Chicago',
+  'TDOT SmartWay': 'America/Chicago',
+  'ALGO Traffic (ALDOT)': 'America/Chicago',
+  'NTTA': 'America/Chicago', 'HCTRA': 'America/Chicago',
+  'MDOT MiDrive': 'America/Detroit',
+  '511NY': 'America/New_York', 'NJDOT': 'America/New_York',
+  'MDOT SHA': 'America/New_York', 'MDOT CHART': 'America/New_York',
+  'KYTC': 'America/New_York', 'DelDOT': 'America/New_York',
+  'FDOT': 'America/New_York', 'FDOT (WZDx)': 'America/New_York',
+  'NCDOT': 'America/New_York', 'CTDOT': 'America/New_York',
+  'MaineDOT': 'America/New_York', 'NHDOT': 'America/New_York',
+  'VTrans': 'America/New_York', 'VDOT': 'America/New_York',
+  'OHGO': 'America/New_York',
+  'INDOT': 'America/Indiana/Indianapolis',
+};
+// No src = California.
+const roadTz = (m) => (m && TZ_BY_SRC[m.src]) || 'America/Los_Angeles';
+const zoneAbbr = (t, tz) => (new Intl.DateTimeFormat('en-US',
+  { timeZone: tz, timeZoneName: 'short' }).formatToParts(t)
+  .find((p) => p.type === 'timeZoneName') || {}).value || '';
+const sameClock = (t, a, b) =>
+  t.toLocaleString('en-US', { timeZone: a }) ===
+  t.toLocaleString('en-US', { timeZone: b });
+// zoneMode: 0 = no zone, 1 = zone abbreviation, 2 = zone abbreviation
+// plus "(your timezone)" when it matches the viewer's.
+function whenPhrase(epoch, tz, zoneMode) {
+  if (!epoch) return null;
+  tz = tz || 'America/Los_Angeles';
+  const t = new Date(epoch * 1000);
+  const now = new Date();
+  const clock = t.toLocaleTimeString([], {
+    hour: 'numeric', minute: '2-digit', timeZone: tz });
+  const ymd = (d) => d.toLocaleDateString('en-CA', { timeZone: tz });
+  const dayGap = Math.round(
+    (Date.parse(ymd(t)) - Date.parse(ymd(now))) / 86400000);
+  const hr = +t.toLocaleString('en-US', {
+    hour: 'numeric', hour12: false, timeZone: tz });
+  let day;
+  if (dayGap === 0) day = hr >= 18 ? 'tonight' : 'today';
+  else if (dayGap === 1) day = 'tomorrow';
+  else if (dayGap === -1) day = 'yesterday';
+  else day = t.toLocaleDateString([], { weekday: 'long', timeZone: tz })
+    + (Math.abs(dayGap) > 6
+      ? ', ' + t.toLocaleDateString([], { month: 'short', day: 'numeric', timeZone: tz }) : '')
+    + (Math.abs(dayGap) > 300
+      ? ', ' + t.toLocaleDateString([], { year: 'numeric', timeZone: tz }) : '');
+  let s = day + ' at ' + clock;
+  if (zoneMode) {
+    s += ' ' + zoneAbbr(t, tz);
+    if (zoneMode === 2 && sameClock(t, tz, VIEWER_TZ)) s += ' (your timezone)';
+  }
+  return s;
+}
+function spanPhrase(epoch) {
+  if (!epoch) return null;
+  const mins = Math.round(Math.abs(Date.now() / 1000 - epoch) / 60);
+  if (mins < 60) return mins + ' minutes';
+  if (mins < 60 * 36) {
+    const h = Math.round(mins / 60);
+    return 'about ' + h + (h === 1 ? ' hour' : ' hours');
+  }
+  const d = Math.round(mins / 1440);
+  return 'about ' + d + (d === 1 ? ' day' : ' days');
+}
+function schedPanel(m) {
+  // Copy spec: never promote a schedule into an observation. The
+  // "scheduled to end" frame survives every state; hedges only from
+  // the approved list; "reopen"/"in effect"/"may" are banned.
+  const now = Date.now() / 1000;
+  const agency = m.src ? esc(m.src) : 'Caltrans';
+  const tz = roadTz(m);
+  // The conversion renders on its own line, and only when the
+  // viewer's timezone actually differs from the road's.
+  const tzLine = (epoch) => (!epoch
+    || sameClock(new Date(epoch * 1000), tz, VIEWER_TZ)) ? ''
+    : '<span class="tzl">In your timezone: ' +
+      whenPhrase(epoch, VIEWER_TZ, 1) + '.</span>';
+  let head, tail, extra = '';
+  if (m.until && m.until < now) {
+    head = 'Was scheduled to end ' + whenPhrase(m.until, tz, 2);
+    tail = 'That was ' + spanPhrase(m.until) + ' ago. ' +
+      (m.cls === 'full-roadway'
+        ? agency + ' has not reported it open. Assume the road is still closed.'
+        : agency + ' has not reported it clear. Assume the restriction is still there.');
+    extra = tzLine(m.until);
+  } else if (m.until) {
+    head = 'Scheduled to end ' + whenPhrase(m.until, tz, 2);
+    tail = 'That is ' + spanPhrase(m.until) + ' from now.' +
+      (m.since ? ' It started ' + whenPhrase(m.since, tz) + '.' : '');
+    extra = tzLine(m.until);
+  } else {
+    head = 'No scheduled end';
+    // "The road stays closed" is only true for a full closure; a lane
+    // or shoulder restriction gets the accurate weaker claim.
+    tail = (m.cls === 'full-roadway'
+      ? 'The road stays closed until ' + agency + ' reports it open.'
+      : 'The restriction stays until ' + agency + ' reports it clear.') +
+      (m.since ? ' It started ' + whenPhrase(m.since, tz) + '.' : '');
+  }
+  return '<div class="sched"><b>' + head + '</b><span>' + tail +
+    '</span>' + extra + '</div>';
+}
+const CHAIN_LEVELS = [
+  ['R-1', 'Chains or approved snow tires required. Carry chains even with snow tires.'],
+  ['R-2', 'Chains required on every vehicle, except 4WD/AWD with snow tires on all four wheels. Even those must carry chains.'],
+  ['R-3', 'Chains required on every vehicle, no exceptions. Plan for a full closure.'],
+];
+const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+  'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+// Caltrans ships degrees, Travel-IQ ships compass strings: show both
+// the same way.
+const windDirTxt = (d) =>
+  typeof d === 'number' ? COMPASS[Math.round(d / 22.5) % 16] : d;
+const windDirDeg = (d) =>
+  typeof d === 'number' ? d : COMPASS.indexOf(String(d).toUpperCase()) * 22.5;
+// Tiny compass: ring with N tick, needle pointing at the direction
+// the wind comes from (matching the "from the NNE" text).
+const compassSvg = (deg) =>
+  '<svg class="cmp" viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">' +
+  '<circle cx="10" cy="10" r="8.5" fill="none" stroke="#cbd5e1" stroke-width="1.6"/>' +
+  '<rect x="9.4" y="0" width="1.2" height="3" fill="#94a3b8"/>' +
+  '<path d="M10 4.2 L12.4 13 L10 11.4 L7.6 13 Z" fill="#0f766e"' +
+  ' transform="rotate(' + deg + ' 10 10)"/></svg>';
+
 function popupFor(m, g) {
   if (g === 'camera') {
-    let h = popHead(g, m.name || 'Roadside camera') +
-      '<div class="d">' + esc([m.route, m.direction, m.near].filter(Boolean).join(' · ')) + '</div>' +
+    // The media type is the first thing a user should know: a still
+    // that refreshes on open is not the same promise as live video.
+    const chip = m.stream
+      ? '<span class="mchip live">Live video</span>'
+      : '<span class="mchip">Still snapshot</span>';
+    return '<div class="p2" style="--acc:' + ACC.camera + '">' +
+      '<div class="hd"><span class="kchip"><i></i>Camera</span>' + chip + '</div>' +
+      '<h4>' + esc(m.name || 'Roadside camera') + '</h4>' +
+      '<div class="sub">' + esc([[m.route, m.direction].filter(Boolean).join(' '),
+        m.near].filter(Boolean).join(', ')) + '</div>' +
       // no-referrer: some state camera hosts (TravelMidwest) 403 any
       // request carrying a foreign Referer header.
       '<img src="' + encodeURI(m.image) + '?t=' + Date.now() + '" width="300" ' +
       'referrerpolicy="no-referrer" ' +
-      'alt="" onerror="this.replaceWith(document.createTextNode(\'snapshot unavailable right now\'))">';
-    if (m.stream) h += '<a href="' + encodeURI(m.stream) + '" target="_blank" rel="noopener">Open live video stream</a>';
-    return h + '</div>';
+      'alt="" onerror="this.replaceWith(document.createTextNode(\'snapshot unavailable right now\'))">' +
+      (m.stream
+        ? '<div><a class="detbtn" href="' + encodeURI(m.stream) +
+          '" target="_blank" rel="noopener">Watch the live stream</a></div>'
+        : '<div class="camnote">Still image, not video. ' +
+          'A new image loads each time you open this camera.</div>') +
+      '<div class="foot"><em>Source: ' +
+      (m.src ? esc(m.src) + ' camera network' : 'Caltrans CCTV') +
+      '</em></div></div>';
   }
   if (g === 'sign') {
     const lines = (m.lines && m.lines.length)
       ? m.lines : (m.message ? m.message.split(' / ') : []);
-    const body = lines.length
-      ? '<div class="cmsboard">' +
-        lines.map((l) => '<span>' + esc(l) + '</span>').join('') + '</div>'
-      : '<div class="d" style="margin-top:5px">Blank right now - nothing displayed.</div>';
-    return popHead(g, [m.route, m.direction].filter(Boolean).join(' ') || 'Changeable sign') +
-      '<div class="d">' + esc(m.near || '') + '</div>' + body +
-      histBlock([lines.length ? 'Live text as displayed on the sign' : null]) +
-      '</div>';
+    return v2(ACC.sign, 'Message sign', null,
+      esc([m.route, m.direction].filter(Boolean).join(' ') || 'Changeable sign'),
+      esc(m.near || ''),
+      [!lines.length ? { text: 'This sign is blank right now.', gloss: true } : null],
+      [], ['Source: ' + (m.src ? esc(m.src) + ' message signs' : 'Caltrans CMS')],
+      lines.length ? '<div class="cmsboard">' +
+        lines.map((l) => '<span>' + esc(l) + '</span>').join('') + '</div>' : '');
   }
   if (g === 'toll') {
     const money = (v) => '$' + v.toFixed(2).replace(/\.00$/, '');
@@ -1488,11 +1871,16 @@ function popupFor(m, g) {
         : '<div class="tsave">Regular lanes moving freely right now (' +
           m.gp_min + ' min)</div>';
     }
+    // Copy spec: direction first so the driver matches on it before
+    // reading; "may" is banned.
+    const OPP_DIR = { westbound: 'Eastbound', eastbound: 'Westbound',
+      northbound: 'Southbound', southbound: 'Northbound' };
     const dirLine = m.toll_dir
-      ? '<div class="d" style="margin-top:4px"><b>Charged ' +
-        esc(m.toll_dir) + '</b>' +
-        (m.toll_note ? ' (' + esc(m.toll_note) + ')' : '') +
-        '. The other direction is free.</div>'
+      ? '<div class="d" style="margin-top:4px"><b>' +
+        esc(humanize(m.toll_dir)) +
+        (m.toll_note ? ', ' + esc(m.toll_note) : '') + ': toll.</b> ' +
+        esc(OPP_DIR[(m.toll_dir || '').toLowerCase()] || 'The other direction') +
+        ': free.</div>'
       : '';
     const freshness = m.as_of
       ? 'Posted rates, effective ' + esc(m.as_of)
@@ -1505,7 +1893,7 @@ function popupFor(m, g) {
           // instead of pretending it is current.
           return 'Rates from ' + new Date(m.updated).toLocaleString([],
             { weekday: 'short', hour: 'numeric', minute: '2-digit' }) +
-            (req ? '' : ' · lanes may be open to all right now');
+            (req ? '' : '. Lanes can be open to all right now');
         })() : null);
     const rows = entries.map((e, gi) => {
       const head = req
@@ -1521,7 +1909,7 @@ function popupFor(m, g) {
       '<div class="tpop">' +
       '<div class="thead">' + typeChip + liveChip + '</div>' +
       '<div class="trange">' + range +
-      (entries.length > 1 ? ' <small>now · ' + entries.length +
+      (entries.length > 1 ? ' <small>now, ' + entries.length +
         ' entry points</small>' : '') + '</div>' + dirLine + save +
       (rows ? '<details open><summary>All rates' +
         (entries.length > 1 ? ' (hover to see on the map)' : '') +
@@ -1537,82 +1925,144 @@ function popupFor(m, g) {
       '</div></div>';
   }
   if (g === 'rwis') {
-    const bits = [];
-    if (m.air_c != null) bits.push('air ' + Math.round(m.air_c * 9 / 5 + 32) + '&deg;F');
-    if (m.pave_c != null) bits.push('pavement ' + Math.round(m.pave_c * 9 / 5 + 32) + '&deg;F');
-    if (m.wind != null) bits.push('wind ' + Math.round(m.wind) + ' mph');
-    if (m.gust != null) bits.push('gusts ' + Math.round(m.gust) + ' mph');
-    if (m.vis_m != null && m.vis_m < 5000) bits.push('visibility ' + Math.round(m.vis_m) + ' m');
-    return popHead(g, m.station || m.name || 'Weather station') +
-      '<div class="d">' + esc(m.route || '') + '</div>' +
-      '<div class="d">' + (bits.join(' · ') || 'no current readings') + '</div></div>';
+    const f = (c) => Math.round(c * 9 / 5 + 32) + '&deg;F';
+    // A direction on calm wind ("0 mph from the E") is noise.
+    const dir = (m.wind_dir != null && !(m.wind != null && Math.round(m.wind) < 1))
+      ? esc(windDirTxt(m.wind_dir)) : null;
+    const gustTail = m.gust != null
+      ? ', gusts ' + Math.round(m.gust) + ' mph' : '';
+    const facts = [
+      m.air_c != null ? ['Air', f(m.air_c)] : null,
+      m.pave_c != null ? ['Pavement', f(m.pave_c)] : null,
+      m.wind != null
+        ? ['Wind', (dir ? compassSvg(windDirDeg(m.wind_dir)) : '') +
+            Math.round(m.wind) + ' mph' +
+            (dir ? ' from the ' + dir : '') + gustTail]
+        : (m.gust != null
+          ? ['Wind', (dir ? compassSvg(windDirDeg(m.wind_dir)) : '') +
+              'gusts ' + Math.round(m.gust) + ' mph' +
+              (dir ? ' from the ' + dir : '')] : null),
+      m.rh != null ? ['Humidity', Math.round(m.rh) + '%'] : null,
+      m.precip ? ['Precip', humanize(m.precip)] : null,
+      m.surface ? ['Surface', esc(m.surface)] : null,
+      m.vis_m != null && m.vis_m < 5000
+        ? ['Visibility', Math.round(m.vis_m) + ' m'] : null,
+    ];
+    const none = !facts.some(Boolean);
+    return v2(ACC.rwis, 'Road weather', null,
+      esc(m.station || m.name || 'Weather station'),
+      esc(m.route || ''),
+      [none ? { text: 'This station is online. It has no readings right now.', gloss: true } : null],
+      facts, ['Source: ' + (m.src ? esc(m.src) + ' weather station'
+        : 'Caltrans roadside weather station')]);
   }
   if (g && g.startsWith('inc_')) {
-    const ago = agoTxt(m.reported);
+    const parts = splitRoad(m.label || '');
+    const title = humanize(m.type) || 'Incident';
+    const sub = m.location || parts.road || null;
+    const body = [];
     const gloss = chpGloss(m.type);
-    return popHead(g, m.type || 'Incident') +
-      '<div class="d">' + esc(m.location || '') + '</div>' +
-      (gloss ? '<div class="d" style="margin-top:5px">' + gloss + '</div>' : '') +
-      histBlock([
-        ago ? 'Reported ' + ago : (m.src ? 'Live report' : 'Live CHP call'),
-        m.dir ? 'Affects the ' + m.dir + ' side'
-              : (m.src ? null : 'Direction not stated in the CHP log'),
-        m.src ? 'Reported by ' + esc(m.src)
-              : (m.area ? 'Dispatched by CHP ' + esc(m.area) : null),
-      ]) +
-      (m.id && m.log_n
-        ? '<button type="button" class="detbtn" data-inc="' + esc(m.id) +
-          '">Show dispatch log (' + m.log_n + ')</button><div class="dets"></div>'
-        : '') +
-      '</div>';
+    // Out-of-state feeds ship a clean `detail` sentence; the templated
+    // `label` dump only fills in when there is nothing better.
+    if (m.detail && m.detail !== m.label) body.push(esc(shapeShout(m.detail)));
+    else if (m.label && m.label !== m.location) body.push(esc(parts.rest || m.label));
+    if (gloss) body.push({ text: gloss, gloss: true });
+    const facts = [
+      parts.road && !m.location ? ['Road', esc(parts.road)] : null,
+      m.dir ? ['Direction', 'Affects the ' + esc(m.dir) + ' side'] : null,
+      m.lanes ? ['Lanes', esc(m.lanes)] : null,
+    ];
+    const foot = [
+      m.reported ? 'Reported ' + agoTxt(m.reported) : 'Live report',
+      'Source: ' + (m.src ? esc(m.src) + ' data feed'
+            : 'CHP ' + (m.area ? esc(m.area) + ' ' : '') + 'dispatch'),
+    ];
+    const btn = (m.id && m.log_n)
+      ? '<button type="button" class="detbtn" data-inc="' + esc(m.id) +
+        '">Show dispatch log (' + m.log_n + ')</button><div class="dets"></div>'
+      : '';
+    return v2(ACC.inc, 'Incident', m.reported ? agoTxt(m.reported) : null,
+      title, sub ? esc(sub) : null, body, facts, foot, btn);
   }
   if (g && g.startsWith('clo_')) {
-    const allLanes = m.cls === 'full-roadway' ||
-      /all lanes/i.test(m.lanes || '');
-    const lanesLine = m.lanes
-      ? '<div class="d' + (allLanes ? ' lanes-strong' : '') +
-        '" style="font-weight:600">' + esc(m.lanes) + '</div>'
-      : (m.cls === 'full-roadway'
-        ? '<div class="d lanes-strong" style="font-weight:600">All lanes closed</div>' : '');
-    const sched = [];
-    const since = clockTxt(m.since);
-    const until = clockTxt(m.until);
-    if (since) sched.push('in place since ' + since);
-    sched.push(until ? 'scheduled until ' + until : 'no scheduled end');
-    const extras = [];
-    if (m.delay_min) extras.push('Caltrans expects ~' + m.delay_min + ' min delay through here');
-    if (m.facility && m.cls === 'ramp') extras.push('Closed facility: ' + esc(m.facility));
-    return popHead(g, [m.route, m.county].filter(Boolean).join(' · ') || 'Closure') +
-      lanesLine +
-      '<div class="d">' + esc(m.label || '') + '</div>' +
-      histBlock([
-        m.work ? 'Work: ' + esc(m.work) : null,
-        ...extras,
-        sched.join(' · '),
-        m.windows ? (m.windows - 1) + ' more scheduled window' +
-          (m.windows > 2 ? 's' : '') + ' at this spot' : null,
-        m.src ? 'Source: ' + esc(m.src) : null,
-      ]) + '</div>';
+    const kindLbl = { clo_full: 'Road closed', clo_lane: 'Lanes closed',
+      clo_oneway: 'One-way traffic', clo_ramp: 'Ramp closed' }[g] || 'Closure';
+    const acc = g === 'clo_full' ? ACC.clo_full : ACC.clo;
+    const warn = (m.cls === 'full-roadway' || /all lanes/i.test(m.lanes || ''))
+      ? 'All lanes closed' : (m.lanes || null);
+    // Out-of-state markers carry a shaped `detail` sentence; the raw
+    // label dump is the fallback, not the default.
+    const prose = shapeShout(m.detail || m.label);
+    return v2(acc, kindLbl, null,
+      esc([m.route, m.county].filter(Boolean).join(', ') || 'Closure'),
+      m.dir ? esc(m.dir) : null,
+      [warn ? { text: '<span class="warnline">' + esc(warn) + '</span>' } : null,
+       prose ? esc(prose) : null],
+      [
+        m.work ? ['Work', humanize(m.work)] : null,
+        m.delay_min ? ['Delay', '~' + m.delay_min + ' min expected'] : null,
+        (m.facility && m.cls === 'ramp') ? ['Facility', esc(m.facility)] : null,
+        m.windows ? ['Windows', (m.windows - 1) + ' more scheduled at this spot'] : null,
+      ],
+      ['Source: ' + (m.src ? esc(m.src) + ' data feed'
+        : 'Caltrans lane closure system')],
+      schedPanel(m));
   }
   if (g === 'chain') {
-    const ago = agoTxt(m.updated);
-    const gloss = CHAIN_GLOSS[(m.status || '').toUpperCase()];
-    return popHead(g, m.status || 'Chain control') +
-      '<div class="d">' + esc([m.route, m.label].filter(Boolean).join(' · ')) + '</div>' +
-      (gloss ? '<div class="d" style="margin-top:5px">' + gloss + '</div>' : '') +
-      histBlock([ago ? 'Status set ' + ago : null]) + '</div>';
+    // The R system is California's. Other agencies (WSDOT mountain
+    // passes) publish free-text restrictions: show those verbatim,
+    // no R legend.
+    if (m.src) {
+      const parts = [...new Set((m.label || '').split(/;\s*/)
+        .map((s) => s.trim()).filter(Boolean))];
+      const noinfo = /no current information/i.test(m.label || '');
+      return v2(ACC.chain, 'Pass restriction',
+        m.updated ? agoTxt(m.updated) : null,
+        esc(m.route || m.status || 'Mountain pass'), null,
+        [noinfo
+          ? { text: esc(m.src) + ' has not posted current restrictions for this pass.', gloss: true }
+          : (parts.length
+            ? esc(parts.join('. ') + (/[.!?]$/.test(parts[parts.length - 1]) ? '' : '.'))
+            : null)],
+        [], ['Source: ' + esc(m.src) + ' mountain pass reports']);
+    }
+    // What applies now gets the bold panel; the other tiers sit below
+    // as quiet reference so the level has meaning.
+    const norm = (m.status || '').toUpperCase().replace(/^R(\d)$/, 'R-$1');
+    const active = CHAIN_LEVELS.find(([k]) => k === norm);
+    const others = CHAIN_LEVELS.filter(([k]) => k !== norm);
+    let extra;
+    if (active) {
+      extra = '<div class="sched"><b>Caltrans reports ' + norm +
+        ' here</b><span>' + active[1] + '</span></div>' +
+        '<div class="lgkey" style="margin-top:8px">The other chain control levels:</div>' +
+        '<div class="rleg">' + others.map(([k, txt]) =>
+          '<div class="rrow"><b>' + k + '</b><span>' + txt + '</span></div>')
+          .join('') + '</div>';
+    } else {
+      extra = '<div class="rleg">' + CHAIN_LEVELS.map(([k, txt]) =>
+        '<div class="rrow"><b>' + k + '</b><span>' + txt + '</span></div>')
+        .join('') + '</div>';
+    }
+    return v2(ACC.chain, 'Chain control', m.updated ? agoTxt(m.updated) : null,
+      esc(norm || m.status || 'Chain control') +
+        (m.route ? ' on ' + esc(m.route) : ''),
+      esc(m.label || ''),
+      [], [], [m.updated ? 'Status set ' + agoTxt(m.updated) : null,
+           'Source: Caltrans chain control feed'],
+      extra);
   }
-  const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : 'size unknown';
-  const cont = (m.contained || m.contained === 0) ? m.contained + '% contained' : '';
-  const disc = agoTxt(m.discovered);
+  const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : null;
+  const cont = (m.contained || m.contained === 0) ? m.contained + '% contained' : null;
   const hasShape = drawablePoly(m.poly);
-  return popHead(g || 'fire_pt', (m.name || 'Wildfire') + ' fire') +
-    '<div class="d">' + [size, cont].filter(Boolean).join(' · ') + '</div>' +
-    histBlock([
-      disc ? 'Discovered ' + disc : null,
-      hasShape ? 'Outline is the mapped burn footprint'
-               : 'Exact shape unknown - no mapped perimeter yet, the dot marks the reported origin',
-    ]) + '</div>';
+  return v2(ACC.fire, 'Wildfire', m.discovered ? agoTxt(m.discovered) : null,
+    esc((m.name || 'Wildfire')) + ' Fire', null,
+    [{ text: hasShape ? 'The outline is the mapped burn footprint.'
+        : 'No mapped perimeter yet. The dot marks the reported origin.',
+        gloss: true }],
+    [size ? ['Size', size] : null, cont ? ['Contained', cont] : null,
+     m.discovered ? ['Discovered', agoTxt(m.discovered)] : null],
+    ['Source: WFIGS national fire data, with CAL FIRE perimeters']);
 }
 
 function pointMarker(m, g) {
@@ -2114,7 +2564,7 @@ function tollRangeText(m) {
   const range = m.min === m.max ? money(m.min)
     : money(m.min) + '–' + money(m.max);
   return range + (m.pricing === 'live' ? ' now' : '')
-    + ' · ' + (m.toll_type === 'required' ? 'toll road' : 'express lane');
+    + ', ' + (m.toll_type === 'required' ? 'toll road' : 'express lane');
 }
 // Price tags and direction arrows live in their own group inside the
 // toll group, so they can be rebuilt on every zoom (both are placed in
@@ -2323,7 +2773,7 @@ function coverageStatus(total, pct) {
     : Object.keys(items).reduce((n, g) => n + items[g].length, 0);
   if (total > 0) {
     return 'Loading this area: ' + have.toLocaleString() + ' of ' +
-      total.toLocaleString() + ' reports' + (pct != null ? ' · ' + pct + '%' : '…');
+      total.toLocaleString() + ' reports' + (pct != null ? ' (' + pct + '%)' : '…');
   }
   return 'Loading more reports for this area…';
 }
@@ -2678,12 +3128,11 @@ map.on('click', (e) => {
         ' has partial coverage today: ' + esc(PARTIAL[name]) +
         '</div></div>'
       : '<div class="pop"><div class="t">' + esc(name) +
-        '</div><div class="d">Sorry, state road data (incidents, ' +
-        'closures, cameras, signs) is not available for ' + esc(name) +
-        ' yet - it is coming as its feeds come online. Wildfires, ' +
-        'weather alerts, and the live traffic overlay already cover ' +
-        'the whole country, so dots you see here are live and ' +
-        'clickable.</div></div>';
+        '</div><div class="d">' + esc(name) + ' road data is not ' +
+        'available yet. We add each state when its data feed comes ' +
+        'online. Wildfires, weather alerts, and the live traffic ' +
+        'overlay already cover the whole country: dots you see here ' +
+        'are live and clickable.</div></div>';
     L.popup({ maxWidth: 270 }).setLatLng(at).setContent(html).openOn(map);
   }, 150);
 });
@@ -2949,10 +3398,10 @@ async function renderSourcePanel() {
       else { state = 'online'; color = '#2f9e6e'; }
       dot.style.background = color;
       const name = document.createElement('span');
-      name.textContent = s.name + ' · ' + s.agency;
+      name.textContent = s.name + ', ' + s.agency;
       const meta = document.createElement('small');
       const ago = s.as_of ? agoTxt(s.as_of) : null;
-      meta.textContent = state + (ago ? ' · data ' + ago : '');
+      meta.textContent = state + (ago ? ', data ' + ago : '');
       if (s.error) meta.title = s.error;
       row.append(dot, name, meta);
       srcPanel.append(row);
@@ -2990,43 +3439,60 @@ map.on('popupopen', (e) => {
       if (!res.ok) throw new Error('unavailable');
       const d = await res.json();
       let h = '';
-      if (d.location_desc) {
-        h += '<div class="drow" style="border-top:0"><b>Where</b>' + esc(d.location_desc) + '</div>';
-      }
       // CHP numbers each comment ("[18] ..."), so sort by that index,
       // newest first; entries without one keep their feed position.
       const seq = (en) => {
         const m2 = /^\[(\d+)\]/.exec(en[1] || '');
         return m2 ? Number(m2[1]) : -1;
       };
-      const rows = (list) => list.map((en, i) => [en, seq(en) >= 0 ? seq(en) : i])
-        .sort((x, y) => y[1] - x[1])
-        .map(([en]) => {
-          const xl = explainLine(en[1] || '');
-          return '<div class="drow' + (xl ? ' hasxl' : '') + '"><b>' +
-            esc(en[0] || '') + '</b>' +
-            '<span class="rw">' + esc(en[1] || '') + '</span>' +
-            (xl ? '<span class="xl">' + esc(xl) + '</span>' : '') +
-            '</div>';
-        }).join('');
+      // CHP stamps look like "Jul 29 2026 12:51AM" (no space before
+      // AM), which Date.parse rejects: pull the clock straight out.
+      const clock = (s) => {
+        const m2 = /(\d{1,2}:\d{2})\s*(AM|PM)/i.exec(s || '');
+        return m2 ? m2[1] + ' ' + m2[2].toUpperCase() : esc(s || '');
+      };
+      const row = (en) => {
+        const xl = explainLine(en[1] || '');
+        return '<div class="lgrow"><time>' + clock(en[0]) + '</time><div>' +
+          '<div class="raw">' + esc(en[1] || '') + '</div>' +
+          (xl ? '<div class="xpl">' + esc(xl) + '</div>' : '') +
+          '</div></div>';
+      };
       if (d.details && d.details.length) {
-        h += '<h5>Dispatch log</h5>' + rows(d.details);
+        h += '<div class="lg"><h5>Dispatch log (newest first)</h5>' +
+          '<div class="lgkey">Blue text is a rough translation of the CHP shorthand.</div>' +
+          d.details.map((en, i) => [en, seq(en) >= 0 ? seq(en) : i])
+            .sort((x, y) => y[1] - x[1]).map(([en]) => row(en)).join('') +
+          '</div>';
       }
-      if (d.units && d.units.length) {
-        // CHP's public feed logs unit status changes without unit
-        // names, so several units interleave. Chronological order
-        // (oldest first) reads as the response story instead of a
-        // jumble of same-minute Assigned/Enroute/Cleared rows.
-        const unitRows = d.units.slice()
-          .map((en) => [en, Date.parse(en[0] || '') || 0])
-          .sort((x, y) => x[1] - y[1])
-          .map(([en]) => '<div class="drow"><b>' + esc(en[0] || '') +
-            '</b><span class="rw">' + esc(en[1] || '') + '</span></div>')
-          .join('');
-        h += '<h5>Unit activity (oldest first)</h5>' + unitRows +
-          '<div class="drow" style="border-top:0;color:var(--dim)">' +
-          'CHP does not name individual units in the public feed; ' +
-          'entries are per responding unit.</div>';
+      // The units feed is a flat pile of status flips with no unit
+      // names: each unit's events arrive newest-first and end at its
+      // "Unit Assigned" row, so split there and tell one unit's story
+      // per line.
+      const groups = [];
+      let cur = [];
+      for (const en of d.units || []) {
+        cur.push(en);
+        if (/assigned/i.test(en[1] || '')) { groups.push(cur); cur = []; }
+      }
+      if (cur.length) groups.push(cur);
+      if (groups.length) {
+        const STATUS = { assigned: 'assigned', enroute: 'en route',
+          'at scene': 'on scene', cleared: 'cleared to leave' };
+        const unitRows = groups.map((grp, i) => {
+          const events = grp.slice().reverse().map((en) => {
+            const key = (en[1] || '').replace(/^Unit\s*/i, '').toLowerCase();
+            return (STATUS[key] || key) + ' ' + clock(en[0]);
+          });
+          const done = /cleared/i.test(grp[0] && grp[0][1] || '');
+          return '<div class="urow"><b>Unit ' + (i + 1) + '</b><span>' +
+            events.join(', ') + (done ? '' : '. Still working the scene') +
+            '</span></div>';
+        }).join('');
+        h += '<div class="lg"><h5>CHP units on this call (' + groups.length + ')</h5>' +
+          '<div class="lgkey">One line per unit. "Cleared to leave" means the unit ' +
+          'finished its part and left the scene. CHP does not name units in the ' +
+          'public feed.</div>' + unitRows + '</div>';
       }
       // No popup.update() here: it re-renders from the original content
       // string and would wipe this injected log (same rule as
@@ -3041,16 +3507,6 @@ map.on('popupopen', (e) => {
         cw.style.width = Math.min(500, window.innerWidth - 70) + 'px';
         e.popup._updateLayout();
         e.popup._updatePosition();
-      }
-      if (h) {
-        const xb = document.createElement('button');
-        xb.type = 'button'; xb.className = 'xbtn';
-        xb.textContent = 'Explain the codes';
-        xb.addEventListener('click', () => {
-          const on = box.classList.toggle('explained');
-          xb.textContent = on ? 'Hide explanations' : 'Explain the codes';
-        });
-        box.prepend(xb);
       }
       btn.remove();
     } catch (_) {
@@ -3682,7 +4138,7 @@ function renderRouteAlts(chosen, a, b) {
       const bEl = document.createElement('b');
       bEl.textContent = r.via ? 'via ' + r.via.split(',')[0] : 'Route ' + (i + 1);
       const sm = document.createElement('small');
-      sm.textContent = (r.distance / 1609.344).toFixed(0) + ' mi · ' +
+      sm.textContent = (r.distance / 1609.344).toFixed(0) + ' mi, ' +
         Math.round(r.duration / 60) + ' min';
       btn.append(bEl, sm);
       btn.addEventListener('click', () => renderRouteAlts(i, a, b));
@@ -3835,19 +4291,19 @@ function showRoute(route, others, a, b) {
   const mi = route.distance / 1609.344, min = route.duration / 60;
   document.getElementById('routesum').textContent =
     plannedRoute.fromName.split(',')[0] + ' → ' + plannedRoute.toName.split(',')[0] +
-    ' · ' + mi.toFixed(0) + ' mi · ~' + Math.round(min) + ' min' +
-    (route.via ? ' · via ' + route.via.split(',')[0] : '');
+    ', ' + mi.toFixed(0) + ' mi, ~' + Math.round(min) + ' min' +
+    (route.via ? ', via ' + route.via.split(',')[0] : '');
   const ol = document.getElementById('steps');
   ol.innerHTML = '';
   document.getElementById('stepsdrop').open = false;
   document.getElementById('stepssummary').textContent =
-    'Turn-by-turn directions · ' + route.steps.length + ' steps';
+    'Turn-by-turn directions (' + route.steps.length + ' steps)';
   route.steps.forEach(s => {
     const li = document.createElement('li');
     li.textContent = s.text + ' ';
     if (s.miles >= 0.05) {
       const sm = document.createElement('small');
-      sm.textContent = '— ' + (s.miles >= 9.5 ? Math.round(s.miles) : s.miles.toFixed(1)) + ' mi';
+      sm.textContent = '(' + (s.miles >= 9.5 ? Math.round(s.miles) : s.miles.toFixed(1)) + ' mi)';
       li.append(sm);
     }
     ol.append(li);

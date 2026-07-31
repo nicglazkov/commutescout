@@ -25,7 +25,7 @@ import json
 import re
 import time
 from base64 import b64decode
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote
 from xml.etree import ElementTree
 from zoneinfo import ZoneInfo
@@ -382,6 +382,7 @@ def _parse_ia_wzdx(payload: dict, src: str = "Iowa DOT",
             "cls": _IMPACT_CLS.get(props.get("vehicle_impact"), "other"),
             "route": ", ".join(core.get("road_names") or [])[:60],
             "county": None, "src": src,
+            "dir": direction or None,
             "lanes": None,
             "work": (props.get("types_of_work") or [{}])[0].get("type_name")
                     if props.get("types_of_work") else None,
@@ -558,22 +559,56 @@ async def _fetch_traveliq(client, code: str) -> dict:
         road = (e.get("RoadwayName") or "").strip()
         label = (f"{road}: {desc}" if road and desc else desc or road
                  or "Reported event")[:220]
+        # Structured fields the popups render. Description is templated
+        # ("<type> on <road> near <place>. Start time: ... Public
+        # Details: ..."); Comment holds the operator's own words, so it
+        # wins as the detail sentence.
+        comment = re.sub(r"\s+", " ", (e.get("Comment") or "")).strip()
+        detail = (comment
+                  or re.sub(r"\s*Start time:.*$", "", desc).strip())[:300]
+        nearm = re.search(r"\bnear ([^.]+)", desc)
+        near = nearm.group(1).strip() if nearm else ""
+        dirn = (e.get("DirectionOfTravel") or "").strip()
+        if dirn.lower() in ("", "unknown", "none", "not directional"):
+            dirn = None
+        lanes = (e.get("LanesAffected") or "").strip()
+        if lanes.lower() in ("", "no data", "n/a", "none"):
+            lanes = None
+        reported = e.get("Reported") or start
         if (e.get("EventType") or "") == "accidentsAndIncidents":
             markers.append({
                 "kind": "incident", "lat": lat, "lon": lon,
                 "type": e.get("EventSubType") or "Incident",
-                "label": label, "src": src})
+                "label": label, "src": src,
+                "location": (f"{road} near {near}" if road and near
+                             else road or near or None),
+                "dir": dirn, "lanes": lanes,
+                "detail": detail or None,
+                "reported": (datetime.fromtimestamp(
+                    reported, tz=timezone.utc).isoformat()
+                    if isinstance(reported, (int, float)) and reported
+                    else None)})
         else:
             etype = (e.get("EventType") or "")
-            lanes = (e.get("LanesAffected") or "").lower()
+            lanes_lc = (e.get("LanesAffected") or "").lower()
             cls = ("full-roadway"
-                   if etype == "closures"
-                   or re.search(r"all lanes|full closure", lanes)
+                   if etype == "closures" or e.get("IsFullClosure")
+                   or re.search(r"all lanes|full closure", lanes_lc)
                    else "lane")
+            until = e.get("PlannedEndDate")
             m = {
                 "kind": "lane_closure", "lat": lat, "lon": lon,
                 "cls": cls, "label": label, "route": road or None,
-                "src": src}
+                "src": src,
+                "dir": dirn, "lanes": lanes, "detail": detail or None,
+                "work": e.get("EventSubType") or None,
+                "since": (start if isinstance(start, (int, float))
+                          and start <= now else None),
+                # Planned ends routinely lapse on live work here (same
+                # quirk as UDOT's WZDx feed); the client renders lapsed
+                # ends as "may still be in effect", which is honest.
+                "until": (until if isinstance(until, (int, float))
+                          and until else None)}
             path = _road_path(
                 _decode_gpoly(e.get("EncodedPolyline") or ""),
                 lat, lon)
@@ -633,8 +668,21 @@ async def _fetch_traveliq(client, code: str) -> dict:
         with contextlib.suppress(TypeError, ValueError):
             marker["air_c"] = round(
                 (float(w.get("AirTemperature")) - 32) * 5 / 9, 1)
+        # Key names vary across Travel-IQ deployments: NV uses
+        # Wind/WindGust, UT uses WindSpeedAvg. Average speed is "wind";
+        # the old code mislabeled it as gust.
         with contextlib.suppress(TypeError, ValueError):
-            marker["gust"] = float(w.get("WindSpeedAvg"))
+            marker["wind"] = float(
+                w.get("Wind") or w.get("WindSpeedAvg"))
+        with contextlib.suppress(TypeError, ValueError):
+            marker["gust"] = float(w.get("WindGust"))
+        wdir = (w.get("WindDirection") or "").strip()
+        if wdir and wdir.lower() not in ("unknown", "none"):
+            marker["wind_dir"] = wdir
+        with contextlib.suppress(TypeError, ValueError):
+            rh = float(w.get("RelativeHumidity"))
+            if 0 <= rh <= 100:
+                marker["rh"] = rh
         surface = w.get("SurfaceStatus")
         if surface and surface not in ("None", "Unknown"):
             marker["surface"] = surface

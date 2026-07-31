@@ -886,6 +886,8 @@ async def api_mapdata(request: Request):
                     "air_c": w.air_temp_c, "pave_c": w.surface_temp_c,
                     "wind": w.wind_avg_mph, "gust": w.wind_gust_mph,
                     "vis_m": w.visibility_m,
+                    "wind_dir": w.wind_dir_deg, "rh": w.humidity_pct,
+                    "precip": w.precip,
                 })
 
     if "sign" in want:

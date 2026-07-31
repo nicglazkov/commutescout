@@ -4,8 +4,8 @@ Reads never wait on a slow upstream. A key within its TTL is served straight
 from memory. A key past its TTL but still within ``max_serve`` is served
 immediately from the last good value while a single background task refreshes
 it (stale-while-revalidate), so only the first fetch of a cold key blocks a
-caller. When a refresh fails, the last good value keeps being served — flagged
-stale with the error — until it exceeds ``max_serve``; only then does a caller
+caller. When a refresh fails, the last good value keeps being served (flagged
+stale with the error) until it exceeds ``max_serve``; only then does a caller
 see a failure.
 """
 
