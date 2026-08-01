@@ -42,13 +42,21 @@ MAX_RATIO = 3.0
 MAX_EXTRA_METERS = 20_000
 PACE_SECONDS = 0.7
 
-_mem: dict[str, list | None] = {}
+_mem: dict[str, list | dict | None] = {}
 _queue: list[str] = []
 _queued: set[str] = set()
 _pairs: dict[str, tuple] = {}
+_tries: dict[str, int] = {}
 _loaded = False
 _worker_task = None
 _db = None
+# Transient router misses retry this many times before a pair is
+# written off as unroutable.
+MAX_TRANSIENT_TRIES = 5
+
+
+class TransientSnapError(Exception):
+    """The router had no answer this time; the pair stays retryable."""
 
 
 def _key(lat1: float, lon1: float, lat2: float, lon2: float) -> str:
@@ -126,7 +134,7 @@ def toll_pair_for(a, b, brg: float, token: str | None) -> dict | None:
     vals = (a[0], a[1], b[0], b[1])
     if not all(isinstance(v, (int, float)) and v for v in vals):
         return None
-    raw = (f"t2:{vals[0]:.4f},{vals[1]:.4f},{vals[2]:.4f},{vals[3]:.4f},"
+    raw = (f"t3:{vals[0]:.4f},{vals[1]:.4f},{vals[2]:.4f},{vals[3]:.4f},"
            f"{brg:.0f},{token or ''}")
     key = hashlib.sha1(raw.encode()).hexdigest()[:20]
     if key in _mem:
@@ -279,9 +287,10 @@ async def _snap_toll(client, lat1, lon1, lat2, lon2, brg, token):
             data = body
             break
     if not data:
-        log.info("toll snap rejected (no directional route) %s %s",
-                 token, coords)
-        return None
+        # The public router intermittently finds no candidate under
+        # load; that is a transient miss, not a verdict. Raising lets
+        # the worker retry instead of tombstoning a routable pair.
+        raise TransientSnapError(f"no directional route {token} {coords}")
     route = data["routes"][0]
     dist = route.get("distance") or 0
     if dist > straight * MAX_RATIO or dist > straight + MAX_EXTRA_METERS:
@@ -379,6 +388,19 @@ async def _drain(client) -> None:
                 path = await _snap_toll(cli, *pair[1:])
             else:
                 path = await _snap(cli, *pair)
+        except TransientSnapError as exc:
+            n = _tries.get(key, 0) + 1
+            if n >= MAX_TRANSIENT_TRIES:
+                log.info("toll snap rejected after %d tries: %s", n, exc)
+                _tries.pop(key, None)
+                path = None
+            else:
+                _tries[key] = n
+                _queued.add(key)
+                _pairs[key] = pair
+                _queue.append(key)
+                await asyncio.sleep(10)
+                continue
         except Exception:  # noqa: BLE001 - router hiccup: retry later
             _queued.add(key)
             _pairs[key] = pair
