@@ -473,6 +473,22 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .routecond .condrow:hover { background:var(--sky-soft) }
 .routecond i { font-style:normal; width:8px; height:8px; border-radius:99px;
   flex:none; position:relative; top:0 }
+/* Toll details live in a left-hand panel, not a popup on the road:
+   the popup used to cover the very corridor the rate rows highlight. */
+.tollside { position:absolute; z-index:1150; top:12px; left:12px;
+  bottom:12px; width:min(360px, calc(100vw - 40px)); background:#fff;
+  border-radius:14px; box-shadow:0 10px 34px rgba(15,28,43,.35);
+  padding:14px 16px; overflow-y:auto; display:none;
+  overscroll-behavior:contain }
+.tollside.open { display:block }
+.tollside .tollx { position:sticky; top:0; float:right; z-index:2;
+  font:400 20px/1 Inter; color:var(--dim); background:#fff;
+  border:1px solid var(--line); border-radius:8px; width:28px;
+  height:28px; cursor:pointer; margin:-2px -2px 0 8px }
+.tollside .tollx:hover { color:#0f172a; border-color:#94a3b8 }
+@media (max-width: 960px) {
+  .tollside { top:auto; bottom:0; left:0; right:0; width:auto;
+    max-height:55vh; border-radius:14px 14px 0 0 } }
 .filters { position:absolute; z-index:800; top:14px; right:14px;
   background:rgba(255,255,255,.96); border:1px solid var(--line);
   border-radius:12px; padding:10px 14px; font-size:.78rem;
@@ -2539,26 +2555,73 @@ function lineHitsAt(containerPt) {
 function openStacked(latlng) {
   const hits = lineHitsAt(map.latLngToContainerPoint(latlng));
   if (!hits.length) return false;
-  const seen = new Set();
-  const parts = [];
-  for (const h of hits) {
-    if (seen.has(h.m)) continue;
-    seen.add(h.m);
-    if (parts.length >= 3) {
-      parts.push('<div class="pop"><div class="d">and ' +
-        (seen.size - parts.length) + ' more on this stretch</div></div>');
-      break;
-    }
-    parts.push(popupFor(h.m, h.g));
-  }
-  const pop = L.popup({ maxWidth: 330 }).setLatLng(latlng)
-    .setContent(parts.join('<div class="stackdiv"></div>')).openOn(map);
-  pop.__m = hits[0].m;
-  pop.__g = hits[0].g;
+  // Toll details go to the left-hand panel, never a popup: a popup on
+  // the road covered the very corridor the rate rows highlight. The
+  // popup (if any) opens FIRST so its popupopen does not dismiss the
+  // panel opened by this same click.
   const toll = hits.find((h) => h.g === 'toll');
-  if (toll) pop.__tollm = toll.m;
+  const rest = hits.filter((h) => h.g !== 'toll');
+  if (rest.length) {
+    const seen = new Set();
+    const parts = [];
+    for (const h of rest) {
+      if (seen.has(h.m)) continue;
+      seen.add(h.m);
+      if (parts.length >= 3) {
+        parts.push('<div class="pop"><div class="d">and ' +
+          (seen.size - parts.length) + ' more on this stretch</div></div>');
+        break;
+      }
+      parts.push(popupFor(h.m, h.g));
+    }
+    const pop = L.popup({ maxWidth: 330 }).setLatLng(latlng)
+      .setContent(parts.join('<div class="stackdiv"></div>'));
+    // Tag the popup BEFORE opening: popupopen listeners run inside
+    // openOn, and tagging after the fact is how the old hover
+    // highlighting silently broke.
+    pop.__m = rest[0].m;
+    pop.__g = rest[0].g;
+    pop.openOn(map);
+  }
+  if (toll) openTollPanel(toll.m);
   return true;
 }
+// ---- toll details panel (left-hand sidebar) ----
+const tollSide = document.createElement('div');
+tollSide.className = 'tollside';
+map.getContainer().appendChild(tollSide);
+L.DomEvent.disableClickPropagation(tollSide);
+L.DomEvent.disableScrollPropagation(tollSide);
+function closeTollPanel() {
+  if (!tollSide.classList.contains('open')) return;
+  tollSide.classList.remove('open');
+  tollSide.innerHTML = '';
+  tollSide.__m = null;
+  tollHiClear();
+}
+function openTollPanel(m) {
+  tollSide.innerHTML =
+    '<button type="button" class="tollx" aria-label="Close">&times;</button>' +
+    popupFor(m, 'toll');
+  tollSide.classList.add('open');
+  tollSide.__m = m;
+  tollSide.querySelector('.tollx').addEventListener('click', closeTollPanel);
+  // Hover a rate row: light up that stretch of the corridor. Wired
+  // directly on the panel DOM, no popup-event bookkeeping to miss.
+  tollSide.querySelectorAll('[data-tg]').forEach((row) => {
+    const gi = +row.dataset.tg;
+    const di = row.dataset.td !== undefined ? +row.dataset.td : null;
+    row.addEventListener('mouseenter', () => tollHighlight(m, gi, di));
+    row.addEventListener('mouseleave', tollHiClear);
+    row.addEventListener('click', () => tollHighlight(m, gi, di));
+  });
+}
+// Click-off dismisses: a bare map click, opening any popup, or Escape.
+map.on('click', closeTollPanel);
+map.on('popupopen', closeTollPanel);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeTollPanel();
+});
 function tollRangeText(m) {
   const money = (v) => '$' + v.toFixed(2).replace(/\.00$/, '');
   const range = m.min === m.max ? money(m.min)
@@ -3249,88 +3312,9 @@ function tollHighlight(m, gi, di) {
     }
   }
 }
-// A toll popup that sits ON the corridor it describes hides exactly
-// what the hover highlighting tries to show. After the popup renders,
-// measure the corridor's on-screen box and, if the popup overlaps it,
-// re-anchor the popup into the roomiest clear space beside or below.
-function repositionTollPopup(popup, m) {
-  const el = popup.getElement();
-  if (!el) return;
-  const segs = (Array.isArray(m.segs) && m.segs.length)
-    ? m.segs : geoByKey.get('t' + geoKey(m));
-  if (!Array.isArray(segs) || !segs.length) return;
-  const size = map.getSize();
-  let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9, any = false;
-  for (const seg of segs) {
-    for (const pt of seg) {
-      const p = map.latLngToContainerPoint(pt);
-      if (p.x < -40 || p.x > size.x + 40
-          || p.y < -40 || p.y > size.y + 40) continue;
-      any = true;
-      x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y);
-      x2 = Math.max(x2, p.x); y2 = Math.max(y2, p.y);
-    }
-  }
-  if (!any) return;
-  const pad = 22;
-  x1 -= pad; y1 -= pad; x2 += pad; y2 += pad;
-  const r = el.getBoundingClientRect();
-  const mr = map.getContainer().getBoundingClientRect();
-  const P = { w: r.width, h: r.height,
-    left: r.left - mr.left, top: r.top - mr.top };
-  if (P.left + P.w < x1 || P.left > x2
-      || P.top + P.h < y1 || P.top > y2) return; // already clear
-  const margin = 14, tip = 14;
-  const fits = {
-    right: size.x - x2 >= P.w + margin * 2,
-    left: x1 >= P.w + margin * 2,
-    below: size.y - y2 >= P.h + tip + margin * 2,
-    above: y1 >= P.h + tip + margin * 2,
-  };
-  const clampX = (x) => Math.max(margin + P.w / 2,
-    Math.min(size.x - margin - P.w / 2, x));
-  const clampY = (y) => Math.max(P.h + tip + margin,
-    Math.min(size.y - margin, y));
-  let anchor = null;
-  if (fits.right) {
-    anchor = [x2 + margin + P.w / 2, clampY((y1 + y2) / 2 + P.h / 2)];
-  } else if (fits.left) {
-    anchor = [x1 - margin - P.w / 2, clampY((y1 + y2) / 2 + P.h / 2)];
-  } else if (fits.below) {
-    anchor = [clampX((x1 + x2) / 2), clampY(y2 + margin + P.h + tip)];
-  } else if (fits.above) {
-    anchor = [clampX((x1 + x2) / 2), y1 - margin];
-  } else {
-    return; // corridor fills the screen: nowhere is better
-  }
-  popup.setLatLng(map.containerPointToLatLng(anchor));
-}
-map.on('popupopen', (e) => {
-  const mk = (e.popup && e.popup.__m) ? e.popup
-    : (e.popup && e.popup._source);
-  // The toll marker is either the popup's own subject or the toll
-  // section of a stacked multi-line popup.
-  const m = (mk && mk.__g === 'toll' && mk.__m) ? mk.__m
-    : (e.popup && e.popup.__tollm);
-  if (!m || !m.entries) return;
-  const el = e.popup.getElement();
-  if (!el) return;
-  el.querySelectorAll('[data-tg]').forEach((row) => {
-    const gi = +row.dataset.tg;
-    const di = row.dataset.td !== undefined ? +row.dataset.td : null;
-    row.addEventListener('mouseenter', () => tollHighlight(m, gi, di));
-    row.addEventListener('mouseleave', tollHiClear);
-    row.addEventListener('click', () => tollHighlight(m, gi, di));
-  });
-  // After Leaflet's own auto-pan settles, move the popup off the
-  // corridor if it landed on top of it. Only when the popup is
-  // purely about the toll: in a stacked popup the closure on top is
-  // the primary context and jumping it around would be disorienting.
-  if (mk && mk.__g === 'toll') {
-    requestAnimationFrame(() => requestAnimationFrame(() =>
-      repositionTollPopup(e.popup, m)));
-  }
-});
+// Toll details render in the left-hand panel (openTollPanel), which
+// wires its own hover highlighting; popups only need the clear-on-
+// close hook.
 map.on('popupclose', tollHiClear);
 
 function appendMeasured(popup, html) {
