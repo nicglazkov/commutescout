@@ -219,6 +219,60 @@ def test_snap_toll_rejects_off_route_and_accepts_on_route(snap_mem):
     assert __import__("asyncio").run(run(back)) is None
 
 
+def test_hand_verified_waypoints_override_feed_coords(monkeypatch):
+    from ca_roads_demo import tollwaypoints
+
+    monkeypatch.setattr(tollwaypoints, "WAYPOINTS", {
+        ("511.org", "T-1 NB"): {
+            "Alpha": [[37.10001, -122.10001]],
+            "Beta": [[37.20002, -122.20002], [37.20502, -122.20502]],
+            "Gamma": [[37.3, -122.3]],   # count mismatch: ignored
+        },
+    })
+    raw = [
+        bay("T-1 NB: T-1 NB - Alpha - 1", 37.1, -122.1,
+            ["to Beta - 2: $2.00"]),
+        bay("T-1 NB: T-1 NB - Beta - 1", 37.2, -122.2,
+            ["to Gamma - 2: $1.00"]),
+        bay("T-1 NB: T-1 NB - Beta - 2", 37.205, -122.205,
+            ["to Gamma - 2: $1.00"]),
+        bay("T-1 NB: T-1 NB - Gamma - 1", 37.3, -122.3,
+            ["to End - 2: $1.50"]),
+        bay("T-1 NB: T-1 NB - Gamma - 2", 37.305, -122.305,
+            ["to End - 2: $1.50"]),
+    ]
+    out = states.toll_corridors(raw)
+    c = next(m for m in out if m.get("corridor") == "T-1 NB")
+    by = {e["label"]: e["pts"] for e in c["entries"]}
+    assert by["Alpha"] == [[37.10001, -122.10001]]
+    assert by["Beta"] == [[37.20002, -122.20002], [37.20502, -122.20502]]
+    # Gamma has 2 feed signs but only 1 override point: feed coords
+    # stay (in the corridor's dominant-axis order).
+    assert sorted(by["Gamma"]) == [[37.3, -122.3], [37.305, -122.305]]
+
+
+def test_apply_toll_skips_recenter_for_pinned_corridors(snap_mem, monkeypatch):
+    from ca_roads_demo import tollwaypoints
+
+    monkeypatch.setattr(tollwaypoints, "WAYPOINTS",
+                        {("511.org", "SM-101 NB"): {"Entry": [[1, 2]]}})
+    a, b = [37.600, -122.400], [37.640, -122.405]
+    m = {"kind": "toll", "src": "511.org", "corridor": "SM-101 NB",
+         "entries": [
+             {"label": "Entry", "pts": [list(a)], "rows": [["Exit", 2.0]]},
+             {"label": "Exit", "pts": [list(b)], "rows": []},
+         ]}
+    roadsnap.apply([m])
+    (key, _), = roadsnap._pairs.items()
+    roadsnap._mem[key] = {"path": [[37.7, -122.5], [37.71, -122.51]],
+                          "a": [37.7, -122.5], "b": [37.71, -122.51]}
+    roadsnap.apply([m])
+    # Segments attach, but the hand-placed points are untouched.
+    assert m["segs"]
+    assert m["entries"][0]["pts"][0] == a
+    assert m["entries"][1]["pts"][0] == b
+
+
 def test_grouped_markers_log_prices(monkeypatch):
     rows = []
 

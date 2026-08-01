@@ -237,7 +237,13 @@ def _apply_toll(m: dict) -> None:
             segs.append(list(seg))
     if segs:
         m["segs"] = segs
-    # Re-center resolved gantry points onto the snapped carriageway.
+    # Re-center resolved gantry points onto the snapped carriageway,
+    # UNLESS the corridor has hand-verified waypoints: those were
+    # placed on the carriageway by hand and are authoritative.
+    from ca_roads_demo import tollwaypoints
+
+    if (m.get("src") or "", corridor) in tollwaypoints.WAYPOINTS:
+        return
     for idx, pt in snapped.items():
         ei, pi = refs[idx]
         m["entries"][ei]["pts"][pi] = [round(pt[0], 5), round(pt[1], 5)]

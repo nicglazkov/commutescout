@@ -473,6 +473,17 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .routecond .condrow:hover { background:var(--sky-soft) }
 .routecond i { font-style:normal; width:8px; height:8px; border-radius:99px;
   flex:none; position:relative; top:0 }
+/* Edge tab that hides/shows the route-planner sidebar so the map can
+   take the full width. */
+.paneltab { position:absolute; z-index:900; left:0; top:50%;
+  transform:translateY(-50%); width:22px; height:64px;
+  border:1px solid var(--line); border-left:0;
+  border-radius:0 10px 10px 0; background:rgba(255,255,255,.96);
+  font:700 13px/62px Inter; text-align:center; cursor:pointer;
+  color:var(--dim); box-shadow:2px 0 8px rgba(15,28,43,.12); padding:0 }
+.paneltab:hover { color:var(--ink) }
+.shell.nopanel aside { display:none }
+.shell.nopanel { grid-template-columns:1fr }
 /* Toll details live in a left-hand panel, not a popup on the road:
    the popup used to cover the very corridor the rate rows highlight. */
 .tollside { position:absolute; z-index:1150; top:12px; left:12px;
@@ -1773,12 +1784,28 @@ function schedPanel(m) {
   const now = Date.now() / 1000;
   const agency = m.src ? esc(m.src) : 'Caltrans';
   const tz = roadTz(m);
-  // The conversion renders on its own line, and only when the
-  // viewer's timezone actually differs from the road's.
-  const tzLine = (epoch) => (!epoch
-    || sameClock(new Date(epoch * 1000), tz, VIEWER_TZ)) ? ''
-    : '<span class="tzl">In your timezone: ' +
-      whenPhrase(epoch, VIEWER_TZ, 1) + '.</span>';
+  // Conversion block: the start and the scheduled end, full date and
+  // time, each on its own line. Rendered only when the viewer's
+  // timezone actually differs from the road's.
+  const fullWhen = (epoch, tzz) => {
+    const t = new Date(epoch * 1000);
+    return t.toLocaleDateString([], { weekday: 'long', month: 'short',
+      day: 'numeric', timeZone: tzz }) + ' at ' +
+      t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit',
+      timeZone: tzz }) + ' ' + zoneAbbr(t, tzz);
+  };
+  const tzBlock = () => {
+    const rows = [['Start', m.since], ['Scheduled end', m.until]]
+      .filter((r) => r[1]);
+    if (!rows.length) return '';
+    const differs = rows.some(([, ep]) =>
+      !sameClock(new Date(ep * 1000), tz, VIEWER_TZ));
+    if (!differs) return '';
+    return '<span class="tzl">In your timezone:' +
+      rows.map(([lbl, ep]) =>
+        '<br>' + lbl + ': ' + fullWhen(ep, VIEWER_TZ)).join('') +
+      '</span>';
+  };
   let head, tail, extra = '';
   if (m.until && m.until < now) {
     head = 'Was scheduled to end ' + whenPhrase(m.until, tz, 2);
@@ -1786,12 +1813,12 @@ function schedPanel(m) {
       (m.cls === 'full-roadway'
         ? agency + ' has not reported it open. Assume the road is still closed.'
         : agency + ' has not reported it clear. Assume the restriction is still there.');
-    extra = tzLine(m.until);
+    extra = tzBlock();
   } else if (m.until) {
     head = 'Scheduled to end ' + whenPhrase(m.until, tz, 2);
     tail = 'That is ' + spanPhrase(m.until) + ' from now.' +
       (m.since ? ' It started ' + whenPhrase(m.since, tz) + '.' : '');
-    extra = tzLine(m.until);
+    extra = tzBlock();
   } else {
     head = 'No scheduled end';
     // "The road stays closed" is only true for a full closure; a lane
@@ -1800,6 +1827,7 @@ function schedPanel(m) {
       ? 'The road stays closed until ' + agency + ' reports it open.'
       : 'The restriction stays until ' + agency + ' reports it clear.') +
       (m.since ? ' It started ' + whenPhrase(m.since, tz) + '.' : '');
+    extra = tzBlock();
   }
   return '<div class="sched"><b>' + head + '</b><span>' + tail +
     '</span>' + extra + '</div>';
@@ -3204,6 +3232,26 @@ document.getElementById('camvideo').addEventListener('change', rebuildCameras);
 document.getElementById('layersbtn').addEventListener('click', () => {
   document.getElementById('filters').classList.toggle('open');
 });
+// Hide/show the route-planner sidebar: an edge tab on the map's left
+// side. The map re-measures after the grid change.
+const panelTab = document.createElement('button');
+panelTab.type = 'button';
+panelTab.className = 'paneltab';
+panelTab.setAttribute('aria-label', 'Hide or show the planner panel');
+document.getElementById('mapcard').appendChild(panelTab);
+function setPanelHidden(hide) {
+  document.querySelector('.shell').classList.toggle('nopanel', hide);
+  panelTab.innerHTML = hide ? '&#x276F;' : '&#x276E;';
+  panelTab.title = hide ? 'Show the planner panel' : 'Hide the planner panel';
+  try { localStorage.setItem('panelhidden', hide ? '1' : ''); }
+  catch (_) { /* private mode */ }
+  setTimeout(() => map.invalidateSize(), 60);
+}
+panelTab.addEventListener('click', () => {
+  setPanelHidden(!document.querySelector('.shell').classList.contains('nopanel'));
+});
+try { setPanelHidden(localStorage.getItem('panelhidden') === '1'); }
+catch (_) { setPanelHidden(false); }
 map.on('popupopen', async (e) => {
   const mk = (e.popup && e.popup.__m) ? e.popup
     : (e.popup && e.popup._source);
