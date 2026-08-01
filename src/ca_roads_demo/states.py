@@ -22,6 +22,7 @@ import asyncio
 import contextlib
 import html as _html
 import json
+import math
 import re
 import time
 from base64 import b64decode
@@ -2327,6 +2328,19 @@ def toll_corridors(markers: list[dict]) -> list[dict]:
                 grp["_seen"].add(dest)
                 grp["rows"].append([dest, price])
         entries = list(by_label.values())
+        # Hand-verified waypoints win over feed gantry coordinates:
+        # matched by entry label, only when the sign count still
+        # agrees (a feed that adds a gantry falls back to its own
+        # coordinates for that entry until the next pin pass).
+        # Applied BEFORE ordering so the pinned points get the same
+        # geometric sort as feed points.
+        src0 = items[0].get("src")
+        override = tollwaypoints.WAYPOINTS.get((src0 or "", corridor))
+        if override:
+            for e in entries:
+                pts = override.get(e["label"])
+                if pts and len(pts) == len(e["pts"]):
+                    e["pts"] = [list(p) for p in pts]
         all_pts = [p for g in entries for p in g["pts"]]
         lats = [p[0] for p in all_pts]
         lons = [p[1] for p in all_pts]
@@ -2335,25 +2349,34 @@ def toll_corridors(markers: list[dict]) -> list[dict]:
             grp["pts"].sort(key=lambda p: p[ax])
         entries.sort(key=lambda g: sum(p[ax] for p in g["pts"])
                      / len(g["pts"]))
-        # Driving order where the name says so: southbound and
-        # westbound corridors read top entry first.
-        if re.search(r"\b(SB|WB|S|W)$", corridor):
-            entries.reverse()
-            for grp in entries:
-                grp["pts"].reverse()
+        # Driving order from the direction in the corridor's name:
+        # orient the chain so its net bearing agrees with the labeled
+        # direction. The old rule ("ascending axis is northbound or
+        # eastbound; reverse SB/WB") inverted on roads that trend
+        # NW-SE like 101 on the Peninsula, where ascending LONGITUDE
+        # is southbound travel: both 101 chains ran backwards, pair
+        # bearings pointed against travel, and the directional
+        # snapper rejected or wrong-sided the end legs.
+        dirm = re.search(r"\b(NB|SB|EB|WB|N|S|E|W)$", corridor)
+        if dirm and len(all_pts) > 1:
+            want = {"N": 0.0, "NB": 0.0, "E": 90.0, "EB": 90.0,
+                    "S": 180.0, "SB": 180.0,
+                    "W": 270.0, "WB": 270.0}[dirm.group(1)]
+            a = entries[0]["pts"][0]
+            b = entries[-1]["pts"][-1]
+            dl = math.radians(b[1] - a[1])
+            la1, la2 = math.radians(a[0]), math.radians(b[0])
+            net = math.degrees(math.atan2(
+                math.sin(dl) * math.cos(la2),
+                math.cos(la1) * math.sin(la2)
+                - math.sin(la1) * math.cos(la2) * math.cos(dl))) % 360
+            gap = abs(net - want) % 360
+            if min(gap, 360 - gap) > 90:
+                entries.reverse()
+                for grp in entries:
+                    grp["pts"].reverse()
         for e in entries:
             del e["_seen"]
-        # Hand-verified waypoints win over feed gantry coordinates:
-        # matched by entry label, only when the sign count still
-        # agrees (a feed that adds a gantry falls back to its own
-        # coordinates for that entry until the next pin pass).
-        src0 = items[0].get("src")
-        override = tollwaypoints.WAYPOINTS.get((src0 or "", corridor))
-        if override:
-            for e in entries:
-                pts = override.get(e["label"])
-                if pts and len(pts) == len(e["pts"]):
-                    e["pts"] = [list(p) for p in pts]
         prices = [r[1] for e in entries for r in e["rows"]
                   if r[1] is not None]
         if not prices:

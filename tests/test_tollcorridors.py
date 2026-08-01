@@ -219,6 +219,43 @@ def test_snap_toll_rejects_off_route_and_accepts_on_route(snap_mem):
     assert __import__("asyncio").run(run(back)) is None
 
 
+def test_chain_orientation_follows_direction_label():
+    # 101 on the Peninsula trends NW-SE: its dominant axis is
+    # longitude, and ascending longitude is SOUTHBOUND travel there.
+    # The old "reverse SB/WB" rule inverted both directions on such
+    # roads; orientation must come from the chain's net bearing vs
+    # the labeled direction. Coordinates mimic I-380 (north end) and
+    # Marsh (south end).
+    def sign(cor, entry, lat, lon):
+        return bay(f"{cor}: {cor} - {entry} - 1", lat, lon,
+                   ["to End - 2: $1.00"])
+
+    nb = states.toll_corridors([
+        sign("P-101 NB", "I-380", 37.621, -122.400),
+        sign("P-101 NB", "Marsh", 37.473, -122.163),
+    ])
+    c = next(m for m in nb if m.get("corridor") == "P-101 NB")
+    # Northbound driving order: the SOUTHERN entry (Marsh) first.
+    assert [e["label"] for e in c["entries"]] == ["Marsh", "I-380"]
+
+    sb = states.toll_corridors([
+        sign("P-101 SB", "Broadway", 37.603, -122.381),
+        sign("P-101 SB", "Embarcadero", 37.454, -122.129),
+    ])
+    c = next(m for m in sb if m.get("corridor") == "P-101 SB")
+    # Southbound driving order: the NORTHERN entry (Broadway) first.
+    assert [e["label"] for e in c["entries"]] == ["Broadway", "Embarcadero"]
+
+    # A latitude-dominant corridor keeps the old behavior: I-880 NB
+    # ascending latitude is northbound already.
+    nb2 = states.toll_corridors([
+        sign("X-880 NB", "South", 37.46, -121.92),
+        sign("X-880 NB", "North", 37.60, -122.06),
+    ])
+    c = next(m for m in nb2 if m.get("corridor") == "X-880 NB")
+    assert [e["label"] for e in c["entries"]] == ["South", "North"]
+
+
 def test_hand_verified_waypoints_override_feed_coords(monkeypatch):
     from ca_roads_demo import tollwaypoints
 
