@@ -2284,6 +2284,7 @@ def toll_corridors(markers: list[dict]) -> list[dict]:
     parsing lives in tollprices so price history and the map share one
     vocabulary."""
     from ca_roads_demo import tollprices as tp
+    from ca_roads_demo import tollwaypoints
 
     out = [m for m in markers if m.get("kind") != "toll"
            or m.get("entries") is not None]  # pre-grouped pass through
@@ -2342,6 +2343,17 @@ def toll_corridors(markers: list[dict]) -> list[dict]:
                 grp["pts"].reverse()
         for e in entries:
             del e["_seen"]
+        # Hand-verified waypoints win over feed gantry coordinates:
+        # matched by entry label, only when the sign count still
+        # agrees (a feed that adds a gantry falls back to its own
+        # coordinates for that entry until the next pin pass).
+        src0 = items[0].get("src")
+        override = tollwaypoints.WAYPOINTS.get((src0 or "", corridor))
+        if override:
+            for e in entries:
+                pts = override.get(e["label"])
+                if pts and len(pts) == len(e["pts"]):
+                    e["pts"] = [list(p) for p in pts]
         prices = [r[1] for e in entries for r in e["rows"]
                   if r[1] is not None]
         if not prices:
