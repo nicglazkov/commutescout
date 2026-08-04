@@ -48,6 +48,26 @@ once.
 
 ## Design choices worth knowing
 
+- **The map's read path never touches compute.** A background publisher
+  builds the whole coverage area once per cycle and uploads pre-gzipped
+  snapshots to GCS behind a CDN; the browser boots from an edge-cached
+  static object. Nothing about that payload was ever per-user, so
+  building it per request only bought a cold-start wait: a cache miss
+  cost 1.2 s to first byte, against 30 ms from the edge. Feed warming
+  and upstream outages can no longer delay a visitor, because the last
+  good snapshot is already on the edge. The publisher skips its upload
+  while feeds are warming or a build looks degraded, so a bad cycle
+  keeps the previous complete map rather than replacing it with an
+  empty one, and the payload's `published` timestamp drives a "data as
+  of" chip so age is always visible. `/api/mapdata` still serves the
+  assistant, routing, watch areas and lazy closure geometry. Details:
+  [deploy](deploy.md#map-snapshots-optional-demo-service).
+- **Long-lived tabs are a supported case.** The map is meant to sit on a
+  wall monitor for weeks: it polls every 30 s (a 304 against the
+  snapshot ETag costs almost nothing), catches up immediately on
+  `visibilitychange`/`online` because browsers throttle hidden-tab
+  timers, and soft-reloads itself when a deploy changes the payload
+  schema out from under it.
 - **Everything is stateless and in-process.** The hosted demo runs a
   single Cloud Run instance; every rate and cost guard lives in process
   memory, which is why the service deploys with `--max-instances 1`.

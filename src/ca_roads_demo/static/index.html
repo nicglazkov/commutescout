@@ -73,6 +73,10 @@ body { background:var(--bg); color:var(--ink);
 .sysok { margin-left:auto; display:flex; align-items:center; gap:7px;
   font-size:.78rem; color:#9fd8b7; white-space:nowrap }
 .sysok i { width:7px; height:7px; border-radius:99px; background:#3fcf8a; font-style:normal }
+/* Quiet until the data is actually old, then it earns attention. */
+.asof { font-size:.78rem; color:#9fd8b7; white-space:nowrap }
+.asof.stale { color:#f5c451 }
+.asof.old { color:#ff9f9f; font-weight:600 }
 #ver { color:#8fa2b8; font-size:.75rem }
 
 .kpis { background:var(--navy2); color:#c8d5e4; display:flex; overflow-x:auto;
@@ -644,6 +648,10 @@ aside { background:var(--card); border-right:1px solid var(--line);
     <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
   </nav>
   <span class="sysok" id="sysok" title="Click for live data-source status"><i></i><span id="feedsok">checking live feeds&hellip;</span></span>
+  <!-- Data age. On a map left open on a wall monitor this is the health
+       indicator: if the publisher or the network stops, this ages in
+       view instead of the map silently freezing on old dots. -->
+  <span id="asof" class="asof" hidden></span>
   <span id="ver"></span>
 </header>
 <div class="kpis" id="kpis">
@@ -2961,136 +2969,147 @@ let incomingCount = 0;
   }).catch(() => {});
 })(0);
 
+
+// ── Snapshot boot ───────────────────────────────────────────────────
+// The map no longer boots through the API. A publisher builds one
+// coverage-wide object per bundle and uploads it pre-gzipped to GCS
+// behind Cloudflare, so first paint is an edge-cached static file: no
+// cold instance, no feed warming and no per-request gzip sitting in the
+// boot path. /api/mapdata still serves the assistant, routing, watch
+// areas and the fields=geo lazy geometry.
+//
+// If the snapshot host is unreachable the same payload is fetched from
+// /api/mapdata instead, so a bad day degrades to the old behaviour
+// rather than to a blank map.
+const SNAP_BASE = 'https://data.commutescout.com';
+const SNAP_BUNDLES = {
+  live: { file: 'live.json.gz', kinds: 'incident,closure,chain,fire,toll' },
+  cameras: { file: 'cameras.json.gz', kinds: 'camera' },
+  signs: { file: 'signs.json.gz', kinds: 'sign,rwis' },
+};
+// One object holds every marker we publish, so panning never needs
+// another fetch and the containment check always passes. Filtering to
+// the viewport is the client's job and already runs (cullSync).
+const SNAP_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
+let snapSchema = null;
+let snapPublished = 0;        // ms epoch of the freshest payload held
+let snapReloadArmed = false;
+
+// "Data as of" is the kiosk's health indicator. Fresh data keeps it
+// quiet; a stalled publisher or a dead network makes it visibly age
+// instead of the map silently freezing on hours-old dots.
+function paintAsOf() {
+  const el = document.getElementById('asof');
+  if (!el || !snapPublished) return;
+  const mins = Math.floor((Date.now() - snapPublished) / 60000);
+  const t = new Date(snapPublished).toLocaleTimeString([],
+    { hour: 'numeric', minute: '2-digit' });
+  el.hidden = false;
+  el.classList.toggle('stale', mins >= 2 && mins < 15);
+  el.classList.toggle('old', mins >= 15);
+  const ago = mins < 60 ? mins + ' min ago'
+    : Math.floor(mins / 60) + ' hr ago';
+  el.textContent = 'Data as of ' + t + (mins >= 2 ? ' (' + ago + ')' : '');
+}
+setInterval(paintAsOf, 30000);
+
+// A tab open on a wall monitor outlives deploys. Rather than break on a
+// payload it no longer understands, it reloads itself once the map is
+// idle: never mid-popup, so it cannot yank something out from under a
+// person standing at the screen.
+function checkSchema(p) {
+  if (!p || !p.schema) return;
+  if (snapSchema === null) { snapSchema = p.schema; return; }
+  if (p.schema === snapSchema || snapReloadArmed) return;
+  snapReloadArmed = true;
+  const go = () => {
+    if (document.querySelector('.leaflet-popup')) { setTimeout(go, 60000); }
+    else { location.reload(); }
+  };
+  setTimeout(go, 5000);
+}
+
+// The service worker keeps the last snapshot on disk. Reading it here
+// paints a repeat visit with zero network in the critical path; the
+// network copy replaces it a moment later. Anything old enough to
+// matter is labelled by the "data as of" chip.
+async function cachedBundle(key) {
+  if (!('caches' in window)) return null;
+  try {
+    const hit = await caches.match(SNAP_BASE + '/' + SNAP_BUNDLES[key].file);
+    return hit ? await hit.json() : null;
+  } catch (e) { return null; }
+}
+
+async function fetchBundle(key) {
+  const b = SNAP_BUNDLES[key];
+  try {
+    const res = await fetch(SNAP_BASE + '/' + b.file, { cache: 'no-cache' });
+    if (res.ok) return await res.json();
+  } catch (e) { /* snapshot host unreachable: fall back below */ }
+  try {
+    const res = await fetch('/api/mapdata?bbox=-85,-180,85,180&kinds=' +
+      b.kinds + '&slim=1', { cache: 'no-cache' });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { return null; }
+}
+
 async function refreshAmbient(force) {
-  const view = map.getBounds();
-  if (!force && ambientBounds && ambientBounds.contains(view)) return;
-  const mine = ++ambientCycle;
-  // First load fetches the WHOLE-WORLD box: the data is inherently
-  // US-only, so this costs the server nothing extra, it matches the
-  // <link rel=preload> in the head (the browser starts that request
-  // before Leaflet even loads), and the containment check above then
-  // holds for every pan and zoom a user can make. Dots never require
-  // re-querying; data refreshes on the interval timer instead.
-  // A visitor who lands on their own metro should download their own
-  // metro, not the country: at zoom 8 and closer the boot fetch is a
-  // padded, GRID-SNAPPED viewport (snapping keeps everyone in a
-  // region on the same cache entry, so the edge still serves hits).
-  // Zoomed-out views still take the whole world in one request, and
-  // warm-up re-polls keep whatever box they started with: each fetch
-  // replaces the marker registry, so shrinking mid-warm-up would
-  // discard states that just finished loading.
-  const first = ambientBounds === null
-    || (warmTotal > 0 && warmReady < warmTotal);
-  const snap = (v, step, dir) => (dir < 0 ? Math.floor(v / step)
-    : Math.ceil(v / step)) * step;
-  let fetchBounds;
-  if (first && map.getZoom() >= 8) {
-    const p = view.pad(0.6);
-    const s = 2;
-    fetchBounds = L.latLngBounds(
-      [snap(p.getSouth(), s, -1), snap(p.getWest(), s, -1)],
-      [snap(p.getNorth(), s, 1), snap(p.getEast(), s, 1)]);
-  } else if (first) {
-    fetchBounds = L.latLngBounds([[-85.0, -180.0], [85.0, 180.0]]);
-  } else {
-    fetchBounds = view.pad(0.35);
+  if (!force && ambientBounds && ambientBounds.contains(map.getBounds())) {
+    return;
   }
-  const sw = fetchBounds.getSouthWest(), ne = fetchBounds.getNorthEast();
-  const bbox = [sw.lat, sw.lng, ne.lat, ne.lng].map(v => v.toFixed(3)).join(',');
-  // Two phases: the fast feeds paint in ~a quarter second; the heavy ones
-  // (3,300 cameras, 970 signs) follow without holding them up.
-  const load = async (kinds, groups, isFast) => {
-    try {
-      // cache: no-cache = always revalidate with the server (ETag).
-      // Cloudflare's browser-TTL setting once stamped a 4-hour
-      // max-age onto this response, and a visitor who loaded during
-      // a degraded window replayed an empty map from disk for hours.
-      // Revalidation makes a stale local copy impossible.
-      const res = await fetch('/api/mapdata?bbox=' + bbox + '&kinds=' +
-        kinds + '&slim=1', { cache: 'no-cache' });
-      if (mine !== ambientCycle) return true;
-      if (!res.ok) return false;
-      if (isFast) {
-        warmTotal = +res.headers.get('X-Warm-Total') || 0;
-        warmReady = +res.headers.get('X-Warm-Ready') || 0;
-        lastLoadProgress = Date.now();
-        // The count header arrives with the response head, before a
-        // single body byte, so the status line has its denominator
-        // straight away.
-        incomingCount = +res.headers.get('X-Marker-Count') || 0;
-        if (coveragePill) showCoveragePill(incomingCount, 0);
-      }
-      let data;
-      if (isFast && res.body && (!mapDataShown || coveragePill)) {
-        // Byte-true progress: X-Raw-Length is the decompressed size,
-        // which is what the reader actually counts. The percentage is
-        // literal bytes received, never a fake animation.
-        const total = +res.headers.get('X-Raw-Length') || 0;
-        const reader = res.body.getReader();
-        const chunks = [];
-        let received = 0;
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          received += value.length;
-          bootBytes = true;
-          lastLoadProgress = Date.now();
-          const pct = total
-            ? Math.min(99, Math.round(100 * received / total)) : null;
-          if (total && !mapDataShown && !mapRefreshPrompt) {
-            showPill('Downloading live reports ' + pct + '%');
-          } else if (coveragePill && pct !== null) {
-            showCoveragePill(incomingCount, pct);
-          }
-        }
-        const all = new Uint8Array(received);
-        let off = 0;
-        for (const c of chunks) { all.set(c, off); off += c.length; }
-        data = JSON.parse(new TextDecoder().decode(all));
-      } else {
-        data = await res.json();
-      }
-      if (mine !== ambientCycle) return true;
-      const done = renderBatch(data.markers || [], groups);
-      if (isFast) {
-        if (done && done.then) await done;
+  const mine = ++ambientCycle;
+  const note = (p) => {
+    if (!p) return;
+    checkSchema(p);
+    const t = p.published ? Date.parse(p.published) : 0;
+    if (t && t > snapPublished) { snapPublished = t; paintAsOf(); }
+  };
+  const fast = (async () => {
+    // Boot only: paint whatever is already on disk, then let the
+    // network copy replace it. Repeat visits show a full map before a
+    // single byte moves.
+    if (ambientBounds === null) {
+      const cached = await cachedBundle('live');
+      if (cached && mine === ambientCycle) {
+        note(cached);
+        const first = renderBatch(cached.markers || [], FAST_GROUPS);
+        if (first && first.then) await first;
         mapLoadingDone();
       }
-      return true;
-    } catch (e) { return false; }
-  };
-  const [fastOk, heavyOk] = await Promise.all([
-    load('incident,closure,chain,fire,toll', FAST_GROUPS, true),
-    load('camera,sign,rwis', HEAVY_GROUPS, false),
-  ]);
-  if (mine !== ambientCycle) return;
-  if (fastOk && warmTotal) {
-    if (warmReady < warmTotal && warmPolls < 36) {
-      warmPolls += 1;
-      if (!mapRefreshPrompt) {
-        showPill('Loading state feeds: ' + warmReady + ' of ' +
-          warmTotal + '…');
-        warmPill = true;
-      }
-      clearTimeout(warmTimer);
-      warmTimer = setTimeout(() => refreshAmbient(true), 5000);
-    } else if (warmPill) {
-      warmPill = false;
-      hidePill();
     }
-  }
+    const p = await fetchBundle('live');
+    if (mine !== ambientCycle || !p) return false;
+    note(p);
+    lastLoadProgress = Date.now();
+    const done = renderBatch(p.markers || [], FAST_GROUPS);
+    if (done && done.then) await done;
+    mapLoadingDone();
+    return true;
+  })();
+  // Cameras and signs land in ONE renderBatch: it clears the camera and
+  // sign caches together, so rendering them separately would wipe the
+  // other's markers.
+  const heavy = (async () => {
+    const [cams, signs] = await Promise.all([
+      fetchBundle('cameras'), fetchBundle('signs')]);
+    if (mine !== ambientCycle) return true;
+    if (!cams && !signs) return false;
+    [cams, signs].forEach(note);
+    renderBatch([...((cams || {}).markers || []),
+      ...((signs || {}).markers || [])], HEAVY_GROUPS);
+    return true;
+  })();
+  const [fastOk, heavyOk] = await Promise.all([fast, heavy]);
+  if (mine !== ambientCycle) return;
   if (fastOk && heavyOk) {
-    ambientBounds = fetchBounds;
+    ambientBounds = SNAP_BOUNDS;
     mapRetryDelay = 4000;
-    // Everything in view is now on the map (or the view moved on and
-    // another cycle owns the pill).
-    if (viewCovered()) clearCoveragePill();
+    clearCoveragePill();
   } else if (!mapDataShown) {
     // The page is useless without the first batch: keep retrying with
-    // backoff instead of sitting blank until the 3-minute refresh.
-    // The clickable refresh prompt, once shown, is more actionable
-    // than the hiccup note, so it stays.
+    // backoff instead of sitting blank until the interval refresh.
     if (!mapRefreshPrompt) {
       mapLoadingText.textContent = 'Connection hiccup - retrying…';
     }
@@ -3116,7 +3135,26 @@ map.on('moveend zoomend', () => {
   if (mapDataShown && !covered) showCoveragePill(0, null);
 });
 refreshAmbient(true);
-setInterval(() => refreshAmbient(true), 180000);
+// ── Long-running sessions (wall monitor / kiosk) ─────────────────────
+// 30 s, not 180 s: the snapshot carries a strong ETag, so an idle open
+// map costs a 304 and a few bytes per poll. This is what sets on-screen
+// freshness for a display nobody ever touches.
+setInterval(() => refreshAmbient(true), 30000);
+// Browsers throttle timers in hidden tabs, and a monitor that sleeps
+// overnight would otherwise show yesterday's dots until the next tick.
+// Catch up the moment the tab is visible again or the network returns.
+let lastWake = 0;
+function catchUp() {
+  if (document.visibilityState === 'hidden') return;
+  // Two events often fire together on wake; one refresh is enough.
+  if (Date.now() - lastWake < 3000) return;
+  lastWake = Date.now();
+  paintAsOf();
+  refreshAmbient(true);
+}
+document.addEventListener('visibilitychange', catchUp);
+window.addEventListener('online', catchUp);
+window.addEventListener('pageshow', (e) => { if (e.persisted) catchUp(); });
 
 document.querySelectorAll('#filters input[data-group]').forEach(box => {
   box.addEventListener('change', () => {

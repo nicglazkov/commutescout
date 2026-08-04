@@ -36,7 +36,7 @@ from ca_roads.feeds import calfire as calfire_feed
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
-from ca_roads_demo import analytics, roadsnap, states, trips, watch
+from ca_roads_demo import analytics, roadsnap, snapshot, states, trips, watch
 from ca_roads_demo.prompt import SYSTEM, TOOL_DEFS, TOOL_FUNCS  # noqa: F401
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_suggest
@@ -714,23 +714,52 @@ _MAPDATA_CACHE_TTL = 30
 _MAPDATA_CACHE_MAX = 24
 
 
-async def api_mapdata(request: Request):
-    """Everything in the viewport, no AI involved: the map is a product
-    on its own. Dense layers (cameras, signs) only ship when the client
-    asks for them (it gates them by zoom). slim=1 drops closure stretch
-    geometry (57% of bytes, invisible below zoom 8); fields=geo returns
-    ONLY that geometry for a viewport, fetched lazily when zoomed in."""
-    box = _bbox_params(request)
-    if box is None:
-        return JSONResponse(
-            {"error": "bbox=lat_min,lon_min,lat_max,lon_max required"},
-            status_code=400,
-        )
+def shape_markers(markers, *, slim: bool = False, geo_only: bool = False):
+    """Trim a marker list for the wire.
+
+    slim boot payloads drop closure stretch geometry and every null
+    field; geo-only responses carry nothing BUT that geometry (matched
+    client-side by coordinates). Shared with the snapshot publisher so a
+    published object is byte-identical in shape to the endpoint's."""
+    if geo_only:
+        return [
+            {"kind": m["kind"], "lat": m["lat"], "lon": m["lon"],
+             "path": m["path"]}
+            for m in markers
+            if m.get("kind") == "lane_closure"
+            and isinstance(m.get("path"), list) and len(m["path"]) > 1
+        ] + [
+            {"kind": "toll", "lat": m["lat"], "lon": m["lon"],
+             "segs": m["segs"]}
+            for m in markers
+            if m.get("kind") == "toll"
+            and isinstance(m.get("segs"), list) and m["segs"]
+        ]
+    if slim:
+        return [
+            {k: v for k, v in m.items()
+             if v is not None
+             and not (m.get("kind") == "lane_closure"
+                      and k in ("path", "end"))
+             and not (m.get("kind") == "toll" and k == "segs")}
+            for m in markers
+        ]
+    return markers
+
+
+async def build_markers(box, want, *, geo_only: bool = False):
+    """Every marker inside `box`, for the requested kinds.
+
+    Shared by the request path and the snapshot publisher, which is the
+    point: the published object has to be built by exactly the code the
+    endpoint uses, or the two drift and the map starts depending on
+    which one answered. The publisher passes the coverage-wide box so a
+    single object serves every viewport (the client already filters in
+    view).
+
+    Returns (markers, warm_ready, warm_total, degraded).
+    """
     lat_min, lon_min, lat_max, lon_max = box
-    want = set((request.query_params.get("kinds") or
-                "incident,closure,chain,fire").split(","))
-    slim = request.query_params.get("slim") == "1"
-    geo_only = request.query_params.get("fields") == "geo"
     road = tools.get_road()
 
     def inside(lat, lon):
@@ -917,7 +946,6 @@ async def api_mapdata(request: Request):
             road.client, box, want,
             budget_seconds=2.5 if ready0 < total0 else None))
     warm_ready, warm_total = states.warm_progress()
-    warming = warm_ready < warm_total
     # A whole-world response with almost nothing in it means the feed
     # layer is degraded (a starved connection pool once served only the
     # 8 static bridge markers for hours), not that the world is quiet.
@@ -928,7 +956,7 @@ async def api_mapdata(request: Request):
         # Report warm-up as one short of done: open pages keep
         # re-polling (bounded client-side) and pick up the recovery
         # within seconds instead of waiting for the interval refresh.
-        warming = True
+        # Callers read "warming" off this, so it must stay below total.
         warm_ready = max(0, warm_total - 1)
 
     # Closures whose feeds publish endpoints but no geometry get their
@@ -939,32 +967,30 @@ async def api_mapdata(request: Request):
         with contextlib.suppress(Exception):
             roadsnap.apply(markers)
 
-    # Shape the response: slim boot payloads drop closure stretch
-    # geometry and every null field; geo-only responses carry nothing
-    # BUT that geometry (matched client-side by coordinates).
-    if geo_only:
-        markers = [
-            {"kind": m["kind"], "lat": m["lat"], "lon": m["lon"],
-             "path": m["path"]}
-            for m in markers
-            if m.get("kind") == "lane_closure"
-            and isinstance(m.get("path"), list) and len(m["path"]) > 1
-        ] + [
-            {"kind": "toll", "lat": m["lat"], "lon": m["lon"],
-             "segs": m["segs"]}
-            for m in markers
-            if m.get("kind") == "toll"
-            and isinstance(m.get("segs"), list) and m["segs"]
-        ]
-    elif slim:
-        markers = [
-            {k: v for k, v in m.items()
-             if v is not None
-             and not (m.get("kind") == "lane_closure"
-                      and k in ("path", "end"))
-             and not (m.get("kind") == "toll" and k == "segs")}
-            for m in markers
-        ]
+    return markers, warm_ready, warm_total, degraded
+
+
+async def api_mapdata(request: Request):
+    """Everything in the viewport, no AI involved: the map is a product
+    on its own. Dense layers (cameras, signs) only ship when the client
+    asks for them (it gates them by zoom). slim=1 drops closure stretch
+    geometry (57% of bytes, invisible below zoom 8); fields=geo returns
+    ONLY that geometry for a viewport, fetched lazily when zoomed in."""
+    box = _bbox_params(request)
+    if box is None:
+        return JSONResponse(
+            {"error": "bbox=lat_min,lon_min,lat_max,lon_max required"},
+            status_code=400,
+        )
+    want = set((request.query_params.get("kinds") or
+                "incident,closure,chain,fire").split(","))
+    slim = request.query_params.get("slim") == "1"
+    geo_only = request.query_params.get("fields") == "geo"
+    markers, warm_ready, warm_total, _degraded = await build_markers(
+        box, want, geo_only=geo_only)
+    warming = warm_ready < warm_total
+
+    markers = shape_markers(markers, slim=slim, geo_only=geo_only)
 
     # Everything, gzipped: compresses roughly 5:1. No caps - the map
     # IS the product. Content-hash ETag lets the interval refresh cost
@@ -1119,7 +1145,11 @@ async def warmup(request: Request):
     awaits): the page polls this while the first map response is still
     in flight so a cold instance shows real progress, not a dead pill."""
     ready, total = states.warm_progress()
-    return JSONResponse({"ready": ready, "total": total},
+    return JSONResponse({"ready": ready, "total": total,
+                         # Publisher health: when the map is served from
+                         # snapshots, "is the publisher still running" is
+                         # the question ops actually needs answered.
+                         "snapshot": snapshot.status()},
                         headers={"Cache-Control": "no-store"})
 
 
@@ -1384,9 +1414,14 @@ async def _snap_closures_loop() -> None:
 async def _lifespan(app_):
     task = asyncio.create_task(_prewarm())
     snap_task = asyncio.create_task(_snap_closures_loop())
+    # Publishes the map's boot payload to GCS so visitors read it from
+    # the edge instead of from this instance. No-op without
+    # SNAPSHOT_BUCKET, so local runs and tests are unaffected.
+    pub_task = asyncio.create_task(snapshot.run())
     yield
     task.cancel()
     snap_task.cancel()
+    pub_task.cancel()
 
 
 app = Starlette(
