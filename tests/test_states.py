@@ -109,6 +109,39 @@ def test_nec_cameras_join_on_location():
     assert states.snapshot("me", "NO-LOCATION-CAM") is None
 
 
+def test_nec_camera_url_round_trips_through_the_endpoint():
+    """The URL the marker advertises must be the URL that serves the
+    frame. NE Compass camera ids carry spaces, so the marker is
+    percent-encoded; anything that re-encodes it on the way back (the
+    map once ran the URL through encodeURI) turns %20 into %2520 and
+    every ME/NH/VT snapshot 404s."""
+    from urllib.parse import quote, unquote
+
+    from starlette.testclient import TestClient
+
+    from ca_roads_demo import app as demo_app
+
+    states._cam_locs.clear()
+    states._snapshots.clear()
+    states._parse_nec_bundle(NEC_BUNDLE, "me", "MaineDOT")
+    url = states._parse_nec_cameras(NEC_CAMS, "me", "MaineDOT")[0]["image"]
+
+    cam_id = "I-95 NB at MM 25 Kennebunk"
+    assert url == "/api/stcam/me/" + quote(cam_id)
+    assert "%20" in url                      # the id really is encoded
+
+    ok = TestClient(demo_app.app).get(url)
+    assert ok.status_code == 200
+    assert ok.content == JPEG
+    assert ok.headers["content-type"] == "image/jpeg"
+
+    # The server decodes the path exactly once. Encoding it a second
+    # time on the way out therefore lands on a different key, which is
+    # what the %2520 regression was.
+    assert unquote(quote(cam_id)) == cam_id
+    assert unquote(quote(quote(cam_id))) != cam_id
+
+
 def _wz_feature(desc, start, end):
     return {
         "type": "Feature",

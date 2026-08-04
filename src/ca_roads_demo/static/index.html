@@ -1854,11 +1854,28 @@ const compassSvg = (deg) =>
   '<path d="M10 4.2 L12.4 13 L10 11.4 L7.6 13 Z" fill="#0f766e"' +
   ' transform="rotate(' + deg + ' 10 10)"/></svg>';
 
+// Camera URLs come from state feeds (and from our own /api/stcam
+// proxy), and they land in src and href attributes. Two rules:
+//   - Only http(s) or a same-origin path survives, so a javascript:
+//     URL in a feed can never become a clickable link.
+//   - Escape for the attribute, never re-encode. encodeURI() used to do
+//     the encoding here and corrupted every proxy URL, whose camera ids
+//     are already percent-encoded server-side (a space became %2520 and
+//     the fetch 404'd, which broke all ME/NH/VT snapshots).
+function safeUrl(u) {
+  const s = String(u == null ? '' : u);
+  const ok = /^https?:\/\//i.test(s) || (s[0] === '/' && s[1] !== '/');
+  return ok ? s.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+}
+
 function popupFor(m, g) {
   if (g === 'camera') {
+    const img = safeUrl(m.image);
+    const vid = safeUrl(m.stream);
     // The media type is the first thing a user should know: a still
     // that refreshes on open is not the same promise as live video.
-    const chip = m.stream
+    const chip = vid
       ? '<span class="mchip live">Live video</span>'
       : '<span class="mchip">Still snapshot</span>';
     return '<div class="p2" style="--acc:' + ACC.camera + '">' +
@@ -1868,14 +1885,24 @@ function popupFor(m, g) {
         m.near].filter(Boolean).join(', ')) + '</div>' +
       // no-referrer: some state camera hosts (TravelMidwest) 403 any
       // request carrying a foreign Referer header.
-      '<img src="' + encodeURI(m.image) + '?t=' + Date.now() + '" width="300" ' +
-      'referrerpolicy="no-referrer" ' +
-      'alt="" onerror="this.replaceWith(document.createTextNode(\'snapshot unavailable right now\'))">' +
-      (m.stream
-        ? '<div><a class="detbtn" href="' + encodeURI(m.stream) +
+      (img
+        ? '<img src="' + img + '?t=' + Date.now() + '" width="300" ' +
+          'referrerpolicy="no-referrer" ' +
+          'alt="" onerror="this.replaceWith(document.createTextNode(\'snapshot unavailable right now\'))">'
+        : '') +
+      (vid
+        ? '<div><a class="detbtn" href="' + vid +
           '" target="_blank" rel="noopener">Watch the live stream</a></div>'
-        : '<div class="camnote">Still image, not video. ' +
-          'A new image loads each time you open this camera.</div>') +
+        : '') +
+      // Straight to the agency's own image, at whatever size they
+      // publish: the popup only ever shows a 300px copy. noreferrer for
+      // the same reason the <img> above carries it.
+      (img
+        ? '<div><a class="detbtn" href="' + img +
+          '" target="_blank" rel="noopener noreferrer">Open the full image</a></div>'
+        : '') +
+      (vid ? '' : '<div class="camnote">Still image, not video. ' +
+        'A new image loads each time you open this camera.</div>') +
       '<div class="foot"><em>Source: ' +
       (m.src ? esc(m.src) + ' camera network' : 'Caltrans CCTV') +
       '</em></div></div>';
