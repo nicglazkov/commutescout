@@ -466,7 +466,14 @@ TRAVELIQ = {
 
 def _decode_gpoly(encoded: str) -> list[list[float]]:
     """Google encoded polyline (precision 5) to [lat, lon] pairs.
-    Travel-IQ events carry road geometry this way."""
+    Travel-IQ events carry road geometry this way.
+
+    A corrupt chunk makes the varint loop keep shifting and emit a
+    delta near 2**31, which throws the point thousands of degrees off
+    (a live NCDOT US-176 closure decoded to longitude -21557 and drew a
+    line off the continent). Whatever decoded before that is real road,
+    so decoding stops at the first point that is not a coordinate
+    instead of discarding the geometry or trusting the rest."""
     pts: list[list[float]] = []
     index = lat = lon = 0
     try:
@@ -484,9 +491,12 @@ def _decode_gpoly(encoded: str) -> list[list[float]]:
                 deltas.append(~(result >> 1) if result & 1 else result >> 1)
             lat += deltas[0]
             lon += deltas[1]
+            if not (-9_000_000 <= lat <= 9_000_000
+                    and -18_000_000 <= lon <= 18_000_000):
+                break
             pts.append([lat / 1e5, lon / 1e5])
     except (IndexError, TypeError):
-        return []
+        return pts
     return pts
 
 
@@ -494,14 +504,31 @@ def _road_path(pts: list, near_lat: float, near_lon: float,
                cap: int = 80) -> list[list[float]] | None:
     """Decimated, sanity-checked path: must start near the marker
     (within ~2 degrees) or the geometry is judged garbage and the
-    closure stays a dot. Never ship a line that is not the road."""
+    closure stays a dot. Never ship a line that is not the road.
+
+    The gap between consecutive points is checked too, not just the
+    first point. A polyline whose tail decodes to a runaway coordinate
+    keeps a perfectly good prefix, and checking only pts[0] let that
+    prefix vouch for the bad tail: the line then ran from the closure
+    to wherever the tail landed. The limit is per STEP rather than
+    distance from the marker, because real closures do run long (a
+    UDOT one spans 2.3 degrees end to end); measured across every
+    closure served, the largest genuine step is 0.58 degrees and the
+    runaway was 21474."""
     if not pts or len(pts) < 2:
         return None
     if abs(pts[0][0] - near_lat) > 2 or abs(pts[0][1] - near_lon) > 2:
         return None
-    step = max(1, len(pts) // cap)
-    path = [[round(a, 5), round(b, 5)] for a, b in pts[::step]]
-    tail = [round(pts[-1][0], 5), round(pts[-1][1], 5)]
+    good = [tuple(pts[0])]
+    for a, b in pts[1:]:
+        if abs(a - good[-1][0]) > 2 or abs(b - good[-1][1]) > 2:
+            break
+        good.append((a, b))
+    if len(good) < 2:
+        return None
+    step = max(1, len(good) // cap)
+    path = [[round(a, 5), round(b, 5)] for a, b in good[::step]]
+    tail = [round(good[-1][0], 5), round(good[-1][1], 5)]
     if path[-1] != tail:
         path.append(tail)
     return path if len(path) > 1 else None
