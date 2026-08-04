@@ -142,6 +142,79 @@ EOF
 | `DEMO_MODEL` | Answering model | `claude-sonnet-5` |
 | `DEMO_DAILY_DOLLARS` | Global daily model-spend cap | `3.0` |
 | `DEMO_PER_IP_DAILY` | Questions per visitor per day | `20` |
+| `SNAPSHOT_BUCKET` | GCS bucket the map snapshots publish to. Unset disables the publisher and the map falls back to `/api/mapdata` | unset |
+| `APP_VERSION` | Stamped into each snapshot as `build`; informational | unset |
+
+## Map snapshots (optional, demo service)
+
+The map does not boot through the API. A background publisher builds the
+whole coverage area once per cycle and uploads pre-gzipped objects to
+GCS, which sits behind Cloudflare, so a visitor's first paint is an
+edge-cached static file and no user request touches compute. Without
+`SNAPSHOT_BUCKET` the publisher is a no-op and the client falls back to
+`/api/mapdata`, which still serves the assistant, routing, watch areas
+and `fields=geo` lazy geometry either way.
+
+Three objects on their own cadences:
+
+| Object | Contents | Rebuilt | Cache-Control |
+|---|---|---|---|
+| `live.json.gz` | incidents, closures, chain controls, fires, tolls | 30 s | `max-age=15, stale-while-revalidate=180` |
+| `signs.json.gz` | message signs, roadside weather | 5 min | `max-age=120, stale-while-revalidate=3600` |
+| `cameras.json.gz` | cameras | 1 h | `max-age=3600, stale-while-revalidate=86400` |
+
+The bucket must be named for the hostname that serves it, because the
+CNAME below routes by Host header.
+
+```bash
+BUCKET=data.example.com          # must equal the DNS name
+gcloud storage buckets create gs://$BUCKET --location us-west1 \
+  --uniform-bucket-level-access
+
+# Public read: these are published road conditions, already public. Only
+# objects are readable; nothing can list or write.
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET \
+  --member=allUsers --role=roles/storage.objectViewer
+
+# The runtime SA writes the snapshots.
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET \
+  --member=serviceAccount:ca-roads-run@$PROJECT.iam.gserviceaccount.com \
+  --role=roles/storage.objectAdmin
+
+# The page fetches cross-origin, so the bucket needs CORS.
+cat > cors.json <<'JSON'
+[{"origin": ["https://example.com"], "method": ["GET", "HEAD"],
+  "responseHeader": ["Content-Type","Content-Encoding","ETag","Cache-Control"],
+  "maxAgeSeconds": 3600}]
+JSON
+gcloud storage buckets update gs://$BUCKET --cors-file=cors.json
+```
+
+Then point the hostname at GCS through the CDN. In Cloudflare: a
+**proxied** (orange cloud) `CNAME data -> c.storage.googleapis.com`, and
+enable Tiered Cache under Caching.
+
+The zone's SSL/TLS mode must be **Full**, not **Full (strict)**. GCS
+serves a `*.storage.googleapis.com` certificate that cannot match your
+own hostname, so strict mode returns 526. If the rest of the zone needs
+strict, scope the relaxation to this hostname with a Configuration Rule.
+
+Verify the object is actually pre-compressed and actually cached at the
+edge, because both are easy to get silently wrong:
+
+```bash
+# Content-Encoding only appears when the client advertises gzip: without
+# it GCS decompressive-transcodes and the header is legitimately absent.
+curl -sI -H 'Accept-Encoding: gzip' https://data.example.com/live.json.gz \
+  | grep -iE 'content-encoding|cache-control|etag'
+
+# Second and later requests must report HIT.
+curl -sI https://data.example.com/live.json.gz | grep -i cf-cache-status
+```
+
+`/api/warmup` reports publisher health (last published time and content
+hash per object), which is the fastest way to tell a stalled publisher
+from a stalled feed.
 
 ## Watch areas (optional, demo service)
 
