@@ -933,3 +933,59 @@ def test_road_path_sanity_guard():
     assert states._road_path(pts, 38.5, -120.2) is not None
     assert states._road_path(pts, 45.0, -90.0) is None
     assert states._road_path([[38.5, -120.2]], 38.5, -120.2) is None
+
+
+def _gpoly_encode(pairs):
+    """Encode (dlat, dlon) deltas in 1e5 units, Google polyline style."""
+    def one(v):
+        v = ~(v << 1) if v < 0 else (v << 1)
+        out = ""
+        while v >= 0x20:
+            out += chr((0x20 | (v & 0x1F)) + 63)
+            v >>= 5
+        return out + chr(v + 63)
+    return "".join(one(a) + one(b) for a, b in pairs)
+
+
+# US-176 near Rivercove Rd in Polk County: real road geometry followed
+# by a chunk that decodes to a delta near 2**31. Served live by NCDOT.
+US176_RUNAWAY = _gpoly_encode([
+    (3522191, -8231819), (-16, -25), (-113, -179), (3, -144),
+    (0, -2147485842),
+])
+
+
+def test_gpoly_stops_at_runaway_chunk():
+    pts = states._decode_gpoly(US176_RUNAWAY)
+    # The real road survives; the impossible coordinate never ships.
+    assert len(pts) == 4
+    assert pts[0] == [35.22191, -82.31819]
+    assert all(-90 <= a <= 90 and -180 <= b <= 180 for a, b in pts)
+
+
+def test_road_path_cuts_a_runaway_tail():
+    """The bug: a good prefix vouched for a bad tail, so the closure
+    drew a line from North Carolina to longitude -21557."""
+    good = [[35.22191, -82.31819], [35.22175, -82.31844], [35.22062, -82.32023]]
+    path = states._road_path(good + [[35.22065, -21557.18009]],
+                             35.22191, -82.31819)
+    assert path is not None
+    assert path[-1] == [35.22062, -82.32023]      # cut before the garbage
+    assert all(-180 <= p[1] <= 180 for p in path)
+    # End to end, from the encoded polyline the feed actually served.
+    full = states._road_path(states._decode_gpoly(US176_RUNAWAY),
+                             35.22191, -82.31819)
+    assert full is not None
+    assert all(abs(p[1] + 82.3) < 1 for p in full)
+
+
+def test_road_path_keeps_a_genuinely_long_closure():
+    """The guard is per step, not distance from the marker: real work
+    zones run long (UDOT ships one spanning 2.3 degrees) and must not
+    be truncated by the runaway-tail fix."""
+    pts = [[40.49216 - i * 0.03, -111.41261 + i * 0.03] for i in range(80)]
+    path = states._road_path(pts, 40.49216, -111.41261)
+    assert path is not None
+    # Survives well past the 2-degree radius that would have cut it.
+    assert abs(path[-1][1] - pts[-1][1]) < 0.01
+    assert abs(path[-1][1] - (-111.41261)) > 2
