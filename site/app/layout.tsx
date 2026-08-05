@@ -22,6 +22,18 @@ export const metadata: Metadata = {
   title: "CommuteScout",
   description:
     "Live California road conditions: incidents, closures, and chain control from CHP, Caltrans, and the state DOTs.",
+  // The four legacy app pages (map/watch/trip/admin.html) already use
+  // <link rel="icon" href="/logo.svg">, served by the Starlette app from
+  // src/ca_roads_demo/static/logo.svg (see the "/logo.svg" route in
+  // app.py). Pointing the site's icon there too, ahead of the
+  // app/favicon.ico fallback, gives every page the crisp brand SVG
+  // instead of create-next-app's default icon.
+  icons: {
+    icon: [
+      { url: "/logo.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
