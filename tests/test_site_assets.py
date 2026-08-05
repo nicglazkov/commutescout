@@ -50,3 +50,20 @@ def test_every_referenced_site_asset_resolves(monkeypatch):
     for url in sorted(urls):
         r = c.get(url)
         assert r.status_code == 200, f"{url} -> {r.status_code}"
+
+
+@pytest.mark.skipif(
+    not REAL_SITE_OUT.exists(),
+    reason="site/out is not built; run `cd site && npm run build` first. "
+    "CI's site job always builds before this suite runs.",
+)
+def test_sitemap_xml_serves_the_real_export(monkeypatch):
+    """site/app/sitemap.ts emits sitemap.xml into the flat export root;
+    /sitemap.xml serves it through the same SITE_DIR resolution as the
+    other site files."""
+    monkeypatch.setattr(demo_app, "SITE_DIR", REAL_SITE_OUT)
+    c = TestClient(demo_app.app)
+    r = c.get("/sitemap.xml")
+    assert r.status_code == 200
+    assert "commutescout.com/map" in r.text
+    assert "commutescout.com/pricing" in r.text

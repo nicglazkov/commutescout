@@ -29,3 +29,8 @@ evals/results/results-*.json
 site/node_modules/
 site/out/
 site/.next/
+
+# Docker's COPY destination for the built site/out export (see SITE_DIR
+# in src/ca_roads_demo/app.py); nothing populates this outside the Docker
+# build, so it must never be committed.
+src/ca_roads_demo/static/site/
