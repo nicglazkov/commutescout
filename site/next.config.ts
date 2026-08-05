@@ -5,8 +5,17 @@ const nextConfig: NextConfig = {
   // Static export: the build writes plain HTML/CSS/JS to out/, which the
   // Python app serves. No Node runs in production.
   output: "export",
-  // The exported pages are served from the site root by Starlette.
-  trailingSlash: false,
+  // The exported pages are served from the site root by Starlette, whose
+  // handler (_site_response in app.py, and its tests in
+  // tests/test_site_pages.py) looks up "<page>/index.html". That is what
+  // trailingSlash: true actually produces for a nested route
+  // (confirmed against node_modules/next/dist/docs/01-app/02-guides/
+  // static-exports.md's own "Deploying" section): false instead emits a
+  // flat "<page>.html" sibling file, which the Starlette handler would
+  // never find. Only the root route ever shipped before Task 8 added the
+  // first nested page (/pricing), so this mismatch - present since the
+  // scaffold - had nothing to expose it until now.
+  trailingSlash: true,
   images: { unoptimized: true },
   // site/ has its own package-lock.json, so Turbopack would otherwise
   // infer site/ as the project root and refuse to resolve the shared
