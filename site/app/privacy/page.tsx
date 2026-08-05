@@ -157,6 +157,7 @@ export default function PrivacyPage() {
               Signed-in users can see every watch area on the{" "}
               <Link
                 href="/watch"
+                prefetch={false}
                 className="text-cs-sky font-medium hover:underline"
               >
                 watch page

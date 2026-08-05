@@ -69,6 +69,7 @@ export default function Home() {
               <CopyField value={MCP_URL} />
               <Link
                 href="https://github.com/nicglazkov/commutescout/blob/main/docs/mcp.md"
+                prefetch={false}
                 className="inline-flex items-center gap-1.5 text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
               >
                 View the MCP docs on GitHub

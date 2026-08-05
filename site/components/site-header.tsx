@@ -1,4 +1,10 @@
 import Image from "next/image";
+// Every Link in site/ is rendered with prefetch={false}. Navigation here is
+// a full page load by design (see the site route table in
+// src/ca_roads_demo/app.py), and the server deliberately does not serve the
+// RSC segment-tree payloads (__next._tree.txt) that next/link prefetches on
+// viewport entry. Leaving the default prefetch on produces a 404 for every
+// nav link on every page load; prefetch={false} keeps the console clean.
 import Link from "next/link";
 
 // Global site chrome, rendered on every page from app/layout.tsx. Plain
@@ -20,7 +26,12 @@ export function SiteHeader() {
   return (
     <header className="bg-cs-navy">
       <div className="mx-auto flex max-w-7xl items-center gap-6 px-6 py-3">
-        <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="CommuteScout home">
+        <Link
+          href="/"
+          prefetch={false}
+          className="flex shrink-0 items-center gap-2.5"
+          aria-label="CommuteScout home"
+        >
           <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-md" />
           <span className="text-base font-semibold text-white">CommuteScout</span>
         </Link>
@@ -30,6 +41,7 @@ export function SiteHeader() {
             <Link
               key={link.href}
               href={link.href}
+              prefetch={false}
               className="rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:text-white"
             >
               {link.label}
@@ -39,6 +51,7 @@ export function SiteHeader() {
 
         <Link
           href="/map"
+          prefetch={false}
           className="rounded-full bg-cs-sky px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cs-sky/90"
         >
           Open the map
