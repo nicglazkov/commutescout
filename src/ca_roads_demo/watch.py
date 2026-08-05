@@ -357,6 +357,19 @@ class FirestoreStore:
         await self.db.collection("watch_state").document(watch_id).set(
             {"seen": top, "updated_at": datetime.now(UTC).isoformat()})
 
+    async def add_waitlist_email(self, email: str) -> bool:
+        """Store a Pro-waitlist signup. Returns False when the address
+        is already on the list. Document id is the lowercased address,
+        which makes duplicates a natural no-op."""
+        from google.cloud import firestore
+
+        doc = self.db.collection("waitlist").document(email.lower())
+        if (await doc.get()).exists:
+            return False
+        await doc.set({"email": email.lower(),
+                       "added": firestore.SERVER_TIMESTAMP})
+        return True
+
 
 _store: FirestoreStore | None = None
 

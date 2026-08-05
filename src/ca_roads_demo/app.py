@@ -1325,14 +1325,20 @@ async def site_contact(_: Request):
     return _site_response("contact")
 
 
+def _no_crlf(value: str) -> str:
+    """Strip embedded CR/LF so user input can't inject extra lines into
+    anything built from it downstream (email subjects, bodies, etc.)."""
+    return value.replace("\r", "").replace("\n", "")
+
+
 async def api_contact(request: Request):
     """The contact form. Emails the site owner through the existing
     Resend integration; the destination never appears in the repo or
     on a page. A filled honeypot returns success without sending, so
     bots get no signal to iterate on."""
     form = await request.form()
-    name = (form.get("name") or "").strip()[:80]
-    email = (form.get("email") or "").strip()[:120]
+    name = _no_crlf((form.get("name") or "").strip())[:80]
+    email = _no_crlf((form.get("email") or "").strip())[:120]
     message = (form.get("message") or "").strip()[:2000]
     if (form.get("website") or "").strip():
         return PlainTextResponse("Thanks. Your message is on its way.")
@@ -1350,6 +1356,24 @@ async def api_contact(request: Request):
         return PlainTextResponse("Sending failed. Try again in a minute.",
                                  status_code=502)
     return PlainTextResponse("Thanks. Your message is on its way.")
+
+
+async def api_waitlist(request: Request):
+    """Pro waitlist signups from the pricing page. A filled honeypot
+    returns success without storing anything, same as /api/contact."""
+    form = await request.form()
+    email = _no_crlf((form.get("email") or "").strip())[:120].lower()
+    if (form.get("website") or "").strip():
+        return PlainTextResponse("You're on the list.")
+    if not ("@" in email and "." in email.rsplit("@", 1)[-1]):
+        return PlainTextResponse("Enter a valid email address.",
+                                 status_code=400)
+    try:
+        await watch.get_store().add_waitlist_email(email)
+    except Exception:  # noqa: BLE001 - no Firestore locally
+        return PlainTextResponse("Signups are unavailable right now. "
+                                 "Try again later.", status_code=503)
+    return PlainTextResponse("You're on the list.")
 
 
 async def sw_js(_: Request):
@@ -1530,6 +1554,7 @@ app = Starlette(
         Route("/about", site_about),
         Route("/contact", site_contact),
         Route("/api/contact", api_contact, methods=["POST"]),
+        Route("/api/waitlist", api_waitlist, methods=["POST"]),
         Route("/trip/{trip_id}", trips.trip_page),
         Route("/api/trip", trips.api_trip_create, methods=["POST"]),
         Route("/api/trip/{trip_id}", trips.api_trip_get),

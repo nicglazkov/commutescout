@@ -49,3 +49,14 @@ def test_unconfigured_contact_email_gives_503(monkeypatch):
     r = c.post("/api/contact", data={"name": "Ada", "email": "a@b.co",
                                      "message": "m", "website": ""})
     assert r.status_code == 503
+
+
+def test_embedded_newline_in_name_produces_clean_subject(monkeypatch):
+    sent = []
+    c = _client(monkeypatch, sent)
+    r = c.post("/api/contact",
+               data={"name": "Ada\r\nBcc: evil@x.com", "email": "a@b.co",
+                     "message": "hello", "website": ""})
+    assert r.status_code == 200
+    assert "\r" not in sent[0]["subject"] and "\n" not in sent[0]["subject"]
+    assert sent[0]["subject"] == "CommuteScout contact: AdaBcc: evil@x.com"
