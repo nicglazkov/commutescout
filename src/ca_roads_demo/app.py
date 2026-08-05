@@ -1547,7 +1547,12 @@ class SecurityHeaders:
         "https://www.nvroads.com https://www.drivenc.gov "
         "https://micamerasimages.net https://*.skyvdn.com "
         "https://mdotjboss.state.mi.us; "
-        "connect-src 'self' https://router.project-osrm.org "
+        # data.* serves the pre-built map snapshots the page boots from.
+        # Leaving it out does not break the site (the client falls back
+        # to /api/mapdata) which is exactly why it is easy to miss: the
+        # map keeps working while quietly using the slow path.
+        "connect-src 'self' https://data.commutescout.com "
+        "https://router.project-osrm.org "
         "https://valhalla1.openstreetmap.de https://*.googleapis.com "
         "https://*.google.com https://cloudflareinsights.com "
         "https://*.gstatic.com; "

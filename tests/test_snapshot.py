@@ -4,6 +4,10 @@ import json
 
 from ca_roads_demo import snapshot
 
+# The one hostname the page, the service worker and the CSP must
+# all agree on.
+SNAP_HOST = "data.commutescout.com"
+
 
 def test_payload_carries_the_fields_the_client_depends_on():
     p = snapshot.build_payload([{"kind": "incident", "lat": 1, "lon": 2}])
@@ -156,3 +160,38 @@ def test_live_bundle_is_the_fast_one():
     assert "stale-while-revalidate=180" in live[3]
     # Tight enough that the chip stays green while the publisher is up.
     assert live[4] <= 120
+
+
+def test_csp_allows_the_snapshot_host():
+    """The CSP must allow connecting to the snapshot host.
+
+    This one is worth pinning because the failure is invisible: with the
+    host missing from connect-src the browser blocks the fetch, the
+    client falls back to /api/mapdata, and the map keeps working while
+    quietly using the slow path it was migrated off. It cost a round of
+    measurement to notice.
+    """
+    from starlette.testclient import TestClient
+
+    from ca_roads_demo import app as demo_app
+
+    csp = TestClient(demo_app.app).get("/").headers["content-security-policy"]
+    connect = next(d for d in csp.split(";") if d.strip().startswith("connect-src"))
+    host = "https://" + SNAP_HOST
+    assert host in connect, f"{host} missing from {connect!r}"
+
+
+def test_client_and_csp_agree_on_the_snapshot_host():
+    """The page hardcodes the host it fetches from; the CSP has to name
+    the same one. Two places, so they can drift."""
+    import pathlib
+    import re
+
+    html = pathlib.Path(
+        "src/ca_roads_demo/static/index.html").read_text(encoding="utf-8")
+    base = re.search(r"const SNAP_BASE = '([^']+)'", html).group(1)
+    assert base == "https://" + SNAP_HOST
+
+    sw = pathlib.Path(
+        "src/ca_roads_demo/static/sw.js").read_text(encoding="utf-8")
+    assert re.search(r"const SNAP_HOST = '([^']+)'", sw).group(1) == SNAP_HOST
