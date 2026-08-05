@@ -46,6 +46,19 @@ CAM_TTL = 600.0          # the camera XML is ~20 MB per state; refresh slowly
 WZDX_TTL = 600.0         # WZDx dumps change slowly and some are 8-16 MB
 TZ_EAST = ZoneInfo("America/New_York")
 
+# The feed count marketing copy pins to. coverage_summary()["sources"]
+# is NOT a stable substitute: it is environment-dependent by design
+# (_wzdx_superseded drops a WZDx entry once a keyed feed supersedes it,
+# so a keyless checkout counts more sources than production, which runs
+# with keys configured and truthfully serves fewer). PUBLIC_SOURCE_COUNT
+# is the number the deployed topbar shows with production keys
+# configured. Update it whenever a source is added or retired here;
+# tests/test_snapshot.py::test_feed_counts_are_current walks every copy
+# location (README.md, site/lib/stats.ts, site/app/about/page.tsx,
+# site/components/blocks/hero-section-1.tsx) and pins them to this
+# constant.
+PUBLIC_SOURCE_COUNT = 53
+
 # (lat_min, lon_min, lat_max, lon_max) - fetch a state only when the
 # viewport overlaps it.
 NEC_STATES = {

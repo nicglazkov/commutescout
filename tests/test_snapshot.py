@@ -248,17 +248,25 @@ def test_state_counts_are_current():
 
 def test_feed_counts_are_current():
     """Sibling to test_state_counts_are_current: every hardcoded "N
-    official agency feeds" claim must match the live registry
-    (states.coverage_summary()["sources"]), derived the same way. Before
-    this test, stats-1.tsx's own comment claimed a drift guard existed
-    that in fact only checked states, not feeds - this closes that gap.
+    official agency feeds" claim must match states.PUBLIC_SOURCE_COUNT.
+    Before this test, stats-1.tsx's own comment claimed a drift guard
+    existed that in fact only checked states, not feeds - this closes
+    that gap.
+
+    This pins to PUBLIC_SOURCE_COUNT, not states.coverage_summary()
+    ["sources"]: the live registry count is environment-dependent by
+    design (_wzdx_superseded drops a WZDx entry once a keyed feed
+    supersedes it, so a keyless checkout counts more sources than
+    production, which runs with keys configured and truthfully serves
+    fewer). PUBLIC_SOURCE_COUNT is the number production actually shows;
+    see its docstring in states.py for the update procedure.
     """
     import pathlib
     import re
 
     from ca_roads_demo import states
 
-    actual = states.coverage_summary()["sources"]
+    actual = states.PUBLIC_SOURCE_COUNT
     assert actual > 0
 
     checked = 0
@@ -274,6 +282,6 @@ def test_feed_counts_are_current():
                  for g in m.groups() if g]
         assert found, f"no feed count found in {path}"
         for n in found:
-            assert n == actual, f"{path} says {n} feeds, registry says {actual}"
+            assert n == actual, f"{path} says {n} feeds, PUBLIC_SOURCE_COUNT says {actual}"
         checked += len(found)
     assert checked >= 4
