@@ -1313,11 +1313,14 @@ ADMIN_PAGE_PATH = "/" + os.environ.get("ADMIN_PATH", "admin").strip("/")
 
 
 async def privacy_page(_: Request):
-    return FileResponse(STATIC_DIR / "privacy.html")
+    # Task 10: ported into the site shell (site/app/privacy/page.tsx), same
+    # flat-export pattern as the other marketing pages below.
+    return _site_response("privacy")
 
 
 async def terms_page(_: Request):
-    return FileResponse(STATIC_DIR / "terms.html")
+    # Task 10: ported into the site shell (site/app/terms/page.tsx).
+    return _site_response("terms")
 
 
 async def site_home(_: Request):
@@ -1879,14 +1882,15 @@ app = RateLimitMiddleware(
                      # as static files; the mutating watch APIs stay
                      # inside the bucket (and are token-gated anyway).
                      "/watch", ADMIN_PAGE_PATH, "/sw.js", "/manifest.webmanifest",
-                     "/privacy", "/terms", "/trip/", "/api/trip",
+                     "/trip/", "/api/trip",
                      "/api/watch/config", "/api/staticmap",
                      # The map page itself: loaded once per session, same
                      # as the pages above.
                      "/map",
-                     # Marketing pages: static exports, as cheap as
-                     # /privacy and /terms above.
-                     "/pricing", "/about", "/contact"),
+                     # Marketing pages: static exports served via
+                     # _site_response (Task 10: /privacy and /terms moved
+                     # here from their own standalone HTML files).
+                     "/pricing", "/about", "/contact", "/privacy", "/terms"),
     # The homepage, exact-match only: a "/" entry in exempt_prefixes would
     # startswith-match every path in the app and disable the limiter
     # entirely (see RateLimitMiddleware's exempt_exact docstring).

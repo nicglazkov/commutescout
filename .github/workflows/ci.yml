@@ -18,6 +18,23 @@ jobs:
         run: pip install -e ".[dev,demo]" -c constraints.txt
       - name: Lint
         run: ruff check .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+        working-directory: site
+      # Task 10: the content-preservation test in test_site_pages.py
+      # (test_legal_content_survived_the_reskin) asserts against the real
+      # site/out/{privacy,terms}.html export, not a monkeypatched fixture -
+      # it skips with a clear reason if site/out is missing. Building here
+      # (duplicating the site job's build, deliberately: keeps the two jobs
+      # independent/parallel rather than wiring a needs: + artifact
+      # download between them) means that test always runs for real in CI
+      # instead of silently skipping forever.
+      - run: npm run build
+        working-directory: site
       - name: Test
         run: pytest -q
       - name: Dependency vulnerability audit
@@ -53,6 +70,8 @@ jobs:
           test -f site/out/pricing.html
           test -f site/out/about.html
           test -f site/out/contact.html
+          test -f site/out/privacy.html
+          test -f site/out/terms.html
       - name: Built pages use slash-less internal links
         run: |
           # Guards the Task 8 fix-round ruling (Nic): served/canonical URLs
