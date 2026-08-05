@@ -29,7 +29,28 @@ import { Check } from "lucide-react";
 // replaced with --cs-* tokens; bare "border" utilities (transparent by
 // default in Tailwind v4) given an explicit border-cs-line color; the
 // check icon uses cs-sky as a small accent instead of a neutral gray.
+//
+// Visual-engagement pass (polish phase 3): the flat two-column bordered
+// grid is now framed in a --cs-navy "plinth" band so the pair reads as a
+// deliberate comparison rather than two loose boxes; every checkmark sits
+// in a small cs-sky/10 circle instead of a bare glyph; the Pro card gets a
+// cs-sky ring, a lifted shadow, and its "Coming soon" marker moved from a
+// corner ribbon to a pill badge for a clearer at-a-glance distinction.
+// None of the bullet copy, plan names, CTA label, or badge text changed -
+// only layout, color, and spacing.
 export default function Pricing() {
+  const freeItems = [
+    "The full live map, all 38 states",
+    "Route planner with GPX, KML, and print export",
+    "Ask about your drive (daily cap)",
+    "3 watch areas: circles up to 25 mi radius, polygons up to 2,000 sq mi, routes up to 250 mi with a 2 mi buffer",
+  ];
+  const proItems = [
+    "More and larger watch areas",
+    "Event history and playback",
+    "Route briefings and exports",
+  ];
+
   return (
     <section className="py-16 md:py-20">
       <div className="mx-auto max-w-7xl px-6">
@@ -37,59 +58,56 @@ export default function Pricing() {
           Pricing
         </h1>
 
-        <div className="mt-12 grid gap-1.5 border border-cs-line *:p-6 max-lg:mx-auto max-lg:max-w-sm lg:mt-16 lg:grid-cols-2">
-          <div className="flex flex-col gap-8 border-cs-line max-lg:border-b lg:border-r">
-            <div>
-              <p className="text-lg font-medium">Free</p>
+        <div className="bg-cs-navy mt-12 rounded-3xl p-2 lg:mt-16 lg:p-3">
+          <div className="grid gap-3 max-lg:mx-auto max-lg:max-w-sm lg:grid-cols-2">
+            <div className="bg-cs-paper flex flex-col gap-8 rounded-2xl p-6 transition-shadow hover:shadow-lg hover:shadow-cs-navy/10 sm:p-8">
+              <div>
+                <p className="text-cs-ink text-lg font-medium">Free</p>
 
-              <Button
-                variant="outline"
-                className="mt-8 w-full"
-                nativeButton={false}
-                render={
-                  <Link href="/map" prefetch={false}>
-                    Open the map
-                  </Link>
-                }
-              />
+                <Button
+                  variant="outline"
+                  className="mt-8 w-full"
+                  nativeButton={false}
+                  render={
+                    <Link href="/map" prefetch={false}>
+                      Open the map
+                    </Link>
+                  }
+                />
+              </div>
+
+              <ul className="text-cs-ink/60 list-outside space-y-3">
+                {freeItems.map((item, index) => (
+                  <li key={index} className="flex items-start gap-3">
+                    <span className="bg-cs-sky/10 text-cs-sky mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full">
+                      <Check className="size-3" />
+                    </span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            <ul className="text-cs-ink/60 list-outside space-y-3">
-              {[
-                "The full live map, all 38 states",
-                "Route planner with GPX, KML, and print export",
-                "Ask about your drive (daily cap)",
-                "3 watch areas: circles up to 25 mi radius, polygons up to 2,000 sq mi, routes up to 250 mi with a 2 mi buffer",
-              ].map((item, index) => (
-                <li key={index} className="flex items-start gap-3">
-                  <Check className="text-cs-sky mt-1 size-3 shrink-0" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
+            <div className="bg-cs-paper ring-cs-sky/50 relative flex flex-col gap-8 rounded-2xl p-6 shadow-xl shadow-cs-navy/20 ring-2 transition-shadow hover:shadow-2xl sm:p-8">
+              <div className="bg-cs-sky absolute -top-3 left-6 w-fit rounded-full px-3 py-1 text-xs font-medium text-white shadow-sm shadow-cs-navy/20">
+                Coming soon
+              </div>
 
-          <div className="bg-cs-paper border-cs-line relative flex flex-col gap-8 max-lg:border-t lg:border-l">
-            <div className="bg-cs-sky/15 text-cs-sky ring-cs-sky/20 absolute right-0 top-0 w-fit -translate-y-px translate-x-px rounded-bl-lg px-3 py-1 text-xs font-medium ring-1">
-              Coming soon
+              <div>
+                <p className="text-cs-ink text-lg font-medium">Pro</p>
+              </div>
+
+              <ul className="text-cs-ink/60 list-outside space-y-3">
+                {proItems.map((item, index) => (
+                  <li key={index} className="flex items-start gap-3">
+                    <span className="bg-cs-sky/10 text-cs-sky mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full">
+                      <Check className="size-3" />
+                    </span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </div>
-
-            <div>
-              <p className="text-lg font-medium">Pro</p>
-            </div>
-
-            <ul className="text-cs-ink/60 list-outside space-y-3">
-              {[
-                "More and larger watch areas",
-                "Event history and playback",
-                "Route briefings and exports",
-              ].map((item, index) => (
-                <li key={index} className="flex items-start gap-3">
-                  <Check className="text-cs-sky mt-1 size-3 shrink-0" />
-                  {item}
-                </li>
-              ))}
-            </ul>
           </div>
         </div>
       </div>

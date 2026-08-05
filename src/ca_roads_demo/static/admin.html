@@ -144,6 +144,22 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
       <div class="msg" id="fb-msg"></div>
     </div>
 
+    <h1 style="margin-top:24px">Pro waitlist</h1>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+        <h2 style="margin:0">Pro plan signups</h2>
+        <button id="wl-refresh">Refresh</button>
+      </div>
+      <div class="an-kpis">
+        <div><span class="an-n" id="wl-count">–</span><span class="an-l">on the list</span></div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Email</th><th>Added</th></tr></thead>
+        <tbody id="wl-rows"></tbody>
+      </table></div>
+      <div class="msg" id="wl-msg"></div>
+    </div>
+
     <h1 style="margin-top:24px">Premium trial management</h1>
 
     <div class="card">
@@ -229,6 +245,7 @@ onAuthStateChanged(auth, async (u) => {
     $('panel').classList.remove('hidden');
     loadAnalytics();
     loadFeedback();
+    loadWaitlist();
   } catch (e) {
     $('signin').classList.remove('hidden');
     msg('signinmsg', e.message, 'err');
@@ -363,6 +380,29 @@ async function loadFeedback() {
       tb.innerHTML = '<tr><td colspan="4" style="color:var(--dim)">No feedback votes in the last ' + f.days + ' days.</td></tr>';
     }
   } catch (e) { msg('fb-msg', e.message, 'err'); }
+}
+
+// ── Pro waitlist ───────────────────────────────────────────────────────
+$('wl-refresh').addEventListener('click', loadWaitlist);
+
+async function loadWaitlist() {
+  try {
+    const w = await api('/api/admin/waitlist');
+    $('wl-count').textContent = (w.count || 0).toLocaleString();
+    const tb = $('wl-rows');
+    tb.innerHTML = '';
+    for (const e of w.entries) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td></td><td></td>';
+      tr.children[0].textContent = e.email;
+      tr.children[1].textContent = e.added ? new Date(e.added).toLocaleString([], {
+        month: 'short', day: 'numeric', year: 'numeric' }) : 'unknown';
+      tb.append(tr);
+    }
+    if (!w.entries.length) {
+      tb.innerHTML = '<tr><td colspan="2" style="color:var(--dim)">No signups yet.</td></tr>';
+    }
+  } catch (e) { msg('wl-msg', e.message, 'err'); }
 }
 
 const SVGNS = 'http://www.w3.org/2000/svg';

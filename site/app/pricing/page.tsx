@@ -37,10 +37,15 @@ export default function PricingPage() {
           no JS submission handler, matching the brief's exact markup. The
           endpoint returns a plain-text response rather than a redirect, so
           a no-JS submission lands on a plain "You're on the list." page;
-          that is the accepted v1 behavior. */}
+          that is the accepted v1 behavior.
+          Visual-engagement pass (polish phase 3): only the surrounding
+          band/card wrapper and heading style changed here, framing the
+          form to match the navy-plinth cards above it - the <form>
+          element itself, its fields/attributes/honeypot/action, and the
+          explainer sentence below it are untouched byte-for-byte. */}
       <section id="waitlist" className="scroll-mt-6 pb-16 md:pb-20">
         <div className="mx-auto max-w-7xl px-6">
-          <div className="max-w-xl">
+          <div className="border-cs-line bg-cs-paper max-w-xl rounded-2xl border p-6 sm:p-8">
             <h2 className="text-cs-ink text-2xl font-medium tracking-tight">
               Get Pro updates
             </h2>
