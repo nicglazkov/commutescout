@@ -387,6 +387,16 @@ class FirestoreStore:
                        "added": firestore.SERVER_TIMESTAMP})
         return True
 
+    async def list_waitlist(self) -> list[dict]:
+        """Every Pro-waitlist signup, for the admin viewer. The doc id
+        is the sha256 hash from add_waitlist_email, not user-facing, so
+        it is not attached to the returned dicts (unlike list_users'
+        uid or list_codes' code)."""
+        out = []
+        async for snap in self.db.collection("waitlist").stream():
+            out.append(snap.to_dict())
+        return out
+
 
 _store: FirestoreStore | None = None
 

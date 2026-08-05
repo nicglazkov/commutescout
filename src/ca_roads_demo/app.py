@@ -1470,6 +1470,25 @@ async def api_waitlist(request: Request):
     return PlainTextResponse("You're on the list.")
 
 
+async def api_admin_waitlist(request: Request):
+    """Admin-only: Pro waitlist signups for the /admin viewer, newest
+    first. Gating mirrors /api/admin/analytics's _require_admin check."""
+    if not await watch._require_admin(request):
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    rows = await watch.get_store().list_waitlist()
+
+    def added_iso(row: dict) -> str | None:
+        added = row.get("added")
+        return added.isoformat() if hasattr(added, "isoformat") else None
+
+    entries = sorted(
+        ({"email": r.get("email", ""), "added": added_iso(r)} for r in rows),
+        key=lambda e: e["added"] or "",
+        reverse=True,
+    )
+    return JSONResponse({"count": len(entries), "entries": entries})
+
+
 async def sw_js(_: Request):
     # Served from the root so the service worker scope covers /watch.
     #
@@ -1674,6 +1693,7 @@ app = Starlette(
               methods=["GET"]),
         Route("/api/admin/user", watch.api_admin_user, methods=["POST"]),
         Route("/api/admin/code", watch.api_admin_code, methods=["POST"]),
+        Route("/api/admin/waitlist", api_admin_waitlist, methods=["GET"]),
         Route("/api/check-watches", watch.api_check_watches,
               methods=["POST"]),
         Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
