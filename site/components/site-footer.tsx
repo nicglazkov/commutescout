@@ -22,14 +22,12 @@ const siteLinks = [
 const productLinks = [
   { href: "/map", label: "Open the map" },
   { href: "/watch", label: "Watch areas" },
+  { href: "/data-sources", label: "Data sources" },
 ];
 
 const resourceLinks = [
   { href: "https://github.com/nicglazkov/commutescout", label: "GitHub" },
-  {
-    href: "https://github.com/nicglazkov/commutescout/blob/main/docs/mcp.md",
-    label: "MCP docs",
-  },
+  { href: "/mcp", label: "MCP server" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
 ];
@@ -79,13 +77,14 @@ export function SiteFooter() {
 
         <div className="space-y-2 border-t border-white/10 pt-6 text-sm text-white/60">
           <p>
-            Data from CHP, Caltrans, and the state DOTs listed in{" "}
-            <a
-              href="https://github.com/nicglazkov/commutescout/blob/main/docs/data-sources.md"
+            Data from CHP, Caltrans, and the state DOTs listed on the{" "}
+            <Link
+              href="/data-sources"
+              prefetch={false}
               className="underline underline-offset-2 hover:text-white"
             >
-              the data sources documentation
-            </a>
+              data sources page
+            </Link>
             .
           </p>
           <p>&copy; {new Date().getFullYear()} CommuteScout</p>

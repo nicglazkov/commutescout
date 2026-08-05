@@ -1405,6 +1405,20 @@ async def site_contact(_: Request):
     return _site_response("contact")
 
 
+async def site_data_sources(_: Request):
+    # Replaces the GitHub-only docs/data-sources.md with an on-site page
+    # (site/app/data-sources/page.tsx): the per-state coverage matrix, the
+    # closure taxonomy, and per-source freshness, restyled from the doc.
+    return _site_response("data-sources")
+
+
+async def site_mcp(_: Request):
+    # Replaces the GitHub-only docs/mcp.md with an on-site page
+    # (site/app/mcp/page.tsx): the connector URL, the tool reference, and
+    # the local stdio config, restyled from the doc.
+    return _site_response("mcp")
+
+
 def _no_crlf(value: str) -> str:
     """Strip embedded CR/LF so user input can't inject extra lines into
     anything built from it downstream (email subjects, bodies, etc.)."""
@@ -1633,6 +1647,8 @@ app = Starlette(
         Route("/pricing", site_pricing),
         Route("/about", site_about),
         Route("/contact", site_contact),
+        Route("/data-sources", site_data_sources),
+        Route("/mcp", site_mcp),
         Route("/favicon.ico", favicon_ico),
         Route("/sitemap.xml", sitemap_xml),
         Route("/api/contact", api_contact, methods=["POST"]),
@@ -1980,8 +1996,11 @@ app = RateLimitMiddleware(
                      "/map",
                      # Marketing pages: static exports served via
                      # _site_response (Task 10: /privacy and /terms moved
-                     # here from their own standalone HTML files).
+                     # here from their own standalone HTML files;
+                     # /data-sources and /mcp added when those docs moved
+                     # on-site).
                      "/pricing", "/about", "/contact", "/privacy", "/terms",
+                     "/data-sources", "/mcp",
                      # A single marketing page load fetches on the order of
                      # ten _next chunks; without this those alone would
                      # drain the strict bucket before the visitor reads

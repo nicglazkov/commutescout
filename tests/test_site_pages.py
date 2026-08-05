@@ -82,6 +82,19 @@ def test_privacy_and_terms_serve_from_the_export(tmp_path, monkeypatch):
     assert b"terms" in c.get("/terms").content
 
 
+def test_data_sources_and_mcp_serve_from_the_export(tmp_path, monkeypatch):
+    """docs/data-sources.md and docs/mcp.md moved on-site: /data-sources and
+    /mcp are re-pointed at _site_response, same as /pricing, /about, and
+    /contact."""
+    (tmp_path / "data-sources.html").write_text("<h1>data sources</h1>",
+                                                 encoding="utf-8")
+    (tmp_path / "mcp.html").write_text("<h1>mcp</h1>", encoding="utf-8")
+    monkeypatch.setattr(demo_app, "SITE_DIR", tmp_path)
+    c = TestClient(demo_app.app)
+    assert b"data sources" in c.get("/data-sources").content
+    assert b"mcp" in c.get("/mcp").content
+
+
 def test_site_page_falls_back_to_nested_index_html(tmp_path, monkeypatch):
     """Older builds (or a trailingSlash: true export) still serve: when the
     flat "<page>.html" is absent, fall back to "<page>/index.html"."""
@@ -113,6 +126,8 @@ def test_marketing_pages_are_exempt_from_the_rate_limiter(tmp_path, monkeypatch)
                                            encoding="utf-8")
     (tmp_path / "privacy.html").write_text("<h1>privacy</h1>",
                                            encoding="utf-8")
+    (tmp_path / "data-sources.html").write_text("<h1>data sources</h1>",
+                                                encoding="utf-8")
     monkeypatch.setattr(demo_app, "SITE_DIR", tmp_path)
     c = TestClient(demo_app.app)
     for _ in range(30):
@@ -124,6 +139,12 @@ def test_marketing_pages_are_exempt_from_the_rate_limiter(tmp_path, monkeypatch)
     # would slip past a test that never actually hammers /privacy.
     for _ in range(30):
         r = c.get("/privacy")
+        assert r.status_code != 429
+    # /data-sources and /mcp share the same exempt_prefixes entry; hammer
+    # one of them too so a regression that dropped just those two entries
+    # would not slip past this test.
+    for _ in range(30):
+        r = c.get("/data-sources")
         assert r.status_code != 429
 
 

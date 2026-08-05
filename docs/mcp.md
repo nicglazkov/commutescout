@@ -50,6 +50,7 @@ checks off), so bind it to localhost when running it on your machine:
 | `get_cameras(center?, route?)` | Roadside camera snapshots, each verified live before it is returned (offline placeholder frames are filtered by image freshness) |
 | `get_road_signs(route?, center?)` | What changeable message signs are displaying right now, verbatim |
 | `rank_routes(by?, limit?)` | All 17 corridors ranked by live events or measured congestion, with reasons; answers "what are the busiest routes right now" |
+| `get_nearby_events(center, radius_km?, kinds?)` | Live road events near a point across every covered state, 38 states, not just California; the fallback for locations outside California, near a state border, or when a California tool comes back empty |
 
 Route and region reports also carry context that changes the advice:
 weather alerts sampled along the trip, road-weather stations reporting
