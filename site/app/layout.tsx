@@ -14,6 +14,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  // Needed for og:image/twitter:image to resolve to an absolute URL: pages
+  // that reference /static/shots/og.png (same-origin, served by the Python
+  // app) would otherwise resolve against Next's localhost:3000 dev default
+  // in the exported HTML. Every page metadata export is on this domain.
+  metadataBase: new URL("https://commutescout.com"),
   title: "CommuteScout",
   description:
     "Live California road conditions: incidents, closures, and chain control from CHP, Caltrans, and the state DOTs.",

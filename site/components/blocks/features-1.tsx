@@ -1,83 +1,56 @@
-import { Card } from "@/components/ui/card";
-import { ArrowLeftRight, Bell, LineChart, Users } from "lucide-react";
+import { Eye, MapPinned, MessageCircleQuestion, ShieldAlert } from "lucide-react";
 
 // Source: Tailark OSS registry, Dusk kit, dusk-features-1
-// (https://oss.tailark.com/r/dusk-features-1.json).
+// (https://oss.tailark.com/r/dusk-features-1.json). Used for the homepage's
+// "How it works" band (Task 7 brief).
 //
-// Adapted from upstream: text-muted-foreground/text-foreground/bg-background/
-// bg-card/ring-foreground replaced with --cs-* tokens throughout. Upstream's
-// copy was written for a CRM product ("deal stage", "pipeline"); replaced
-// with neutral placeholder copy since a page composing this block owns its
-// own real content.
+// Adapted from upstream, beyond colors: dropped the two large illustrated
+// "Card" mockups upstream ships above the item list. They carried no real
+// content (Tailark's own generic mockup blocks) and the brief gives exact
+// copy for only the four-item list below, so this component now composes
+// that list alone rather than inventing headline/mockup copy to fill the
+// dropped section. The four-item grid is the part of dusk-features-1 that
+// maps directly onto the brief's "How it works" spec.
+const items = [
+  {
+    icon: Eye,
+    lead: "See it.",
+    body: "The live map shows what agencies are reporting right now, refreshed about every 30 seconds.",
+  },
+  {
+    icon: MapPinned,
+    lead: "Plan it.",
+    body: "Route options with live conditions along the way, exportable to GPX or KML.",
+  },
+  {
+    icon: MessageCircleQuestion,
+    lead: "Ask it.",
+    body: "Plain-English answers read from the same feeds, with per-source timestamps.",
+  },
+  {
+    icon: ShieldAlert,
+    lead: "Watch it.",
+    body: "Draw an area and get push or email alerts when something appears inside it.",
+  },
+];
+
 export default function Features() {
   return (
     <section className="py-16 md:py-20">
       <div className="mx-auto max-w-7xl px-6">
-        <h2 className="text-cs-ink/60 max-w-4xl text-balance text-4xl font-medium tracking-tight lg:text-5xl">
-          <span className="text-cs-ink">Section headline placeholder.</span> <br /> One
-          line of supporting copy.
+        <h2 className="text-cs-ink max-w-4xl text-balance text-4xl font-medium tracking-tight lg:text-5xl">
+          How it works
         </h2>
-        <div className="*:bg-cs-paper mt-8 grid gap-3 md:mt-16 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="p-8">
-            <p className="text-cs-ink/60 max-w-xs text-lg font-medium">
-              <span className="text-cs-ink">Feature headline.</span> One or two sentences
-              describing this capability.
+
+        <div className="max-sm:*:not-last:border-cs-line max-sm:*:not-last:border-b max-sm:*:not-last:pb-3 mt-12 grid gap-3 *:max-w-xs sm:grid-cols-2 md:mt-16 md:gap-y-6 lg:grid-cols-4 lg:gap-6">
+          {items.map(({ icon: Icon, lead, body }) => (
+            <p key={lead} className="text-cs-ink/60 text-balance">
+              <span className="text-cs-ink font-medium">
+                <Icon className="inline size-4 -translate-y-0.5" /> {lead}
+              </span>{" "}
+              {body}
             </p>
-
-            <div className="my-16">
-              <div
-                aria-hidden
-                className="bg-cs-paper relative mx-auto aspect-square w-10/12 rounded-xl border border-cs-line"
-              >
-                <div className="bg-cs-paper ring-cs-ink/6.5 absolute bottom-0 right-0 aspect-square w-3/5 translate-x-8 translate-y-16 rounded-xl shadow-xl ring" />
-              </div>
-            </div>
-          </Card>
-          <Card className="lg:col-span-2">
-            <div className="p-8">
-              <p className="text-cs-ink/60 max-w-xs text-lg font-medium">
-                <span className="text-cs-ink">Feature headline.</span> One or two
-                sentences describing this capability.
-              </p>
-            </div>
-
-            <div className="mask-x-from-65% mt-6 pt-2">
-              <div
-                aria-hidden
-                className="bg-linear-to-b from-cs-ink/5 ring-cs-ink/6.5 relative h-72 rounded-xl shadow-xl ring"
-              ></div>
-            </div>
-          </Card>
-        </div>
-
-        <div className="max-sm:*:not-last:border-cs-line max-sm:*:not-last:border-b max-sm:*:not-last:pb-3 mt-12 grid gap-3 *:max-w-xs sm:grid-cols-2 md:mt-16 md:gap-y-6 lg:mt-24 lg:grid-cols-4 lg:gap-6">
-          <p className="text-cs-ink/60 text-balance">
-            <span className="text-cs-ink font-medium">
-              <ArrowLeftRight className="inline size-4 -translate-y-0.5" /> Capability one.
-            </span>{" "}
-            Placeholder description of this capability.
-          </p>
-
-          <p className="text-cs-ink/60 text-balance">
-            <span className="text-cs-ink font-medium">
-              <Bell className="inline size-4 -translate-y-0.5" /> Capability two.
-            </span>{" "}
-            Placeholder description of this capability.
-          </p>
-
-          <p className="text-cs-ink/60 text-balance">
-            <span className="text-cs-ink font-medium">
-              <Users className="inline size-4 -translate-y-0.5" /> Capability three.
-            </span>{" "}
-            Placeholder description of this capability.
-          </p>
-
-          <p className="text-cs-ink/60 text-balance">
-            <span className="text-cs-ink font-medium">
-              <LineChart className="inline size-4 -translate-y-0.5" /> Capability four.
-            </span>{" "}
-            Placeholder description of this capability.
-          </p>
+          ))}
         </div>
       </div>
     </section>
