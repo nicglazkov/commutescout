@@ -1,34 +1,48 @@
 @import "tailwindcss";
 @import "../../src/ca_roads_demo/static/tokens.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--cs-bg);
+  --color-foreground: var(--cs-ink);
+  /* --font-inter comes from next/font/google in app/layout.tsx (self-hosted
+     Inter, matching the map app's self-hosted Inter). --cs-font is the
+     shared token sheet's generic fallback stack. */
+  --font-sans: var(--font-inter), var(--cs-font);
   --color-cs-navy: var(--cs-navy);
   --color-cs-navy2: var(--cs-navy2);
   --color-cs-sky: var(--cs-sky);
   --color-cs-ink: var(--cs-ink);
   --color-cs-paper: var(--cs-paper);
+  --color-cs-bg: var(--cs-bg);
   --color-cs-line: var(--cs-line);
   --font-cs: var(--cs-font);
+  /* Keyframes the vendored Tailark accordion block (components/ui/accordion.tsx)
+     animates open/closed with. Defined here instead of pulling in the
+     tw-animate-css package, which the site otherwise has no use for. */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--accordion-panel-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--accordion-panel-height);
+  }
+  to {
+    height: 0;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--cs-bg);
+  color: var(--cs-ink);
+  font-family: var(--font-sans);
 }
