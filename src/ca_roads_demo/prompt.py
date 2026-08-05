@@ -262,7 +262,7 @@ TOOL_DEFS = [
         "name": "get_nearby_events",
         "description": (
             "Live road events near a point ANYWHERE CommuteScout covers "
-            "(32 states, not just California): state DOT incidents, "
+            "(38 states, not just California): state DOT incidents, "
             "roadwork and closures, chain advisories, wildfires, sign "
             "text. Use for any location outside California or near a "
             "state border; each event names its source agency. Coverage "

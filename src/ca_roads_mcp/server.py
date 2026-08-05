@@ -1286,7 +1286,7 @@ async def get_nearby_events(
     kinds: str = "incident,closure,chain,fire",
 ) -> dict:
     """Live road events near a point anywhere CommuteScout covers, not
-    just California: 32 states today, growing.
+    just California: 38 states today, growing.
 
     Data: the same multi-state feeds the live map shows, normalized -
     state DOT incidents, roadwork and closures, chain and traction

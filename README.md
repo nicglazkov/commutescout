@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/logo.svg" width="110" alt="CommuteScout logo">
   <h1>CommuteScout</h1>
-  <p><b>Live California road conditions: a map, a route planner, and an
+  <p><b>Live road conditions across 38 states: a map, a route planner, and an
   AI assistant.<br>Also an MCP server, so your assistant can use it too.</b></p>
 
 [![CI](https://github.com/nicglazkov/commutescout/actions/workflows/ci.yml/badge.svg)](https://github.com/nicglazkov/commutescout/actions/workflows/ci.yml)
@@ -12,6 +12,7 @@
   <p>
     <a href="https://commutescout.com"><b>Open the app</b></a> ·
     <a href="#add-to-claude">Add to Claude</a> ·
+    <a href="#coverage">Coverage</a> ·
     <a href="#self-hosting-advanced">Self-hosting</a> ·
     <a href="docs/data-sources.md">Data</a> ·
     <a href="docs/mcp.md">MCP tools</a> ·
@@ -34,49 +35,74 @@
   </a>
 </div>
 
-CommuteScout watches 13 public agency feeds (CHP dispatch, Caltrans
-closures, chain controls, cameras and message signs, wildfire
-perimeters, weather) and turns them into one live picture of
-California's roads. Look at the map, plan a route and see what's
-actually on it, or just ask about a drive in plain English. The same
-data is served over [MCP](docs/mcp.md), so Claude and other AI
-assistants can use it as a tool instead of guessing about traffic.
+CommuteScout reads 53 official agency feeds (CHP dispatch, state DOT
+closures and incidents, chain controls, cameras, message signs, wildfire
+perimeters, road weather, toll prices) and turns them into one live
+picture of the road. Look at the map, plan a route and see what is
+actually on it, or ask about a drive in plain English. The same data is
+served over [MCP](docs/mcp.md), so Claude and other AI assistants can use
+it as a tool instead of guessing about traffic.
 
 ## What you get
 
-- **A live statewide map:** incidents by type, closures by class,
-  chain controls, wildfires with burn footprints, weather stations,
-  ~3,300 verified-live cameras, and every message sign currently
-  displaying something.
-- **A route planner that knows the roads:** autocomplete, route
-  options, turn-by-turn directions, live conditions along the way, and
-  print / GPX / KML / share-link export.
+- **A live national map:** incidents by type, closures by class, chain
+  controls, wildfires with real burn footprints, roadside weather
+  stations, roughly 18,000 traffic cameras, and every message sign
+  currently displaying something.
+- **Toll and express-lane pricing:** current rates on tolled corridors
+  and bridges, drawn along the actual carriageway with hand-verified
+  gantry positions, so a price tag never floats over the wrong road.
+- **A route planner that knows the roads:** autocomplete, route options,
+  turn-by-turn directions, live conditions along the way, and print,
+  GPX, KML, or share-link export.
 - **An assistant that reads the feeds:** plan a route, tap a suggested
-  question, and the answer streams in from the same live data, with
+  question, and the answer streams in from the same live data with
   per-source timestamps.
+- **Plain-English incident detail:** CHP dispatch logs are translated
+  from radio shorthand into readable timelines, with each unit's arrival
+  and clearance in order.
 - **Watch areas:** draw a circle, polygon, or route corridor and get a
   push or email alert when an incident, closure, chain control, or
   wildfire appears inside it.
-- **An MCP server:** nine tools over curated corridors and regions,
-  with a [closure taxonomy](docs/data-sources.md#the-closure-taxonomy)
-  that keeps a closed on-ramp from reading as a closed highway.
-- **Public evals:** 91 golden questions on recorded fixtures gate
-  every release; the [scorecard](EVALS.md) and its history are
-  committed to this repo.
+- **An MCP server:** ten tools over curated corridors and regions, with
+  a [closure taxonomy](docs/data-sources.md#the-closure-taxonomy) that
+  keeps a closed on-ramp from reading as a closed highway.
+- **Public evals:** 91 golden questions on recorded fixtures, scored by
+  an LLM judge that is never one of the evaluated models. The
+  [scorecard](EVALS.md) and its full history are committed to this repo.
 
 <table>
   <tr>
     <td width="34%"><img src="docs/shots/planner.png" alt="Route planner with two route options, turn-by-turn directions, and suggested questions"><br><sub><b>Plan a trip.</b> Autocomplete, route options, directions, print or export.</sub></td>
     <td width="34%"><img src="docs/shots/answer.png" alt="An AI answer about a drive, with live speeds and conditions"><br><sub><b>Ask about it.</b> One tap on a suggested question; the answer reads the live feeds.</sub></td>
-    <td width="32%"><img src="docs/shots/map.png" alt="The statewide map with per-layer filters and live counts"><br><sub><b>Or just look.</b> Every layer toggleable, from full closures to blank signs.</sub></td>
+    <td width="32%"><img src="docs/shots/map.png" alt="The map with per-layer filters and live counts"><br><sub><b>Or just look.</b> Every layer toggleable, from full closures to blank signs.</sub></td>
   </tr>
 </table>
+
+## Coverage
+
+The map covers **38 states**. Coverage is not uniform, because it is
+built from what each agency actually publishes: some states offer every
+layer keylessly, some publish roadwork only, and a few offer nothing
+usable. The map says so directly, shading unsupported states and naming
+what is missing rather than showing an empty region.
+
+**California is the deepest.** It is the only state with CHP dispatch
+logs, per-lane closure detail, chain-control levels, and CAL FIRE
+perimeters. The assistant and the MCP tools answer for every covered
+state, but a California question gets that richer detail, while
+elsewhere they answer from the normalized state DOT feeds.
+
+Per-state matrix of what is live and why the gaps exist:
+**[docs/state-coverage.md](docs/state-coverage.md)**. States not yet
+integrated, with the reason for each:
+**[docs/state-expansion-audit.md](docs/state-expansion-audit.md)**.
 
 ## Get started
 
 The fastest way to use CommuteScout is the hosted app:
-**[commutescout.com](https://commutescout.com)**. Nothing to run,
-always on the latest release, feeds already warm.
+**[commutescout.com](https://commutescout.com)**. Nothing to run, always
+on the latest release, feeds already warm.
 
 |  | [commutescout.com](https://commutescout.com) | Self-hosted |
 |---|---|---|
@@ -115,47 +141,63 @@ keys:
 
 The web app is `pip install ".[demo]"` then `ca-roads-demo` with an
 `ANTHROPIC_API_KEY` in the environment. For your own Cloud Run copy
-(small enough for the free tier most months), optional feed keys, and
-the watch-areas setup, see **[docs/deploy.md](docs/deploy.md)**.
+(small enough for the free tier most months), optional feed keys, map
+snapshot publishing, and the watch-areas setup, see
+**[docs/deploy.md](docs/deploy.md)**.
 
-Self-hosted deployments are supported on a best-effort basis: issues
-and PRs are very welcome, but there is no support guarantee for
-deployments I don't run.
+Self-hosted deployments are supported on a best-effort basis: issues and
+PRs are very welcome, but there is no support guarantee for deployments
+I do not run.
 
 ## The data
 
-CHP incidents, Caltrans lane closures, chain controls, message signs,
-cameras, and road weather; WFIGS and CAL FIRE wildfires with
-perimeters; NWS alerts; USGS quakes; and optional TomTom, 511 SF Bay,
-and Nevada DOT feeds. Every response carries per-source `data_as_of`
-timestamps, and a failing feed is never silent: the last good data is
-served, flagged stale, with the error attached.
+CHP incidents and dispatch logs; Caltrans and 30-plus other state DOT
+closures, incidents, cameras, message signs, and road weather; chain
+controls from California and the Pacific Northwest; WFIGS and CAL FIRE
+wildfires with perimeters; NWS alerts; USGS quakes; toll and express
+lane pricing; and optional TomTom and 511 SF Bay feeds.
+
+Every response carries per-source `data_as_of` timestamps, and a failing
+feed is never silent: the last good data is served, flagged stale, with
+the error attached and surfaced all the way to the UI.
 
 Full source table, refresh rates, and the closure taxonomy:
 **[docs/data-sources.md](docs/data-sources.md)**.
 
 ## How good are the answers?
 
-An eval suite gates every release: recorded fixtures for four scenarios
-(a Sierra storm day, a fire-closure day, a quiet day, and a
+An eval suite scores the assistant against recorded fixtures: four
+scenarios (a Sierra storm day, a fire-closure day, a quiet day, and a
 byte-for-byte capture of a real fire-season day), 91 golden questions
 with ground truth including traps, and an LLM judge that is never an
-evaluated model. Every run appends to a committed history file, so the
-trend is public: **[EVALS.md](EVALS.md)**.
+evaluated model.
+
+Runs are triggered manually rather than on every release. Firing a full
+suite on each release turned out to cost more per month than the hosted
+assistant serves, so it now runs when a prompt or tool change actually
+warrants re-scoring. Every run appends to a committed history file, so
+the trend stays public: **[EVALS.md](EVALS.md)**.
 
 ## Under the hood
 
-Three cleanly layered Python packages (a feed layer with
-stale-while-revalidate caches and salvaging parsers, the MCP surface,
-and the web app) sharing one data spine. Diagram and design notes:
-**[docs/architecture.md](docs/architecture.md)**.
+Three cleanly layered Python packages sharing one data spine: a feed
+layer with stale-while-revalidate caches and parsers that salvage
+complete records from truncated feeds, the MCP surface, and the web app.
+
+The map does not boot through the API. A publisher builds the whole
+coverage area once per cycle and uploads pre-gzipped snapshots to object
+storage behind a CDN, so first paint is an edge-cached static file and no
+visitor request waits on a server assembling JSON. A map left open on a
+wall monitor keeps updating in place indefinitely.
+
+Diagram and design notes: **[docs/architecture.md](docs/architecture.md)**.
 
 ## Contributing
 
 PRs welcome. The test suite is fixture-based and runs without network
 access. Start with **[CONTRIBUTING.md](CONTRIBUTING.md)**, and see
-[adding a data source](docs/adding-a-source.md) if you want to wire up
-a new feed.
+[adding a data source](docs/adding-a-source.md) if you want to wire up a
+new feed.
 
 ## License & sustainability
 
@@ -167,11 +209,13 @@ funds the servers and keeps the free tier free.
 
 ## Disclaimer
 
-Data: CHP, Caltrans, WFIGS, CAL FIRE, NWS, USGS. Not affiliated with
-any agency. Conditions change faster than any feed; verify before you
-drive (511 or [quickmap.dot.ca.gov](https://quickmap.dot.ca.gov)).
+Data comes from CHP, Caltrans and the other state DOTs listed in
+[docs/state-coverage.md](docs/state-coverage.md), plus WFIGS, CAL FIRE,
+NWS, and USGS. Not affiliated with any agency. Conditions change faster
+than any feed; verify before you drive (511 or your state DOT, and
+[quickmap.dot.ca.gov](https://quickmap.dot.ca.gov) in California).
 
 Place names resolve through the Nominatim and Photon OpenStreetMap
-geocoders; the web app loads map tiles from CARTO and route previews
-from the public OSRM and Valhalla routers, so those services see the
+geocoders; the web app loads map tiles from CARTO and route previews from
+the public OSRM and Valhalla routers, so those services see the
 coordinates involved. Fonts and map libraries are served locally.

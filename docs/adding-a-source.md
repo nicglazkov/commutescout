@@ -57,3 +57,23 @@ Roughly in order of value per effort:
 
 The corridor table (`ca_roads_mcp/corridors.py`) is the other growth axis:
 adding a corridor is a dozen waypoints and a few aliases, no code.
+
+## Adding a state
+
+Wiring the feed is only half of it. A state is live when all of these
+agree, and they are in different files, so they drift:
+
+1. `ca_roads_demo/states.py` registry (the adapter itself).
+2. The `COVERED` set in `static/index.html`, or `PARTIAL` if only some
+   layers work. A state missing here renders under the grey
+   "not supported yet" wash even though its data is on the map.
+3. A row in [state-coverage.md](state-coverage.md).
+4. The **state count**, which appears in more places than you would
+   expect: `index.html` metadata (title, description, og, ld+json),
+   `prompt.py`, the `get_nearby_events` docstring in
+   `ca_roads_mcp/server.py`, and [registry.md](registry.md).
+
+`tests/test_snapshot.py::test_state_counts_are_current` fails when a
+count drifts from the live registry, so item 4 cannot be forgotten
+quietly. The count in the MCP tool docstring matters most: the model
+reads it to decide whether a location is worth querying at all.
