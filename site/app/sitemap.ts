@@ -18,13 +18,15 @@ export const dynamic = "force-static";
 // exported pages.
 const BASE_URL = "https://commutescout.com";
 
-// The six marketing pages (see the URL map in
-// docs/superpowers/specs/2026-08-05-saas-shell-redesign-design.md) plus
-// /map. /map is not a page in this Next app - it is the Leaflet map,
-// served straight from src/ca_roads_demo/static/map.html - so it is
-// listed here by hand alongside the exported routes below.
+// The six marketing pages from the original shell redesign (see the URL
+// map in docs/superpowers/specs/2026-08-05-saas-shell-redesign-design.md)
+// plus /data-sources and /mcp, added afterward to replace the GitHub-only
+// docs/data-sources.md and docs/mcp.md with on-site pages, plus /map.
+// /map is not a page in this Next app - it is the Leaflet map, served
+// straight from src/ca_roads_demo/static/map.html - so it is listed here
+// by hand alongside the exported routes below.
 const MARKETING_PATHS = ["", "/pricing", "/about", "/contact", "/privacy",
-  "/terms"];
+  "/terms", "/data-sources", "/mcp"];
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();

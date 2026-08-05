@@ -72,6 +72,8 @@ jobs:
           test -f site/out/contact.html
           test -f site/out/privacy.html
           test -f site/out/terms.html
+          test -f site/out/data-sources.html
+          test -f site/out/mcp.html
           # site/app/sitemap.ts (spec's URL map requires sitemap coverage);
           # served at /sitemap.xml by app.py through the same SITE_DIR
           # resolution as the pages above.
