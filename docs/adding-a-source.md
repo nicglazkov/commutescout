@@ -72,8 +72,20 @@ agree, and they are in different files, so they drift:
    expect: `index.html` metadata (title, description, og, ld+json),
    `prompt.py`, the `get_nearby_events` docstring in
    `ca_roads_mcp/server.py`, and [registry.md](registry.md).
+5. The **feed count**. A new state usually adds new feed sources too.
+   Unlike the state count, this one is not read live from the registry:
+   `PUBLIC_SOURCE_COUNT` in `states.py` is a manually maintained
+   constant (the number production's topbar shows with keys
+   configured; the live `coverage_summary()["sources"]` count varies
+   with key availability and WZDx supersession, so it is not a stable
+   source of truth for marketing copy). Update `PUBLIC_SOURCE_COUNT`
+   yourself, then update its copies: `README.md`,
+   `site/lib/stats.ts`, `site/app/about/page.tsx`, and
+   `site/components/blocks/hero-section-1.tsx`.
 
 `tests/test_snapshot.py::test_state_counts_are_current` fails when a
-count drifts from the live registry, so item 4 cannot be forgotten
+state count drifts from the live registry, and
+`test_feed_counts_are_current` fails when a copy's feed count drifts
+from `PUBLIC_SOURCE_COUNT`, so items 4 and 5 cannot be forgotten
 quietly. The count in the MCP tool docstring matters most: the model
 reads it to decide whether a location is worth querying at all.

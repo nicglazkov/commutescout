@@ -10,6 +10,12 @@ import Link from "next/link";
 // heading levels, and link styling classes were adapted; the old page's
 // own topbar nav (which pointed "Live map" at "/", stale now that "/" is
 // the marketing homepage) is gone, replaced by the shared SiteHeader.
+//
+// Owner-approved edit 2026-08-05: the personal name in the Contact
+// section's byline was removed, leaving just the email contact.
+// tests/fixtures/privacy_text.txt was regenerated from this new content
+// with the same _visible() normalization so the content-preservation
+// test re-pins on the updated wording.
 export const metadata: Metadata = {
   title: "Privacy - CommuteScout",
   description: "What CommuteScout collects, why, and how to get it deleted.",
@@ -208,7 +214,6 @@ export default function PrivacyPage() {
           <div>
             <h2 className="text-cs-ink text-xl font-medium">Contact</h2>
             <p className="mt-4">
-              Nic Glazkov ·{" "}
               <a
                 href="mailto:hello@commutescout.com"
                 className="text-cs-sky font-medium hover:underline"

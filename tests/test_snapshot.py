@@ -244,3 +244,44 @@ def test_state_counts_are_current():
             assert n == actual, f"{path} says {n} states, registry says {actual}"
         checked += len(found)
     assert checked >= 6
+
+
+def test_feed_counts_are_current():
+    """Sibling to test_state_counts_are_current: every hardcoded "N
+    official agency feeds" claim must match states.PUBLIC_SOURCE_COUNT.
+    Before this test, stats-1.tsx's own comment claimed a drift guard
+    existed that in fact only checked states, not feeds - this closes
+    that gap.
+
+    This pins to PUBLIC_SOURCE_COUNT, not states.coverage_summary()
+    ["sources"]: the live registry count is environment-dependent by
+    design (_wzdx_superseded drops a WZDx entry once a keyed feed
+    supersedes it, so a keyless checkout counts more sources than
+    production, which runs with keys configured and truthfully serves
+    fewer). PUBLIC_SOURCE_COUNT is the number production actually shows;
+    see its docstring in states.py for the update procedure.
+    """
+    import pathlib
+    import re
+
+    from ca_roads_demo import states
+
+    actual = states.PUBLIC_SOURCE_COUNT
+    assert actual > 0
+
+    checked = 0
+    for path, pattern in (
+        ("README.md", r"reads (\d+) official agency feeds"),
+        ("site/lib/stats.ts", r"AGENCY_FEED_COUNT = (\d+)"),
+        ("site/app/about/page.tsx", r"reads (\d+) official agency feeds"),
+        ("site/components/blocks/hero-section-1.tsx",
+         r"reads (\d+) official agency feeds"),
+    ):
+        text = pathlib.Path(path).read_text(encoding="utf-8")
+        found = [int(g) for m in re.finditer(pattern, text)
+                 for g in m.groups() if g]
+        assert found, f"no feed count found in {path}"
+        for n in found:
+            assert n == actual, f"{path} says {n} feeds, PUBLIC_SOURCE_COUNT says {actual}"
+        checked += len(found)
+    assert checked >= 4
