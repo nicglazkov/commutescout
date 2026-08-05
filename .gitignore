@@ -24,3 +24,8 @@ build/
 
 # Eval raw results are artifacts, not source (badge.json is kept)
 evals/results/results-*.json
+
+# Node site workspace build outputs
+site/node_modules/
+site/out/
+site/.next/
