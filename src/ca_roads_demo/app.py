@@ -1210,6 +1210,53 @@ STATIC_DIR = Path(__file__).parent / "static"
 # The Docker build copies site/out here; local dev without Node gets a
 # clear 503 for marketing pages while the map and APIs keep working.
 SITE_DIR = STATIC_DIR / "site"
+_DEFAULT_SITE_DIR = SITE_DIR
+
+# Dev-only fallback: a plain repo checkout never populates STATIC_DIR/site
+# (only the Docker build's COPY step does), but `cd site && npm run build`
+# does populate this repo-relative path. In the installed wheel,
+# parents[2] lands outside the package entirely and this directory simply
+# does not exist, so the fallback is inert in production; it only ever
+# activates in a source checkout.
+REPO_SITE_OUT = Path(__file__).resolve().parents[2] / "site" / "out"
+
+
+def _resolve_site_file(*parts: str) -> Path | None:
+    """Look up a file under SITE_DIR, falling back to REPO_SITE_OUT when
+    the primary location lacks it. Shared by _site_response, favicon_ico,
+    and sitemap_xml so all three follow the same precedence: the
+    Docker-image copy wins when present, the checkout's own `site/out`
+    fills in for local dev without that copy step.
+
+    The fallback only applies when SITE_DIR is still the built-in
+    default. Tests monkeypatch SITE_DIR directly to stand in for a whole
+    site export (including a deliberately-missing one, to prove the 503
+    path); they must see exactly that directory, not have files leak in
+    from a real site/out sitting next to the test run."""
+    candidates = (SITE_DIR, REPO_SITE_OUT) if SITE_DIR == _DEFAULT_SITE_DIR \
+        else (SITE_DIR,)
+    for base in candidates:
+        f = base.joinpath(*parts)
+        if f.exists():
+            return f
+    return None
+
+
+def _asset_source_dir() -> Path:
+    """Directory backing the /_next and /shots static mounts (see the
+    Mount(...) calls in the route table below). StaticFiles mounts are
+    wired up once when this module is imported, so - unlike
+    _resolve_site_file - this cannot re-check both candidates per
+    request; it picks whichever has a "_next" subdirectory at import
+    time, preferring the Docker-image layout."""
+    if (SITE_DIR / "_next").is_dir():
+        return SITE_DIR
+    if (REPO_SITE_OUT / "_next").is_dir():
+        return REPO_SITE_OUT
+    return SITE_DIR  # neither exists; StaticFiles(check_dir=False) 404s cleanly
+
+
+ASSET_DIR = _asset_source_dir()
 
 
 def _site_response(page: str):
@@ -1220,17 +1267,36 @@ def _site_response(page: str):
     # fall back to the nested layout so either export shape still serves
     # (older builds, or a future trailingSlash: true export, keep working).
     if not page:
-        f = SITE_DIR / "index.html"
+        f = _resolve_site_file("index.html")
     else:
-        f = SITE_DIR / f"{page}.html"
-        if not f.exists():
-            f = SITE_DIR / page / "index.html"
-    if not f.exists():
+        f = _resolve_site_file(f"{page}.html")
+        if f is None:
+            f = _resolve_site_file(page, "index.html")
+    if f is None:
+        # This text stays accurate even with the REPO_SITE_OUT fallback
+        # above: running the build populates site/out, which
+        # _resolve_site_file then finds on the next request.
         return Response(
             "The marketing site is not built. Run: cd site && npm ci && "
             "npm run build. The map is at /map and APIs are unaffected.",
             status_code=503, media_type="text/plain",
             headers={"Cache-Control": "no-store"})
+    return FileResponse(f)
+
+
+async def favicon_ico(_: Request):
+    f = _resolve_site_file("favicon.ico")
+    if f is None:
+        return Response(status_code=404)
+    return FileResponse(f)
+
+
+async def sitemap_xml(_: Request):
+    # Emitted by site/app/sitemap.ts at build time: the six marketing
+    # pages plus /map, on the production https://commutescout.com origin.
+    f = _resolve_site_file("sitemap.xml")
+    if f is None:
+        return Response(status_code=404)
     return FileResponse(f)
 
 
@@ -1567,6 +1633,8 @@ app = Starlette(
         Route("/pricing", site_pricing),
         Route("/about", site_about),
         Route("/contact", site_contact),
+        Route("/favicon.ico", favicon_ico),
+        Route("/sitemap.xml", sitemap_xml),
         Route("/api/contact", api_contact, methods=["POST"]),
         Route("/api/waitlist", api_waitlist, methods=["POST"]),
         Route("/trip/{trip_id}", trips.trip_page),
@@ -1593,6 +1661,24 @@ app = Starlette(
         Route("/api/check-watches", watch.api_check_watches,
               methods=["POST"]),
         Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
+        # The exported pages reference /_next/static/... (CSS, JS chunks,
+        # woff2) and /shots/hero-*.png directly; both need a route or every
+        # page load ships with no styling, no scripts, and broken images.
+        # check_dir=False so import still succeeds (and 404s cleanly, see
+        # StaticFiles.lookup_path) on a Node-less checkout where neither
+        # ASSET_DIR/_next nor ASSET_DIR/shots exists yet.
+        #
+        # DECISION (coordinator, final review): Next's client router also
+        # requests RSC payloads like /about.txt?_rsc=... on Link
+        # navigation; those .txt files exist in the export but deliberately
+        # get no route here. A failed RSC fetch falls back to a full page
+        # navigation, which is an acceptable cost for a 6-page marketing
+        # site, and it avoids adding a route for content that isn't meant
+        # to be fetched directly.
+        Mount("/_next", app=StaticFiles(directory=str(ASSET_DIR / "_next"),
+                                        check_dir=False), name="site_next"),
+        Mount("/shots", app=StaticFiles(directory=str(ASSET_DIR / "shots"),
+                                        check_dir=False), name="site_shots"),
     ]
 )
 # Request-level limiter on top of the daily caps (burst 20, ~30/min
@@ -1778,9 +1864,14 @@ class StaticCacheHeaders:
 
         def cache_policy(hdict) -> bytes | None:
             if (path.startswith(("/static/vendor/", "/static/fonts/"))
-                    or path.startswith("/static/icon-")):
+                    or path.startswith("/static/icon-")
+                    # Next content-hashes every file under _next/static/
+                    # (the filename changes when the content does), so an
+                    # immutable week-long cache is safe: a rebuild ships
+                    # under new filenames, never overwrites an old one.
+                    or path.startswith("/_next/static/")):
                 return b"public, max-age=604800, immutable"
-            if path.startswith("/static/"):
+            if path.startswith("/static/") or path.startswith("/shots/"):
                 return b"public, max-age=3600"
             ctype = hdict.get(b"content-type", b"")
             if ctype.startswith(b"text/html"):
@@ -1890,7 +1981,12 @@ app = RateLimitMiddleware(
                      # Marketing pages: static exports served via
                      # _site_response (Task 10: /privacy and /terms moved
                      # here from their own standalone HTML files).
-                     "/pricing", "/about", "/contact", "/privacy", "/terms"),
+                     "/pricing", "/about", "/contact", "/privacy", "/terms",
+                     # A single marketing page load fetches on the order of
+                     # ten _next chunks; without this those alone would
+                     # drain the strict bucket before the visitor reads
+                     # anything.
+                     "/_next/", "/shots/"),
     # The homepage, exact-match only: a "/" entry in exempt_prefixes would
     # startswith-match every path in the app and disable the limiter
     # entirely (see RateLimitMiddleware's exempt_exact docstring).

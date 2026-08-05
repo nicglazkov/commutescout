@@ -72,6 +72,10 @@ jobs:
           test -f site/out/contact.html
           test -f site/out/privacy.html
           test -f site/out/terms.html
+          # site/app/sitemap.ts (spec's URL map requires sitemap coverage);
+          # served at /sitemap.xml by app.py through the same SITE_DIR
+          # resolution as the pages above.
+          test -f site/out/sitemap.xml
       - name: Built pages use slash-less internal links
         run: |
           # Guards the Task 8 fix-round ruling (Nic): served/canonical URLs
