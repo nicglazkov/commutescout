@@ -228,7 +228,7 @@ input:focus { border-color:var(--sky) }
             <div class="field" style="margin:12px 0 0">
               <label>Alert distance from route</label>
               <div class="radius">
-                <input type="range" id="rw-buffer" min="1" max="7" value="2">
+                <input type="range" id="rw-buffer" min="1" max="2" value="2">
                 <b id="rw-bufferlabel">2 mi</b>
               </div>
             </div>
@@ -236,7 +236,7 @@ input:focus { border-color:var(--sky) }
           <div class="field" id="radiusrow">
             <label>Radius</label>
             <div class="radius">
-              <input type="range" id="radius" min="1" max="65" value="15">
+              <input type="range" id="radius" min="1" max="40.2" value="15">
               <b id="radiuslabel">15 km</b>
             </div>
           </div>
@@ -722,7 +722,7 @@ function renderWatches() {
   list.innerHTML = '';
   savedLayer.clearLayers();
   $('wcount').textContent = '(' + me.watches.length + '/' +
-    CFG.limits.watches + ')';
+    CFG.limits.free_watches + ')';
   if (!me.watches.length) {
     list.innerHTML = '<div class="hint">Nothing yet - draw your first watch on the map.</div>';
     return;
@@ -854,7 +854,10 @@ $('createbtn').addEventListener('click', async () => {
       msg('createmsg', 'Preview the route first.', 'err'); return;
     }
     Object.assign(body, { type: 'route', points: routePts,
-      buffer_km: Number($('rw-buffer').value) * 1.609 });
+      // 1.6, not the more precise 1.609: at the 2 mi slider max this
+      // lands buffer_km exactly on the 3.2 km free cap instead of
+      // just over it, so the top of the slider never gets rejected.
+      buffer_km: Number($('rw-buffer').value) * 1.6 });
   } else {
     if (polyPoints.length < 3) { msg('createmsg', 'Add at least three corners on the map.', 'err'); return; }
     Object.assign(body, { type: 'polygon', points: polyPoints });

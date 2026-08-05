@@ -175,6 +175,11 @@ async def approve(store, uid="sam"):
 def test_config_is_public(client):
     data = client.get("/api/watch/config").json()
     assert data["limits"]["watches"] == watch.MAX_WATCHES
+    assert data["limits"]["free_watches"] == watch.FREE_MAX_WATCHES
+    assert data["limits"]["free_radius_km"] == watch.FREE_MAX_RADIUS_KM
+    assert data["limits"]["free_polygon_sq_km"] == watch.FREE_MAX_POLYGON_SQ_KM
+    assert data["limits"]["free_route_km"] == watch.FREE_MAX_ROUTE_KM
+    assert data["limits"]["free_buffer_km"] == watch.FREE_MAX_BUFFER_KM
     assert data["firebase"]["projectId"] == watch.PROJECT
 
 
@@ -220,16 +225,75 @@ def approved_client(client, store):
     return client
 
 
+@pytest.fixture
+def _create(approved_client):
+    """Post a watch-create body as the approved user, filling in "kinds"
+    when a test payload omits it (the API requires at least one)."""
+    def create(payload):
+        payload = {"kinds": ["incident"], **payload}
+        return approved_client.post("/api/watch/create", json=payload,
+                                    headers=auth())
+    return create
+
+
 def test_create_circle_watch(approved_client, store):
     r = approved_client.post("/api/watch/create", json=CIRCLE, headers=auth())
     assert r.status_code == 200
     assert store.watches[r.json()["id"]]["radius_km"] == 20
 
 
-def test_radius_clamps_to_trial_cap(approved_client):
-    body = {**CIRCLE, "radius_km": 500}
+def test_tiny_radius_clamps_up(approved_client):
+    # Below-minimum is a UX nicety, not a tier issue: it still clamps.
+    body = {**CIRCLE, "radius_km": 0.1}
     r = approved_client.post("/api/watch/create", json=body, headers=auth())
-    assert r.json()["radius_km"] == watch.MAX_RADIUS_KM
+    assert r.json()["radius_km"] == watch.MIN_RADIUS_KM
+
+
+# ------------------------------------------------------- free-tier limits
+
+def test_free_circle_radius_capped(_create):
+    r = _create({"type": "circle", "name": "big",
+                 "center": {"lat": 37.0, "lon": -120.0},
+                 "radius_km": 41.0})
+    assert r.status_code == 400
+    assert "free limit" in r.json()["error"]
+
+
+def test_free_polygon_area_capped(_create):
+    # A ~1.0 by 1.0 degree box near 37N is ~9,800 sq km: over the limit.
+    big = [[37.0, -120.0], [38.0, -120.0], [38.0, -119.0], [37.0, -119.0]]
+    r = _create({"type": "polygon", "name": "big", "points": big})
+    assert r.status_code == 400
+    assert "free limit" in r.json()["error"]
+
+
+def test_free_route_length_capped(_create):
+    # A straight shot well beyond 402 km, both ends still in California.
+    pts = [[33.0, -117.2], [38.5, -121.5]]     # ~724 km
+    r = _create({"type": "route", "name": "long", "points": pts})
+    assert r.status_code == 400
+    assert "free limit" in r.json()["error"]
+
+
+def test_free_route_buffer_capped(_create):
+    r = _create({"type": "route", "name": "wide", "points": ROUTE_PTS,
+                 "buffer_km": 5.0})
+    assert r.status_code == 400
+    assert "free limit" in r.json()["error"]
+
+
+def test_within_limits_still_creates(_create):
+    r = _create({"type": "circle", "name": "ok",
+                 "center": {"lat": 37.0, "lon": -120.0},
+                 "radius_km": 25.0})
+    assert r.status_code == 200
+
+
+def test_polygon_area_math():
+    from ca_roads_demo.watch import polygon_area_sq_km
+    # 0.1 by 0.1 degree box at 37N: 11.1 km x 8.9 km, about 98 sq km.
+    box = [[37.0, -120.0], [37.1, -120.0], [37.1, -119.9], [37.0, -119.9]]
+    assert 90 < polygon_area_sq_km(box) < 106
 
 
 def test_rejects_outside_california(approved_client):
@@ -262,12 +326,13 @@ def test_polygon_stores_firestore_safe_points(approved_client, store):
 
 
 def test_watch_count_cap(approved_client):
-    for _ in range(watch.MAX_WATCHES):
+    for _ in range(watch.FREE_MAX_WATCHES):
         assert approved_client.post("/api/watch/create", json=CIRCLE,
                                     headers=auth()).status_code == 200
     r = approved_client.post("/api/watch/create", json=CIRCLE,
                              headers=auth())
     assert r.status_code == 403
+    assert "free limit" in r.json()["error"]
 
 
 def test_delete_is_owner_only(approved_client, store):
@@ -507,6 +572,19 @@ def test_update_polygon_shape(approved_client, store):
     assert stored[0] == {"lat": 38.8, "lon": -120.5}  # Firestore-safe maps
 
 
+def test_update_polygon_shape_rejects_over_free_area(approved_client, store):
+    body = {"type": "polygon", "name": "Tahoe", "kinds": ["fire"],
+            "points": [[38.9, -120.2], [39.2, -120.2], [39.2, -120.1]]}
+    wid = approved_client.post("/api/watch/create", json=body,
+                               headers=auth()).json()["id"]
+    big = [[37.0, -120.0], [38.0, -120.0], [38.0, -119.0], [37.0, -119.0]]
+    r = approved_client.patch("/api/watch/" + wid, json={"points": big},
+                              headers=auth())
+    assert r.status_code == 400
+    assert "free limit" in r.json()["error"]
+    assert len(store.watches[wid]["points"]) == 3  # untouched
+
+
 def test_nevada_and_oregon_corners_refuse(approved_client):
     base = {"type": "polygon", "name": "Edge", "kinds": ["incident"]}
     reno = {**base, "points": [[39.5, -119.8], [39.6, -119.8],
@@ -687,15 +765,21 @@ async def test_route_watch_alerts(checker):
     assert stats["alerts"] == 1 and len(pushes) == 1
 
 
-def test_route_buffer_updates_and_clamps(approved_client, store):
+def test_route_buffer_update_rejects_over_free_limit(approved_client, store):
     body = {"type": "route", "name": "SJ to SF", "kinds": ["incident"],
             "points": ROUTE_PTS, "buffer_km": 3.0}
     wid = approved_client.post("/api/watch/create", json=body,
                                headers=auth()).json()["id"]
     r = approved_client.patch("/api/watch/" + wid,
-                              json={"buffer_km": 50}, headers=auth())
+                              json={"buffer_km": 5}, headers=auth())
+    assert r.status_code == 400
+    assert "free limit" in r.json()["error"]
+    assert store.watches[wid]["buffer_km"] == 3.0  # untouched, not clamped
+    # Below-minimum is still a UX nicety: it clamps up rather than refuses.
+    r = approved_client.patch("/api/watch/" + wid,
+                              json={"buffer_km": 0.1}, headers=auth())
     assert r.status_code == 200
-    assert store.watches[wid]["buffer_km"] == watch.MAX_BUFFER_KM
+    assert store.watches[wid]["buffer_km"] == watch.MIN_BUFFER_KM
     cid = approved_client.post("/api/watch/create", json=CIRCLE,
                                headers=auth()).json()["id"]
     assert approved_client.patch("/api/watch/" + cid,
