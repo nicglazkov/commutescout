@@ -128,6 +128,12 @@ class RateLimitMiddleware:
     skip the bucket entirely: static assets are cheap to serve, and counting
     them starves the requests that matter (a page load fetching local fonts
     and map libraries once drained the whole bucket before the question).
+
+    exempt_exact is a separate, exact-match set for paths that must NOT be
+    exempted as a prefix - "/" is the motivating case: exempt_prefixes uses
+    str.startswith, so a "/" entry there would match every path in the app
+    and silently disable the limiter entirely. exempt_exact is checked
+    before the prefix loop and only ever matches the literal path.
     """
 
     def __init__(
@@ -135,10 +141,12 @@ class RateLimitMiddleware:
         app,
         limiter: RateLimiter | None = None,
         exempt_prefixes: tuple[str, ...] = (),
+        exempt_exact: frozenset[str] = frozenset(),
     ) -> None:
         self.app = app
         self.limiter = limiter or RateLimiter()
         self.exempt_prefixes = exempt_prefixes
+        self.exempt_exact = exempt_exact
 
     @staticmethod
     def _client_key(scope) -> str:
@@ -158,6 +166,9 @@ class RateLimitMiddleware:
             await self.app(scope, receive, send)
             return
         path = scope.get("path", "")
+        if path in self.exempt_exact:
+            await self.app(scope, receive, send)
+            return
         if any(path.startswith(p) for p in self.exempt_prefixes):
             await self.app(scope, receive, send)
             return

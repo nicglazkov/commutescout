@@ -1232,7 +1232,7 @@ _GEO_SLOT = "<!--BOOT_GEO-->"
 
 
 def _index_template() -> str:
-    path = STATIC_DIR / "index.html"
+    path = STATIC_DIR / "map.html"
     stamp = path.stat().st_mtime
     if _INDEX_CACHE.get("stamp") != stamp:
         _INDEX_CACHE["stamp"] = stamp
@@ -1264,10 +1264,10 @@ def _visitor_view(request: Request) -> dict | None:
             "src": "edge"}
 
 
-async def index(request: Request):
+async def map_page(request: Request):
     view = _visitor_view(request)
     if view is None:
-        return FileResponse(STATIC_DIR / "index.html")
+        return FileResponse(STATIC_DIR / "map.html")
     html = _index_template().replace(
         _GEO_SLOT,
         '<script type="application/json" id="bootgeo">'
@@ -1307,9 +1307,6 @@ async def terms_page(_: Request):
     return FileResponse(STATIC_DIR / "terms.html")
 
 
-# Temporary test seam for this task: / still serves the map, so the
-# marketing home page is reachable at /site-preview until Task 5
-# promotes site_home to /.
 async def site_home(_: Request):
     return _site_response("")
 
@@ -1472,7 +1469,8 @@ async def _lifespan(app_):
 app = Starlette(
     lifespan=_lifespan,
     routes=[
-        Route("/", index),
+        Route("/", site_home),
+        Route("/map", map_page),
         Route("/logo.svg", logo),
         # /healthz is intercepted by Google's frontend on Cloud Run and never
         # reaches the container; /health gets through.
@@ -1499,7 +1497,6 @@ app = Starlette(
         Route("/api/sources", api_sources, methods=["GET"]),
         Route("/privacy", privacy_page),
         Route("/terms", terms_page),
-        Route("/site-preview", site_home),
         Route("/pricing", site_pricing),
         Route("/about", site_about),
         Route("/contact", site_contact),
@@ -1817,9 +1814,16 @@ app = RateLimitMiddleware(
                      "/watch", ADMIN_PAGE_PATH, "/sw.js", "/manifest.webmanifest",
                      "/privacy", "/terms", "/trip/", "/api/trip",
                      "/api/watch/config", "/api/staticmap",
+                     # The map page itself: loaded once per session, same
+                     # as the pages above.
+                     "/map",
                      # Marketing pages: static exports, as cheap as
                      # /privacy and /terms above.
-                     "/pricing", "/about", "/contact", "/site-preview"),
+                     "/pricing", "/about", "/contact"),
+    # The homepage, exact-match only: a "/" entry in exempt_prefixes would
+    # startswith-match every path in the app and disable the limiter
+    # entirely (see RateLimitMiddleware's exempt_exact docstring).
+    exempt_exact=frozenset({"/"}),
 )
 app = SecurityHeaders(app)
 
