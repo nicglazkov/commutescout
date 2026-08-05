@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 export default function HeroSection() {
   return (
     <section className="overflow-hidden">
-      <div className="relative pt-24 md:pt-36">
+      <div className="relative pt-12 md:pt-18">
         <div className="mx-auto max-w-7xl">
           <div className="px-6 text-center sm:mx-auto lg:mr-auto lg:mt-0">
             <h1 className="mx-auto mt-8 max-w-4xl text-balance text-5xl font-medium tracking-tight md:text-6xl lg:mt-12 xl:text-7xl">
