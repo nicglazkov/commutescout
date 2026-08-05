@@ -23,3 +23,11 @@ tests/
 evals/fixtures/
 evals/results/
 docs/screenshots/
+
+# The site workspace's build artifacts: enormous, Windows-native,
+# and rebuilt inside the Docker Node stage anyway. Uploading them
+# once overwrote the container's Linux install and broke the deploy
+# (next: Permission denied).
+site/node_modules/
+site/.next/
+site/out/

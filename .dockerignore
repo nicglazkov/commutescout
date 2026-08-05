@@ -20,9 +20,11 @@ build
 
 # site/ build artifacts: the site stage runs its own `npm ci` and
 # `npm run build` inside the Linux container. Host-generated node_modules
+site/node_modules
 # (built for the host's OS/arch, e.g. Windows) and stale .next/out caches
 # must never enter the build context, or COPY site/ ./ would overwrite the
 # container's freshly installed Linux packages with incompatible ones.
 node_modules
 .next
+site/.next
 site/out
