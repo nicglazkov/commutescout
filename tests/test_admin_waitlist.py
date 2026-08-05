@@ -11,6 +11,7 @@ from starlette.testclient import TestClient
 
 from ca_roads_demo import app as demo_app
 from ca_roads_demo import watch
+from ca_roads_mcp.ratelimit import RateLimiter
 
 
 class MemoryStore:
@@ -37,6 +38,16 @@ USERS = {
 def _client(monkeypatch, store):
     monkeypatch.setattr(watch, "get_store", lambda: store)
     monkeypatch.setattr(watch, "ADMIN_EMAILS", {"admin@example.com"})
+    # demo_app.app is SecurityHeaders(RateLimitMiddleware(...)); the
+    # RateLimitMiddleware layer (demo_app.app.app) wraps one
+    # process-lifetime token bucket (capacity 20, 0.5/s refill) shared by
+    # every test module that exercises demo_app.app (test_waitlist.py,
+    # test_contact.py, etc, all keyed on TestClient's fixed "testclient"
+    # peer). Swapping in a fresh limiter here (monkeypatch reverts it
+    # after the test) keeps this file's requests from spending down - or
+    # being starved by - that shared budget.
+    monkeypatch.setattr(demo_app.app.app, "limiter",
+                        RateLimiter(capacity=20, refill_per_second=0.5))
 
     async def fake_verify(request):
         header = request.headers.get("authorization") or ""
