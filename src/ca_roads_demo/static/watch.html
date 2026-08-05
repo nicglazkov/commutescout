@@ -12,12 +12,16 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="stylesheet" href="/static/tokens.css">
 <style>
 :root {
-  --navy:#0b1f33; --navy2:#122c47; --ink:#0f1c2b; --dim:#5b6b7d;
-  --bg:#f5f2ea; --card:#fffdf7; --line:#e3ddd0;
-  --sky:#2f81f7; --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
-  --green:#2f9e6e;
+  /* Aliased to the shared token sheet (tokens.css) so this page moves
+     with the map app and the marketing site; the many existing
+     --navy/--navy2/--ink/--line/--bg/--sky usages below are unchanged. */
+  --navy:var(--cs-navy); --navy2:var(--cs-navy2); --ink:var(--cs-ink); --dim:#5b6b7d;
+  --bg:var(--cs-bg); --card:var(--cs-paper); --line:var(--cs-line);
+  --sky:var(--cs-sky); --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
+  --red-soft:#fbe9e9; --green:#2f9e6e; --green-soft:#e2f5ec;
 }
 * { box-sizing:border-box; margin:0 }
 html, body { height:100% }
@@ -40,14 +44,16 @@ body { background:var(--bg); color:var(--ink);
   color:#b7c4d4; border-radius:7px; padding:3px 10px; font:500 .76rem Inter;
   cursor:pointer }
 .topbar .who button:hover { color:#fff; border-color:#5b7898 }
-main { max-width:1180px; margin:0 auto; padding:18px 16px 50px }
-h1 { font-size:1.25rem; margin:6px 0 2px }
-.sub { color:var(--dim); font-size:.86rem; margin-bottom:16px }
+main { max-width:1180px; margin:0 auto; padding:22px 16px 50px }
+h1 { font-size:1.3rem; margin:6px 0 2px; letter-spacing:-.2px }
+.sub { color:var(--dim); font-size:.86rem; margin-bottom:18px }
 .card { background:var(--card); border:1px solid var(--line);
-  border-radius:14px; padding:18px; margin-bottom:14px }
-.card h2 { font-size:.95rem; margin-bottom:8px }
-.center { max-width:430px; margin:8vh auto 0; text-align:center }
-.center p { color:var(--dim); font-size:.85rem; margin:8px 0 16px }
+  border-radius:14px; padding:20px; margin-bottom:16px;
+  box-shadow:0 1px 3px rgba(15,28,43,.05) }
+.card h2 { font-size:.95rem; margin-bottom:10px; font-weight:700 }
+.cardhead { display:flex; align-items:center; justify-content:space-between;
+  gap:10px; margin-bottom:6px }
+.cardhead h2 { margin-bottom:0 }
 button.primary { background:var(--sky); color:#fff; border:0;
   border-radius:9px; padding:10px 18px; font:600 .88rem Inter;
   cursor:pointer; width:100% }
@@ -64,39 +70,24 @@ input[type=text], input[type=email] { width:100%; border:1.5px solid
   var(--line); border-radius:9px; padding:9px 12px; font:400 .88rem Inter;
   background:#fff; outline:none }
 input:focus { border-color:var(--sky) }
-.msg { font-size:.8rem; margin-top:9px; min-height:1.2em }
-.msg.err { color:var(--red) } .msg.ok { color:var(--green) }
-.split { display:grid; grid-template-columns:390px 1fr; gap:14px }
-@media (max-width: 900px) {
-  .split { grid-template-columns:1fr }
-  /* Map above the form on a phone: draw first, describe after. */
-  #wmap { order:-1; height:48vh; min-height:320px }
-  .split > div { order:1 }
-  .topbar { gap:8px; padding:0 12px }
-  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
-  .topbar nav { margin-left:0; overflow-x:auto; scrollbar-width:none }
-  .topbar nav::-webkit-scrollbar { display:none }
-  .topbar nav a { padding:7px 9px; white-space:nowrap }
-  .topbar nav a[href*="github"] { display:none }
-  .topbar .who span { display:none }
-  main { padding:14px 12px 40px }
-  button.primary, button.ghost { min-height:44px }
-  .witem > button { padding:8px }
-  input, select, textarea { font-size:16px !important }
-  #wmap { height:48dvh }
-  body { overflow-x:clip }
-  .topbar { padding-left:max(12px, env(safe-area-inset-left));
-    padding-right:max(12px, env(safe-area-inset-right)) }
-  main { padding-bottom:calc(40px + env(safe-area-inset-bottom)) }
-  .kinds label, .chans label { padding:4px 0 }
-}
+/* .msg doubles as the "alert" component: an empty one takes no space,
+   a filled one (err/ok/neutral) renders as a bordered, tinted panel
+   instead of bare colored text. */
+.msg:empty { display:none }
+.msg { font-size:.82rem; margin-top:10px; border-radius:9px; line-height:1.5 }
+.msg:not(:empty) { padding:9px 12px; border:1px solid #cfe2fd;
+  background:var(--sky-soft); color:var(--ink) }
+.msg.err:not(:empty) { color:#7a2020; background:var(--red-soft); border-color:#f0c6c6 }
+.msg.ok:not(:empty) { color:#155c3c; background:var(--green-soft); border-color:#bfe6d2 }
+.split { display:grid; grid-template-columns:400px 1fr; gap:16px; align-items:start }
 #wmap { height:520px; min-height:320px; border-radius:14px; border:1px solid var(--line) }
 .field { margin-bottom:12px }
+.field:last-child { margin-bottom:0 }
 .field label { display:block; font:600 .72rem Inter; letter-spacing:.6px;
   text-transform:uppercase; color:var(--dim); margin-bottom:5px }
 .modes { display:flex; gap:6px }
 .modes button { flex:1; border:1.5px solid var(--line); background:#fff;
-  border-radius:9px; padding:7px; font:500 .82rem Inter; cursor:pointer;
+  border-radius:9px; padding:8px; font:500 .82rem Inter; cursor:pointer;
   color:var(--dim) }
 .modes button.on { border-color:var(--sky); color:var(--sky);
   background:var(--sky-soft) }
@@ -107,6 +98,37 @@ input:focus { border-color:var(--sky) }
 .radius input { flex:1 }
 .radius b { font-size:.82rem; min-width:52px; text-align:right }
 .hint { color:var(--dim); font-size:.76rem; margin-top:4px }
+
+/* ── Three-step "new watch" flow ───────────────────────────────── */
+.newwatch-card h2 { margin-bottom:14px }
+.stepblock { display:flex; gap:12px; padding:14px 0 4px;
+  border-top:1px dashed var(--line) }
+.stepblock:first-of-type { border-top:0; padding-top:0 }
+.stepnum { flex:none; width:23px; height:23px; border-radius:99px;
+  background:var(--navy); color:#fff; font:700 .76rem Inter;
+  display:grid; place-items:center; margin-top:1px }
+.stepbody { flex:1; min-width:0 }
+.steplabel { font:700 .8rem Inter; color:var(--ink); margin-bottom:9px }
+
+/* ── Usage indicator ────────────────────────────────────────────── */
+.usage { font-size:.76rem; font-weight:600; color:var(--dim);
+  background:var(--bg); border:1px solid var(--line); border-radius:99px;
+  padding:3px 10px; white-space:nowrap }
+.usagebar { height:5px; border-radius:99px; background:var(--bg);
+  overflow:hidden; margin:0 0 14px }
+.usagefill { height:100%; background:var(--sky); border-radius:99px;
+  width:0; transition:width .25s }
+
+/* ── Empty state ────────────────────────────────────────────────── */
+.empty { text-align:center; padding:22px 8px; color:var(--dim) }
+.empty-ico { width:38px; height:38px; margin:0 auto 10px; position:relative }
+.empty-ico::before { content:""; position:absolute; inset:0; border-radius:11px;
+  border:1.5px dashed var(--line) }
+.empty-ico::after { content:""; position:absolute; inset:9px; border-radius:99px;
+  border:1.5px solid var(--sky); opacity:.55 }
+.empty-title { font-weight:700; color:var(--ink); font-size:.87rem; margin-bottom:4px }
+.empty-sub { font-size:.78rem; line-height:1.55; max-width:280px; margin:0 auto }
+
 .wlist { display:flex; flex-direction:column; gap:8px }
 .witem { display:flex; gap:10px; align-items:center; border:1px solid
   var(--line); border-radius:10px; padding:9px 12px; background:#fff;
@@ -138,6 +160,82 @@ input:focus { border-color:var(--sky) }
   border-radius:99px; box-shadow:0 1px 4px rgba(15,28,43,.4); cursor:grab }
 .mhandle { background:rgba(47,129,247,.5); border:2px solid #fff;
   border-radius:99px; cursor:copy }
+
+/* ── Signed-out pitch ───────────────────────────────────────────── */
+.pitch { display:grid; grid-template-columns:1.1fr 1fr; gap:30px;
+  align-items:center; max-width:980px; margin:6vh auto 28px }
+.pitch-copy .lead { color:var(--dim); font-size:.95rem; line-height:1.6;
+  margin:12px 0 18px }
+.pitchlist { list-style:none; display:flex; flex-direction:column; gap:11px }
+.pitchlist li { font-size:.86rem; color:var(--ink); padding-left:26px;
+  position:relative }
+.pitchlist li::before { content:""; position:absolute; left:0; top:4px;
+  width:16px; height:16px; border-radius:99px; background:var(--sky-soft);
+  border:1px solid #cfe2fd }
+.pitchlist li b { font-weight:700 }
+.signin-card { max-width:380px; margin:0 auto 8vh; text-align:left }
+
+/* Screenshot-free illustrative panel: a stylized watch circle over a
+   faux road grid with a floating alert toast, built entirely from
+   CSS shapes so it never goes stale like a real capture would. */
+.illustrate { position:relative; height:230px; border-radius:16px;
+  overflow:hidden; border:1px solid var(--navy);
+  background:linear-gradient(165deg, var(--navy) 0%, var(--navy2) 100%) }
+.ill-roads { position:absolute; inset:0; opacity:.4;
+  background-image:
+    linear-gradient(90deg, transparent 46%, #ffffff33 46% 54%, transparent 54%),
+    linear-gradient(0deg, transparent 28%, #ffffff22 28% 31%, transparent 31%),
+    linear-gradient(0deg, transparent 68%, #ffffff22 68% 71%, transparent 71%) }
+.ill-watch { position:absolute; left:38%; top:38%; width:130px; height:130px;
+  transform:translate(-50%,-50%); border-radius:99px; border:2px dashed #7fb0ec;
+  background:radial-gradient(circle, rgba(47,129,247,.32), transparent 70%) }
+.ill-pin { position:absolute; left:38%; top:38%; width:11px; height:11px;
+  transform:translate(-50%,-50%); border-radius:99px; background:#fff;
+  box-shadow:0 0 0 4px rgba(255,255,255,.22) }
+.ill-toast { position:absolute; right:14px; bottom:14px; left:14px;
+  max-width:250px; margin-left:auto; background:#fff; border-radius:12px;
+  padding:10px 12px; display:flex; gap:10px; align-items:center;
+  box-shadow:0 8px 20px rgba(0,0,0,.3) }
+.ill-toast-dot { width:9px; height:9px; border-radius:99px;
+  background:var(--amber); flex:none }
+.ill-toast-title { font-size:.8rem; font-weight:700; color:var(--ink) }
+.ill-toast-sub { font-size:.72rem; color:var(--dim) }
+
+/* ── Access-gate card ───────────────────────────────────────────── */
+.authwrap { max-width:420px; margin:9vh auto 0 }
+.authwrap h1 { text-align:center; margin-bottom:14px }
+.gate-copy { color:var(--dim); font-size:.85rem; margin-bottom:14px }
+
+/* ── Mobile: kept last so it wins the cascade over every component
+   rule above (all same specificity, so source order decides). ───── */
+@media (max-width: 900px) {
+  .split { grid-template-columns:1fr }
+  /* Map above the form on a phone: draw first, describe after. */
+  #wmap { order:-1; height:48vh; min-height:320px }
+  .split > div { order:1 }
+  .topbar { gap:8px; padding:0 12px }
+  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
+  .topbar nav { margin-left:0; overflow-x:auto; scrollbar-width:none }
+  .topbar nav::-webkit-scrollbar { display:none }
+  .topbar nav a { padding:7px 9px; white-space:nowrap }
+  .topbar nav a[href*="github"] { display:none }
+  .topbar .who span { display:none }
+  main { padding:14px 12px 40px }
+  button.primary, button.ghost { min-height:44px }
+  .witem > button { padding:8px }
+  input, select, textarea { font-size:16px !important }
+  #wmap { height:48dvh }
+  body { overflow-x:clip }
+  .topbar { padding-left:max(12px, env(safe-area-inset-left));
+    padding-right:max(12px, env(safe-area-inset-right)) }
+  main { padding-bottom:calc(40px + env(safe-area-inset-bottom)) }
+  .kinds label, .chans label { padding:4px 0 }
+  .pitch { grid-template-columns:1fr; margin-top:3vh }
+  .illustrate { order:-1 }
+  .pitch-copy h1 { font-size:1.4rem }
+  .stepblock { gap:10px }
+}
+
 .hidden { display:none !important }
 </style>
 </head>
@@ -146,7 +244,9 @@ input:focus { border-color:var(--sky) }
   <img class="mark" src="/logo.svg" alt="">
   <span class="wordmark">CommuteScout</span>
   <nav>
+    <a href="/">Home</a>
     <a href="/map">Live map</a>
+    <a href="/pricing">Pricing</a>
     <a href="/watch" class="on">Watch areas</a>
     <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
   </nav>
@@ -155,12 +255,39 @@ input:focus { border-color:var(--sky) }
 <main>
 
   <!-- signed out -->
-  <section id="signin" class="center hidden">
-    <h1>Watch areas <span class="badge">TRIAL</span></h1>
-    <p>Pick an area of California and get an alert the moment an
-      incident, closure, chain control, or wildfire shows up in it.
-      Sign in to get started.</p>
-    <div class="card" style="text-align:left">
+  <section id="signin" class="hidden">
+    <div class="pitch">
+      <div class="pitch-copy">
+        <span class="badge">TRIAL</span>
+        <h1>Never miss a closure on your commute</h1>
+        <p class="lead">Draw an area of California once. CommuteScout
+          checks it every few minutes and sends an alert the moment an
+          incident, closure, chain control, or wildfire shows up inside
+          it, so you find out before you are already stuck in it.</p>
+        <ul class="pitchlist">
+          <li><b>Draw it.</b> A circle around home or work, a polygon
+            around a region, or a route with a buffer along your
+            commute.</li>
+          <li><b>Pick what matters.</b> Incidents, closures, chain
+            controls, wildfires: choose any combination.</li>
+          <li><b>Get notified.</b> Push notification, email, or both,
+            the moment something changes.</li>
+        </ul>
+      </div>
+      <div class="illustrate" aria-hidden="true">
+        <div class="ill-roads"></div>
+        <div class="ill-watch"></div>
+        <div class="ill-pin"></div>
+        <div class="ill-toast">
+          <div class="ill-toast-dot"></div>
+          <div>
+            <div class="ill-toast-title">Chain control active</div>
+            <div class="ill-toast-sub">Inside your watch area</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card signin-card">
       <button class="primary" id="googlebtn">Continue with Google</button>
       <div class="or">or use an email link</div>
       <input type="email" id="email" placeholder="you@example.com"
@@ -173,16 +300,19 @@ input:focus { border-color:var(--sky) }
   </section>
 
   <!-- signed in, not approved -->
-  <section id="gate" class="center hidden">
-    <h1>Almost there</h1>
-    <p id="gatetext">Watch areas are in a limited trial. Enter an access
-      code to unlock them, or check back once your account is approved.</p>
-    <div class="card" style="text-align:left">
-      <input type="text" id="code" placeholder="Access code"
-             autocomplete="off" style="text-transform:uppercase">
-      <div style="height:8px"></div>
-      <button class="primary" id="redeembtn">Unlock watch areas</button>
-      <div class="msg" id="gatemsg"></div>
+  <section id="gate" class="hidden">
+    <div class="authwrap">
+      <h1>Almost there</h1>
+      <div class="card">
+        <p id="gatetext" class="gate-copy">Watch areas are in a limited
+          trial. Enter an access code to unlock them, or check back once
+          your account is approved.</p>
+        <input type="text" id="code" placeholder="Access code"
+               autocomplete="off" style="text-transform:uppercase">
+        <div style="height:8px"></div>
+        <button class="primary" id="redeembtn">Unlock watch areas</button>
+        <div class="msg" id="gatemsg"></div>
+      </div>
     </div>
   </section>
 
@@ -193,77 +323,100 @@ input:focus { border-color:var(--sky) }
       Informational only - verify with 511 before you drive.</div>
     <div class="split">
       <div>
-        <div class="card">
+        <div class="card newwatch-card">
           <h2>New watch</h2>
-          <div class="field">
-            <label>Name</label>
-            <input type="text" id="wname" maxlength="60"
-                   placeholder="e.g. Commute over 17">
-          </div>
-          <div class="field">
-            <label>Shape</label>
-            <div class="modes">
-              <button id="mode-circle" class="on">Circle</button>
-              <button id="mode-polygon">Polygon</button>
-              <button id="mode-route">Route</button>
-            </div>
-            <div class="hint" id="shapehint">Click the map to place the
-              center, then set the radius.</div>
-            <div class="devrow hidden" id="polytools" style="margin-top:8px">
-              <button class="ghost" id="undopt">Undo corner</button>
-              <button class="ghost" id="clearpts">Start over</button>
-            </div>
-          </div>
-          <div class="field hidden" id="routerow">
-            <label>From</label>
-            <input type="text" id="rw-from" maxlength="200"
-                   placeholder="e.g. San Jose">
-            <div style="height:8px"></div>
-            <label>To</label>
-            <input type="text" id="rw-to" maxlength="200"
-                   placeholder="e.g. South Lake Tahoe">
-            <div style="height:8px"></div>
-            <button class="ghost" id="rw-preview" style="width:100%">
-              Preview route</button>
-            <div class="field" style="margin:12px 0 0">
-              <label>Alert distance from route</label>
-              <div class="radius">
-                <input type="range" id="rw-buffer" min="1" max="2" value="2">
-                <b id="rw-bufferlabel">2 mi</b>
+
+          <div class="stepblock">
+            <div class="stepnum">1</div>
+            <div class="stepbody">
+              <div class="steplabel">Choose a shape</div>
+              <div class="modes">
+                <button id="mode-circle" class="on">Circle</button>
+                <button id="mode-polygon">Polygon</button>
+                <button id="mode-route">Route</button>
               </div>
             </div>
           </div>
-          <div class="field" id="radiusrow">
-            <label>Radius</label>
-            <div class="radius">
-              <input type="range" id="radius" min="1" max="40.2" value="15">
-              <b id="radiuslabel">15 km</b>
+
+          <div class="stepblock">
+            <div class="stepnum">2</div>
+            <div class="stepbody">
+              <div class="steplabel">Draw it in</div>
+              <div class="hint" id="shapehint">Click the map to place the
+                center, then set the radius.</div>
+              <div class="devrow hidden" id="polytools" style="margin-top:8px">
+                <button class="ghost" id="undopt">Undo corner</button>
+                <button class="ghost" id="clearpts">Start over</button>
+              </div>
+              <div class="field hidden" id="routerow" style="margin-top:12px">
+                <label>From</label>
+                <input type="text" id="rw-from" maxlength="200"
+                       placeholder="e.g. San Jose">
+                <div style="height:8px"></div>
+                <label>To</label>
+                <input type="text" id="rw-to" maxlength="200"
+                       placeholder="e.g. South Lake Tahoe">
+                <div style="height:8px"></div>
+                <button class="ghost" id="rw-preview" style="width:100%">
+                  Preview route</button>
+                <div class="field" style="margin:12px 0 0">
+                  <label>Alert distance from route</label>
+                  <div class="radius">
+                    <input type="range" id="rw-buffer" min="1" max="2" value="2">
+                    <b id="rw-bufferlabel">2 mi</b>
+                  </div>
+                </div>
+              </div>
+              <div class="field" id="radiusrow" style="margin-top:12px">
+                <label>Radius</label>
+                <div class="radius">
+                  <input type="range" id="radius" min="1" max="40.2" value="15">
+                  <b id="radiuslabel">15 km</b>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="field">
-            <label>Alert me about</label>
-            <div class="kinds">
-              <label><input type="checkbox" data-kind="incident" checked>Incidents</label>
-              <label><input type="checkbox" data-kind="closure" checked>Closures</label>
-              <label><input type="checkbox" data-kind="chain">Chain controls</label>
-              <label><input type="checkbox" data-kind="fire" checked>Wildfires</label>
+
+          <div class="stepblock">
+            <div class="stepnum">3</div>
+            <div class="stepbody">
+              <div class="steplabel">Name it and choose alerts</div>
+              <div class="field">
+                <label>Name</label>
+                <input type="text" id="wname" maxlength="60"
+                       placeholder="e.g. Commute over 17">
+              </div>
+              <div class="field">
+                <label>Alert me about</label>
+                <div class="kinds">
+                  <label><input type="checkbox" data-kind="incident" checked>Incidents</label>
+                  <label><input type="checkbox" data-kind="closure" checked>Closures</label>
+                  <label><input type="checkbox" data-kind="chain">Chain controls</label>
+                  <label><input type="checkbox" data-kind="fire" checked>Wildfires</label>
+                </div>
+              </div>
+              <div class="field">
+                <label>Deliver via</label>
+                <div class="chans">
+                  <label><input type="checkbox" id="ch-push" checked>Push notification</label>
+                  <label id="emailchan" class="hidden">
+                    <input type="checkbox" id="ch-email">Email</label>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="field">
-            <label>Deliver via</label>
-            <div class="chans">
-              <label><input type="checkbox" id="ch-push" checked>Push notification</label>
-              <label id="emailchan" class="hidden">
-                <input type="checkbox" id="ch-email">Email</label>
-            </div>
-          </div>
+
           <button class="primary" id="createbtn">Create watch</button>
           <button class="ghost hidden" id="canceledit"
                   style="width:100%;margin-top:8px">Cancel shape edit</button>
           <div class="msg" id="createmsg"></div>
         </div>
         <div class="card">
-          <h2>Your watches <span id="wcount" style="color:var(--dim);font-weight:400"></span></h2>
+          <div class="cardhead">
+            <h2>Your watches</h2>
+            <span class="usage" id="wcount"></span>
+          </div>
+          <div class="usagebar"><div class="usagefill" id="usagefill"></div></div>
           <div class="wlist" id="wlist"></div>
           <div class="msg" id="listmsg"></div>
         </div>
@@ -721,10 +874,15 @@ function renderWatches() {
   const list = $('wlist');
   list.innerHTML = '';
   savedLayer.clearLayers();
-  $('wcount').textContent = '(' + me.watches.length + '/' +
-    CFG.limits.free_watches + ')';
+  const used = me.watches.length;
+  const cap = CFG.limits.free_watches;
+  $('wcount').textContent = used + ' of ' + cap + ' watch areas used';
+  $('usagefill').style.width = (cap ? Math.min(100, (used / cap) * 100) : 0) + '%';
   if (!me.watches.length) {
-    list.innerHTML = '<div class="hint">Nothing yet - draw your first watch on the map.</div>';
+    list.innerHTML = '<div class="empty"><div class="empty-ico"></div>'
+      + '<div class="empty-title">No watch areas yet</div>'
+      + '<div class="empty-sub">Pick a shape above, draw it on the map, '
+      + 'then give it a name to start getting alerts.</div></div>';
     return;
   }
   for (const w of me.watches) {
