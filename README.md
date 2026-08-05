@@ -121,6 +121,7 @@ Give Claude live road data with a custom connector:
 https://mcp.commutescout.com/mcp
 ```
 
+See it on the site: [commutescout.com/mcp](https://commutescout.com/mcp).
 Local stdio setup and the full tool reference: [docs/mcp.md](docs/mcp.md).
 
 ### Self-hosting (advanced)

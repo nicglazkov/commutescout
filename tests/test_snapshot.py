@@ -276,6 +276,8 @@ def test_feed_counts_are_current():
         ("site/app/about/page.tsx", r"reads (\d+) official agency feeds"),
         ("site/components/blocks/hero-section-1.tsx",
          r"reads (\d+) official agency feeds"),
+        ("site/app/data-sources/page.tsx",
+         r"reads (\d+) official agency feeds"),
     ):
         text = pathlib.Path(path).read_text(encoding="utf-8")
         found = [int(g) for m in re.finditer(pattern, text)
@@ -284,4 +286,4 @@ def test_feed_counts_are_current():
         for n in found:
             assert n == actual, f"{path} says {n} feeds, PUBLIC_SOURCE_COUNT says {actual}"
         checked += len(found)
-    assert checked >= 4
+    assert checked >= 5
