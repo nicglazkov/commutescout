@@ -1820,6 +1820,10 @@ app = RateLimitMiddleware(
                      # Marketing pages: static exports, as cheap as
                      # /privacy and /terms above.
                      "/pricing", "/about", "/contact"),
+    # The homepage, exact-match only: a "/" entry in exempt_prefixes would
+    # startswith-match every path in the app and disable the limiter
+    # entirely (see RateLimitMiddleware's exempt_exact docstring).
+    exempt_exact=frozenset({"/"}),
 )
 app = SecurityHeaders(app)
 

@@ -85,6 +85,63 @@ async def _sink(message):
     pass
 
 
+async def test_exact_exempt_bypasses_the_bucket_but_prefix_matches_dont():
+    """exempt_exact is a separate, literal-match set from exempt_prefixes:
+    "/" can safely sit in it (unlike exempt_prefixes, where "/" would
+    startswith-match every path and disable the limiter entirely)."""
+    from ca_roads_mcp.ratelimit import RateLimiter, RateLimitMiddleware
+
+    served = []
+    statuses = []
+
+    async def inner(scope, receive, send):
+        served.append(scope["path"])
+
+    async def capture(message):
+        if message["type"] == "http.response.start":
+            statuses.append(message["status"])
+
+    mw = RateLimitMiddleware(
+        inner, RateLimiter(capacity=1, refill_per_second=0),
+        exempt_exact=frozenset({"/"}),
+    )
+    scope = {"type": "http", "headers": [], "client": ("1.2.3.4", 0)}
+    # Drain the one-token bucket on an ordinary path...
+    await mw({**scope, "path": "/api/ask"}, None, capture)
+    assert served == ["/api/ask"]
+    assert statuses == []
+    # ...so a second ordinary request against the now-empty bucket is
+    # rejected: a non-exempt path really is still rate limited.
+    await mw({**scope, "path": "/api/ask"}, None, capture)
+    assert statuses == [429]
+
+    # "/" is exact-exempt: it never touches the (empty) bucket, no matter
+    # how many times it's hammered.
+    for _ in range(10):
+        await mw({**scope, "path": "/"}, None, None)
+    assert served.count("/") == 10
+
+    # exempt_exact must not leak into prefix behavior: a path that merely
+    # starts with "/" is not "/" itself, and is still subject to the
+    # (still-empty) bucket.
+    await mw({**scope, "path": "/anything"}, None, capture)
+    assert statuses == [429, 429]
+
+
+def test_root_is_exempt_from_the_rate_limiter_in_the_real_app():
+    """The homepage must not share the /api/ask bucket (capacity=20),
+    same guarantee /pricing etc. get from exempt_prefixes - but / is wired
+    through exempt_exact, since a prefix entry would exempt every path."""
+    from starlette.testclient import TestClient
+
+    from ca_roads_demo.app import app
+
+    client = TestClient(app)
+    for _ in range(30):
+        r = client.get("/")
+        assert r.status_code != 429
+
+
 def test_security_headers_and_softlimit():
     from starlette.testclient import TestClient
 
