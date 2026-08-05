@@ -195,3 +195,16 @@ def test_client_and_csp_agree_on_the_snapshot_host():
     sw = pathlib.Path(
         "src/ca_roads_demo/static/sw.js").read_text(encoding="utf-8")
     assert re.search(r"const SNAP_HOST = '([^']+)'", sw).group(1) == SNAP_HOST
+
+
+def test_service_worker_is_never_edge_cached():
+    """A worker snapshots its CSP at install. An edge-cached sw.js kept
+    installing workers whose connect-src predated the snapshot host, so
+    they could not fetch snapshots at all while the page could."""
+    from starlette.testclient import TestClient
+
+    from ca_roads_demo import app as demo_app
+
+    r = TestClient(demo_app.app).get("/sw.js")
+    assert r.status_code == 200
+    assert "no-cache" in r.headers.get("cache-control", "")

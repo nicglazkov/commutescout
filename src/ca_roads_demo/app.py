@@ -1292,8 +1292,17 @@ async def terms_page(_: Request):
 
 async def sw_js(_: Request):
     # Served from the root so the service worker scope covers /watch.
+    #
+    # Never let this response be cached at the edge. A worker snapshots
+    # its CSP at install time, so an edge-cached sw.js installs workers
+    # carrying whatever policy was current when the CDN stored it: after
+    # adding the snapshot host to connect-src, cached copies kept
+    # installing workers that could not fetch snapshots at all, while
+    # the (no-store) page had the new policy. It also means a deploy can
+    # otherwise strand clients on an old worker for the cache lifetime.
     return FileResponse(STATIC_DIR / "sw.js",
-                        headers={"Service-Worker-Allowed": "/"})
+                        headers={"Service-Worker-Allowed": "/",
+                                 "Cache-Control": "no-cache, max-age=0"})
 
 
 async def manifest_file(_: Request):
