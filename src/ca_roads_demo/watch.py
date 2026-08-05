@@ -359,14 +359,22 @@ class FirestoreStore:
 
     async def add_waitlist_email(self, email: str) -> bool:
         """Store a Pro-waitlist signup. Returns False when the address
-        is already on the list. Document id is the lowercased address,
-        which makes duplicates a natural no-op."""
+        is already on the list. Document id is the sha256 hex digest of
+        the lowercased address, not the address itself: an email local
+        part may legally contain "/", which Firestore treats as a path
+        separator, so a raw address as the id either raises on one
+        slash or silently nests a sub-document on two. Hashing keeps
+        every legal address as one flat document under "waitlist" and
+        still dedupes identically on resubmission; the lowercased
+        address itself is kept in the stored "email" field."""
         from google.cloud import firestore
 
-        doc = self.db.collection("waitlist").document(email.lower())
+        key = email.lower()
+        doc_id = hashlib.sha256(key.encode()).hexdigest()
+        doc = self.db.collection("waitlist").document(doc_id)
         if (await doc.get()).exists:
             return False
-        await doc.set({"email": email.lower(),
+        await doc.set({"email": key,
                        "added": firestore.SERVER_TIMESTAMP})
         return True
 
