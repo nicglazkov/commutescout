@@ -3,11 +3,23 @@ CommuteScout header - the four legacy static pages under
 src/ca_roads_demo/static/ and the Next site's global SiteHeader, exported to
 site/out/index.html - must all expose the same header shape: the
 logo/wordmark links home, the nav destination set is exactly
-{/watch, /data-sources, /mcp, /pricing, /map}, and none of them has a
-leftover "Home" nav item (the logo IS the home affordance now).
+{/watch, /data-sources, /mcp, /pricing, /map}, the four text nav links
+appear in that exact order with their exact labels, the /map link's label
+is exactly "Live map", and none of them has a leftover "Home" nav item
+(the logo IS the home affordance now).
+
+Order/label checks look only at the four text-nav anchors' relative order
+among themselves (filtering out the logo and the /map link first), not at
+their raw position in the DOM: the site header's two-row mobile layout
+(components/site-header.tsx) puts the Live map CTA before <nav> in source
+order so it can sit next to the brand on row 1, while the legacy pages'
+Live map link (a .navcta sibling of <nav>, see e.g.
+src/ca_roads_demo/static/map.html) comes after it. That's an intentional
+per-surface layout difference, not something this guard should flag.
 
 This is a guard test, not a design doc: if the target nav changes, update
-REQUIRED_NAV_DESTINATIONS here alongside the header markup.
+REQUIRED_TEXT_NAV_ORDER / TEXT_NAV_LABELS / LIVE_MAP_LABEL here alongside
+the header markup.
 """
 from __future__ import annotations
 
@@ -20,7 +32,19 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = REPO_ROOT / "src" / "ca_roads_demo" / "static"
 SITE_OUT = REPO_ROOT / "site" / "out"
 
-REQUIRED_NAV_DESTINATIONS = {"/watch", "/data-sources", "/mcp", "/pricing", "/map"}
+# Order matters: this is the exact left-to-right sequence the four text nav
+# links must appear in on every surface.
+REQUIRED_TEXT_NAV_ORDER = ["/watch", "/data-sources", "/mcp", "/pricing"]
+TEXT_NAV_LABELS = {
+    "/watch": "Watch areas",
+    "/data-sources": "Data sources",
+    "/mcp": "Developers",
+    "/pricing": "Pricing",
+}
+LIVE_MAP_HREF = "/map"
+LIVE_MAP_LABEL = "Live map"
+
+REQUIRED_NAV_DESTINATIONS = set(REQUIRED_TEXT_NAV_ORDER) | {LIVE_MAP_HREF}
 
 STATIC_PAGES = ["map", "watch", "trip", "admin"]
 
@@ -86,6 +110,30 @@ def _check_surface(name: str, anchors: list[dict]) -> None:
     assert nav_hrefs == REQUIRED_NAV_DESTINATIONS, (
         f"{name}: nav destinations {sorted(nav_hrefs)} != "
         f"{sorted(REQUIRED_NAV_DESTINATIONS)}"
+    )
+
+    # Order + exact labels for the four text nav links, filtered to just
+    # those hrefs so an unrelated anchor (the logo, or /map, which sits on
+    # either side of <nav> depending on the surface) can't shift the
+    # comparison.
+    text_links = [a for a in anchors if a["href"] in TEXT_NAV_LABELS]
+    actual_order = [a["href"] for a in text_links]
+    assert actual_order == REQUIRED_TEXT_NAV_ORDER, (
+        f"{name}: text nav order {actual_order} != {REQUIRED_TEXT_NAV_ORDER}"
+    )
+    for a in text_links:
+        expected_label = TEXT_NAV_LABELS[a["href"]]
+        assert a["text"] == expected_label, (
+            f"{name}: {a['href']} label is {a['text']!r}, want {expected_label!r}"
+        )
+
+    live_map_links = [a for a in anchors if a["href"] == LIVE_MAP_HREF]
+    assert len(live_map_links) == 1, (
+        f"{name}: expected exactly one {LIVE_MAP_HREF} link, found {len(live_map_links)}"
+    )
+    assert live_map_links[0]["text"] == LIVE_MAP_LABEL, (
+        f"{name}: {LIVE_MAP_HREF} link text is {live_map_links[0]['text']!r}, "
+        f"want {LIVE_MAP_LABEL!r}"
     )
 
     for a in anchors:

@@ -30,17 +30,21 @@ button:active { transform:scale(.985) }
 body { background:var(--bg); color:var(--ink);
   font:14.5px/1.55 Inter, system-ui, sans-serif }
 .topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
-  gap:14px; padding:0 20px; height:56px; flex:none }
+  flex-wrap:wrap; gap:14px; padding:0 20px; height:56px; flex:none }
 .topbar a.brand { display:flex; align-items:center; gap:14px; color:inherit;
   text-decoration:none }
 .topbar img.mark { width:30px; height:30px; border-radius:7px }
 .topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
 .topbar nav { display:flex; gap:4px; margin-left:14px }
-.topbar nav a { color:#b7c4d4; font-size:.85rem; padding:7px 12px; border-radius:8px;
-  text-decoration:none }
-.topbar nav a.on { background:var(--navy2); color:#fff }
-.topbar nav a.live { background:var(--sky); color:#fff }
-.topbar nav a:hover { color:#fff }
+/* .navcta is the Live map / current-page pill: a topbar-level sibling of
+   nav (not nested inside it), same as the site's Next.js header, so it
+   can sit beside the brand on its own row at <=640px (see that media
+   query below). Shares nav a's base look. */
+.topbar nav a, .topbar .navcta { color:#b7c4d4; font-size:.85rem; padding:7px 12px;
+  border-radius:8px; text-decoration:none }
+.topbar nav a:hover, .topbar .navcta:hover { color:#fff }
+.topbar .navcta.live { background:var(--sky); color:#fff }
+.topbar nav a.on, .topbar .navcta.on { background:var(--navy2); color:#fff }
 .topbar .who { margin-left:auto; font-size:.78rem; color:#9fb4c9;
   display:flex; gap:10px; align-items:center; white-space:nowrap }
 .topbar .who button { background:none; border:1px solid #33506e;
@@ -222,27 +226,44 @@ input:focus { border-color:var(--sky) }
   /* Map above the form on a phone: draw first, describe after. */
   #wmap { order:-1; height:48vh; min-height:320px }
   .split > div { order:1 }
-  .topbar { gap:8px; padding:0 12px }
-  .topbar a.brand { gap:8px }
-  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
-  .topbar nav { margin-left:0; overflow-x:auto; scrollbar-width:none }
-  .topbar nav::-webkit-scrollbar { display:none }
-  .topbar nav a { padding:7px 9px; white-space:nowrap }
-  .topbar .who span { display:none }
   main { padding:14px 12px 40px }
   button.primary, button.ghost { min-height:44px }
   .witem > button { padding:8px }
   input, select, textarea { font-size:16px !important }
   #wmap { height:48dvh }
   body { overflow-x:clip }
-  .topbar { padding-left:max(12px, env(safe-area-inset-left));
-    padding-right:max(12px, env(safe-area-inset-right)) }
   main { padding-bottom:calc(40px + env(safe-area-inset-bottom)) }
   .kinds label, .chans label { padding:4px 0 }
   .pitch { grid-template-columns:1fr; margin-top:3vh }
   .illustrate { order:-1 }
   .pitch-copy h1 { font-size:1.4rem }
   .stepblock { gap:10px }
+}
+/* ── Topbar: two rows below 640px ──────────────────────────────
+   Row 1 (unchanged flex row, just tighter): brand left, the Live
+   map/current-page pill right. Row 2: the four text nav links, one
+   row, four equal columns, each a >=40px tap target - full width,
+   evenly distributed, no scrolling (the 375px horizontal-scroll strip
+   this replaced hid 3 of 4 destinations with no visible affordance).
+   flex-wrap on .topbar plus flex-basis:100% on nav is what forces nav
+   onto its own line: brand + the pill fit on row 1 with room to
+   spare, so wrap only breaks before the item that alone demands the
+   full row width. */
+@media (max-width: 640px) {
+  .topbar { height:auto; flex-wrap:wrap; gap:8px; row-gap:4px;
+    padding:8px 12px;
+    padding-left:max(12px, env(safe-area-inset-left));
+    padding-right:max(12px, env(safe-area-inset-right)) }
+  .topbar a.brand { gap:8px }
+  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
+  .topbar .navcta { flex:0 0 auto; margin-left:auto; min-height:36px;
+    display:flex; align-items:center }
+  .topbar .who { display:none }
+  .topbar nav { order:3; flex:1 1 100%; margin-left:0;
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:4px }
+  .topbar nav a { padding:2px 4px; font-size:.72rem; text-align:center;
+    white-space:normal; line-height:1.2; min-height:40px;
+    display:flex; align-items:center; justify-content:center }
 }
 
 .hidden { display:none !important }
@@ -259,8 +280,8 @@ input:focus { border-color:var(--sky) }
     <a href="/data-sources">Data sources</a>
     <a href="/mcp">Developers</a>
     <a href="/pricing">Pricing</a>
-    <a href="/map" class="live">Live map</a>
   </nav>
+  <a class="navcta live" href="/map">Live map</a>
   <span class="who" id="who"></span>
 </header>
 <main>
