@@ -208,3 +208,37 @@ def test_service_worker_is_never_edge_cached():
     r = TestClient(demo_app.app).get("/sw.js")
     assert r.status_code == 200
     assert "no-cache" in r.headers.get("cache-control", "")
+
+
+def test_state_counts_are_current():
+    """Every hardcoded "N states" must match the live registry.
+
+    The count is written in the page metadata, the assistant prompt, the
+    MCP tool docstring and the README. They drift the moment a state is
+    added, and the MCP docstring drifting is the expensive one: the
+    model reads it to decide whether a location is worth querying.
+    """
+    import pathlib
+    import re
+
+    from ca_roads_demo import states
+
+    actual = states.coverage_summary()["states"]
+    assert actual > 0
+
+    checked = 0
+    for path, pattern in (
+        ("src/ca_roads_demo/static/index.html", r"across (\d+) states"),
+        ("src/ca_roads_demo/prompt.py", r"\((\d+) states, not just California\)"),
+        ("src/ca_roads_mcp/server.py", r"just California: (\d+) states today"),
+        ("README.md", r"across \*\*(\d+) states\*\*|across (\d+) states"),
+        ("docs/registry.md", r"across (\d+) states"),
+    ):
+        text = pathlib.Path(path).read_text(encoding="utf-8")
+        found = [int(g) for m in re.finditer(pattern, text)
+                 for g in m.groups() if g]
+        assert found, f"no state count found in {path}"
+        for n in found:
+            assert n == actual, f"{path} says {n} states, registry says {actual}"
+        checked += len(found)
+    assert checked >= 5
