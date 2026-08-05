@@ -13,6 +13,13 @@ const nextConfig: NextConfig = {
   // token sheet at ../src/ca_roads_demo/static/tokens.css (imported
   // from app/globals.css), which lives one level above site/. Widen
   // the root to the repo root so that import resolves.
+  //
+  // Cost: this also widens Turbopack's filesystem watching scope and
+  // reduces cache validation efficiency during `next dev`, since it now
+  // has to consider the whole repo root instead of just site/. This repo
+  // root contains a large .venv/ and other heavy directories, so expect
+  // `next dev` to start slower and use more file watchers here than in a
+  // plain single-app checkout, especially on Windows.
   turbopack: {
     root: path.join(__dirname, ".."),
   },
