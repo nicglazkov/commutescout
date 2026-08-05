@@ -102,6 +102,7 @@ def test_map_still_serves_when_site_is_not_built(tmp_path, monkeypatch):
     assert r.status_code == 503
     assert "site is not built" in r.text
     assert r.headers["cache-control"] == "no-store"
+    assert c.get("/map").status_code == 200
 
 
 def test_marketing_pages_are_exempt_from_the_rate_limiter(tmp_path, monkeypatch):
@@ -110,10 +111,19 @@ def test_marketing_pages_are_exempt_from_the_rate_limiter(tmp_path, monkeypatch)
     produce a 429."""
     (tmp_path / "pricing.html").write_text("<h1>pricing</h1>",
                                            encoding="utf-8")
+    (tmp_path / "privacy.html").write_text("<h1>privacy</h1>",
+                                           encoding="utf-8")
     monkeypatch.setattr(demo_app, "SITE_DIR", tmp_path)
     c = TestClient(demo_app.app)
     for _ in range(30):
         r = c.get("/pricing")
+        assert r.status_code != 429
+    # A legal page (as opposed to a product marketing page) must be exempt
+    # too: it shares the exempt_prefixes entry with /pricing, /about, and
+    # /contact, but a regression that only re-added the product pages
+    # would slip past a test that never actually hammers /privacy.
+    for _ in range(30):
+        r = c.get("/privacy")
         assert r.status_code != 429
 
 
@@ -132,3 +142,69 @@ def test_root_serves_homepage_not_map(tmp_path, monkeypatch):
     c = TestClient(demo_app.app)
     assert b"home" in c.get("/").content
     assert b"leaflet" not in c.get("/").content.lower()
+
+
+def test_resolve_site_file_prefers_the_default_dir_over_the_repo_fallback(
+        tmp_path, monkeypatch):
+    """Dev-only fallback (nothing populates STATIC_DIR/site outside
+    Docker): when SITE_DIR is at its built-in default, a missing file
+    there falls back to REPO_SITE_OUT (the repo checkout's own
+    `site/out`), but a file present in both is served from the default,
+    never from the fallback."""
+    primary = tmp_path / "primary"
+    fallback = tmp_path / "fallback"
+    primary.mkdir()
+    fallback.mkdir()
+    (primary / "shared.html").write_text("primary", encoding="utf-8")
+    (fallback / "shared.html").write_text("fallback", encoding="utf-8")
+    (fallback / "only_in_fallback.html").write_text("fallback-only",
+                                                     encoding="utf-8")
+    monkeypatch.setattr(demo_app, "_DEFAULT_SITE_DIR", primary)
+    monkeypatch.setattr(demo_app, "REPO_SITE_OUT", fallback)
+    monkeypatch.setattr(demo_app, "SITE_DIR", primary)
+
+    assert demo_app._resolve_site_file("shared.html").read_text(
+        encoding="utf-8") == "primary"
+    assert demo_app._resolve_site_file("only_in_fallback.html").read_text(
+        encoding="utf-8") == "fallback-only"
+    assert demo_app._resolve_site_file("nope.html") is None
+
+
+def test_resolve_site_file_skips_the_fallback_when_site_dir_is_monkeypatched(
+        tmp_path, monkeypatch):
+    """When a test (or a future caller) points SITE_DIR somewhere other
+    than the built-in default, the repo fallback must not leak files in
+    from a real checkout sitting alongside the test run - it must behave
+    as though only SITE_DIR exists."""
+    other = tmp_path / "other"
+    fallback = tmp_path / "fallback"
+    other.mkdir()
+    fallback.mkdir()
+    (fallback / "only_in_fallback.html").write_text("fallback-only",
+                                                     encoding="utf-8")
+    monkeypatch.setattr(demo_app, "_DEFAULT_SITE_DIR", tmp_path / "default")
+    monkeypatch.setattr(demo_app, "REPO_SITE_OUT", fallback)
+    monkeypatch.setattr(demo_app, "SITE_DIR", other)
+
+    assert demo_app._resolve_site_file("only_in_fallback.html") is None
+
+
+def test_asset_source_dir_prefers_the_default_when_it_has_next(
+        tmp_path, monkeypatch):
+    """The /_next and /shots mounts are wired up once at import time (see
+    _asset_source_dir in app.py); this checks the directory-selection
+    logic directly, since it can't be exercised through a monkeypatched
+    request the way _resolve_site_file can."""
+    primary = tmp_path / "primary"
+    fallback = tmp_path / "fallback"
+    (primary / "_next").mkdir(parents=True)
+    (fallback / "_next").mkdir(parents=True)
+    monkeypatch.setattr(demo_app, "SITE_DIR", primary)
+    monkeypatch.setattr(demo_app, "REPO_SITE_OUT", fallback)
+
+    assert demo_app._asset_source_dir() == primary
+
+    # Docker image layout absent (no _next under SITE_DIR): falls back to
+    # the repo checkout's own build.
+    (primary / "_next").rmdir()
+    assert demo_app._asset_source_dir() == fallback
