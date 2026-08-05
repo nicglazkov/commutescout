@@ -24,3 +24,18 @@ def test_map_still_serves_when_site_is_not_built(tmp_path, monkeypatch):
     r = c.get("/site-preview")
     assert r.status_code == 503
     assert "site is not built" in r.text
+    assert r.headers["cache-control"] == "no-store"
+
+
+def test_marketing_pages_are_exempt_from_the_rate_limiter(tmp_path, monkeypatch):
+    """Marketing pages must not share the /api/ask bucket (RateLimitMiddleware,
+    capacity=20): hammering one well past that burst allowance must never
+    produce a 429."""
+    (tmp_path / "pricing").mkdir(parents=True)
+    (tmp_path / "pricing" / "index.html").write_text("<h1>pricing</h1>",
+                                                     encoding="utf-8")
+    monkeypatch.setattr(demo_app, "SITE_DIR", tmp_path)
+    c = TestClient(demo_app.app)
+    for _ in range(30):
+        r = c.get("/pricing")
+        assert r.status_code != 429

@@ -1216,7 +1216,8 @@ def _site_response(page: str):
         return Response(
             "The marketing site is not built. Run: cd site && npm ci && "
             "npm run build. The map is at /map and APIs are unaffected.",
-            status_code=503, media_type="text/plain")
+            status_code=503, media_type="text/plain",
+            headers={"Cache-Control": "no-store"})
     return FileResponse(f)
 
 
@@ -1815,7 +1816,10 @@ app = RateLimitMiddleware(
                      # inside the bucket (and are token-gated anyway).
                      "/watch", ADMIN_PAGE_PATH, "/sw.js", "/manifest.webmanifest",
                      "/privacy", "/terms", "/trip/", "/api/trip",
-                     "/api/watch/config", "/api/staticmap"),
+                     "/api/watch/config", "/api/staticmap",
+                     # Marketing pages: static exports, as cheap as
+                     # /privacy and /terms above.
+                     "/pricing", "/about", "/contact", "/site-preview"),
 )
 app = SecurityHeaders(app)
 
