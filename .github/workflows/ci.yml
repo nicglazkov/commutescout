@@ -46,11 +46,13 @@ jobs:
         working-directory: site
       - name: Exported routes exist
         run: |
-          # index.html and pricing.html exist so far (trailingSlash: false
-          # emits a flat "<page>.html" per route); about/contact land in a
-          # later task and should be added to this list then.
+          # trailingSlash: false emits a flat "<page>.html" per route,
+          # matching the Starlette route table exactly (_site_response in
+          # app.py serves these directly).
           test -f site/out/index.html
           test -f site/out/pricing.html
+          test -f site/out/about.html
+          test -f site/out/contact.html
       - name: Built pages use slash-less internal links
         run: |
           # Guards the Task 8 fix-round ruling (Nic): served/canonical URLs
