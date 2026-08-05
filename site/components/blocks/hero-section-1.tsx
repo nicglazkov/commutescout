@@ -38,7 +38,7 @@ export default function HeroSection() {
               <Button
                 nativeButton={false}
                 render={
-                  <Link href="/map">
+                  <Link href="/map" prefetch={false}>
                     <span className="text-nowrap">Open the map</span>
                   </Link>
                 }
@@ -47,7 +47,7 @@ export default function HeroSection() {
                 variant="ghost"
                 nativeButton={false}
                 render={
-                  <Link href="/pricing#waitlist">
+                  <Link href="/pricing#waitlist" prefetch={false}>
                     <span className="text-nowrap">Get Pro updates</span>
                   </Link>
                 }

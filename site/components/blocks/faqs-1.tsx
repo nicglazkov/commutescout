@@ -60,7 +60,7 @@ export default function FAQs() {
 
             <p className="text-cs-ink/60 mt-6">
               Can&apos;t find what you&apos;re looking for? Contact{" "}
-              <Link href="/contact" className="text-cs-sky font-medium hover:underline">
+              <Link href="/contact" prefetch={false} className="text-cs-sky font-medium hover:underline">
                 the CommuteScout team
               </Link>
             </p>

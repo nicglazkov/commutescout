@@ -46,7 +46,11 @@ export default function Pricing() {
                 variant="outline"
                 className="mt-8 w-full"
                 nativeButton={false}
-                render={<Link href="/map">Open the map</Link>}
+                render={
+                  <Link href="/map" prefetch={false}>
+                    Open the map
+                  </Link>
+                }
               />
             </div>
 

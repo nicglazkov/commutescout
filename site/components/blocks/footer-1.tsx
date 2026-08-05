@@ -48,7 +48,7 @@ export default function Footer() {
       <div className="mx-auto max-w-7xl space-y-16 px-6 pb-16 pt-32">
         <div className="grid grid-cols-2 gap-x-3 gap-y-12 sm:grid-cols-4 lg:grid-cols-5">
           <div className="max-lg:col-span-full">
-            <Link href="/" aria-label="go home">
+            <Link href="/" prefetch={false} aria-label="go home">
               <Image src="/logo.svg" alt="CommuteScout" width={32} height={32} className="h-8 w-8" />
             </Link>
           </div>
@@ -61,6 +61,7 @@ export default function Footer() {
                   <li key={linkIndex}>
                     <Link
                       href={link.href}
+                      prefetch={false}
                       className="hover:text-cs-sky text-cs-ink/60 text-sm duration-150"
                     >
                       {link.label}

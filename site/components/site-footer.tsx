@@ -46,7 +46,12 @@ export function SiteFooter() {
       <div className="mx-auto max-w-7xl space-y-12 px-6 pb-10 pt-16">
         <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4">
           <div className="col-span-2 sm:col-span-1">
-            <Link href="/" className="flex items-center gap-2.5" aria-label="CommuteScout home">
+            <Link
+              href="/"
+              prefetch={false}
+              className="flex items-center gap-2.5"
+              aria-label="CommuteScout home"
+            >
               <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-md" />
               <span className="text-base font-semibold">CommuteScout</span>
             </Link>
@@ -60,6 +65,7 @@ export function SiteFooter() {
                   <li key={link.href}>
                     <Link
                       href={link.href}
+                      prefetch={false}
                       className="text-sm text-white/70 transition-colors hover:text-white"
                     >
                       {link.label}
