@@ -37,12 +37,12 @@ def test_visitor_view_rejects_missing_bogus_and_null_island():
 
 def test_index_serves_island_only_with_headers():
     client = TestClient(app)
-    plain = client.get("/")
+    plain = client.get("/map")
     assert plain.status_code == 200
     assert 'id="bootgeo"' not in plain.text
 
-    located = client.get("/", headers={"cf-iplatitude": "47.6062",
-                                       "cf-iplongitude": "-122.3321"})
+    located = client.get("/map", headers={"cf-iplatitude": "47.6062",
+                                          "cf-iplongitude": "-122.3321"})
     assert located.status_code == 200
     assert '<script type="application/json" id="bootgeo">' in located.text
     assert '"lat": 47.61' in located.text
@@ -64,7 +64,7 @@ def test_index_serves_island_only_with_headers():
 def _index_html():
     import pathlib
     return pathlib.Path(
-        "src/ca_roads_demo/static/index.html").read_text(encoding="utf-8")
+        "src/ca_roads_demo/static/map.html").read_text(encoding="utf-8")
 
 
 def test_saved_view_is_per_tab_not_per_browser():

@@ -12,7 +12,7 @@ def test_site_pages_serve_when_built(tmp_path, monkeypatch):
                                                      encoding="utf-8")
     monkeypatch.setattr(demo_app, "SITE_DIR", tmp_path)
     c = TestClient(demo_app.app)
-    assert b"home" in c.get("/site-preview").content
+    assert b"home" in c.get("/").content
     assert b"pricing" in c.get("/pricing").content
 
 
@@ -21,7 +21,7 @@ def test_map_still_serves_when_site_is_not_built(tmp_path, monkeypatch):
     pages return a clear 503, not a stack trace."""
     monkeypatch.setattr(demo_app, "SITE_DIR", tmp_path / "missing")
     c = TestClient(demo_app.app)
-    r = c.get("/site-preview")
+    r = c.get("/")
     assert r.status_code == 503
     assert "site is not built" in r.text
     assert r.headers["cache-control"] == "no-store"
@@ -39,3 +39,20 @@ def test_marketing_pages_are_exempt_from_the_rate_limiter(tmp_path, monkeypatch)
     for _ in range(30):
         r = c.get("/pricing")
         assert r.status_code != 429
+
+
+def test_map_serves_at_map_with_bootgeo(monkeypatch):
+    c = TestClient(demo_app.app)
+    r = c.get("/map", headers={"x-visitor-lat": "37.77",
+                               "x-visitor-lon": "-122.41"})
+    assert r.status_code == 200
+    assert 'id="bootgeo"' in r.text          # data island still injected
+    assert "leaflet" in r.text.lower()
+
+
+def test_root_serves_homepage_not_map(tmp_path, monkeypatch):
+    (tmp_path / "index.html").write_text("<h1>home</h1>", encoding="utf-8")
+    monkeypatch.setattr(demo_app, "SITE_DIR", tmp_path)
+    c = TestClient(demo_app.app)
+    assert b"home" in c.get("/").content
+    assert b"leaflet" not in c.get("/").content.lower()

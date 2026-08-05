@@ -175,7 +175,7 @@ def test_csp_allows_the_snapshot_host():
 
     from ca_roads_demo import app as demo_app
 
-    csp = TestClient(demo_app.app).get("/").headers["content-security-policy"]
+    csp = TestClient(demo_app.app).get("/map").headers["content-security-policy"]
     connect = next(d for d in csp.split(";") if d.strip().startswith("connect-src"))
     host = "https://" + SNAP_HOST
     assert host in connect, f"{host} missing from {connect!r}"
@@ -188,7 +188,7 @@ def test_client_and_csp_agree_on_the_snapshot_host():
     import re
 
     html = pathlib.Path(
-        "src/ca_roads_demo/static/index.html").read_text(encoding="utf-8")
+        "src/ca_roads_demo/static/map.html").read_text(encoding="utf-8")
     base = re.search(r"const SNAP_BASE = '([^']+)'", html).group(1)
     assert base == "https://" + SNAP_HOST
 
@@ -228,7 +228,7 @@ def test_state_counts_are_current():
 
     checked = 0
     for path, pattern in (
-        ("src/ca_roads_demo/static/index.html", r"across (\d+) states"),
+        ("src/ca_roads_demo/static/map.html", r"across (\d+) states"),
         ("src/ca_roads_demo/prompt.py", r"\((\d+) states, not just California\)"),
         ("src/ca_roads_mcp/server.py", r"just California: (\d+) states today"),
         ("README.md", r"across \*\*(\d+) states\*\*|across (\d+) states"),
