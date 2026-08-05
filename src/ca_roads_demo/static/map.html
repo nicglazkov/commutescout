@@ -67,6 +67,8 @@ body { background:var(--bg); color:var(--ink);
 /* ── App chrome ─────────────────────────────────────────────── */
 .topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
   gap:14px; padding:0 20px; height:56px; flex:none }
+.topbar a.brand { display:flex; align-items:center; gap:14px; color:inherit;
+  text-decoration:none }
 .topbar img.mark { width:30px; height:30px; border-radius:7px }
 .topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
 .topbar nav { display:flex; gap:4px; margin-left:14px }
@@ -617,10 +619,10 @@ aside { background:var(--card); border-right:1px solid var(--line);
   aside { border-right:0; border-top:1px solid var(--line) }
   .topbar { gap:8px; padding:0 12px }
   .topbar .wordmark { white-space:nowrap; font-size:.98rem }
+  .topbar a.brand { gap:8px }
   .topbar nav { margin-left:0; overflow-x:auto; scrollbar-width:none }
   .topbar nav::-webkit-scrollbar { display:none }
   .topbar nav a { padding:7px 9px; white-space:nowrap }
-  .topbar nav a[href*="github"] { display:none }
   .sysok, #ver { display:none }
   .legend { display:none }
   .filters { display:none; top:64px; right:12px; left:12px;
@@ -644,14 +646,16 @@ aside { background:var(--card); border-right:1px solid var(--line);
 </head>
 <body>
 <header class="topbar">
-  <img class="mark" src="/logo.svg" alt="">
-  <span class="wordmark">CommuteScout</span>
+  <a class="brand" href="/" aria-label="CommuteScout home">
+    <img class="mark" src="/logo.svg" alt="">
+    <span class="wordmark">CommuteScout</span>
+  </a>
   <nav>
-    <a href="/">Home</a>
-    <a class="on" href="/map">Live map</a>
-    <a href="/pricing">Pricing</a>
     <a href="/watch">Watch areas</a>
-    <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
+    <a href="/data-sources">Data sources</a>
+    <a href="/mcp">Developers</a>
+    <a href="/pricing">Pricing</a>
+    <a class="on" href="/map">Live map</a>
   </nav>
   <span class="sysok" id="sysok" title="Click for live data-source status"><i></i><span id="feedsok">checking live feeds&hellip;</span></span>
   <!-- Data age. On a map left open on a wall monitor this is the health
@@ -764,6 +768,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <a href="/pricing">Pricing</a>
       <a href="/about">About</a>
       <a href="/contact">Contact</a>
+      <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
     </p>
   </aside>
   <div class="map-card active" id="mapcard">
