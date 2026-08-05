@@ -66,6 +66,15 @@ MAX_ROUTE_POINTS = 80
 MAX_ROUTE_KM = 800.0
 MIN_BUFFER_KM = 1.0
 MAX_BUFFER_KM = 12.0
+# Free-tier size caps: the numbers a free account actually gets, sitting
+# inside the technical ceilings above. Approved values: 3 watch areas,
+# a 25 mi circle radius (40.2 km), a 2,000 sq mi polygon (5,180 sq km),
+# a 250 mi route (402 km), and a 2 mi route buffer (3.2 km).
+FREE_MAX_WATCHES = 3
+FREE_MAX_RADIUS_KM = 40.2
+FREE_MAX_POLYGON_SQ_KM = 5180.0
+FREE_MAX_ROUTE_KM = 402.0
+FREE_MAX_BUFFER_KM = 3.2
 MAX_ALERTS_PER_WATCH_CYCLE = 8
 MAX_SEEN_IDS = 1500
 # An event id stays in seen-state this long after vanishing from the
@@ -357,6 +366,27 @@ class FirestoreStore:
         await self.db.collection("watch_state").document(watch_id).set(
             {"seen": top, "updated_at": datetime.now(UTC).isoformat()})
 
+    async def add_waitlist_email(self, email: str) -> bool:
+        """Store a Pro-waitlist signup. Returns False when the address
+        is already on the list. Document id is the sha256 hex digest of
+        the lowercased address, not the address itself: an email local
+        part may legally contain "/", which Firestore treats as a path
+        separator, so a raw address as the id either raises on one
+        slash or silently nests a sub-document on two. Hashing keeps
+        every legal address as one flat document under "waitlist" and
+        still dedupes identically on resubmission; the lowercased
+        address itself is kept in the stored "email" field."""
+        from google.cloud import firestore
+
+        key = email.lower()
+        doc_id = hashlib.sha256(key.encode()).hexdigest()
+        doc = self.db.collection("waitlist").document(doc_id)
+        if (await doc.get()).exists:
+            return False
+        await doc.set({"email": key,
+                       "added": firestore.SERVER_TIMESTAMP})
+        return True
+
 
 _store: FirestoreStore | None = None
 
@@ -393,6 +423,21 @@ def point_in_polygon(lat: float, lon: float, points: list[list[float]]) -> bool:
             inside = not inside
         j = i
     return inside
+
+
+def polygon_area_sq_km(points: list) -> float:
+    """Approximate polygon area from [lat, lon] pairs. Planar shoelace
+    on a locally scaled grid; plenty accurate at watch-area sizes."""
+    if len(points) < 3:
+        return 0.0
+    lat0 = sum(p[0] for p in points) / len(points)
+    kx = 111.32 * math.cos(math.radians(lat0))   # km per degree lon
+    ky = 110.57                                   # km per degree lat
+    xs = [(p[1] * kx, p[0] * ky) for p in points]
+    s = 0.0
+    for (x1, y1), (x2, y2) in zip(xs, xs[1:] + xs[:1], strict=True):
+        s += x1 * y2 - x2 * y1
+    return abs(s) / 2.0
 
 
 def _point_to_segment_km(lat, lon, a, b) -> float:
@@ -496,7 +541,12 @@ async def api_watch_config(_: Request) -> JSONResponse:
         "vapidPublicKey": public,
         "emailEnabled": bool(RESEND_API_KEY and ALERT_FROM_EMAIL),
         "limits": {"watches": MAX_WATCHES, "radius_km": MAX_RADIUS_KM,
-                   "polygon_points": MAX_POLY_POINTS},
+                   "polygon_points": MAX_POLY_POINTS,
+                   "free_watches": FREE_MAX_WATCHES,
+                   "free_radius_km": FREE_MAX_RADIUS_KM,
+                   "free_polygon_sq_km": FREE_MAX_POLYGON_SQ_KM,
+                   "free_route_km": FREE_MAX_ROUTE_KM,
+                   "free_buffer_km": FREE_MAX_BUFFER_KM},
     })
 
 
@@ -607,13 +657,20 @@ async def api_watch_create(request: Request) -> JSONResponse:
             return _err("circle needs center {lat, lon} and radius_km")
         if not in_california(lat, lon):
             return _err("center must be in California (offshore is fine)")
-        radius = min(max(radius, MIN_RADIUS_KM), MAX_RADIUS_KM)
+        if radius > FREE_MAX_RADIUS_KM:
+            return _err(f"circles above {FREE_MAX_RADIUS_KM:g} km radius "
+                        "are over the free limit")
+        radius = max(radius, MIN_RADIUS_KM)
         watch.update({"type": "circle", "center": {"lat": lat, "lon": lon},
                       "radius_km": radius})
     elif wtype == "polygon":
         points, point_err = _parse_polygon_points(body.get("points"))
         if point_err:
             return _err(point_err)
+        area = polygon_area_sq_km([[p["lat"], p["lon"]] for p in points])
+        if area > FREE_MAX_POLYGON_SQ_KM:
+            return _err(f"polygons above {FREE_MAX_POLYGON_SQ_KM:.0f} sq km "
+                        "are over the free limit")
         watch.update({"type": "polygon", "points": points})
     elif wtype == "route":
         raw = body.get("points") or []
@@ -638,6 +695,9 @@ async def api_watch_create(request: Request) -> JSONResponse:
                 points.append({"lat": lat, "lon": lon})
         except (TypeError, ValueError, IndexError):
             return _err("points must be [lat, lon] pairs")
+        if total_km > FREE_MAX_ROUTE_KM:
+            return _err(f"routes above {FREE_MAX_ROUTE_KM:.0f} km are "
+                        "over the free limit")
         if total_km > MAX_ROUTE_KM:
             return _err(f"routes are limited to {MAX_ROUTE_KM:.0f} km "
                         "during the trial")
@@ -645,7 +705,10 @@ async def api_watch_create(request: Request) -> JSONResponse:
             buffer_km = float(body.get("buffer_km") or 3.0)
         except (TypeError, ValueError):
             buffer_km = 3.0
-        buffer_km = min(max(buffer_km, MIN_BUFFER_KM), MAX_BUFFER_KM)
+        if buffer_km > FREE_MAX_BUFFER_KM:
+            return _err(f"buffers above {FREE_MAX_BUFFER_KM:g} km are "
+                        "over the free limit")
+        buffer_km = max(buffer_km, MIN_BUFFER_KM)
         watch.update({"type": "route", "points": points,
                       "buffer_km": round(buffer_km, 2),
                       "length_km": round(total_km, 1)})
@@ -654,8 +717,9 @@ async def api_watch_create(request: Request) -> JSONResponse:
 
     store = get_store()
     existing = await store.list_watches(claims["sub"])
-    if len(existing) >= MAX_WATCHES:
-        return _err(f"trial accounts are limited to {MAX_WATCHES} watches", 403)
+    if len(existing) >= FREE_MAX_WATCHES:
+        return _err(f"free accounts are limited to {FREE_MAX_WATCHES} "
+                    "watches; that is the free limit", 403)
     watch_id = await store.create_watch(watch)
     watch["id"] = watch_id
     return JSONResponse(watch)
@@ -717,14 +781,20 @@ async def api_watch_update(request: Request) -> JSONResponse:
             buffer_km = float(body.get("buffer_km"))
         except (TypeError, ValueError):
             return _err("buffer_km must be a number")
-        updates["buffer_km"] = round(
-            min(max(buffer_km, MIN_BUFFER_KM), MAX_BUFFER_KM), 2)
+        if buffer_km > FREE_MAX_BUFFER_KM:
+            return _err(f"buffers above {FREE_MAX_BUFFER_KM:g} km are "
+                        "over the free limit")
+        updates["buffer_km"] = round(max(buffer_km, MIN_BUFFER_KM), 2)
     if "points" in body:
         if watch.get("type") != "polygon":
             return _err("only polygon watches have editable points")
         points, point_err = _parse_polygon_points(body.get("points"))
         if point_err:
             return _err(point_err)
+        area = polygon_area_sq_km([[p["lat"], p["lon"]] for p in points])
+        if area > FREE_MAX_POLYGON_SQ_KM:
+            return _err(f"polygons above {FREE_MAX_POLYGON_SQ_KM:.0f} sq km "
+                        "are over the free limit")
         updates["points"] = points
     if not updates:
         return _err("nothing to update")

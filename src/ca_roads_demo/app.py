@@ -15,6 +15,7 @@ import json
 import os
 import time
 from datetime import UTC, datetime
+from html import escape as html_escape
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -26,6 +27,7 @@ from starlette.responses import (
     FileResponse,
     HTMLResponse,
     JSONResponse,
+    PlainTextResponse,
     Response,
     StreamingResponse,
 )
@@ -1323,6 +1325,57 @@ async def site_contact(_: Request):
     return _site_response("contact")
 
 
+def _no_crlf(value: str) -> str:
+    """Strip embedded CR/LF so user input can't inject extra lines into
+    anything built from it downstream (email subjects, bodies, etc.)."""
+    return value.replace("\r", "").replace("\n", "")
+
+
+async def api_contact(request: Request):
+    """The contact form. Emails the site owner through the existing
+    Resend integration; the destination never appears in the repo or
+    on a page. A filled honeypot returns success without sending, so
+    bots get no signal to iterate on."""
+    form = await request.form()
+    name = _no_crlf((form.get("name") or "").strip())[:80]
+    email = _no_crlf((form.get("email") or "").strip())[:120]
+    message = (form.get("message") or "").strip()[:2000]
+    if (form.get("website") or "").strip():
+        return PlainTextResponse("Thanks. Your message is on its way.")
+    if not (name and message and "@" in email and "." in email.rsplit("@", 1)[-1]):
+        return PlainTextResponse("Name, a valid email, and a message are "
+                                 "required.", status_code=400)
+    dest = os.environ.get("CONTACT_EMAIL", "")
+    if not dest:
+        return PlainTextResponse("Contact is not configured on this "
+                                 "deployment.", status_code=503)
+    body = f"From: {name} <{email}>\n\n{message}"
+    ok = await watch._email_alert(dest, f"CommuteScout contact: {name}",
+                                  f"<pre>{html_escape(body)}</pre>", body)
+    if not ok:
+        return PlainTextResponse("Sending failed. Try again in a minute.",
+                                 status_code=502)
+    return PlainTextResponse("Thanks. Your message is on its way.")
+
+
+async def api_waitlist(request: Request):
+    """Pro waitlist signups from the pricing page. A filled honeypot
+    returns success without storing anything, same as /api/contact."""
+    form = await request.form()
+    email = _no_crlf((form.get("email") or "").strip())[:120].lower()
+    if (form.get("website") or "").strip():
+        return PlainTextResponse("You're on the list.")
+    if not ("@" in email and "." in email.rsplit("@", 1)[-1]):
+        return PlainTextResponse("Enter a valid email address.",
+                                 status_code=400)
+    try:
+        await watch.get_store().add_waitlist_email(email)
+    except Exception:  # noqa: BLE001 - no Firestore locally
+        return PlainTextResponse("Signups are unavailable right now. "
+                                 "Try again later.", status_code=503)
+    return PlainTextResponse("You're on the list.")
+
+
 async def sw_js(_: Request):
     # Served from the root so the service worker scope covers /watch.
     #
@@ -1500,6 +1553,8 @@ app = Starlette(
         Route("/pricing", site_pricing),
         Route("/about", site_about),
         Route("/contact", site_contact),
+        Route("/api/contact", api_contact, methods=["POST"]),
+        Route("/api/waitlist", api_waitlist, methods=["POST"]),
         Route("/trip/{trip_id}", trips.trip_page),
         Route("/api/trip", trips.api_trip_create, methods=["POST"]),
         Route("/api/trip/{trip_id}", trips.api_trip_get),
@@ -1642,7 +1697,8 @@ class SoftLimit:
     human; it stops a curl loop."""
 
     PREFIXES = ("/api/suggest", "/api/geocode", "/api/flow",
-                "/api/staticmap", "/api/traffictile")
+                "/api/staticmap", "/api/traffictile", "/api/contact",
+                "/api/waitlist")
 
     def __init__(self, app_):
         self.app = app_
