@@ -971,6 +971,37 @@ function renderChips() {
     `${n} ${KIND_LABELS[kind][n === 1 ? 0 : 1]}</span>`).join('');
 }
 
+// Where this TAB last looked. sessionStorage, deliberately: it survives
+// a reload and dies with the tab, so reloading keeps the area you moved
+// to while a brand new tab still opens on where you are. localStorage
+// would get this wrong, because someone who scrolled to Chicago
+// yesterday still wants their own commute when they open the map today.
+const VIEW_KEY = 'cs.view';
+
+function readSavedView() {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(VIEW_KEY) || 'null');
+    // Validate rather than trust: a stale or hand-edited value must not
+    // be able to strand the map off the edge of the world.
+    if (Array.isArray(v) && v.length === 3
+        && Number.isFinite(v[0]) && Math.abs(v[0]) <= 85
+        && Number.isFinite(v[1]) && Math.abs(v[1]) <= 180
+        && Number.isFinite(v[2]) && v[2] >= 2 && v[2] <= 17) {
+      return [[v[0], v[1]], v[2]];
+    }
+  } catch (e) { /* private mode, or nothing saved yet */ }
+  return null;
+}
+
+function saveView() {
+  if (!map) return;
+  try {
+    const c = map.getCenter();
+    sessionStorage.setItem(VIEW_KEY, JSON.stringify(
+      [+c.lat.toFixed(5), +c.lng.toFixed(5), map.getZoom()]));
+  } catch (e) { /* private mode or quota: the view just is not kept */ }
+}
+
 function ensureMap() {
   mapcard.classList.add('active');
   if (map) return;
@@ -1011,11 +1042,27 @@ function ensureMap() {
       }
     }
   } catch (e) { /* fall through to the timezone view */ }
-  // Deliberately NOT restoring the last view: someone who scrolled to
-  // Chicago yesterday still wants their own commute when they open
-  // the map today. Location wins every time.
+  // A view this tab was moved to outranks every guess above: the
+  // visitor already said where they want to be, and a reload should not
+  // argue with them. It cannot outlive the tab (see VIEW_KEY), so a new
+  // tab still gets the location-based guess.
+  const restored = readSavedView();
+  if (restored) view0 = restored;
   map = L.map('map', { scrollWheelZoom: true })
     .setView(view0[0], view0[1]);
+  // One coalesced write per gesture, at idle: moveend already fires
+  // once per gesture rather than continuously, and deferring keeps a
+  // synchronous storage write off the pan/zoom path entirely.
+  let viewSaveQueued = false;
+  map.on('moveend zoomend', () => {
+    if (viewSaveQueued) return;
+    viewSaveQueued = true;
+    const run = () => { viewSaveQueued = false; saveView(); };
+    // requestIdleCallback's second argument is an options object; a
+    // number there throws.
+    if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 1000 });
+    else setTimeout(run, 200);
+  });
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     keepBuffer: 4,
     maxZoom: 17,
