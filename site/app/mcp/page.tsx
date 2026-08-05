@@ -9,24 +9,22 @@ import { CopyField } from "@/components/copy-field";
 // claim on this page: docs/mcp.md; this page restyles that doc into a
 // visual developer page rather than rewording its content.
 //
-// Tool count note: docs/mcp.md's own tool-reference table lists nine
-// tools (check_route, check_region, get_incidents, get_lane_closures,
-// get_chain_controls, get_wildfires, get_cameras, get_road_signs,
-// rank_routes). README.md separately says "ten tools" in its feature
-// list. That is a pre-existing mismatch between the two docs, not
-// something introduced here: this page renders exactly the nine the
-// mcp.md table documents, since mcp.md is this page's named source.
+// Tool count note: docs/mcp.md's tool-reference table previously listed
+// only nine tools, missing get_nearby_events (src/ca_roads_mcp/server.py),
+// while README.md's feature list correctly said "ten tools." mcp.md was
+// the stale artifact; both it and this page's TOOLS array below now
+// include all ten (coordinator ruling, 2026-08-05).
 export const metadata: Metadata = {
   title: "MCP server - CommuteScout",
   description:
-    "Connect Claude or any MCP client to CommuteScout's live road data: nine tools over curated corridors and regions, no key required.",
+    "Connect Claude or any MCP client to CommuteScout's live road data: ten tools over curated corridors and regions, no key required.",
   alternates: {
     canonical: "https://commutescout.com/mcp",
   },
   openGraph: {
     title: "MCP server - CommuteScout",
     description:
-      "Connect Claude or any MCP client to CommuteScout's live road data: nine tools over curated corridors and regions, no key required.",
+      "Connect Claude or any MCP client to CommuteScout's live road data: ten tools over curated corridors and regions, no key required.",
     url: "https://commutescout.com/mcp",
     images: ["/static/shots/og.png"],
   },
@@ -119,6 +117,14 @@ const TOOLS: Tool[] = [
       'All 17 corridors ranked by live events or measured congestion, ' +
       'with reasons; answers "what are the busiest routes right now"',
   },
+  {
+    signature: "get_nearby_events(center, radius_km?, kinds?)",
+    description:
+      "Live road events near a point across every covered state, 38 " +
+      "states, not just California; the fallback for locations outside " +
+      "California, near a state border, or when a California tool comes " +
+      "back empty",
+  },
 ];
 
 const CONTEXT_TEXT =
@@ -206,7 +212,7 @@ export default function McpPage() {
             id="tools-heading"
             className="text-cs-ink text-balance text-3xl font-medium tracking-tight md:text-4xl"
           >
-            Nine tools, one live data spine
+            Ten tools, one live data spine
           </h2>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
