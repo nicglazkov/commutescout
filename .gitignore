@@ -34,3 +34,4 @@ site/.next/
 # in src/ca_roads_demo/app.py); nothing populates this outside the Docker
 # build, so it must never be committed.
 src/ca_roads_demo/static/site/
+uv.lock
