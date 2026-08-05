@@ -46,7 +46,8 @@ jobs:
         working-directory: site
       - name: Exported routes exist
         run: |
-          # index.html and pricing/index.html exist so far; about/contact
-          # land in a later task and should be added to this list then.
+          # index.html and pricing.html exist so far (trailingSlash: false
+          # emits a flat "<page>.html" per route); about/contact land in a
+          # later task and should be added to this list then.
           test -f site/out/index.html
-          test -f site/out/pricing/index.html
+          test -f site/out/pricing.html
