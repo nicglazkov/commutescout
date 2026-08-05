@@ -45,11 +45,15 @@
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="stylesheet" href="/static/tokens.css">
 <style>
 :root {
-  --navy:#0b1f33; --navy2:#122c47; --ink:#0f1c2b; --dim:#5b6b7d;
-  --line:#dbe3ec; --bg:#eef2f6; --card:#ffffff;
-  --sky:#2f81f7; --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
+  /* Aliased to the shared token sheet (tokens.css) so the map app and
+     the marketing site move together; the several thousand existing
+     --navy/--navy2/--ink/--line/--bg/--sky usages below are unchanged. */
+  --navy:var(--cs-navy); --navy2:var(--cs-navy2); --ink:var(--cs-ink); --dim:#5b6b7d;
+  --line:var(--cs-line); --bg:var(--cs-bg); --card:var(--cs-paper);
+  --sky:var(--cs-sky); --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
   --green:#2f9e6e; --green-soft:#e2f5ec;
 }
 * { box-sizing:border-box; margin:0 }
@@ -643,7 +647,9 @@ aside { background:var(--card); border-right:1px solid var(--line);
   <img class="mark" src="/logo.svg" alt="">
   <span class="wordmark">CommuteScout</span>
   <nav>
-    <a class="on" href="/">Live map</a>
+    <a href="/">Home</a>
+    <a class="on" href="/map">Live map</a>
+    <a href="/pricing">Pricing</a>
     <a href="/watch">Watch areas</a>
     <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
   </nav>
@@ -755,6 +761,9 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <a href="/privacy">Privacy</a>
       <a href="/terms">Terms</a>
       <a href="https://github.com/nicglazkov/commutescout">GitHub</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
     </p>
   </aside>
   <div class="map-card active" id="mapcard">
