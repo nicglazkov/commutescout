@@ -5,7 +5,19 @@ const nextConfig: NextConfig = {
   // Static export: the build writes plain HTML/CSS/JS to out/, which the
   // Python app serves. No Node runs in production.
   output: "export",
-  // The exported pages are served from the site root by Starlette.
+  // Ruling (Task 8 fix round 1, Nic): served URLs are slash-less, to match
+  // the Starlette route table exactly (every route is registered without a
+  // trailing slash - /pricing, /about, /map, ...). trailingSlash: true was
+  // tried and reverted: it made every internal link a trailing-slash URL
+  // that had to 307 through Starlette's redirect_slashes to reach its
+  // canonical (slash-less) route, and it broke canonical/og:url on the
+  // pricing page (declared .../pricing/, which itself then redirected).
+  // With trailingSlash: false, the export emits a flat "<page>.html"
+  // sibling file per route instead of "<page>/index.html" (confirmed
+  // against node_modules/next/dist/docs/01-app/02-guides/static-exports.md's
+  // "Deploying" section). _site_response in app.py now serves that flat
+  // layout directly, falling back to the nested layout if the flat file is
+  // absent.
   trailingSlash: false,
   images: { unoptimized: true },
   // site/ has its own package-lock.json, so Turbopack would otherwise

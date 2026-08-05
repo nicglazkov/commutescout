@@ -18,6 +18,23 @@ jobs:
         run: pip install -e ".[dev,demo]" -c constraints.txt
       - name: Lint
         run: ruff check .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+        working-directory: site
+      # Task 10: the content-preservation test in test_site_pages.py
+      # (test_legal_content_survived_the_reskin) asserts against the real
+      # site/out/{privacy,terms}.html export, not a monkeypatched fixture -
+      # it skips with a clear reason if site/out is missing. Building here
+      # (duplicating the site job's build, deliberately: keeps the two jobs
+      # independent/parallel rather than wiring a needs: + artifact
+      # download between them) means that test always runs for real in CI
+      # instead of silently skipping forever.
+      - run: npm run build
+        working-directory: site
       - name: Test
         run: pytest -q
       - name: Dependency vulnerability audit
@@ -46,6 +63,52 @@ jobs:
         working-directory: site
       - name: Exported routes exist
         run: |
-          # Only index.html exists so far; pricing/about/contact land in
-          # a later task and should be added to this list then.
+          # trailingSlash: false emits a flat "<page>.html" per route,
+          # matching the Starlette route table exactly (_site_response in
+          # app.py serves these directly).
           test -f site/out/index.html
+          test -f site/out/pricing.html
+          test -f site/out/about.html
+          test -f site/out/contact.html
+          test -f site/out/privacy.html
+          test -f site/out/terms.html
+      - name: Built pages use slash-less internal links
+        run: |
+          # Guards the Task 8 fix-round ruling (Nic): served/canonical URLs
+          # are slash-less, matching the Starlette route table exactly
+          # (every route - /pricing, /map, /about, ... - is registered
+          # without a trailing slash). Scans every exported page for a
+          # same-origin href ending in a trailing slash right before the
+          # closing quote or a "#" fragment - the href="/pricing/" /
+          # href="/pricing/#waitlist" shape a stray link, or a future
+          # trailingSlash: true regression, would produce - and fails the
+          # build on any match.
+          #
+          # Pattern: href="/[a-z][a-z-]*/["#]  - a same-origin href whose
+          # path is an unbroken run of lowercase letters/hyphens, followed
+          # by a second "/", followed immediately by the closing quote or a
+          # "#". That shape is deliberately narrow so it only ever matches
+          # the page-link shape above, not:
+          #   - the bare root href="/" (no letters between the two "/"s)
+          #   - an already-correct slash-less link like href="/pricing"
+          #     (no second "/" before the terminator)
+          #   - external URLs (the pattern requires a literal "/" right
+          #     after the opening quote, so href="https://..." can't match)
+          #   - asset paths under /_next/... and /static/... - deliberately
+          #     NOT special-cased with an --exclude: their real path
+          #     segments/filenames (e.g. "chunks/1km21gh256b4v.js",
+          #     "hero-map.png") contain digits, dots, or underscores that
+          #     break the required unbroken lowercase-letter-or-hyphen run
+          #     immediately before the terminating "/" + quote/#, and
+          #     /_next itself starts with "_", not [a-z], so this pattern
+          #     structurally never reaches into either asset tree.
+          #
+          # Verified both directions locally before adding this step: zero
+          # matches against this task's real build output, and matches only
+          # deliberately-slashed href="/pricing/" / href="/pricing/#waitlist"
+          # test strings - not root "/", not slash-less "/pricing", not
+          # /static/ or /_next/ asset hrefs, not external URLs.
+          if grep -rE 'href="/[a-z][a-z-]*/["#]' site/out --include='*.html'; then
+            echo "Found a slashed same-origin href in the exported site (see above). Served URLs must be slash-less." >&2
+            exit 1
+          fi

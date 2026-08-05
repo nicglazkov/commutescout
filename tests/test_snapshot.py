@@ -214,9 +214,10 @@ def test_state_counts_are_current():
     """Every hardcoded "N states" must match the live registry.
 
     The count is written in the page metadata, the assistant prompt, the
-    MCP tool docstring and the README. They drift the moment a state is
-    added, and the MCP docstring drifting is the expensive one: the
-    model reads it to decide whether a location is worth querying.
+    MCP tool docstring, the README, and the homepage's stats module. They
+    drift the moment a state is added, and the MCP docstring drifting is
+    the expensive one: the model reads it to decide whether a location is
+    worth querying.
     """
     import pathlib
     import re
@@ -233,6 +234,7 @@ def test_state_counts_are_current():
         ("src/ca_roads_mcp/server.py", r"just California: (\d+) states today"),
         ("README.md", r"across \*\*(\d+) states\*\*|across (\d+) states"),
         ("docs/registry.md", r"across (\d+) states"),
+        ("site/lib/stats.ts", r"STATE_COUNT = (\d+)"),
     ):
         text = pathlib.Path(path).read_text(encoding="utf-8")
         found = [int(g) for m in re.finditer(pattern, text)
@@ -241,4 +243,4 @@ def test_state_counts_are_current():
         for n in found:
             assert n == actual, f"{path} says {n} states, registry says {actual}"
         checked += len(found)
-    assert checked >= 5
+    assert checked >= 6
