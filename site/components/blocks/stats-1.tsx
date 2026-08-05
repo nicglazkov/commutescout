@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AGENCY_FEED_COUNT, STATE_COUNT } from "@/lib/stats";
 
 // Source: Tailark OSS registry, Dusk kit, dusk-stats-1
@@ -22,7 +23,15 @@ export default function StatsSection() {
           <div className="flex flex-col gap-12 md:mx-auto">
             <p className="text-cs-ink/60 text-balance text-lg">
               Every answer names its sources and their timestamps. When a feed goes
-              stale, CommuteScout says so instead of guessing.
+              stale, CommuteScout says so instead of guessing. See every feed on the{" "}
+              <Link
+                href="/data-sources"
+                prefetch={false}
+                className="text-cs-sky font-medium hover:underline"
+              >
+                Data sources
+              </Link>{" "}
+              page.
             </p>
 
             <div className="grid gap-12 sm:grid-cols-3 md:gap-12">

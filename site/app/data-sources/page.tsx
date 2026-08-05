@@ -226,29 +226,6 @@ export default function DataSourcesPage() {
           </ul>
         </div>
       </section>
-
-      <section className="pb-16 md:pb-20">
-        <div className="mx-auto max-w-3xl px-6">
-          <p className="text-cs-ink/60 space-y-2 text-sm">
-            Want to add a feed? See{" "}
-            <a
-              href="https://github.com/nicglazkov/commutescout/blob/main/docs/adding-a-source.md"
-              className="text-cs-sky font-medium hover:underline"
-            >
-              adding a data source
-            </a>
-            . The full state-by-state expansion plan, for states not yet
-            integrated, lives in{" "}
-            <a
-              href="https://github.com/nicglazkov/commutescout/blob/main/docs/state-expansion-audit.md"
-              className="text-cs-sky font-medium hover:underline"
-            >
-              state-expansion-audit.md
-            </a>
-            .
-          </p>
-        </div>
-      </section>
     </>
   );
 }
