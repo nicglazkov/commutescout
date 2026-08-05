@@ -1203,6 +1203,23 @@ async def track(request: Request):
 
 STATIC_DIR = Path(__file__).parent / "static"
 
+# The marketing site: a static export built from site/ (see
+# docs/superpowers/specs/2026-08-05-saas-shell-redesign-design.md).
+# The Docker build copies site/out here; local dev without Node gets a
+# clear 503 for marketing pages while the map and APIs keep working.
+SITE_DIR = STATIC_DIR / "site"
+
+
+def _site_response(page: str):
+    f = SITE_DIR / page / "index.html" if page else SITE_DIR / "index.html"
+    if not f.exists():
+        return Response(
+            "The marketing site is not built. Run: cd site && npm ci && "
+            "npm run build. The map is at /map and APIs are unaffected.",
+            status_code=503, media_type="text/plain",
+            headers={"Cache-Control": "no-store"})
+    return FileResponse(f)
+
 
 # The page opens on the visitor's own area, which is both friendlier
 # and much cheaper: a metro viewport loads a fraction of the markers a
@@ -1288,6 +1305,25 @@ async def privacy_page(_: Request):
 
 async def terms_page(_: Request):
     return FileResponse(STATIC_DIR / "terms.html")
+
+
+# Temporary test seam for this task: / still serves the map, so the
+# marketing home page is reachable at /site-preview until Task 5
+# promotes site_home to /.
+async def site_home(_: Request):
+    return _site_response("")
+
+
+async def site_pricing(_: Request):
+    return _site_response("pricing")
+
+
+async def site_about(_: Request):
+    return _site_response("about")
+
+
+async def site_contact(_: Request):
+    return _site_response("contact")
 
 
 async def sw_js(_: Request):
@@ -1463,6 +1499,10 @@ app = Starlette(
         Route("/api/sources", api_sources, methods=["GET"]),
         Route("/privacy", privacy_page),
         Route("/terms", terms_page),
+        Route("/site-preview", site_home),
+        Route("/pricing", site_pricing),
+        Route("/about", site_about),
+        Route("/contact", site_contact),
         Route("/trip/{trip_id}", trips.trip_page),
         Route("/api/trip", trips.api_trip_create, methods=["POST"]),
         Route("/api/trip/{trip_id}", trips.api_trip_get),
@@ -1776,7 +1816,10 @@ app = RateLimitMiddleware(
                      # inside the bucket (and are token-gated anyway).
                      "/watch", ADMIN_PAGE_PATH, "/sw.js", "/manifest.webmanifest",
                      "/privacy", "/terms", "/trip/", "/api/trip",
-                     "/api/watch/config", "/api/staticmap"),
+                     "/api/watch/config", "/api/staticmap",
+                     # Marketing pages: static exports, as cheap as
+                     # /privacy and /terms above.
+                     "/pricing", "/about", "/contact", "/site-preview"),
 )
 app = SecurityHeaders(app)
 

@@ -1,9 +1,25 @@
+FROM node:22-slim AS site
+WORKDIR /site
+COPY site/package.json site/package-lock.json ./
+RUN npm ci
+COPY site/ ./
+# globals.css imports the shared token sheet by the relative path
+# ../../src/ca_roads_demo/static/tokens.css (from site/app/), and
+# next.config.ts widens turbopack's root to one level above site/ for the
+# same reason. Recreate that "site/ next to src/" layout here: WORKDIR is
+# /site, so the sibling path one level up is /, and copying tokens.css to
+# /src/ca_roads_demo/static/tokens.css makes both the CSS import and the
+# turbopack root resolve exactly as they do in the repo checkout.
+COPY src/ca_roads_demo/static/tokens.css /src/ca_roads_demo/static/tokens.css
+RUN npm run build
+
 FROM python:3.12-slim
 
 WORKDIR /app
 
 COPY pyproject.toml README.md LICENSE constraints.txt ./
 COPY src ./src
+COPY --from=site /site/out ./src/ca_roads_demo/static/site
 
 # [demo] adds the anthropic SDK so one image serves both Cloud Run services:
 # default command runs the MCP server; the demo service overrides the command

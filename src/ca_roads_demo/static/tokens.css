@@ -1,0 +1,23 @@
+/* Design tokens shared by the map app and the marketing site.
+   The map app's CSS and the site's Tailwind config both reference
+   these. Change a color here and both surfaces move together.
+
+   Values copied verbatim from the map app's :root block in
+   src/ca_roads_demo/static/index.html. Mapping notes for tokens
+   that have no direct name match on the map app side:
+     --cs-ink   <- index.html's --ink (body text color)
+     --cs-paper <- index.html's --card (the white surface used for
+                   panels, cards, and popovers; index.html's --bg,
+                   the muted page backdrop, is not exposed here)
+   The map app also defines --dim, --bg, --sky-soft, --amber, --red,
+   --green, and --green-soft; those are not part of this shared
+   sheet's interface and are left as is in index.html. */
+:root {
+  --cs-navy: #0b1f33;   /* header, dark bands */
+  --cs-navy2: #122c47;  /* raised dark surfaces */
+  --cs-sky: #2f81f7;    /* primary action */
+  --cs-ink: #0f1c2b;    /* body text on light */
+  --cs-paper: #ffffff;  /* light surfaces */
+  --cs-line: #dbe3ec;   /* borders */
+  --cs-font: Inter, system-ui, sans-serif;
+}

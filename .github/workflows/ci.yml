@@ -30,3 +30,22 @@ jobs:
           # Linux runner. Not using --strict: the only un-auditable
           # entry is this repo's own editable package, which is fine.
           pip-audit
+
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+        working-directory: site
+      - run: npm run build
+        working-directory: site
+      - name: Exported routes exist
+        run: |
+          # Only index.html exists so far; pricing/about/contact land in
+          # a later task and should be added to this list then.
+          test -f site/out/index.html
