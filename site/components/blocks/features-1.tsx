@@ -36,7 +36,7 @@ const items = [
 
 export default function Features() {
   return (
-    <section className="py-16 md:py-20">
+    <section className="pb-16 pt-6 md:pb-20 md:pt-8">
       <div className="mx-auto max-w-7xl px-6">
         <h2 className="text-cs-ink max-w-4xl text-balance text-4xl font-medium tracking-tight lg:text-5xl">
           How it works
