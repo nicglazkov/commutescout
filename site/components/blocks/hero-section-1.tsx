@@ -24,10 +24,10 @@ import { Button } from "@/components/ui/button";
 export default function HeroSection() {
   return (
     <section className="overflow-hidden">
-      <div className="relative pt-12 md:pt-18">
+      <div className="relative pt-4 md:pt-6">
         <div className="mx-auto max-w-7xl">
           <div className="px-6 text-center sm:mx-auto lg:mr-auto lg:mt-0">
-            <h1 className="mx-auto mt-8 max-w-4xl text-balance text-5xl font-medium tracking-tight md:text-6xl lg:mt-12 xl:text-7xl">
+            <h1 className="mx-auto mt-4 max-w-4xl text-balance text-5xl font-medium tracking-tight md:text-6xl lg:mt-6 xl:text-7xl">
               Live road conditions, straight from the source.
             </h1>
             <p className="text-cs-ink/60 mx-auto mt-4 max-w-2xl text-balance md:text-lg">
@@ -55,7 +55,7 @@ export default function HeroSection() {
               />
             </div>
 
-            <div className="relative mx-auto mt-10 max-w-5xl pb-24 md:pb-32">
+            <div className="relative mx-auto mt-10 max-w-5xl pb-8 md:pb-10">
               <div className="overflow-hidden rounded-2xl shadow-2xl shadow-cs-navy/15 ring-1 ring-cs-line">
                 <Image
                   src="/shots/hero-map.png"
