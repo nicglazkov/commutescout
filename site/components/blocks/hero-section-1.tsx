@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/button";
 // - Dropped the "trusted by" third-party logo strip (Spotify, Supabase,
 //   Hulu, etc.) and the "New:" announcement pill: both were stock Tailark
 //   content with no CommuteScout equivalent to fill them with.
-// - Replaced the screenshot mockup with the two real screenshots captured
-//   for Task 7 (site/public/shots/hero-map.png, hero-route.png), a wide
-//   multi-state view and a Bay Area zoom, both from the live production map.
+// - Replaced the screenshot mockup with a real screenshot captured for
+//   Task 7 (site/public/shots/hero-map.png), a wide multi-state view from
+//   the live production map. A second overlapping Bay Area card
+//   (hero-route.png) was removed 2026-08-06 at Nic's request.
 // - text-muted-foreground replaced with text-cs-ink/60; the rest of the
 //   text inherits the page's --cs-ink color from the body rule in
 //   app/globals.css, same as upstream relied on a global text-foreground.
@@ -63,15 +64,6 @@ export default function HeroSection() {
                   height={900}
                   className="h-auto w-full"
                   priority
-                />
-              </div>
-              <div className="absolute -bottom-10 -right-4 hidden w-64 overflow-hidden rounded-xl shadow-xl shadow-cs-navy/15 ring-1 ring-cs-line sm:block md:-right-10 md:w-80">
-                <Image
-                  src="/shots/hero-route.png"
-                  alt="The map zoomed to the San Francisco Bay Area, showing local incidents and closures"
-                  width={1440}
-                  height={900}
-                  className="h-auto w-full"
                 />
               </div>
             </div>
