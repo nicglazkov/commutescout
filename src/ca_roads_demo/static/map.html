@@ -1314,10 +1314,21 @@ if ('serviceWorker' in navigator) {
 }
 
 ensureMap();
-// The KPI strip re-polls while a fresh server instance is still warming
-// its state feeds, so the headline numbers climb to the real nationwide
-// totals instead of freezing on whatever was cached at page load.
-(function pollStats(attempt) {
+// The KPI strip first re-polls fast while a fresh server instance is
+// still warming its state feeds, so the headline numbers climb to the
+// real nationwide totals. After warm-up it keeps refreshing every 30 s,
+// the same cadence as the map's ambient refresh below, so a long-lived
+// tab (wall monitor / kiosk) shows current counts instead of freezing
+// on whatever was true at page load. Hidden tabs skip the fetch and
+// the visibility listener catches up the moment the tab is shown.
+// /api/stats is rate-limit exempt and served from the feed caches.
+let statsTimer = null;
+function pollStats(attempt) {
+  clearTimeout(statsTimer);
+  const later = (ms, next) => {
+    statsTimer = setTimeout(() => pollStats(next), ms);
+  };
+  if (document.visibilityState === 'hidden') { later(30000, attempt); return; }
   fetch('/api/stats').then(r => r.json()).then(s => {
     const put = (id, v) => {
       const el = document.getElementById(id);
@@ -1332,11 +1343,15 @@ ensureMap();
         (s.warm_total && s.warm_ready < s.warm_total
           ? ', warming ' + s.warm_ready + '/' + s.warm_total : '');
     }
-    if (s.warm_total && s.warm_ready < s.warm_total && attempt < 40) {
-      setTimeout(() => pollStats(attempt + 1), 8000);
-    }
-  }).catch(() => {});
-})(0);
+    const warming = s.warm_total && s.warm_ready < s.warm_total;
+    if (warming && attempt < 40) later(8000, attempt + 1);
+    else later(30000, 40);
+  }).catch(() => later(30000, attempt));
+}
+pollStats(0);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') pollStats(40);
+});
 
 fetch('/health').then(r => r.json()).then(d => {
   if (d.version) document.getElementById('ver').textContent = ' v' + d.version;
