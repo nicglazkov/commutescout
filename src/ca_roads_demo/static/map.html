@@ -66,14 +66,21 @@ body { background:var(--bg); color:var(--ink);
 
 /* ── App chrome ─────────────────────────────────────────────── */
 .topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
-  gap:14px; padding:0 20px; height:56px; flex:none }
+  flex-wrap:wrap; gap:14px; padding:0 20px; height:56px; flex:none }
+.topbar a.brand { display:flex; align-items:center; gap:14px; color:inherit;
+  text-decoration:none }
 .topbar img.mark { width:30px; height:30px; border-radius:7px }
 .topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
 .topbar nav { display:flex; gap:4px; margin-left:14px }
-.topbar nav a { color:#b7c4d4; font-size:.85rem; padding:7px 12px; border-radius:8px;
-  text-decoration:none }
-.topbar nav a.on { background:var(--navy2); color:#fff }
-.topbar nav a:hover { color:#fff }
+/* .navcta is the Live map / current-page pill: a topbar-level sibling of
+   nav (not nested inside it), same as the site's Next.js header, so it
+   can sit beside the brand on its own row at <=640px (see that media
+   query below). Shares nav a's base look. */
+.topbar nav a, .topbar .navcta { color:#b7c4d4; font-size:.85rem; padding:7px 12px;
+  border-radius:8px; text-decoration:none }
+.topbar nav a:hover, .topbar .navcta:hover { color:#fff }
+.topbar .navcta.live { background:var(--sky); color:#fff }
+.topbar nav a.on, .topbar .navcta.on { background:var(--navy2); color:#fff }
 .sysok { margin-left:auto; display:flex; align-items:center; gap:7px;
   font-size:.78rem; color:#9fd8b7; white-space:nowrap }
 .sysok i { width:7px; height:7px; border-radius:99px; background:#3fcf8a; font-style:normal }
@@ -615,12 +622,6 @@ aside { background:var(--card); border-right:1px solid var(--line);
   aside { overflow:visible }
   .map-card { order:-1; height:56vh; min-height:340px }
   aside { border-right:0; border-top:1px solid var(--line) }
-  .topbar { gap:8px; padding:0 12px }
-  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
-  .topbar nav { margin-left:0; overflow-x:auto; scrollbar-width:none }
-  .topbar nav::-webkit-scrollbar { display:none }
-  .topbar nav a { padding:7px 9px; white-space:nowrap }
-  .topbar nav a[href*="github"] { display:none }
   .sysok, #ver { display:none }
   .legend { display:none }
   .filters { display:none; top:64px; right:12px; left:12px;
@@ -634,25 +635,51 @@ aside { background:var(--card); border-right:1px solid var(--line);
   .map-card { height:56dvh }
   .filters { max-height:calc(56dvh - 120px); overscroll-behavior:contain }
   body { overflow-x:clip }
-  .topbar { padding-left:max(12px, env(safe-area-inset-left));
-    padding-right:max(12px, env(safe-area-inset-right)) }
   aside { padding-bottom:calc(18px + env(safe-area-inset-bottom)) }
   .examples button { padding:8px 12px }
   .filters label { padding:3px 0 }
+}
+/* ── Topbar: two rows below 640px ──────────────────────────────
+   Row 1 (unchanged flex row, just tighter): brand left, the Live
+   map/current-page pill right. Row 2: the four text nav links, one
+   row, four equal columns, each a >=40px tap target - full width,
+   evenly distributed, no scrolling (the 375px horizontal-scroll strip
+   this replaced hid 3 of 4 destinations with no visible affordance;
+   see git history on this file for that revision). flex-wrap on
+   .topbar plus flex-basis:100% on nav is what forces nav onto its own
+   line: brand + the pill fit on row 1 with room to spare, so wrap
+   only breaks before the item that alone demands the full row width. */
+@media (max-width: 640px) {
+  .topbar { height:auto; flex-wrap:wrap; gap:8px; row-gap:4px;
+    padding:8px 12px;
+    padding-left:max(12px, env(safe-area-inset-left));
+    padding-right:max(12px, env(safe-area-inset-right)) }
+  .topbar a.brand { gap:8px }
+  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
+  .topbar .navcta { flex:0 0 auto; margin-left:auto; min-height:36px;
+    display:flex; align-items:center }
+  .topbar nav { order:3; flex:1 1 100%; margin-left:0;
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:4px }
+  .topbar nav a { padding:2px 4px; font-size:.72rem; text-align:center;
+    white-space:normal; line-height:1.2; min-height:40px;
+    display:flex; align-items:center; justify-content:center }
 }
 </style>
 </head>
 <body>
 <header class="topbar">
-  <img class="mark" src="/logo.svg" alt="">
-  <span class="wordmark">CommuteScout</span>
+  <a class="brand" href="/" aria-label="CommuteScout home">
+    <img class="mark" src="/logo.svg" alt="">
+    <span class="wordmark">CommuteScout</span>
+  </a>
   <nav>
-    <a href="/">Home</a>
-    <a class="on" href="/map">Live map</a>
-    <a href="/pricing">Pricing</a>
     <a href="/watch">Watch areas</a>
-    <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
+    <a href="/data-sources">Data sources</a>
+    <a href="/mcp">Developers</a>
+    <a href="/pricing">Pricing</a>
   </nav>
+  <!-- Current page: .on intentionally wins over .live in the CSS cascade above (declared after it) if a link ever carries both classes. -->
+  <a class="navcta on" href="/map">Live map</a>
   <span class="sysok" id="sysok" title="Click for live data-source status"><i></i><span id="feedsok">checking live feeds&hellip;</span></span>
   <!-- Data age. On a map left open on a wall monitor this is the health
        indicator: if the publisher or the network stops, this ages in
@@ -764,6 +791,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
       <a href="/pricing">Pricing</a>
       <a href="/about">About</a>
       <a href="/contact">Contact</a>
+      <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
     </p>
   </aside>
   <div class="map-card active" id="mapcard">
