@@ -91,6 +91,17 @@ export default function PrivacyPage() {
                 delivered through Resend.
               </li>
               <li>
+                <strong>If you write to us</strong> (the contact form): the
+                name, email address, and message you type. We use them to
+                read and answer you, and for nothing else. The message is
+                delivered to us as email; we do not add you to any list.
+              </li>
+              <li>
+                <strong>If you join the Pro waitlist</strong>: your email
+                address, and nothing else. We use it once, to tell you when
+                Pro launches. Ask us at any time to remove it.
+              </li>
+              <li>
                 <strong>Analytics</strong>: cookieless Cloudflare Web
                 Analytics counts visits and page timings. It sets no
                 cookies, stores no device identifiers, and does not follow
@@ -119,7 +130,8 @@ export default function PrivacyPage() {
                 generate answers.
               </li>
               <li>
-                <strong>Resend</strong> delivers alert and sign-in emails.
+                <strong>Resend</strong> delivers alert and sign-in emails,
+                and the messages you send through the contact form.
               </li>
               <li>
                 <strong>Cloudflare</strong> provides the cookieless visit
@@ -204,7 +216,10 @@ export default function PrivacyPage() {
               Anonymized question logs age out with normal log retention
               (about 30 days). Account data stays until you delete it.
               Push subscriptions are dropped automatically when a device
-              unsubscribes. Separately, we keep a long-term archive of the
+              unsubscribes. Contact messages stay in our email until we
+              have dealt with them. A waitlist email stays until Pro
+              launches or until you ask us to remove it, whichever comes
+              first. Separately, we keep a long-term archive of the
               public road events themselves (incidents, closures, fires,
               as the agencies publish them) to build history features; it
               contains no user data of any kind.
