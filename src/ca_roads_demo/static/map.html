@@ -1257,7 +1257,10 @@ function drawGeo(geo) {
       chipCounts.wildfire = (chipCounts.wildfire || 0) + 1;
       L.polygon(m.poly, {
         color: '#d97706', weight: 1.5, fillColor: '#d97706', fillOpacity: 0.22,
-      }).bindPopup(m.label ? String(m.label) : 'wildfire').addTo(layerFires);
+      // esc(): the label is agency feed text bound as popup HTML. The
+      // point-marker path below escapes it; this one must too.
+      }).bindPopup(esc(m.label ? String(m.label) : 'wildfire'))
+        .addTo(layerFires);
       continue;
     }
     const target = m.kind === 'wildfire' ? layerFires : layerPrimary;

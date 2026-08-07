@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 
 import anthropic
 from starlette.applications import Starlette
+from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import (
     FileResponse,
@@ -364,16 +365,54 @@ async def _safe_answer_stream(gen):
         yield _sse({"done": True})
 
 
-async def _capped_json(request: Request):
+async def _capped_body(request: Request) -> bytes | None:
+    """Read a request body, aborting past MAX_REQUEST_BYTES.
+
+    The BodyLimit middleware only sees Content-Length, which a chunked
+    request never sends, so every body that gets buffered in memory has
+    to enforce its own ceiling. Returns None when the cap is exceeded.
+    """
     body = b""
     async for chunk in request.stream():
         body += chunk
         if len(body) > MAX_REQUEST_BYTES:
             return None
+    return body
+
+
+async def _capped_json(request: Request):
+    body = await _capped_body(request)
+    if body is None:
+        return None
     try:
         return json.loads(body) if body else {}
     except (json.JSONDecodeError, ValueError):
         return None
+
+
+async def _capped_form(request: Request):
+    """Form parsing with the same ceiling as _capped_json.
+
+    Starlette's request.form() buffers the whole body with no cap of its
+    own; on a single-instance service one oversized POST is an outage.
+    Returns None when the cap is exceeded.
+    """
+    body = await _capped_body(request)
+    if body is None:
+        return None
+    # The body is already drained, so hand the parser a replayed stream
+    # rather than letting it read from the exhausted receive channel.
+    scope = dict(request.scope)
+    sent = False
+
+    async def receive():
+        nonlocal sent
+        if sent:
+            return {"type": "http.disconnect"}
+        sent = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return await Request(scope, receive).form()
 
 
 async def ask(request: Request):
@@ -1430,7 +1469,9 @@ async def api_contact(request: Request):
     Resend integration; the destination never appears in the repo or
     on a page. A filled honeypot returns success without sending, so
     bots get no signal to iterate on."""
-    form = await request.form()
+    form = await _capped_form(request)
+    if form is None:
+        return PlainTextResponse("Message too large.", status_code=413)
     name = _no_crlf((form.get("name") or "").strip())[:80]
     email = _no_crlf((form.get("email") or "").strip())[:120]
     message = (form.get("message") or "").strip()[:2000]
@@ -1455,7 +1496,9 @@ async def api_contact(request: Request):
 async def api_waitlist(request: Request):
     """Pro waitlist signups from the pricing page. A filled honeypot
     returns success without storing anything, same as /api/contact."""
-    form = await request.form()
+    form = await _capped_form(request)
+    if form is None:
+        return PlainTextResponse("Request too large.", status_code=413)
     email = _no_crlf((form.get("email") or "").strip())[:120].lower()
     if (form.get("website") or "").strip():
         return PlainTextResponse("You're on the list.")
@@ -1632,6 +1675,53 @@ async def _lifespan(app_):
     pub_task.cancel()
 
 
+class ForwardedScheme:
+    """Trust X-Forwarded-Proto for the request scheme, and nothing else.
+
+    TLS terminates at Cloudflare and Cloud Run, so the ASGI scope says
+    "http". Starlette builds its trailing-slash redirect Location from
+    that scheme, which turned https://host/pricing/ into a 307 to
+    http://host/pricing: an insecure hop for bots and first-time
+    visitors that HSTS does not cover.
+
+    Deliberately narrower than uvicorn's --proxy-headers: this only
+    rewrites the scheme, never scope["client"]. Client IP comes from
+    trusted_client_ip(), whose last-entry rule is what makes X-Forwarded-For
+    spoofing safe here, and that logic must keep owning the address.
+    """
+
+    def __init__(self, app_):
+        self.app = app_
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            proto = dict(scope.get("headers") or {}).get(b"x-forwarded-proto")
+            if proto:
+                first = proto.decode("latin-1").split(",")[0].strip().lower()
+                if first in ("http", "https"):
+                    scope = dict(scope, scheme=first)
+        await self.app(scope, receive, send)
+
+
+class _GuardedStatic(StaticFiles):
+    """The /static mount, minus the pages that own their own route.
+
+    admin.html is served only from ADMIN_PAGE_PATH, whose whole point is
+    that the URL is not guessable. Serving the same bytes at the
+    predictable /static/admin.html defeated that and handed out the
+    admin endpoint list; the server-side auth gate held, but the
+    obscurity layer did not. The app pages are listed too: each has a
+    real route, so the /static copy is a duplicate with no caller.
+    """
+
+    BLOCKED = frozenset({"admin.html", "map.html", "watch.html", "trip.html"})
+
+    async def get_response(self, path, scope):
+        if path.replace("\\", "/").split("/")[-1].lower() in self.BLOCKED:
+            raise HTTPException(status_code=404)
+        return await super().get_response(path, scope)
+
+
 app = Starlette(
     lifespan=_lifespan,
     routes=[
@@ -1696,7 +1786,8 @@ app = Starlette(
         Route("/api/admin/waitlist", api_admin_waitlist, methods=["GET"]),
         Route("/api/check-watches", watch.api_check_watches,
               methods=["POST"]),
-        Mount("/static", app=StaticFiles(directory=str(STATIC_DIR)), name="static"),
+        Mount("/static", app=_GuardedStatic(directory=str(STATIC_DIR)),
+              name="static"),
         # The exported pages reference /_next/static/... (CSS, JS chunks,
         # woff2) and /shots/hero-*.png directly; both need a route or every
         # page load ships with no styling, no scripts, and broken images.
@@ -2032,6 +2123,9 @@ app = RateLimitMiddleware(
     exempt_exact=frozenset({"/"}),
 )
 app = SecurityHeaders(app)
+# Outermost: the scheme must be corrected before any inner layer builds
+# a URL from it.
+app = ForwardedScheme(app)
 
 
 def main() -> None:

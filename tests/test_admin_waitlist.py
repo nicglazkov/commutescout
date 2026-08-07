@@ -35,18 +35,32 @@ USERS = {
 }
 
 
+def _rate_limit_layer():
+    """The middleware in demo_app.app's chain that owns the token bucket."""
+    layer = demo_app.app
+    seen = 0
+    while layer is not None and seen < 12:
+        if hasattr(layer, "limiter"):
+            return layer
+        layer = getattr(layer, "app", None)
+        seen += 1
+    raise AssertionError("no rate-limit middleware in the chain")
+
+
 def _client(monkeypatch, store):
     monkeypatch.setattr(watch, "get_store", lambda: store)
     monkeypatch.setattr(watch, "ADMIN_EMAILS", {"admin@example.com"})
-    # demo_app.app is SecurityHeaders(RateLimitMiddleware(...)); the
-    # RateLimitMiddleware layer (demo_app.app.app) wraps one
-    # process-lifetime token bucket (capacity 20, 0.5/s refill) shared by
-    # every test module that exercises demo_app.app (test_waitlist.py,
-    # test_contact.py, etc, all keyed on TestClient's fixed "testclient"
-    # peer). Swapping in a fresh limiter here (monkeypatch reverts it
-    # after the test) keeps this file's requests from spending down - or
-    # being starved by - that shared budget.
-    monkeypatch.setattr(demo_app.app.app, "limiter",
+    # The RateLimitMiddleware layer wraps one process-lifetime token
+    # bucket (capacity 20, 0.5/s refill) shared by every test module that
+    # exercises demo_app.app (test_waitlist.py, test_contact.py, etc, all
+    # keyed on TestClient's fixed "testclient" peer). Swapping in a fresh
+    # limiter here (monkeypatch reverts it after the test) keeps this
+    # file's requests from spending down - or being starved by - that
+    # shared budget. Found by walking the middleware chain, not by
+    # counting layers: an earlier version hardcoded demo_app.app.app and
+    # broke the moment a new outer middleware was added.
+    monkeypatch.setattr(_rate_limit_layer(),
+                        "limiter",
                         RateLimiter(capacity=20, refill_per_second=0.5))
 
     async def fake_verify(request):
