@@ -25,6 +25,11 @@ build/
 # Eval raw results are artifacts, not source (badge.json is kept)
 evals/results/results-*.json
 
+# Agent scratch: task ledgers, briefs, and review diffs. Never source.
+# A `git add -A` committed 11 of these once; the directory was assumed
+# to be ignored and was not.
+.superpowers/
+
 # Node site workspace build outputs
 site/node_modules/
 site/out/
