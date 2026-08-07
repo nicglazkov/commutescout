@@ -256,6 +256,36 @@ def test_state_counts_are_current():
     assert checked >= 10
 
 
+def test_no_stale_state_count_in_the_built_site():
+    """Scan the export, not the sources.
+
+    The per-file patterns above read raw source, so a count split across
+    a line ("...state, 38 " + "states, ...") is invisible to them. That is
+    exactly how /mcp kept claiming 38 after every other surface moved to
+    37. The built HTML has the concatenation resolved, so this catches
+    any phrasing anywhere on any page.
+    """
+    import pathlib
+    import re
+
+    import pytest
+
+    from ca_roads_demo import states
+
+    out = pathlib.Path("site/out")
+    if not out.exists():
+        pytest.skip("site/out is not built; CI's site job builds first.")
+
+    actual = states.coverage_summary()["states"]
+    bad = []
+    for page in out.glob("*.html"):
+        text = page.read_text(encoding="utf-8", errors="replace")
+        for found in re.findall(r"(\d+)\s+states", text):
+            if int(found) != actual:
+                bad.append(f"{page.name} says {found} states")
+    assert not bad, f"registry says {actual}: {sorted(set(bad))}"
+
+
 def test_state_count_matches_the_published_matrix():
     """The number we claim must equal the rows a visitor can count.
 
