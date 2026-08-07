@@ -57,6 +57,12 @@ _MAX_TRIP_BODY = 256 * 1024
 
 def _clean(value, limit):
     return re.sub(r"[\x00-\x1f\x7f]", " ", str(value or "")).strip()[:limit]
+
+
+# Every placeholder the trip template carries. Substituting through one
+# regex pass keeps an inserted value from being read as a placeholder by
+# a later replacement (see the comment in trip_page).
+_PLACEHOLDER_RE = re.compile(r"__(?:TITLE|OG_IMAGE|OG_URL|TRIP_JSON)__")
 _template_cache: str | None = None
 
 
@@ -195,10 +201,22 @@ async def trip_page(request: Request) -> HTMLResponse:
     mid = mid[len(mid) // 2] if mid else [37.5, -120.5]
     og_image = (f"{DEMO_URL}/api/staticmap?lat={mid[0]:.4f}"
                 f"&lon={mid[1]:.4f}&z=9&k=incident")
-    page = (_template_cache
-            .replace("__TITLE__", html_mod.escape(title))
-            .replace("__OG_IMAGE__", html_mod.escape(og_image))
-            .replace("__OG_URL__", html_mod.escape(
-                f"{DEMO_URL}/trip/{request.path_params['trip_id']}"))
-            .replace("__TRIP_JSON__", json.dumps(pub).replace("</", "<\\/")))
+    # One pass, not a chain of .replace() calls. Chained replaces re-scan
+    # the text they just inserted, so a trip name of literally
+    # "__TRIP_JSON__" survived escaping (escaping does not touch
+    # underscores), landed inside the og:title attribute, and was then
+    # substituted by the next call in the chain. json.dumps output starts
+    # with '{"', which closed content=" and let the rest of the JSON,
+    # including attacker-controlled names, be parsed as markup. Anyone
+    # could plant one through POST /api/trip and it fired for every
+    # visitor who opened the link. Substituting in a single pass means a
+    # replacement value is never treated as a placeholder.
+    values = {
+        "__TITLE__": html_mod.escape(title),
+        "__OG_IMAGE__": html_mod.escape(og_image),
+        "__OG_URL__": html_mod.escape(
+            f"{DEMO_URL}/trip/{request.path_params['trip_id']}"),
+        "__TRIP_JSON__": json.dumps(pub).replace("</", "<\\/"),
+    }
+    page = _PLACEHOLDER_RE.sub(lambda m: values[m.group(0)], _template_cache)
     return HTMLResponse(page)
