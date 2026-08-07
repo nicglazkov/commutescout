@@ -24,7 +24,7 @@ Submission form asks for a name, the connector URL, and a description.
 - URL: `https://mcp.commutescout.com/mcp`
 - Short description:
 
-  > Live US road conditions across 38 states. Ask about a route or a place
+  > Live US road conditions across 37 states. Ask about a route or a place
   > and get current incidents, closures, chain controls, and wildfires
   > straight from official state DOT feeds, with the deepest coverage in
   > California.

@@ -231,10 +231,20 @@ def test_state_counts_are_current():
     for path, pattern in (
         ("src/ca_roads_demo/static/map.html", r"across (\d+) states"),
         ("src/ca_roads_demo/prompt.py", r"\((\d+) states, not just California\)"),
+        # The same file states coverage twice; both must agree. This one
+        # said 32 while the line above said 38, inside the text the
+        # assistant reads to answer users.
+        ("src/ca_roads_demo/prompt.py", r"(\d+) covered states"),
         ("src/ca_roads_mcp/server.py", r"just California: (\d+) states today"),
         ("README.md", r"across \*\*(\d+) states\*\*|across (\d+) states"),
         ("docs/registry.md", r"across (\d+) states"),
         ("site/lib/stats.ts", r"STATE_COUNT = (\d+)"),
+        # The marketing pages state it in prose, outside stats.ts, so the
+        # constant alone was not enough to keep them honest.
+        ("site/app/page.tsx", r"across (\d+) states"),
+        ("site/components/blocks/hero-section-1.tsx", r"across (\d+) states"),
+        ("docs/architecture.md", r"(\d+) states"),
+        ("docs/mcp.md", r"(\d+) states, not just California"),
     ):
         text = pathlib.Path(path).read_text(encoding="utf-8")
         found = [int(g) for m in re.finditer(pattern, text)
@@ -243,7 +253,39 @@ def test_state_counts_are_current():
         for n in found:
             assert n == actual, f"{path} says {n} states, registry says {actual}"
         checked += len(found)
-    assert checked >= 6
+    assert checked >= 10
+
+
+def test_state_count_matches_the_published_matrix():
+    """The number we claim must equal the rows a visitor can count.
+
+    /data-sources renders one row per state. The claim was 38 while the
+    matrix had 37 rows, because coverage_summary counted source labels
+    and Texas ships three feeds under two labels ("Texas" for the toll
+    feeds, "Texas (Austin)" for the work-zone feed).
+    """
+    import pathlib
+    import re
+
+    from ca_roads_demo import states
+
+    md = pathlib.Path("docs/state-coverage.md").read_text(encoding="utf-8")
+    rows = [ln for ln in md.splitlines()
+            if ln.startswith("|") and not re.match(r"^\|[\s:-]+\|", ln)]
+    documented = len(rows) - 1  # minus the header
+    assert states.coverage_summary()["states"] == documented
+
+    ts = pathlib.Path("site/lib/state-coverage.ts").read_text(encoding="utf-8")
+    assert len(re.findall(r"\{\s*state:\s*[\"']", ts)) == documented
+
+
+def test_sub_region_labels_do_not_inflate_the_state_count():
+    """A "State (Region)" label is the same state as "State"."""
+    from ca_roads_demo import states
+
+    assert states._state_key("Texas (Austin)") == "Texas"
+    assert states._state_key("Texas") == "Texas"
+    assert states._state_key("California") == "California"
 
 
 def test_feed_counts_are_current():
