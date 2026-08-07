@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import os
 import time
 from datetime import UTC, datetime
@@ -57,6 +58,8 @@ except PackageNotFoundError:  # running from a bare checkout
     VERSION = "dev"
 
 MODEL = os.environ.get("DEMO_MODEL", "claude-sonnet-5")
+
+log = logging.getLogger(__name__)
 MAX_QUESTION_CHARS = 300
 MAX_PRIOR_ANSWER_CHARS = 8000
 MAX_TOOL_TURNS = 6
@@ -1482,12 +1485,17 @@ async def api_contact(request: Request):
                                  "required.", status_code=400)
     dest = os.environ.get("CONTACT_EMAIL", "")
     if not dest:
+        log.error("contact: CONTACT_EMAIL unset, dropping a real message")
         return PlainTextResponse("Contact is not configured on this "
                                  "deployment.", status_code=503)
     body = f"From: {name} <{email}>\n\n{message}"
     ok = await watch._email_alert(dest, f"CommuteScout contact: {name}",
                                   f"<pre>{html_escape(body)}</pre>", body)
     if not ok:
+        # _email_alert logs the cause; this records that a real visitor
+        # message was lost, which is the part worth alerting on.
+        log.error("contact: send failed, message from %s not delivered",
+                  email)
         return PlainTextResponse("Sending failed. Try again in a minute.",
                                  status_code=502)
     return PlainTextResponse("Thanks. Your message is on its way.")
@@ -1508,6 +1516,9 @@ async def api_waitlist(request: Request):
     try:
         await watch.get_store().add_waitlist_email(email)
     except Exception:  # noqa: BLE001 - no Firestore locally
+        # Logged: without this a Firestore outage silently drops signups
+        # and looks identical to nobody signing up.
+        log.exception("waitlist: store write failed")
         return PlainTextResponse("Signups are unavailable right now. "
                                  "Try again later.", status_code=503)
     return PlainTextResponse("You're on the list.")

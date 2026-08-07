@@ -27,8 +27,11 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import os
 from datetime import UTC, datetime
+
+log = logging.getLogger(__name__)
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "ca-roads-mcp")
 DATASET = os.environ.get("ARCHIVE_DATASET", "events")
@@ -40,6 +43,30 @@ ENABLED = os.environ.get("ARCHIVE_ENABLED", "1").lower() not in ("0", "false")
 _seen: dict[str, dict] = {}
 _started = False
 _client = None
+
+# Rows a previous cycle built but could not write. The diff that
+# produced them is not reproducible: _seen is advanced while the rows
+# are built, so by the next cycle the events look unchanged and would
+# never generate a row again. Dropping a failed batch is therefore
+# permanent data loss in an archive that cannot be backfilled, so
+# failures are carried forward and retried on the next cycle instead.
+_pending: list[dict] = []
+# Roughly two hours of a busy cycle. Past this the backlog is a symptom
+# of a sustained outage, not a blip; the oldest rows go and say so.
+PENDING_MAX = 20_000
+
+
+def _retain(rows: list[dict]) -> None:
+    """Hold rows for the next cycle's insert, oldest dropped past the cap."""
+    if not rows:
+        return
+    _pending.extend(rows)
+    if len(_pending) > PENDING_MAX:
+        dropped = len(_pending) - PENDING_MAX
+        del _pending[:dropped]
+        log.error("archive: dropped %d buffered rows, backlog over %d",
+                  dropped, PENDING_MAX)
+    log.warning("archive: %d rows buffered for retry", len(_pending))
 
 
 def _bq():
@@ -146,10 +173,28 @@ def observe_sync(events: list[dict]) -> dict:
                 "payload": None,
             })
     _started = True
-    if not rows:
+    # Anything a previous cycle failed to write goes first, so the
+    # archive stays in event order across a transient outage.
+    batch = _pending + rows
+    _pending.clear()
+    if not batch:
         return {"archived": 0}
-    errors = _bq().insert_rows_json(f"{PROJECT}.{DATASET}.{TABLE}", rows)
-    return {"archived": len(rows) - len(errors), "failed": len(errors)}
+    try:
+        errors = _bq().insert_rows_json(f"{PROJECT}.{DATASET}.{TABLE}", batch)
+    except Exception:
+        # The whole insert failed. Keep every row: observe() logs and
+        # resets the client, and the next cycle tries again.
+        _retain(batch)
+        raise
+    if errors:
+        # Partial failure: BigQuery reports the offending rows by index.
+        bad = {e["index"] for e in errors if isinstance(e, dict)
+               and "index" in e}
+        _retain([r for i, r in enumerate(batch) if i in bad])
+        log.warning("archive: %d of %d rows rejected by BigQuery",
+                    len(errors), len(batch))
+    return {"archived": len(batch) - len(errors), "failed": len(errors),
+            "pending": len(_pending)}
 
 
 async def observe(events: list[dict]) -> dict:
@@ -159,7 +204,11 @@ async def observe(events: list[dict]) -> dict:
     try:
         return await asyncio.to_thread(observe_sync, events)
     except Exception:  # noqa: BLE001 - archive must never break alerts
+        # Logged, not swallowed silently: a stalled archive is invisible
+        # in every other signal, and the rows are already buffered.
+        log.exception("archive: insert failed, %d rows buffered", len(_pending))
         with contextlib.suppress(Exception):
             global _client
             _client = None  # a poisoned client gets rebuilt next cycle
-        return {"archived": 0, "failed": len(events)}
+        return {"archived": 0, "failed": len(events),
+                "pending": len(_pending)}

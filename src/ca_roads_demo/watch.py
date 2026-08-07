@@ -20,6 +20,7 @@ import contextlib
 import hashlib
 import ipaddress
 import json
+import logging
 import math
 import os
 import re
@@ -37,6 +38,8 @@ from ca_roads_mcp import server as tools
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "ca-roads-mcp")
 ISSUER = f"https://securetoken.google.com/{PROJECT}"
+
+log = logging.getLogger(__name__)
 CERTS_URL = ("https://www.googleapis.com/robot/v1/metadata/x509/"
              "securetoken@system.gserviceaccount.com")
 FIREBASE_API_KEY = os.environ.get(
@@ -1308,8 +1311,16 @@ async def _email_alert(to_email: str, subject: str, html: str,
                   "subject": subject, "html": html, "text": text},
             timeout=15,
         )
-        return resp.status_code in (200, 201)
+        if resp.status_code not in (200, 201):
+            # Body, not just the code: Resend puts the actual reason
+            # (unverified domain, bad key, suppressed address) in there,
+            # and without it a delivery outage is unexplainable.
+            log.error("email: Resend returned %s: %s", resp.status_code,
+                      resp.text[:200])
+            return False
+        return True
     except Exception:  # noqa: BLE001
+        log.exception("email: send to Resend failed")
         return False
 
 
