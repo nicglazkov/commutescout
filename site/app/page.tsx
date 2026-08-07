@@ -12,14 +12,14 @@ import { CopyField } from "@/components/copy-field";
 export const metadata: Metadata = {
   title: "CommuteScout: live road conditions, traffic map, and route planner",
   description:
-    "Live traffic map and route planner across 38 states: incidents, lane closures, chain controls, wildfires, live highway cameras, and message signs from official DOT feeds. Deepest coverage in California.",
+    "Live traffic map and route planner across 37 states: incidents, lane closures, chain controls, wildfires, live highway cameras, and message signs from official DOT feeds. Deepest coverage in California.",
   alternates: {
     canonical: "https://commutescout.com/",
   },
   openGraph: {
     title: "CommuteScout: live road conditions, traffic map, and route planner",
     description:
-      "Live traffic map and route planner across 38 states: incidents, lane closures, chain controls, wildfires, live highway cameras, and message signs from official DOT feeds. Deepest coverage in California.",
+      "Live traffic map and route planner across 37 states: incidents, lane closures, chain controls, wildfires, live highway cameras, and message signs from official DOT feeds. Deepest coverage in California.",
     // The brief pins this to exactly "https://commutescout.com/" (trailing
     // slash). Next 16's metadata resolver unconditionally normalizes a
     // root-path absolute URL to origin-only (see resolveAbsoluteUrlWithPathname

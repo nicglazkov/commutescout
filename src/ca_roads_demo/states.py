@@ -2714,10 +2714,22 @@ def stat_counts() -> dict:
     return kinds
 
 
+def _state_key(label: str) -> str:
+    """The state a source label belongs to, ignoring any sub-region.
+
+    Sources are labelled per feed, not per state, so Texas arrives three
+    times: "Texas (Austin)" for the Austin work-zone feed and "Texas"
+    twice for the NTTA and HCTRA toll feeds. Counting the raw strings
+    made Texas two states and inflated every public "N states" claim by
+    one. The parenthetical is display detail; the state is what counts.
+    """
+    return label.split("(")[0].strip()
+
+
 def coverage_summary() -> dict:
     """How many sources and states are live right now (topbar text)."""
     entries = source_status()
-    states_set = {e["state"] for e in entries if e.get("state")
+    states_set = {_state_key(e["state"]) for e in entries if e.get("state")
                   not in (None, "Nationwide")}
     states_set.update({"California", "Nevada"})
     return {"sources": len(entries) + 7,   # + the CA core feeds

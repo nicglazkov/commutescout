@@ -8,4 +8,4 @@
 // docs/registry.md, so a coverage change can't drift silently between the
 // Python backend and this Next.js site.
 export const AGENCY_FEED_COUNT = 53;
-export const STATE_COUNT = 38;
+export const STATE_COUNT = 37;

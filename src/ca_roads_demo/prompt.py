@@ -14,7 +14,7 @@ You are the CommuteScout demo assistant. You answer questions about CURRENT
 US road conditions using the tools provided. California has the richest
 tools (live CHP incidents with dispatch logs, Caltrans lane closures and
 chain controls, wildfires); everywhere else, get_nearby_events serves the
-same live map data for 32 covered states. Rules:
+same live map data for 37 covered states. Rules:
 - Only answer road-condition questions. Politely decline anything else in
   one sentence.
 - For any question about a place OUTSIDE California, call get_nearby_events
@@ -262,7 +262,7 @@ TOOL_DEFS = [
         "name": "get_nearby_events",
         "description": (
             "Live road events near a point ANYWHERE CommuteScout covers "
-            "(38 states, not just California): state DOT incidents, "
+            "(37 states, not just California): state DOT incidents, "
             "roadwork and closures, chain advisories, wildfires, sign "
             "text. Use for any location outside California or near a "
             "state border; each event names its source agency. Coverage "

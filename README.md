@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/logo.svg" width="110" alt="CommuteScout logo">
   <h1>CommuteScout</h1>
-  <p><b>Live road conditions across 38 states: a map, a route planner, and an
+  <p><b>Live road conditions across 37 states: a map, a route planner, and an
   AI assistant.<br>Also an MCP server, so your assistant can use it too.</b></p>
 
 [![CI](https://github.com/nicglazkov/commutescout/actions/workflows/ci.yml/badge.svg)](https://github.com/nicglazkov/commutescout/actions/workflows/ci.yml)
@@ -81,7 +81,7 @@ it as a tool instead of guessing about traffic.
 
 ## Coverage
 
-The map covers **38 states**. Coverage is not uniform, because it is
+The map covers **37 states**. Coverage is not uniform, because it is
 built from what each agency actually publishes: some states offer every
 layer keylessly, some publish roadwork only, and a few offer nothing
 usable. The map says so directly, shading unsupported states and naming

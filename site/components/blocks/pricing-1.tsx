@@ -2,9 +2,8 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 import { AGENCY_FEED_COUNT, STATE_COUNT } from "@/lib/stats";
 
-// Two-tone pricing layout, approved 2026-08-05 from the W01 mockup
-// (docs-private/theme-previews-2026-08-05/pages/02-pricing.html): a navy
-// hero band that continues the site header's surface, with both plan
+// Two-tone pricing layout, approved 2026-08-05 from the W01 mockup: a
+// navy hero band that continues the site header's surface, with both plan
 // cards pulled up to overlap the navy/light seam, and the Pro waitlist
 // as a navy panel bled to the card's edges. This replaced the vendored
 // Tailark dusk-pricing-1 adaptation; the earlier provenance notes live

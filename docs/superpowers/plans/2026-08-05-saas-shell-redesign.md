@@ -959,7 +959,9 @@ git add -A && git commit -m "feat: free-tier size limits for watch areas"
 ### Task 14: Legal coverage gap analysis
 
 **Files:**
-- Create: `docs-private/legal-gap-analysis.md` (gitignored, never committed)
+- Create: the legal gap analysis, in the private (gitignored) docs
+  directory. Never committed, and not named here: tracked files must not
+  reference private paths.
 
 **Interfaces:**
 - Consumes: current `/privacy` and `/terms` content; Tailark legal templates; public exemplars.

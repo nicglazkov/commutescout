@@ -31,7 +31,7 @@ export default function HeroSection() {
               Live road conditions, straight from the source.
             </h1>
             <p className="text-cs-ink/60 mx-auto mt-4 max-w-2xl text-balance md:text-lg">
-              CommuteScout reads 53 official agency feeds across 38 states: incidents,
+              CommuteScout reads 53 official agency feeds across 37 states: incidents,
               closures, chain controls, cameras, and wildfires on one live map.
             </p>
 

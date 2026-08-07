@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart LR
-    subgraph feeds["53 agency feeds, 38 states"]
+    subgraph feeds["53 agency feeds, 37 states"]
         CHP["CHP incidents"]
         CT["Caltrans: closures, chains,<br/>signs, cameras, road weather"]
         WF["WFIGS + CAL FIRE fires + perimeters"]
