@@ -59,6 +59,16 @@ jobs:
           cache-dependency-path: site/package-lock.json
       - run: npm ci
         working-directory: site
+      # pip-audit covers the Python tree; nothing covered npm, so a
+      # vulnerable dependency in the site workspace could ship unnoticed.
+      # Production ships no Node, so dev-only advisories are excluded.
+      - name: Audit npm dependencies
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: site
+      # Next 16 no longer runs ESLint during the build, so without this
+      # step the configured linter never ran anywhere.
+      - run: npm run lint
+        working-directory: site
       - run: npm run build
         working-directory: site
       - name: Exported routes exist

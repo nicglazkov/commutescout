@@ -71,6 +71,10 @@ body { background:var(--bg); color:var(--ink);
   text-decoration:none }
 .topbar img.mark { width:30px; height:30px; border-radius:7px }
 .topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
+/* Present to crawlers and screen readers, absent from the layout. */
+.visually-hidden { position:absolute; width:1px; height:1px; padding:0;
+  margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap;
+  border:0 }
 .topbar nav { display:flex; gap:4px; margin-left:14px }
 /* .navcta is the Live map / current-page pill: a topbar-level sibling of
    nav (not nested inside it), same as the site's Next.js header, so it
@@ -687,6 +691,12 @@ aside { background:var(--card); border-right:1px solid var(--line);
   <span id="asof" class="asof" hidden></span>
   <span id="ver"></span>
 </header>
+<!-- The page's one h1. It is visually hidden because the map itself is
+     the interface and a printed heading would cost vertical space on a
+     phone, but the page is the highest-priority entry in the sitemap and
+     had no heading element at all: no h1, no outline, nothing for a
+     crawler or a screen reader to anchor on. -->
+<h1 class="visually-hidden">Live US road conditions map</h1>
 <div class="kpis" id="kpis">
   <div><b id="k-inc">–</b>active incidents</div>
   <div><b id="k-clo">–</b>closures in place</div>

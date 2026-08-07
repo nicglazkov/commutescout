@@ -33,12 +33,61 @@ export const metadata: Metadata = {
       { url: "/logo.svg", type: "image/svg+xml" },
       { url: "/favicon.ico", sizes: "any" },
     ],
+    // iOS home-screen icon. The legacy app pages already point at this
+    // file; without it here, adding a marketing page to the home screen
+    // used a screenshot, and /apple-touch-icon.png (the path iOS probes
+    // by default) 404'd.
+    apple: [{ url: "/static/icon-192.png", sizes: "192x192" }],
   },
+  // The four legacy app pages ship the manifest; the marketing pages did
+  // not, so an install prompt on the homepage had no app identity.
+  manifest: "/manifest.webmanifest",
+};
+
+// Organization and WebSite schema, emitted once for the whole site. The
+// map page carries its own WebApplication block; before this, none of
+// the eight marketing pages had any structured data at all, so search
+// engines had no machine-readable statement of what this site is or who
+// runs it.
+const SITE_SCHEMA = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://commutescout.com/#org",
+      name: "CommuteScout",
+      url: "https://commutescout.com",
+      logo: "https://commutescout.com/logo.svg",
+      description:
+        "Live road conditions read from official state transportation "
+        + "agency feeds.",
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://commutescout.com/#site",
+      url: "https://commutescout.com",
+      name: "CommuteScout",
+      publisher: { "@id": "https://commutescout.com/#org" },
+    },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
+      <head>
+        <script
+          type="application/ld+json"
+          // SITE_SCHEMA is a build-time literal, so nothing user-supplied
+          // reaches this string. The "<" escape is belt and braces: it
+          // keeps a future dynamic field from being able to close the
+          // script tag, which is the one way JSON-LD turns into an
+          // injection point.
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(SITE_SCHEMA).replace(/</g, "\\u003c"),
+          }}
+        />
+      </head>
       <body className="flex min-h-full flex-col bg-cs-bg text-cs-ink">
         <SiteHeader />
         <main className="flex-1">{children}</main>
