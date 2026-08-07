@@ -120,7 +120,7 @@ const TOOLS: Tool[] = [
   {
     signature: "get_nearby_events(center, radius_km?, kinds?)",
     description:
-      "Live road events near a point across every covered state, 38 " +
+      "Live road events near a point across every covered state, 37 " +
       "states, not just California; the fallback for locations outside " +
       "California, near a state border, or when a California tool comes " +
       "back empty",
