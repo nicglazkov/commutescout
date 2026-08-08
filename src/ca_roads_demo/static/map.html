@@ -628,8 +628,17 @@ aside { background:var(--card); border-right:1px solid var(--line);
   aside { border-right:0; border-top:1px solid var(--line) }
   .sysok, #ver { display:none }
   .legend { display:none }
-  .filters { display:none; top:64px; right:12px; left:12px;
-    max-height:calc(56vh - 120px); overflow-y:auto }
+  /* position:fixed, not absolute: the panel escapes the map card's
+     56dvh height and its overflow:hidden, so it uses the whole viewport
+     and needs little or no scrolling instead of a ~90px inner window in
+     landscape. What scrolling remains is a top-level scroller, which iOS
+     handles reliably - unlike the clamped inner scroller this replaced,
+     the exact "nested scroll areas feel wrong on iOS and hide content"
+     pattern the layout avoids everywhere else (see the note above). */
+  .filters { display:none; position:fixed; top:60px; right:12px;
+    left:auto; width:min(320px, calc(100vw - 24px));
+    max-height:calc(100dvh - 76px); overflow-y:auto;
+    -webkit-overflow-scrolling:touch; touch-action:pan-y }
   .filters.open { display:block }
   .map-card { overflow:hidden }
   .layersbtn { display:flex }
@@ -637,7 +646,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
   /* iOS zooms the page when a focused input is under 16px. */
   input, select, textarea { font-size:16px !important }
   .map-card { height:56dvh }
-  .filters { max-height:calc(56dvh - 120px); overscroll-behavior:contain }
+  .filters { overscroll-behavior:contain }
   body { overflow-x:clip }
   aside { padding-bottom:calc(18px + env(safe-area-inset-bottom)) }
   .examples button { padding:8px 12px }
@@ -3409,6 +3418,11 @@ document.getElementById('camvideo').addEventListener('change', rebuildCameras);
 document.getElementById('layersbtn').addEventListener('click', () => {
   document.getElementById('filters').classList.toggle('open');
 });
+// The filters panel overlays the map, so a scroll or tap gesture that
+// starts on it must stay on it and never fall through to the map's own
+// pan/zoom/tap handling - the same treatment the toll panel gets.
+L.DomEvent.disableScrollPropagation(document.getElementById('filters'));
+L.DomEvent.disableClickPropagation(document.getElementById('filters'));
 // Hide/show the route-planner sidebar: an edge tab on the map's left
 // side. The map re-measures after the grid change.
 const panelTab = document.createElement('button');
