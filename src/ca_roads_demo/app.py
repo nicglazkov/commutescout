@@ -14,6 +14,7 @@ import contextlib
 import json
 import logging
 import os
+import secrets
 import time
 from datetime import UTC, datetime
 from html import escape as html_escape
@@ -1467,6 +1468,87 @@ def _no_crlf(value: str) -> str:
     return value.replace("\r", "").replace("\n", "")
 
 
+def _render_contact_email(name: str, email: str, message: str,
+                          received: str, ref: str) -> tuple[str, str]:
+    """(html, text) for a contact-form notification that is obviously the
+    form and carries what's needed to trust it.
+
+    The visitor-typed fields are labelled unverified (the form does not
+    confirm the sender's address); the received time and reference are
+    server-stamped. The real proof of provenance is the DKIM signature
+    for send.commutescout.com, which the footer spells out, since a spoof
+    emailed straight to the inbox can copy this layout but cannot sign as
+    that domain."""
+    e = html_escape
+    html = f"""\
+<body style="margin:0;padding:0;background:#f5f2ea">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+       style="background:#f5f2ea;padding:24px 12px">
+<tr><td align="center">
+<table role="presentation" width="520" cellpadding="0" cellspacing="0"
+       style="max-width:520px;width:100%">
+  <tr><td style="background:#0b1f33;border-radius:14px 14px 0 0;
+      padding:16px 22px">
+    <span style="font:600 17px Georgia,serif;color:#fff">CommuteScout</span>
+    <span style="font:400 12px -apple-system,Segoe UI,Arial,sans-serif;
+      color:#9fb4c9"> &nbsp;contact form</span>
+  </td></tr>
+  <tr><td style="background:#fffdf7;padding:20px 22px 6px">
+    <div style="font:400 13.5px/1.5 -apple-system,Segoe UI,Arial,sans-serif;
+      color:#5b6b7d">Someone sent this through the contact form on
+      <b style="color:#0f1c2b">commutescout.com</b>.</div>
+  </td></tr>
+  <tr><td style="background:#fffdf7;padding:6px 22px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+      style="font:400 14px/1.55 -apple-system,Segoe UI,Arial,sans-serif;
+      color:#0f1c2b">
+      <tr><td style="padding:8px 0;border-top:1px solid #e3ddd0;width:130px;
+        color:#8a94a3;font-size:12px;text-transform:uppercase;
+        letter-spacing:.5px;vertical-align:top">From (unverified)</td>
+        <td style="padding:8px 0;border-top:1px solid #e3ddd0">{e(name)}
+        &lt;{e(email)}&gt;</td></tr>
+      <tr><td style="padding:8px 0;border-top:1px solid #e3ddd0;
+        color:#8a94a3;font-size:12px;text-transform:uppercase;
+        letter-spacing:.5px;vertical-align:top">Message</td>
+        <td style="padding:8px 0;border-top:1px solid #e3ddd0;
+        white-space:pre-wrap">{e(message)}</td></tr>
+      <tr><td style="padding:8px 0;border-top:1px solid #e3ddd0;
+        color:#8a94a3;font-size:12px;text-transform:uppercase;
+        letter-spacing:.5px;vertical-align:top">Received</td>
+        <td style="padding:8px 0;border-top:1px solid #e3ddd0">{e(received)}
+        </td></tr>
+      <tr><td style="padding:8px 0;border-top:1px solid #e3ddd0;
+        color:#8a94a3;font-size:12px;text-transform:uppercase;
+        letter-spacing:.5px;vertical-align:top">Reference</td>
+        <td style="padding:8px 0;border-top:1px solid #e3ddd0;
+        font-family:ui-monospace,Menlo,monospace">{e(ref)}</td></tr>
+    </table>
+  </td></tr>
+  <tr><td style="background:#fffdf7;border-radius:0 0 14px 14px;
+      border-top:1px solid #e3ddd0;padding:14px 22px;margin-top:8px">
+    <div style="font:400 11.5px/1.6 -apple-system,Segoe UI,Arial,sans-serif;
+      color:#8a94a3">Reply to answer the sender directly. This is a real
+      form submission only if it is DKIM-signed by
+      <b>send.commutescout.com</b> (check "signed-by" / show original);
+      the name and email above are what the visitor typed and are not
+      verified.</div>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>"""
+    text = (f"CommuteScout contact form\n\n"
+            f"From (unverified): {name} <{email}>\n"
+            f"Received: {received}\n"
+            f"Reference: {ref}\n\n"
+            f"Message:\n{message}\n\n"
+            "---\n"
+            "Reply to answer the sender directly. Genuine form mail is "
+            "DKIM-signed by send.commutescout.com; the sender name and "
+            "email are unverified.")
+    return html, text
+
+
 async def api_contact(request: Request):
     """The contact form. Emails the site owner through the existing
     Resend integration; the destination never appears in the repo or
@@ -1488,13 +1570,15 @@ async def api_contact(request: Request):
         log.error("contact: CONTACT_EMAIL unset, dropping a real message")
         return PlainTextResponse("Contact is not configured on this "
                                  "deployment.", status_code=503)
-    body = f"From: {name} <{email}>\n\n{message}"
-    # reply_to is the sender's own address (already validated above and
-    # CRLF-stripped), so replying answers the visitor instead of the
-    # alerts mailbox the message is delivered from.
-    ok = await watch._email_alert(dest, f"CommuteScout contact: {name}",
-                                  f"<pre>{html_escape(body)}</pre>", body,
-                                  reply_to=email)
+    received = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    ref = secrets.token_hex(4)
+    html, text = _render_contact_email(name, email, message, received, ref)
+    # Fixed, unmistakable subject prefix so the form is filterable and
+    # obvious; reply_to is the sender's own (validated, CRLF-stripped)
+    # address so a reply answers the visitor, not the alerts mailbox.
+    ok = await watch._email_alert(
+        dest, f"[commutescout.com contact form] {name}", html, text,
+        reply_to=email)
     if not ok:
         # _email_alert logs the cause; this records that a real visitor
         # message was lost, which is the part worth alerting on.
