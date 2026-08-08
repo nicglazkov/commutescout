@@ -218,6 +218,11 @@ input:focus { border-color:var(--sky) }
 .authwrap { max-width:420px; margin:9vh auto 0 }
 .authwrap h1 { text-align:center; margin-bottom:14px }
 .gate-copy { color:var(--dim); font-size:.85rem; margin-bottom:14px }
+/* The way out of the gate: without this the card was a dead end for a
+   signed-in user who has no code. The contact form (now reply-to aware)
+   answers the address they signed in with. */
+.gate-ask { color:var(--dim); font-size:.82rem; margin:14px 0 0 }
+.gate-ask a { color:var(--sky) }
 
 /* ── Mobile: kept last so it wins the cascade over every component
    rule above (all same specificity, so source order decides). ───── */
@@ -344,6 +349,8 @@ input:focus { border-color:var(--sky) }
         <div style="height:8px"></div>
         <button class="primary" id="redeembtn">Unlock watch areas</button>
         <div class="msg" id="gatemsg"></div>
+        <p class="gate-ask">No code? <a href="/contact">Ask for access</a>
+          and we'll reply to the email you signed in with.</p>
       </div>
     </div>
   </section>
