@@ -6,8 +6,9 @@ from ca_roads_demo import watch
 
 
 def _client(monkeypatch, sent):
-    async def fake_email(to_email, subject, html, text):
-        sent.append({"to": to_email, "subject": subject, "text": text})
+    async def fake_email(to_email, subject, html, text, reply_to=None):
+        sent.append({"to": to_email, "subject": subject, "text": text,
+                     "reply_to": reply_to})
         return True
     monkeypatch.setattr(watch, "_email_alert", fake_email)
     monkeypatch.setenv("CONTACT_EMAIL", "owner@example.com")
@@ -22,6 +23,9 @@ def test_valid_submission_sends_email(monkeypatch):
     assert r.status_code == 200
     assert sent and sent[0]["to"] == "owner@example.com"
     assert "Ada" in sent[0]["text"] and "a@b.co" in sent[0]["text"]
+    # A reply must reach the visitor, not the alerts mailbox the message
+    # is delivered from.
+    assert sent[0]["reply_to"] == "a@b.co"
 
 
 def test_honeypot_filled_is_dropped_but_returns_ok(monkeypatch):
