@@ -1505,6 +1505,72 @@ async def api_contact(request: Request):
     return PlainTextResponse("Thanks. Your message is on its way.")
 
 
+# A sign-in email goes to an address the requester types, so the endpoint
+# is an inbox-bombing vector. Two in-process caps (max-instances 1, so
+# in-process is authoritative): per target email, which is what stops
+# bombing one victim, and per IP, which stops one source spraying many
+# addresses. Firebase's own flow had this built in; ours has to add it.
+_SIGNIN_PER_EMAIL_HOUR = 4
+_SIGNIN_PER_IP_HOUR = 12
+_signin_email_hits: dict[str, list[float]] = {}
+_signin_ip_hits: dict[str, list[float]] = {}
+
+
+def _signin_allowed(email: str, ip: str) -> bool:
+    now = time.time()
+
+    def ok(store: dict, key: str, cap: int) -> bool:
+        hits = [t for t in store.get(key, []) if now - t < 3600]
+        if len(hits) >= cap:
+            store[key] = hits
+            return False
+        hits.append(now)
+        store[key] = hits
+        return True
+
+    if len(_signin_email_hits) > 5000:
+        _signin_email_hits.clear()
+    if len(_signin_ip_hits) > 5000:
+        _signin_ip_hits.clear()
+    # Check the email cap first, but only consume an IP token if the email
+    # cap passed, so a blocked-victim retry does not burn the IP budget.
+    if not ok(_signin_email_hits, email, _SIGNIN_PER_EMAIL_HOUR):
+        return False
+    return ok(_signin_ip_hits, ip, _SIGNIN_PER_IP_HOUR)
+
+
+async def api_signin_link(request: Request):
+    """Email a branded sign-in link, replacing Firebase's own email. The
+    link is minted server-side (watch.generate_signin_link) so Firebase
+    sends nothing; we deliver it through Resend."""
+    form = await _capped_form(request)
+    if form is None:
+        return PlainTextResponse("Request too large.", status_code=413)
+    email = _no_crlf((form.get("email") or "").strip())[:120].lower()
+    # Honeypot: a bot that fills the hidden field gets the success text
+    # and no email, same as the contact and waitlist forms.
+    if (form.get("website") or "").strip():
+        return PlainTextResponse("Check your inbox for a sign-in link.")
+    if not ("@" in email and "." in email.rsplit("@", 1)[-1]):
+        return PlainTextResponse("Enter a valid email address.",
+                                 status_code=400)
+    if not _signin_allowed(email, client_ip(request)):
+        return PlainTextResponse("Too many sign-in requests. Wait a bit "
+                                 "and try again.", status_code=429)
+    link = await asyncio.to_thread(watch.generate_signin_link, email)
+    if not link:
+        log.error("signin-link: could not mint a link")
+        return PlainTextResponse("Could not send a sign-in link right now. "
+                                 "Try again, or use Google sign-in.",
+                                 status_code=503)
+    subject, html, text = watch.render_signin_email(link)
+    if not await watch._email_alert(email, subject, html, text):
+        log.error("signin-link: send failed after minting a link")
+        return PlainTextResponse("Could not send the email. Try again in "
+                                 "a minute.", status_code=502)
+    return PlainTextResponse("Check your inbox for a sign-in link.")
+
+
 async def api_waitlist(request: Request):
     """Pro waitlist signups from the pricing page. A filled honeypot
     returns success without storing anything, same as /api/contact."""
@@ -1777,6 +1843,7 @@ app = Starlette(
         Route("/sitemap.xml", sitemap_xml),
         Route("/api/contact", api_contact, methods=["POST"]),
         Route("/api/waitlist", api_waitlist, methods=["POST"]),
+        Route("/api/signin-link", api_signin_link, methods=["POST"]),
         Route("/trip/{trip_id}", trips.trip_page),
         Route("/api/trip", trips.api_trip_create, methods=["POST"]),
         Route("/api/trip/{trip_id}", trips.api_trip_get),
@@ -1940,7 +2007,7 @@ class SoftLimit:
 
     PREFIXES = ("/api/suggest", "/api/geocode", "/api/flow",
                 "/api/staticmap", "/api/traffictile", "/api/contact",
-                "/api/waitlist")
+                "/api/waitlist", "/api/signin-link")
 
     def __init__(self, app_):
         self.app = app_

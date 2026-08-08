@@ -504,7 +504,7 @@ input:focus { border-color:var(--sky) }
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut,
-  sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
+  isSignInWithEmailLink, signInWithEmailLink,
   onAuthStateChanged,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
@@ -553,11 +553,22 @@ $('emailbtn').addEventListener('click', async () => {
   const email = $('email').value.trim();
   if (!email) { msg('signinmsg', 'Enter your email first.', 'err'); return; }
   try {
-    await sendSignInLinkToEmail(auth, email, {
-      url: location.origin + '/watch', handleCodeInApp: true });
-    localStorage.setItem('watchEmail', email);
-    msg('signinmsg', 'Link sent - check your inbox.', 'ok');
-  } catch (e) { msg('signinmsg', e.message, 'err'); }
+    // Our endpoint mints the link and sends a branded email through
+    // Resend, instead of Firebase sending its own unbranded one. The
+    // return link still completes below via signInWithEmailLink.
+    const r = await fetch('/api/signin-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email: email, website: '' }),
+    });
+    const txt = (await r.text()).trim();
+    if (r.ok) {
+      localStorage.setItem('watchEmail', email);
+      msg('signinmsg', txt || 'Link sent - check your inbox.', 'ok');
+    } else {
+      msg('signinmsg', txt || 'Could not send the link.', 'err');
+    }
+  } catch (e) { msg('signinmsg', 'Network error. Try again.', 'err'); }
 });
 
 if (isSignInWithEmailLink(auth, location.href)) {
