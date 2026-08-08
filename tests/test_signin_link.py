@@ -94,7 +94,7 @@ def test_blocked_victim_does_not_burn_the_ip_budget(client):
     # Spray the victim past their cap from one IP, then that IP requests a
     # link to its OWN address: it must still work (the blocked victim
     # attempts did not consume this IP's budget).
-    for i in range(demo_app._SIGNIN_PER_EMAIL_HOUR + 2):
+    for _ in range(demo_app._SIGNIN_PER_EMAIL_HOUR + 2):
         client.post("/api/signin-link",
                     data={"email": "victim@b.co", "website": ""},
                     headers={"x-forwarded-for": "5.5.5.5"})
