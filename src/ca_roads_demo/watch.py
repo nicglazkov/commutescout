@@ -1331,6 +1331,95 @@ async def _email_alert(to_email: str, subject: str, html: str,
         return False
 
 
+# ---- email-link sign-in, sent by us through Resend --------------------
+# The client used to call Firebase's sendSignInLinkToEmail, which sent an
+# unbranded email from Firebase's template. We now mint the same link
+# server-side (sendOobCode with returnOobLink, so Firebase sends nothing)
+# and deliver a branded email through Resend instead. Requires the
+# runtime SA to hold firebaseauth.users.sendEmail (custom role
+# commutescoutAuthLink).
+SIGNIN_CONTINUE_URL = DEMO_URL.rstrip("/") + "/watch"
+
+
+def generate_signin_link(email: str) -> str | None:
+    """Mint an email-link sign-in URL without Firebase sending its own
+    email. Runs synchronously (google-auth's transport is sync); the
+    caller wraps it in asyncio.to_thread. Returns None on any failure so
+    the endpoint can fall back cleanly. Never log the returned link: it
+    is a bearer sign-in credential."""
+    import google.auth
+    from google.auth.transport.requests import AuthorizedSession
+
+    try:
+        creds, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        session = AuthorizedSession(creds)
+        resp = session.post(
+            "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode",
+            json={"requestType": "EMAIL_SIGNIN", "email": email,
+                  "continueUrl": SIGNIN_CONTINUE_URL,
+                  "canHandleCodeInApp": True, "returnOobLink": True},
+            timeout=15)
+        if resp.status_code != 200:
+            # resp.text carries the reason (bad perms, disabled provider);
+            # it does not contain the link on a non-200.
+            log.error("signin-link: sendOobCode %s: %s",
+                      resp.status_code, resp.text[:200])
+            return None
+        return resp.json().get("oobLink") or None
+    except Exception:  # noqa: BLE001
+        log.exception("signin-link: link generation failed")
+        return None
+
+
+def render_signin_email(link: str) -> tuple[str, str, str]:
+    """(subject, html, text) for the branded sign-in email. Same shell as
+    the watch-alert email so the two read as one product."""
+    subject = "Sign in to CommuteScout"
+    html = f"""\
+<body style="margin:0;padding:0;background:#f5f2ea">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+       style="background:#f5f2ea;padding:24px 12px">
+<tr><td align="center">
+<table role="presentation" width="480" cellpadding="0" cellspacing="0"
+       style="max-width:480px;width:100%">
+  <tr><td style="background:#0b1f33;border-radius:14px 14px 0 0;
+      padding:18px 22px">
+    <span style="font:600 18px Georgia,serif;color:#fff">CommuteScout</span>
+  </td></tr>
+  <tr><td style="background:#fffdf7;padding:26px 22px 8px">
+    <div style="font:600 18px/1.4 -apple-system,Segoe UI,Arial,sans-serif;
+      color:#0f1c2b">Sign in to CommuteScout</div>
+    <div style="font:400 14px/1.6 -apple-system,Segoe UI,Arial,sans-serif;
+      color:#5b6b7d;margin-top:8px">Tap the button to sign in and set up
+      alerts for your watch areas. The link works once and expires
+      shortly.</div>
+  </td></tr>
+  <tr><td style="background:#fffdf7;padding:18px 22px 24px;text-align:center">
+    <a href="{link}" style="display:inline-block;background:#2f81f7;
+      color:#fff;text-decoration:none;font:600 15px -apple-system,
+      Segoe UI,Arial,sans-serif;padding:13px 30px;border-radius:9px">
+      Sign in</a>
+  </td></tr>
+  <tr><td style="background:#fffdf7;border-radius:0 0 14px 14px;
+      border-top:1px solid #e3ddd0;padding:14px 22px">
+    <div style="font:400 12px/1.6 -apple-system,Segoe UI,Arial,sans-serif;
+      color:#8a94a3">If you did not request this, you can ignore this
+      email; no one can sign in without the link above.</div>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>"""
+    text = ("Sign in to CommuteScout\n\n"
+            "Open this link to sign in and manage your watch areas. It "
+            "works once and expires shortly:\n\n"
+            f"{link}\n\n"
+            "If you did not request this, ignore this email; no one can "
+            "sign in without the link.")
+    return subject, html, text
+
+
 async def run_check_cycle() -> dict:
     """One pass over every active watch: new matching events get pushed
     (and emailed when configured), then the seen-set advances. First run
