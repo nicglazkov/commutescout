@@ -1489,8 +1489,12 @@ async def api_contact(request: Request):
         return PlainTextResponse("Contact is not configured on this "
                                  "deployment.", status_code=503)
     body = f"From: {name} <{email}>\n\n{message}"
+    # reply_to is the sender's own address (already validated above and
+    # CRLF-stripped), so replying answers the visitor instead of the
+    # alerts mailbox the message is delivered from.
     ok = await watch._email_alert(dest, f"CommuteScout contact: {name}",
-                                  f"<pre>{html_escape(body)}</pre>", body)
+                                  f"<pre>{html_escape(body)}</pre>", body,
+                                  reply_to=email)
     if not ok:
         # _email_alert logs the cause; this records that a real visitor
         # message was lost, which is the part worth alerting on.

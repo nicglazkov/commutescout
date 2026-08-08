@@ -1299,16 +1299,23 @@ def render_alert_email(watch_name: str, events: list[dict],
 
 
 async def _email_alert(to_email: str, subject: str, html: str,
-                       text: str) -> bool:
+                       text: str, reply_to: str | None = None) -> bool:
     if not (RESEND_API_KEY and ALERT_FROM_EMAIL and to_email):
         return False
     road = tools.get_road()
+    payload = {"from": ALERT_FROM_EMAIL, "to": [to_email],
+               "subject": subject, "html": html, "text": text}
+    # reply_to lets a reply reach the person who wrote in, not the
+    # from-address (a no-reply alerts mailbox). Resend takes it as a JSON
+    # field, so there is no header-injection surface even before the
+    # caller's own validation.
+    if reply_to:
+        payload["reply_to"] = reply_to
     try:
         resp = await road.client.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
-            json={"from": ALERT_FROM_EMAIL, "to": [to_email],
-                  "subject": subject, "html": html, "text": text},
+            json=payload,
             timeout=15,
         )
         if resp.status_code not in (200, 201):
