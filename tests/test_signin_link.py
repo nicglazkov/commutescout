@@ -9,33 +9,14 @@ from starlette.testclient import TestClient
 
 from ca_roads_demo import app as demo_app
 from ca_roads_demo import watch
-from ca_roads_mcp.ratelimit import RateLimiter
-
-
-def _reset_shared_limiters(monkeypatch):
-    """Give every rate-limit middleware in the chain a fresh, generous
-    bucket for this test file. The main and SoftLimit buckets are one
-    process-lifetime instance shared across all test modules (keyed on
-    TestClient's fixed peer), so this file's volume would otherwise drain
-    them and 429 a later module. Walking the chain by attribute, not by a
-    hardcoded depth, survives middleware reordering."""
-    layer = demo_app.app
-    for _ in range(12):
-        if layer is None:
-            break
-        if hasattr(layer, "limiter"):
-            monkeypatch.setattr(
-                layer, "limiter",
-                RateLimiter(capacity=1000, refill_per_second=1000))
-        layer = getattr(layer, "app", None)
 
 
 @pytest.fixture()
 def client(monkeypatch):
-    # Reset the in-process throttle state between tests.
+    # The shared rate-limiter is reset by the autouse conftest fixture.
+    # Reset the in-process abuse throttle state between tests.
     monkeypatch.setattr(demo_app, "_signin_email_hits", {})
     monkeypatch.setattr(demo_app, "_signin_ip_hits", {})
-    _reset_shared_limiters(monkeypatch)
 
     sent = []
 

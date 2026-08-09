@@ -3,30 +3,10 @@ from starlette.testclient import TestClient
 
 from ca_roads_demo import app as demo_app
 from ca_roads_demo import watch
-from ca_roads_mcp.ratelimit import RateLimiter
-
-
-def _reset_shared_limiters(monkeypatch):
-    """The main and SoftLimit rate buckets are one process-lifetime
-    instance shared across every test module (keyed on TestClient's fixed
-    peer). This file's several POSTs would otherwise drain them and 429 a
-    later module (it did: test_waitlist). Give every limiter in the chain
-    a fresh, generous bucket for this file. Walk by attribute, not depth,
-    so middleware reordering doesn't break it."""
-    layer = demo_app.app
-    for _ in range(12):
-        if layer is None:
-            break
-        if hasattr(layer, "limiter"):
-            monkeypatch.setattr(
-                layer, "limiter",
-                RateLimiter(capacity=1000, refill_per_second=1000))
-        layer = getattr(layer, "app", None)
 
 
 def _client(monkeypatch, sent):
-    _reset_shared_limiters(monkeypatch)
-
+    # The shared rate-limiter is reset by the autouse conftest fixture.
     async def fake_email(to_email, subject, html, text, reply_to=None):
         sent.append({"to": to_email, "subject": subject, "html": html,
                      "text": text, "reply_to": reply_to})
