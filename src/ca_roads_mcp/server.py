@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import ipaddress
 import os
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from urllib.parse import urlparse
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -1131,6 +1133,31 @@ async def rank_routes(by: str = "activity", limit: int = 5) -> dict:
     }
 
 
+def _fetchable_camera_url(url: str) -> bool:
+    """Feed-trust SSRF guard for camera images.
+
+    image_url is free text from an agency feed and we fetch it
+    server-side. Require http/https and reject a host that is a literal
+    private, loopback, link-local, or reserved IP (e.g. the cloud
+    metadata address) so a hostile or compromised feed can't turn the
+    camera-liveness check into a request against internal infrastructure.
+    A hostname that resolves to a private IP is not caught here, but this
+    closes the direct-IP vector cheaply.
+    """
+    try:
+        u = urlparse(url or "")
+    except ValueError:
+        return False
+    if u.scheme not in ("http", "https") or not u.hostname:
+        return False
+    try:
+        ip = ipaddress.ip_address(u.hostname)
+    except ValueError:
+        return True  # a hostname, not a literal IP: allowed
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast)
+
+
 async def _live_cameras(candidates, limit: int):
     """Keep only cameras whose image is actually live.
 
@@ -1146,6 +1173,8 @@ async def _live_cameras(candidates, limit: int):
     sem = asyncio.Semaphore(6)
 
     async def check(cam):
+        if not _fetchable_camera_url(cam.image_url):
+            return None
         async with sem:
             try:
                 resp = await client.get(

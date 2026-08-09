@@ -1877,12 +1877,19 @@ class _GuardedStatic(StaticFiles):
     admin endpoint list; the server-side auth gate held, but the
     obscurity layer did not. The app pages are listed too: each has a
     real route, so the /static copy is a duplicate with no caller.
+
+    The whole Next export lives at STATIC_DIR/site (SITE_DIR) and is
+    served from its own routes, so /static/site/* was a second copy of
+    every marketing page; that subtree is blocked here too.
     """
 
     BLOCKED = frozenset({"admin.html", "map.html", "watch.html", "trip.html"})
 
     async def get_response(self, path, scope):
-        if path.replace("\\", "/").split("/")[-1].lower() in self.BLOCKED:
+        norm = path.replace("\\", "/")
+        if (norm.split("/")[-1].lower() in self.BLOCKED
+                or norm.lower() == "site"
+                or norm.lower().startswith("site/")):
             raise HTTPException(status_code=404)
         return await super().get_response(path, scope)
 
