@@ -16,7 +16,7 @@ import logging
 import os
 import secrets
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from html import escape as html_escape
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -1718,7 +1718,37 @@ async def manifest_file(_: Request):
 
 
 async def health(_: Request):
-    return JSONResponse({"ok": True, "version": VERSION, "model": MODEL})
+    # version is public (it's in server.json in the open-source repo); the
+    # answering model is an internal detail with no reason to be disclosed
+    # to anonymous callers.
+    return JSONResponse({"ok": True, "version": VERSION})
+
+
+async def security_txt(_: Request):
+    """RFC 9116 vulnerability-disclosure pointer. Reporting goes through
+    GitHub security advisories, matching SECURITY.md. Expires is stamped a
+    year ahead each request so it never goes stale."""
+    exp = (datetime.now(UTC) + timedelta(days=365)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    body = (
+        "Contact: https://github.com/nicglazkov/commutescout/security/"
+        "advisories/new\n"
+        f"Expires: {exp}\n"
+        "Preferred-Languages: en\n"
+        "Canonical: https://commutescout.com/.well-known/security.txt\n"
+    )
+    return PlainTextResponse(body)
+
+
+async def not_found(request: Request, exc: HTTPException):
+    """Branded 404 for page navigations; APIs keep a plain JSON 404. The
+    site's own 404.html carries the header, footer, and a link home."""
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    page = _resolve_site_file("404.html")
+    if page is not None:
+        return HTMLResponse(page.read_text(encoding="utf-8"), status_code=404)
+    return PlainTextResponse("Not found", status_code=404)
 
 
 async def _prewarm() -> None:
@@ -1903,6 +1933,7 @@ app = Starlette(
         # /healthz is intercepted by Google's frontend on Cloud Run and never
         # reaches the container; /health gets through.
         Route("/health", health),
+        Route("/.well-known/security.txt", security_txt),
         Route("/api/ask", ask, methods=["POST"]),
         Route("/api/event", track, methods=["POST"]),
         Route("/api/stats", stats, methods=["GET"]),
@@ -1979,7 +2010,8 @@ app = Starlette(
                                         check_dir=False), name="site_next"),
         Mount("/shots", app=StaticFiles(directory=str(ASSET_DIR / "shots"),
                                         check_dir=False), name="site_shots"),
-    ]
+    ],
+    exception_handlers={404: not_found},
 )
 # Request-level limiter on top of the daily caps (burst 20, ~30/min
 # sustained): normal browsing fires event beacons and watch-API calls

@@ -86,15 +86,6 @@ def entry_label(m: dict) -> str:
     return _SEQ_RE.sub("", _PLAZA_CODE_RE.sub("", rest))
 
 
-def entry_seq(m: dict) -> int | None:
-    """Sign sequence number when the source embeds one (511.org names
-    end in " - N"); orders gantries along the corridor."""
-    name = m.get("name") or ""
-    rest = name.split(":", 1)[1].strip() if ":" in name else name
-    got = _ENTRY_RE.match(rest)
-    return int(got.group(2)) if got else None
-
-
 def price_rows(m: dict) -> list[tuple[str, float]]:
     """(destination, price) pairs for one marker. Explicit rate tables
     (bridge payment tiers) win; then per-destination sign lines; then

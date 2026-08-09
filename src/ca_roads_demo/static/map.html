@@ -717,12 +717,12 @@ aside { background:var(--card); border-right:1px solid var(--line);
 <div class="shell">
   <aside>
     <section id="pane-plan">
-      <div class="fld"><label>From</label>
+      <div class="fld"><label for="from">From</label>
         <button type="button" class="pickmap" id="pickfrom" data-pick="from">Pick on map</button>
         <input id="from" maxlength="200" placeholder="e.g. San Jose or 123 Main St, Davis" autocomplete="off">
         <div class="sugg" id="fromsugg"></div>
         <div class="val" id="fromval"></div></div>
-      <div class="fld"><label>To</label>
+      <div class="fld"><label for="to">To</label>
         <button type="button" class="pickmap" id="pickto" data-pick="to">Pick on map</button>
         <input id="to" maxlength="200" placeholder="e.g. South Lake Tahoe" autocomplete="off">
         <div class="sugg" id="tosugg"></div>
@@ -770,6 +770,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
     <form id="form">
       <div class="searchrow">
         <input type="text" id="q" maxlength="300" required autocomplete="off"
+               aria-label="Ask about your drive"
                placeholder="How's my drive looking right now?">
         <button class="ask" id="go" type="submit">Check</button>
       </div>

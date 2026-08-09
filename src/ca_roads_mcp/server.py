@@ -76,10 +76,6 @@ def _read_only(title: str) -> ToolAnnotations:
 MILES_PER_METER = 1 / 1609.344
 
 
-async def _noop() -> None:
-    return None
-
-
 async def _route_context(
     road, sample_points: list[tuple[float, float]]
 ) -> tuple[list[dict], list[dict], list[str]]:
