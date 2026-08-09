@@ -89,8 +89,21 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         />
       </head>
       <body className="flex min-h-full flex-col bg-cs-bg text-cs-ink">
+        {/* Skip link: first focusable element in the body, invisible until
+            keyboard focus lands on it (Tailwind's sr-only clips it
+            off-screen; focus:not-sr-only restores normal layout on
+            :focus). Jumps past SiteHeader's brand/nav/CTA straight to
+            #main, the landmark below. */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-cs-navy focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cs-sky"
+        >
+          Skip to main content
+        </a>
         <SiteHeader />
-        <main className="flex-1">{children}</main>
+        <main id="main" className="flex-1">
+          {children}
+        </main>
         <SiteFooter />
       </body>
     </html>
