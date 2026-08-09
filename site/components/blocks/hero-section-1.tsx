@@ -56,7 +56,15 @@ export default function HeroSection() {
             </div>
 
             <div className="relative mx-auto mt-10 max-w-5xl pb-8 md:pb-10">
-              <div className="overflow-hidden rounded-2xl shadow-2xl shadow-cs-navy/15 ring-1 ring-cs-line">
+              {/* The whole screenshot links to the live map, so a click
+                  anywhere on it opens /map. focus-visible + hover give it
+                  a clickable affordance; the alt text is the label. */}
+              <Link
+                href="/map"
+                prefetch={false}
+                aria-label="Open the live map"
+                className="focus-visible:ring-cs-sky block cursor-pointer overflow-hidden rounded-2xl shadow-2xl shadow-cs-navy/15 ring-1 ring-cs-line transition hover:shadow-cs-navy/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              >
                 <Image
                   src="/shots/hero-map.png"
                   alt="The CommuteScout live map showing incidents, closures, chain controls, and cameras across dozens of states"
@@ -65,7 +73,7 @@ export default function HeroSection() {
                   className="h-auto w-full"
                   priority
                 />
-              </div>
+              </Link>
             </div>
           </div>
         </div>
