@@ -475,6 +475,33 @@ async def test_new_event_alerts_once(checker):
     assert len(pushes) == 1
 
 
+async def test_one_bad_watch_does_not_abort_the_cycle(checker, monkeypatch):
+    """A Firestore error on one watch must not skip every watch after it."""
+    store, events, pushes = checker
+    w1 = await seed_watch(store)
+    w2 = await store.create_watch({
+        "uid": "sam", "name": "Work", "type": "circle",
+        "center": {"lat": 37.3, "lon": -121.9}, "radius_km": 20,
+        "kinds": ["incident"], "channels": {"push": True}, "active": True,
+    })
+    await store.set_seen(w1, {"chp:0"})
+    await store.set_seen(w2, {"chp:0"})
+    events.append(EVENT)
+
+    orig_get_seen = store.get_seen
+
+    async def boom_for_w1(watch_id):
+        if watch_id == w1:
+            raise RuntimeError("firestore down for this watch")
+        return await orig_get_seen(watch_id)
+
+    monkeypatch.setattr(store, "get_seen", boom_for_w1)
+    stats = await watch.run_check_cycle()
+    # w1 failed and was counted; w2 still alerted.
+    assert stats.get("errors") == 1
+    assert stats["alerts"] == 1 and len(pushes) == 1
+
+
 async def test_cleared_event_realerts_after_grace(checker):
     store, events, pushes = checker
     wid = await seed_watch(store)

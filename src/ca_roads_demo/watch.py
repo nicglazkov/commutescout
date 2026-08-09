@@ -205,8 +205,15 @@ async def verify_scheduler(request: Request) -> bool:
 
             info = gidt.verify_oauth2_token(
                 token, gadc.Request(), audience=CHECKER_AUDIENCE)
-            return (info.get("email") or "").lower() == CHECKER_SA
-        except Exception:  # noqa: BLE001
+            if (info.get("email") or "").lower() == CHECKER_SA:
+                return True
+            log.warning("scheduler: token caller %r != CHECKER_SA",
+                        info.get("email"))
+            return False
+        except Exception:
+            # A bad scheduler credential (expired cert, wrong audience,
+            # clock skew) silently kills every alert cycle otherwise.
+            log.exception("scheduler: OIDC token verification failed")
             return False
 
     return await asyncio.to_thread(_check, header[7:].strip())
@@ -1451,67 +1458,77 @@ async def run_check_cycle() -> dict:
              "archived": archive_stats.get("archived", 0)}
 
     for watch in watches:
-        if not watch.get("active"):
+        # Per-watch isolation: a Firestore/push/email error on one watch
+        # must not abort the cycle and skip every watch after it (events
+        # that appear-and-clear inside a skipped gap go unalerted for
+        # good). Log and move on.
+        try:
+            if not watch.get("active"):
+                continue
+            uid = watch.get("uid", "")
+            if uid not in users:
+                users[uid] = await store.get_user(uid)
+            user = users[uid]
+            if not user or user.get("status") != "approved":
+                continue
+
+            matched = [e for e in events
+                       if e["kind"] in (watch.get("kinds") or [])
+                       and watch_matches(watch, e["lat"], e["lon"])]
+            raw_seen = await store.get_seen(watch["id"])
+            first_run = raw_seen is None
+            now_ts = time.time()
+            if isinstance(raw_seen, dict):
+                # Age out at read time too: an id past the grace window is
+                # forgotten, so its reopen counts as fresh news.
+                seen = {i: ts for i, ts in raw_seen.items()
+                        if now_ts - ts < SEEN_GRACE_SECONDS}
+            elif raw_seen:
+                seen = {i: now_ts for i in raw_seen}
+            else:
+                seen = {}
+            fresh = [e for e in matched if e["id"] not in seen]
+
+            if not first_run and fresh:
+                batch = fresh[:MAX_ALERTS_PER_WATCH_CYCLE]
+                overflow = len(fresh) - len(batch)
+                for event in batch:
+                    stats["alerts"] += 1
+                    title = f"{watch.get('name', 'Watch')}: {event['title']}"
+                    if watch.get("channels", {}).get("push", True):
+                        subs = await push_subs_for(uid)
+                        lat, lon = event.get("lat"), event.get("lon")
+                        click = (f"{DEMO_URL}/?focus={lat:.5f},{lon:.5f}"
+                                 f"&k={event.get('kind', 'incident')}"
+                                 if lat and lon else f"{DEMO_URL}/watch")
+                        stats["pushes"] += await _push_to_subs(subs, {
+                            "title": title, "body": event["body"],
+                            "url": click,
+                        })
+                # One email per watch per cycle: pushes are per event, but
+                # a busy cycle as eight separate emails reads as spam.
+                if watch.get("channels", {}).get("email"):
+                    subject, body_html, body_text = render_alert_email(
+                        watch.get("name", "Watch area"), batch, overflow)
+                    ok = await _email_alert(user.get("email") or "", subject,
+                                            body_html, body_text)
+                    stats["emails"] += 1 if ok else 0
+
+            # Union with a grace window instead of replacing: flapping
+            # feeds (CHP mirrors disagree cycle to cycle) must not
+            # re-alert the same event every time it blinks back. Ids
+            # absent longer than the grace window age out, so a genuine
+            # reopen still alerts.
+            for e in matched:
+                seen[e["id"]] = now_ts
+            pruned = {i: ts for i, ts in seen.items()
+                      if now_ts - ts < SEEN_GRACE_SECONDS}
+            await store.set_seen(watch["id"], pruned)
+        except Exception:  # noqa: BLE001 - isolate one bad watch
+            stats["errors"] = stats.get("errors", 0) + 1
+            log.exception("checker: watch %s failed; skipping",
+                          watch.get("id"))
             continue
-        uid = watch.get("uid", "")
-        if uid not in users:
-            users[uid] = await store.get_user(uid)
-        user = users[uid]
-        if not user or user.get("status") != "approved":
-            continue
-
-        matched = [e for e in events
-                   if e["kind"] in (watch.get("kinds") or [])
-                   and watch_matches(watch, e["lat"], e["lon"])]
-        raw_seen = await store.get_seen(watch["id"])
-        first_run = raw_seen is None
-        now_ts = time.time()
-        if isinstance(raw_seen, dict):
-            # Age out at read time too: an id past the grace window is
-            # forgotten, so its reopen counts as fresh news.
-            seen = {i: ts for i, ts in raw_seen.items()
-                    if now_ts - ts < SEEN_GRACE_SECONDS}
-        elif raw_seen:
-            seen = {i: now_ts for i in raw_seen}
-        else:
-            seen = {}
-        fresh = [e for e in matched if e["id"] not in seen]
-
-        if not first_run and fresh:
-            batch = fresh[:MAX_ALERTS_PER_WATCH_CYCLE]
-            overflow = len(fresh) - len(batch)
-            for event in batch:
-                stats["alerts"] += 1
-                title = f"{watch.get('name', 'Watch')}: {event['title']}"
-                if watch.get("channels", {}).get("push", True):
-                    subs = await push_subs_for(uid)
-                    lat, lon = event.get("lat"), event.get("lon")
-                    click = (f"{DEMO_URL}/?focus={lat:.5f},{lon:.5f}"
-                             f"&k={event.get('kind', 'incident')}"
-                             if lat and lon else f"{DEMO_URL}/watch")
-                    stats["pushes"] += await _push_to_subs(subs, {
-                        "title": title, "body": event["body"],
-                        "url": click,
-                    })
-            # One email per watch per cycle: pushes are per event, but a
-            # busy cycle as eight separate emails reads as spam.
-            if watch.get("channels", {}).get("email"):
-                subject, body_html, body_text = render_alert_email(
-                    watch.get("name", "Watch area"), batch, overflow)
-                ok = await _email_alert(user.get("email") or "", subject,
-                                        body_html, body_text)
-                stats["emails"] += 1 if ok else 0
-
-        # Union with a grace window instead of replacing: flapping
-        # feeds (CHP mirrors disagree cycle to cycle) must not
-        # re-alert the same event every time it blinks back. Ids
-        # absent longer than the grace window age out, so a genuine
-        # reopen still alerts.
-        for e in matched:
-            seen[e["id"]] = now_ts
-        pruned = {i: ts for i, ts in seen.items()
-                  if now_ts - ts < SEEN_GRACE_SECONDS}
-        await store.set_seen(watch["id"], pruned)
     return stats
 
 
@@ -1520,6 +1537,10 @@ async def api_check_watches(request: Request) -> JSONResponse:
     if not await verify_scheduler(request):
         admin = await _require_admin(request)
         if not admin:
+            # The scheduler ping being rejected means alerts have stopped;
+            # verify_scheduler logs the cause. This records the outcome.
+            log.error("scheduler: check request not authorized (alerts "
+                      "will not run this cycle)")
             return _err("not authorized", 403)
     if _scheduler_check_lock.locked():
         return JSONResponse({"skipped": "check already running"})

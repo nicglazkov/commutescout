@@ -45,12 +45,70 @@ class FakeBQ:
         return []
 
 
+class BoomBQ:
+    """Every insert fails, like a BigQuery outage."""
+
+    def insert_rows_json(self, table, rows):
+        raise RuntimeError("bigquery unavailable")
+
+
 @pytest.fixture
 def bq(monkeypatch):
     fake = FakeBQ()
     monkeypatch.setattr(tollprices, "_bq", lambda: fake)
     monkeypatch.setattr(tollprices, "_last", {})
+    monkeypatch.setattr(tollprices, "_pending", [])
     return fake
+
+
+def test_failed_batch_is_retained_not_lost(monkeypatch):
+    """_last advances when a row is built, so a dropped batch can never be
+    regenerated - it must be retained instead."""
+    monkeypatch.setattr(tollprices, "_last", {})
+    monkeypatch.setattr(tollprices, "_pending", [])
+    monkeypatch.setattr(tollprices, "_bq", lambda: BoomBQ())
+    with pytest.raises(RuntimeError):
+        tollprices.observe_sync([BAY])          # two destinations
+    assert len(tollprices._pending) == 2
+
+
+def test_retained_rows_flush_next_cycle(monkeypatch):
+    monkeypatch.setattr(tollprices, "_last", {})
+    monkeypatch.setattr(tollprices, "_pending", [])
+    monkeypatch.setattr(tollprices, "_bq", lambda: BoomBQ())
+    with pytest.raises(RuntimeError):
+        tollprices.observe_sync([BAY])
+    assert len(tollprices._pending) == 2
+    rec = FakeBQ()
+    monkeypatch.setattr(tollprices, "_bq", lambda: rec)
+    # Same prices: _last already advanced, so this cycle makes no NEW
+    # rows - only the retained ones flush. Without the buffer they'd be
+    # gone for good.
+    out = tollprices.observe_sync([BAY])
+    assert len(rec.rows) == 2 and out["archived"] == 2
+    assert tollprices._pending == []
+
+
+def test_partial_rejection_retains_only_bad_rows(monkeypatch):
+    class Partial:
+        def insert_rows_json(self, table, rows):
+            return [{"index": 0, "errors": [{"reason": "invalid"}]}]
+
+    monkeypatch.setattr(tollprices, "_last", {})
+    monkeypatch.setattr(tollprices, "_pending", [])
+    monkeypatch.setattr(tollprices, "_bq", lambda: Partial())
+    out = tollprices.observe_sync([BAY])
+    assert out["failed"] == 1 and len(tollprices._pending) == 1
+
+
+def test_backlog_is_capped(monkeypatch):
+    monkeypatch.setattr(tollprices, "_last", {})
+    monkeypatch.setattr(tollprices, "_pending", [])
+    monkeypatch.setattr(tollprices, "PENDING_MAX", 1)
+    monkeypatch.setattr(tollprices, "_bq", lambda: BoomBQ())
+    with pytest.raises(RuntimeError):
+        tollprices.observe_sync([BAY])          # would buffer 2, cap 1
+    assert len(tollprices._pending) == 1
 
 
 def test_rows_written_once_and_only_on_change(bq):
