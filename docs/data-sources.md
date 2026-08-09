@@ -60,21 +60,18 @@ learned running them:
   gazetteer fallback, and when a street exists in several towns the
   tools say so and ask instead of guessing.
 
-## Expansion states (map only, first wave)
+## Beyond California
 
-Beyond California, the map also shows live data when you pan there:
+The map shows live data across 37 states, from 53 official agency feeds
+in total (CHP and Caltrans among them). Out-of-state feeds are fetched
+only when the viewport touches the state and carry a source label in
+every popup. Coverage is not uniform: some states have full incidents,
+closures, cameras, and signs, others only roadwork.
 
-| Region | Source | Data |
-|---|---|---|
-| Maine, New Hampshire, Vermont | NE Compass tri-state portal (keyless C2C XML) | Incidents, lane closures, message signs, road weather, cameras (snapshots served via `/api/stcam`) |
-| Iowa | Iowa DOT WZDx feed (keyless, CC0) | Roadwork and closures with route geometry and schedule windows |
-| North Carolina | NCDOT WZDx feed (keyless) | Roadwork and closures with geometry and schedules |
-| Washington | WSDOT Traveler API (free key) | Incidents, closures, cameras, mountain-pass traction restrictions |
-| Oregon | ODOT TripCheck API (free key) | Incidents, roadwork, cameras |
-| Ohio | OHGO public API (free key) | Incidents, roadwork, cameras, message signs |
-
-These feeds are fetched only when the viewport touches the state and
-carry a source label in every popup. The full state-by-state expansion
-plan lives in [state-expansion-audit.md](state-expansion-audit.md).
+The current, authoritative list is the live
+[data sources page](https://commutescout.com/data-sources), which renders
+the per-state coverage matrix (which categories each state provides) and
+the reasons a state is partial or absent. It is generated from the code,
+so it never drifts; this doc does not duplicate it.
 
 Want to add a feed? See [adding a data source](adding-a-source.md).

@@ -140,7 +140,7 @@ EOF
 | `ANTHROPIC_API_KEY` | Model access; mount from Secret Manager | required |
 | `TELEMETRY_SALT` | Random 32+ chars; salts the daily visitor hashes so they can't be brute-forced back to IPs | required in production |
 | `DEMO_MODEL` | Answering model | `claude-sonnet-5` |
-| `DEMO_DAILY_DOLLARS` | Global daily model-spend cap | `3.0` |
+| `DEMO_DAILY_DOLLARS` | Global daily model-spend cap | `1.5` |
 | `DEMO_PER_IP_DAILY` | Questions per visitor per day | `20` |
 | `SNAPSHOT_BUCKET` | GCS bucket the map snapshots publish to. Unset disables the publisher and the map falls back to `/api/mapdata` | unset |
 | `APP_VERSION` | Stamped into each snapshot as `build`; informational | unset |

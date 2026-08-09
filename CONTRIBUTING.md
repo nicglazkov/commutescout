@@ -47,8 +47,9 @@ python evals/build_fixtures.py
 python evals/run_evals.py       # needs your own ANTHROPIC_API_KEY; costs a few dollars
 ```
 
-Evals also run automatically on releases that touch the data or tool
-layers.
+Evals run only on manual dispatch (the Actions tab or the weekly cron),
+not on releases. The release trigger was removed after it repeatedly ran
+up the monthly API budget.
 
 ## Releases
 
