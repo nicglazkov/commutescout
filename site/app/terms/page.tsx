@@ -37,8 +37,7 @@ export default function TermsPage() {
           Terms of use
         </h1>
         <p className="text-cs-ink/70 mt-3 text-sm">
-          Effective July 20, 2026. Changes will be posted here with a new
-          effective date.
+          Effective August 9, 2026.
         </p>
 
         <div className="text-cs-ink/60 mt-8 space-y-8 md:text-lg">
@@ -94,6 +93,17 @@ export default function TermsPage() {
 
           <div>
             <h2 className="text-cs-ink text-xl font-medium">
+              Ending access
+            </h2>
+            <p className="mt-4">
+              We can suspend or end access for anyone who violates these
+              terms or abuses the service, with or without notice. You can
+              stop using the service whenever you like.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="text-cs-ink text-xl font-medium">
               No warranty, limited liability
             </h2>
             <p className="mt-4">
@@ -103,8 +113,11 @@ export default function TermsPage() {
               the operator is not liable for any damages arising from use
               of the service or reliance on its data, including decisions
               made based on alerts, maps, routes, or assistant answers.
-              Road conditions are verified by official sources, not by us;
-              your driving decisions are yours.
+              That limit covers indirect, incidental, consequential,
+              special, and punitive damages alike, along with any lost
+              data, profits, or time, even if we were warned they were
+              possible. Road conditions are verified by official sources,
+              not by us; your driving decisions are yours.
             </p>
           </div>
 
@@ -120,6 +133,55 @@ export default function TermsPage() {
               </a>
               . These terms cover this hosted instance, not the code - you
               are welcome to run your own.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="text-cs-ink text-xl font-medium">
+              Copyright and takedowns
+            </h2>
+            <p className="mt-4">
+              Almost everything shown here comes from public agency feeds,
+              but if you believe something on the service infringes your
+              copyright, email{" "}
+              <a
+                href="mailto:hello@commutescout.com"
+                className="text-cs-sky font-medium hover:underline"
+              >
+                hello@commutescout.com
+              </a>{" "}
+              with a description of the work, where it appears, and how to
+              reach you. We&apos;ll review it and remove anything that
+              shouldn&apos;t be here.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="text-cs-ink text-xl font-medium">
+              Changes to these terms
+            </h2>
+            <p className="mt-4">
+              We may update these terms from time to time. We&apos;ll post
+              the new version here with a new effective date, and for
+              significant changes we&apos;ll email account holders.
+              Continuing to use the service after a change means you accept
+              the updated terms.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="text-cs-ink text-xl font-medium">General</h2>
+            <p className="mt-4">
+              If any part of these terms is found unenforceable, the rest
+              still applies. Together with our{" "}
+              <a
+                href="/privacy"
+                className="text-cs-sky font-medium hover:underline"
+              >
+                privacy policy
+              </a>
+              , these terms are the whole agreement between you and the
+              operator about the service.
             </p>
           </div>
 
