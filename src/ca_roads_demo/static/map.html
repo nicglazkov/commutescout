@@ -942,7 +942,12 @@ function stopLoader() {
 
 // ── Tiny markdown renderer (bold, italics, code, headings, lists) ────
 function esc(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Escapes quotes too, not just angle brackets: esc() output is used in
+  // double-quoted HTML attributes (e.g. data-inc="...") as well as text,
+  // and an unescaped " there breaks out of the attribute. renderMd's
+  // trailing .replaceAll('"','&quot;') becomes a harmless no-op now.
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function inline(s) {
   return s
@@ -2143,7 +2148,7 @@ function popupFor(m, g) {
               'gusts ' + Math.round(m.gust) + ' mph' +
               (dir ? ' from the ' + dir : '')] : null),
       m.rh != null ? ['Humidity', Math.round(m.rh) + '%'] : null,
-      m.precip ? ['Precip', humanize(m.precip)] : null,
+      m.precip ? ['Precip', esc(humanize(m.precip))] : null,
       m.surface ? ['Surface', esc(m.surface)] : null,
       m.vis_m != null && m.vis_m < 5000
         ? ['Visibility', Math.round(m.vis_m) + ' m'] : null,
@@ -2158,7 +2163,9 @@ function popupFor(m, g) {
   }
   if (g && g.startsWith('inc_')) {
     const parts = splitRoad(m.label || '');
-    const title = humanize(m.type) || 'Incident';
+    // esc(): m.type is CHP LogType feed text, and v2() drops title into
+    // <h4> as raw HTML (callers pre-escape, like the toll_dir site).
+    const title = esc(humanize(m.type) || 'Incident');
     const sub = m.location || parts.road || null;
     const body = [];
     const gloss = chpGloss(m.type);
@@ -2199,7 +2206,7 @@ function popupFor(m, g) {
       [warn ? { text: '<span class="warnline">' + esc(warn) + '</span>' } : null,
        prose ? esc(prose) : null],
       [
-        m.work ? ['Work', humanize(m.work)] : null,
+        m.work ? ['Work', esc(humanize(m.work))] : null,
         m.delay_min ? ['Delay', '~' + m.delay_min + ' min expected'] : null,
         (m.facility && m.cls === 'ramp') ? ['Facility', esc(m.facility)] : null,
         m.windows ? ['Windows', (m.windows - 1) + ' more scheduled at this spot'] : null,
@@ -3705,7 +3712,8 @@ map.on('popupopen', (e) => {
         const unitRows = groups.map((grp, i) => {
           const events = grp.slice().reverse().map((en) => {
             const key = (en[1] || '').replace(/^Unit\s*/i, '').toLowerCase();
-            return (STATUS[key] || key) + ' ' + clock(en[0]);
+            // esc(): key falls back to raw CHP unit-status feed text.
+            return esc(STATUS[key] || key) + ' ' + clock(en[0]);
           });
           const done = /cleared/i.test(grp[0] && grp[0][1] || '');
           return '<div class="urow"><b>Unit ' + (i + 1) + '</b><span>' +

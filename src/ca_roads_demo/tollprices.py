@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 import re
 from datetime import UTC, datetime
+
+log = logging.getLogger(__name__)
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "ca-roads-mcp")
 DATASET = os.environ.get("ARCHIVE_DATASET", "events")
@@ -29,6 +32,24 @@ ENABLED = os.environ.get("ARCHIVE_ENABLED", "1").lower() not in ("0", "false")
 # (src, corridor, entry, dest) -> last recorded price
 _last: dict[tuple, float] = {}
 _client = None
+# Rows a previous cycle built but could not write. _last is advanced when
+# a row is built, so a dropped batch can never be regenerated (the next
+# cycle sees the price as unchanged) - the same permanent-loss shape the
+# event archive was fixed for. Failures are carried forward and retried.
+_pending: list[dict] = []
+PENDING_MAX = 20_000
+
+
+def _retain(rows: list[dict]) -> None:
+    if not rows:
+        return
+    _pending.extend(rows)
+    if len(_pending) > PENDING_MAX:
+        dropped = len(_pending) - PENDING_MAX
+        del _pending[:dropped]
+        log.error("tollprices: dropped %d buffered rows, backlog over %d",
+                  dropped, PENDING_MAX)
+    log.warning("tollprices: %d rows buffered for retry", len(_pending))
 
 _DIRS = {"NB", "SB", "EB", "WB", "INSIDE", "OUTSIDE",
          "NORTH", "SOUTH", "EAST", "WEST"}
@@ -131,10 +152,24 @@ def observe_sync(markers: list[dict]) -> dict:
         for dest, price in price_rows(m):
             note(m.get("src"), corridor, entry, dest, price,
                  m.get("pricing"))
-    if not out:
+    # Retry anything a previous cycle could not write, in order.
+    batch = _pending + out
+    _pending.clear()
+    if not batch:
         return {"archived": 0}
-    errors = _bq().insert_rows_json(f"{PROJECT}.{DATASET}.{TABLE}", out)
-    return {"archived": len(out) - len(errors), "failed": len(errors)}
+    try:
+        errors = _bq().insert_rows_json(f"{PROJECT}.{DATASET}.{TABLE}", batch)
+    except Exception:
+        _retain(batch)
+        raise
+    if errors:
+        bad = {e["index"] for e in errors if isinstance(e, dict)
+               and "index" in e}
+        _retain([r for i, r in enumerate(batch) if i in bad])
+        log.warning("tollprices: %d of %d rows rejected by BigQuery",
+                    len(errors), len(batch))
+    return {"archived": len(batch) - len(errors), "failed": len(errors),
+            "pending": len(_pending)}
 
 
 def cached_toll_markers() -> list[dict]:
@@ -159,7 +194,11 @@ async def observe() -> dict:
         markers = cached_toll_markers()
         return await asyncio.to_thread(observe_sync, markers)
     except Exception:  # noqa: BLE001 - history must never break alerts
+        # Logged, not silently swallowed: a stalled toll archive is
+        # invisible otherwise, and the rows are already buffered.
+        log.exception("tollprices: insert failed, %d rows buffered",
+                      len(_pending))
         with contextlib.suppress(Exception):
             global _client
             _client = None
-        return {"archived": 0, "failed": 1}
+        return {"archived": 0, "failed": 1, "pending": len(_pending)}

@@ -97,3 +97,35 @@ def test_wildfire_polygon_popup_escapes_its_label():
     binds = re.findall(r"\.bindPopup\(([^;]{0,120})", src, re.S)
     raw = [b for b in binds if "m.label" in b and "esc(" not in b]
     assert not raw, f"unescaped label bound into a popup: {raw}"
+
+
+def _map_src():
+    return pathlib.Path(
+        "src/ca_roads_demo/static/map.html").read_text(encoding="utf-8")
+
+
+def test_esc_escapes_quotes_not_just_angle_brackets():
+    """esc() output lands in double-quoted attributes (data-inc="..."), so
+    a " must be escaped or it breaks out of the attribute."""
+    src = _map_src()
+    body = re.search(r"function esc\(s\)\s*\{(.*?)\}", src, re.S).group(1)
+    assert "&quot;" in body, "esc() does not escape double quotes"
+
+
+def test_every_humanize_into_a_popup_is_escaped():
+    """humanize() is a plain text transform of feed text, and v2() drops
+    its args into raw HTML. Every call site must be esc-wrapped."""
+    src = _map_src()
+    unescaped = []
+    for m in re.finditer(r"[^c(]humanize\(", src):
+        # The 20 chars before the match should contain esc(
+        before = src[max(0, m.start() - 6):m.start() + 1]
+        if "esc(" not in before:
+            unescaped.append(src[m.start():m.start() + 40].strip())
+    assert not unescaped, f"unescaped humanize() into a sink: {unescaped}"
+
+
+def test_dispatch_log_unit_status_is_escaped():
+    """CHP unit-status feed text (STATUS[key] || key) goes into innerHTML."""
+    src = _map_src()
+    assert "esc(STATUS[key] || key)" in src
