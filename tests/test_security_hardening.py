@@ -63,6 +63,14 @@ def test_app_pages_not_duplicated_under_static(client, name):
     assert client.get(f"/static/{name}").status_code == 404
 
 
+@pytest.mark.parametrize("path", [
+    "/static/site/index.html", "/static/site/pricing.html", "/static/site"])
+def test_site_export_not_duplicated_under_static(client, path):
+    """The Next export is served from its own routes; /static/site/* was a
+    second copy of every marketing page."""
+    assert client.get(path).status_code == 404
+
+
 def test_static_still_serves_real_assets(client):
     """The guard must block only the page duplicates."""
     r = client.get("/static/tokens.css")
