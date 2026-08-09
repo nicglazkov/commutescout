@@ -18,14 +18,15 @@ import Link from "next/link";
 // test re-pins on the updated wording.
 export const metadata: Metadata = {
   title: "Privacy - CommuteScout",
-  description: "What CommuteScout collects, why, and how to get it deleted.",
+  description:
+    "What CommuteScout collects: nothing identifying you on the map or assistant, just your email and watch areas if you make an account. Nothing is sold.",
   alternates: {
     canonical: "https://commutescout.com/privacy",
   },
   openGraph: {
     title: "Privacy - CommuteScout",
     description:
-      "What CommuteScout collects, why, and how to get it deleted.",
+      "What CommuteScout collects: nothing identifying you on the map or assistant, just your email and watch areas if you make an account. Nothing is sold.",
     url: "https://commutescout.com/privacy",
     images: ["/static/shots/og.png"],
   },
@@ -42,7 +43,7 @@ export default function PrivacyPage() {
         <h1 className="text-cs-ink text-balance text-4xl font-medium tracking-tight lg:text-5xl">
           Privacy
         </h1>
-        <p className="text-cs-ink/50 mt-3 text-sm">
+        <p className="text-cs-ink/70 mt-3 text-sm">
           Effective July 20, 2026. Material changes will be posted here with
           a new effective date; account holders get an email when a change
           affects them.

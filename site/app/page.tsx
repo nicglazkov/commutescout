@@ -5,21 +5,25 @@ import Features from "@/components/blocks/features-1";
 import StatsSection from "@/components/blocks/stats-1";
 import { CopyField } from "@/components/copy-field";
 
-// Homepage takes the product-level metadata (Task 7 brief). Description
-// matches the map page's current one (src/ca_roads_demo/static/map.html);
-// og:image reuses the existing same-origin asset the map page also points
-// at (src/ca_roads_demo/static/shots/og.png, served at /static/shots/og.png).
+// Homepage takes the product-level metadata (Task 7 brief). Description is
+// homepage-focused (brand and product overview) and distinct from the map
+// page's own description (src/ca_roads_demo/static/map.html, outside site/
+// and not editable here) - the two used to be byte-identical, which is
+// SERP-cannibalizing duplicate content, and the shared string ran to 202
+// chars, well past Google's ~155-char display limit. og:image reuses the
+// existing same-origin asset the map page also points at
+// (src/ca_roads_demo/static/shots/og.png, served at /static/shots/og.png).
 export const metadata: Metadata = {
   title: "CommuteScout: live road conditions, traffic map, and route planner",
   description:
-    "Live traffic map and route planner across 37 states: incidents, lane closures, chain controls, wildfires, live highway cameras, and message signs from official DOT feeds. Deepest coverage in California.",
+    "CommuteScout tracks live road conditions from 53 official agency feeds across 37 states and plans routes that avoid closures and chain controls.",
   alternates: {
     canonical: "https://commutescout.com/",
   },
   openGraph: {
     title: "CommuteScout: live road conditions, traffic map, and route planner",
     description:
-      "Live traffic map and route planner across 37 states: incidents, lane closures, chain controls, wildfires, live highway cameras, and message signs from official DOT feeds. Deepest coverage in California.",
+      "CommuteScout tracks live road conditions from 53 official agency feeds across 37 states and plans routes that avoid closures and chain controls.",
     // The brief pins this to exactly "https://commutescout.com/" (trailing
     // slash). Next 16's metadata resolver unconditionally normalizes a
     // root-path absolute URL to origin-only (see resolveAbsoluteUrlWithPathname

@@ -28,11 +28,15 @@ const BASE_URL = "https://commutescout.com";
 const MARKETING_PATHS = ["", "/pricing", "/about", "/contact", "/privacy",
   "/terms", "/data-sources", "/mcp"];
 
+// No lastModified: stamping every URL with `new Date()` at build time gave
+// every entry in the sitemap the identical build timestamp, which is not a
+// real per-page modification date and reads to crawlers as a uniform,
+// uninformative signal. Omitting the field entirely is more honest than a
+// fake uniform date - Next/Google both treat a missing lastmod as "unknown"
+// rather than "just changed."
 export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date();
   const marketing: MetadataRoute.Sitemap = MARKETING_PATHS.map((path) => ({
     url: `${BASE_URL}${path}`,
-    lastModified,
     changeFrequency: path === "" ? "weekly" : "monthly",
     priority: path === "" ? 1 : 0.8,
   }));
@@ -40,7 +44,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...marketing,
     {
       url: `${BASE_URL}/map`,
-      lastModified,
       changeFrequency: "daily",
       priority: 0.9,
     },

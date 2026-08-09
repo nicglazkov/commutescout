@@ -11,13 +11,15 @@ import type { Metadata } from "next";
 // marketing homepage) is gone, replaced by the shared SiteHeader.
 export const metadata: Metadata = {
   title: "Terms - CommuteScout",
-  description: "Plain-language terms for using CommuteScout.",
+  description:
+    "Plain-language terms for using CommuteScout: informational only, not a substitute for your official DOT source, and provided as is with no warranty.",
   alternates: {
     canonical: "https://commutescout.com/terms",
   },
   openGraph: {
     title: "Terms - CommuteScout",
-    description: "Plain-language terms for using CommuteScout.",
+    description:
+      "Plain-language terms for using CommuteScout: informational only, not a substitute for your official DOT source, and provided as is with no warranty.",
     url: "https://commutescout.com/terms",
     images: ["/static/shots/og.png"],
   },
@@ -34,7 +36,7 @@ export default function TermsPage() {
         <h1 className="text-cs-ink text-balance text-4xl font-medium tracking-tight lg:text-5xl">
           Terms of use
         </h1>
-        <p className="text-cs-ink/50 mt-3 text-sm">
+        <p className="text-cs-ink/70 mt-3 text-sm">
           Effective July 20, 2026. Changes will be posted here with a new
           effective date.
         </p>
