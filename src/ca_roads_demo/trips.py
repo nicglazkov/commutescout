@@ -21,6 +21,7 @@ import secrets as pysecrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 
@@ -186,12 +187,12 @@ async def trip_page(request: Request) -> HTMLResponse:
     global _template_cache
     tid = request.path_params["trip_id"]
     if not _TRIP_ID_RE.match(tid):
-        return HTMLResponse("<h1>This trip link is not valid.</h1>",
-                            status_code=404)
+        # Raise so the app's branded 404 handler renders the site shell
+        # (header, footer, link home) instead of a bare heading.
+        raise HTTPException(status_code=404)
     trip = await watch_mod.get_store().get_trip(tid)
     if trip is None:
-        return HTMLResponse("<h1>This trip link has expired or never "
-                            "existed.</h1>", status_code=404)
+        raise HTTPException(status_code=404)
     if _template_cache is None:
         _template_cache = _TEMPLATE_PATH.read_text(encoding="utf-8")
     pub = _trip_public(trip)

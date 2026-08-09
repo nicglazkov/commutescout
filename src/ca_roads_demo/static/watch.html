@@ -328,7 +328,7 @@ input:focus { border-color:var(--sky) }
       <button class="primary" id="googlebtn">Continue with Google</button>
       <div class="or">or use an email link</div>
       <input type="email" id="email" placeholder="you@example.com"
-             autocomplete="email">
+             aria-label="Email address" autocomplete="email">
       <div style="height:8px"></div>
       <button class="ghost" id="emailbtn" style="width:100%">
         Email me a sign-in link</button>
@@ -345,6 +345,7 @@ input:focus { border-color:var(--sky) }
           trial. Enter an access code to unlock them, or check back once
           your account is approved.</p>
         <input type="text" id="code" placeholder="Access code"
+               aria-label="Access code"
                autocomplete="off" style="text-transform:uppercase">
         <div style="height:8px"></div>
         <button class="primary" id="redeembtn">Unlock watch areas</button>
@@ -388,18 +389,18 @@ input:focus { border-color:var(--sky) }
                 <button class="ghost" id="clearpts">Start over</button>
               </div>
               <div class="field hidden" id="routerow" style="margin-top:12px">
-                <label>From</label>
+                <label for="rw-from">From</label>
                 <input type="text" id="rw-from" maxlength="200"
                        placeholder="e.g. San Jose">
                 <div style="height:8px"></div>
-                <label>To</label>
+                <label for="rw-to">To</label>
                 <input type="text" id="rw-to" maxlength="200"
                        placeholder="e.g. South Lake Tahoe">
                 <div style="height:8px"></div>
                 <button class="ghost" id="rw-preview" style="width:100%">
                   Preview route</button>
                 <div class="field" style="margin:12px 0 0">
-                  <label>Alert distance from route</label>
+                  <label for="rw-buffer">Alert distance from route</label>
                   <div class="radius">
                     <input type="range" id="rw-buffer" min="1" max="2" value="2">
                     <b id="rw-bufferlabel">2 mi</b>
@@ -407,7 +408,7 @@ input:focus { border-color:var(--sky) }
                 </div>
               </div>
               <div class="field" id="radiusrow" style="margin-top:12px">
-                <label>Radius</label>
+                <label for="radius">Radius</label>
                 <div class="radius">
                   <input type="range" id="radius" min="1" max="40.2" value="15">
                   <b id="radiuslabel">15 km</b>
@@ -421,7 +422,7 @@ input:focus { border-color:var(--sky) }
             <div class="stepbody">
               <div class="steplabel">Name it and choose alerts</div>
               <div class="field">
-                <label>Name</label>
+                <label for="wname">Name</label>
                 <input type="text" id="wname" maxlength="60"
                        placeholder="e.g. Commute over 17">
               </div>

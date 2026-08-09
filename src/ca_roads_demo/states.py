@@ -448,11 +448,6 @@ def _oh_key() -> str:
     return os.environ.get("OHGO_API_KEY", "")
 
 
-def _ut_key() -> str:
-    import os
-    return os.environ.get("UT511_API_KEY", "")
-
-
 UT_BOUNDS = (36.9, -114.1, 42.1, -109.0)
 
 # Travel-IQ platform states: one client, per-state host and key.
