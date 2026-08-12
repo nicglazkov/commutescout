@@ -95,6 +95,13 @@ gcloud run deploy ca-roads-demo \
   --set-env-vars DEMO_MODEL=claude-sonnet-5,TELEMETRY_SALT=<random 32 chars>
 ```
 
+To require a Cloudflare Turnstile check on the contact form, create a
+Turnstile widget for your domain (managed mode), put its secret key in
+Secret Manager, and mount it as `TURNSTILE_SECRET_KEY`
+(`--update-secrets TURNSTILE_SECRET_KEY=<secret-name>:latest`). The
+sitekey lives in `site/app/contact/page.tsx`. With the variable unset
+the form works without the check.
+
 If you front the demo with Cloudflare (proxied DNS), set
 `REQUIRE_CLOUDFLARE=1` in the service environment. The app then refuses
 requests that reach the Cloud Run origin directly instead of through
