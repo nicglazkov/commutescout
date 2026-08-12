@@ -95,6 +95,16 @@ gcloud run deploy ca-roads-demo \
   --set-env-vars DEMO_MODEL=claude-sonnet-5,TELEMETRY_SALT=<random 32 chars>
 ```
 
+If you front the demo with Cloudflare (proxied DNS), set
+`REQUIRE_CLOUDFLARE=1` in the service environment. The app then refuses
+requests that reach the Cloud Run origin directly instead of through
+Cloudflare's proxy, so the WAF and bot filtering can't be bypassed by
+hitting the `run.app` URL. Browser GETs to the `run.app` host are
+redirected to the public site; everything else gets a 403. The Cloud
+Scheduler endpoint and `/health` stay reachable. Leave the variable
+unset when the origin is meant to be public. To roll back without a
+code change, set `REQUIRE_CLOUDFLARE=0`.
+
 ## Cold starts
 
 The MCP service runs with `--min-instances 0` (scale to zero); the

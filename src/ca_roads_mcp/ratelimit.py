@@ -26,7 +26,13 @@ _CLOUDFLARE_RANGES = tuple(ipaddress.ip_network(n) for n in (
 ))
 
 
-def _is_cloudflare(ip: str) -> bool:
+def is_cloudflare_ip(ip: str) -> bool:
+    """Whether ``ip`` belongs to Cloudflare's published edge ranges.
+
+    Shared by the rate limiter (to decide when CF-Connecting-IP is
+    trustworthy) and the demo's origin gate (to refuse traffic that
+    reached the origin without going through Cloudflare at all).
+    """
     try:
         addr = ipaddress.ip_address(ip)
     except ValueError:
@@ -61,7 +67,7 @@ def trusted_client_ip(
             vouched = entries[-1]
     if vouched is None:
         vouched = peer or "unknown"
-    if cf_connecting_ip and _is_cloudflare(vouched):
+    if cf_connecting_ip and is_cloudflare_ip(vouched):
         return cf_connecting_ip.strip()
     return vouched
 
