@@ -24,6 +24,13 @@ export const metadata: Metadata = {
   },
 };
 
+// Turnstile sitekey: a public identifier (same class as the Firebase web
+// apiKey), safe to hardcode. The widget is enforcement's visible half;
+// the server only rejects tokenless submissions when TURNSTILE_SECRET_KEY
+// is set in its environment, so a self-hosted build without Cloudflare
+// still has a working form even though this widget errors quietly.
+const TURNSTILE_SITEKEY = "0x4AAAAAAEOZmJkCus9gRJcl";
+
 // "Other ways to reach us" cards. Icons are generic lucide glyphs (bug
 // report, security shield, external-link arrow) chosen for the visual
 // engagement pass - no brand marks, no new copy. Link destinations and
@@ -124,6 +131,23 @@ export default function ContactPage() {
                   className="hidden"
                   aria-hidden="true"
                 />
+
+                {/* Turnstile bot check (implicit rendering: the script
+                    scans for this div and injects the hidden
+                    cf-turnstile-response input the server verifies).
+                    React hoists the async script into <head>. Managed
+                    mode is invisible for most visitors, so reserving no
+                    layout height here is deliberate: the widget only
+                    grows when a visitor is actually challenged. No SRI
+                    hash: Cloudflare rolls this loader continuously, so
+                    pinning would break the widget on their next release
+                    (same reasoning as the Firebase SDK imports). */}
+                <script
+                  src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+                  async
+                  defer
+                />
+                <div className="cf-turnstile" data-sitekey={TURNSTILE_SITEKEY} />
 
                 <button
                   type="submit"

@@ -23,6 +23,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import anthropic
+import httpx
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
@@ -1551,11 +1552,44 @@ def _render_contact_email(name: str, email: str, message: str,
     return html, text
 
 
+TURNSTILE_VERIFY_URL = (
+    "https://challenges.cloudflare.com/turnstile/v0/siteverify")
+
+
+async def _turnstile_verify(secret: str, token: str, ip: str) -> bool:
+    """Ask Cloudflare whether a Turnstile token is genuine.
+
+    Fail closed: only an explicit success from siteverify passes. A
+    non-200 reply or an unreachable API rejects the submission rather
+    than waving bots through during an outage; the contact form is low
+    volume enough that availability loses to the zero-bot goal here.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(TURNSTILE_VERIFY_URL, data={
+                "secret": secret, "response": token, "remoteip": ip})
+    except Exception as exc:
+        log.warning("turnstile: siteverify unreachable (%s)", exc)
+        return False
+    if resp.status_code != 200:
+        log.warning("turnstile: siteverify HTTP %s", resp.status_code)
+        return False
+    body = resp.json()
+    if not body.get("success"):
+        log.warning("turnstile: token rejected (%s)",
+                    body.get("error-codes"))
+        return False
+    return True
+
+
 async def api_contact(request: Request):
     """The contact form. Emails the site owner through the existing
     Resend integration; the destination never appears in the repo or
     on a page. A filled honeypot returns success without sending, so
-    bots get no signal to iterate on."""
+    bots get no signal to iterate on. With TURNSTILE_SECRET_KEY set,
+    a submission also needs a Cloudflare-verified Turnstile token
+    before any mail goes out (unset means the check is off: local dev,
+    tests, and self-hosters without Cloudflare)."""
     form = await _capped_form(request)
     if form is None:
         return PlainTextResponse("Message too large.", status_code=413)
@@ -1564,6 +1598,14 @@ async def api_contact(request: Request):
     message = (form.get("message") or "").strip()[:2000]
     if (form.get("website") or "").strip():
         return PlainTextResponse("Thanks. Your message is on its way.")
+    turnstile_secret = os.environ.get("TURNSTILE_SECRET_KEY", "").strip()
+    if turnstile_secret:
+        token = (form.get("cf-turnstile-response") or "").strip()[:2048]
+        if not token or not await _turnstile_verify(
+                turnstile_secret, token, client_ip(request)):
+            return PlainTextResponse(
+                "Human verification failed. Reload the page and try "
+                "again.", status_code=403)
     if not (name and message and "@" in email and "." in email.rsplit("@", 1)[-1]):
         return PlainTextResponse("Name, a valid email, and a message are "
                                  "required.", status_code=400)
@@ -2132,8 +2174,11 @@ class SecurityHeaders:
         "object-src 'none'; "
         "form-action 'self'; "
         "frame-ancestors 'none'; "
+        # challenges.cloudflare.com is the Turnstile widget on /contact
+        # (script here, its iframe under frame-src below).
         "script-src 'self' 'unsafe-inline' https://www.gstatic.com "
-        "https://apis.google.com https://static.cloudflareinsights.com; "
+        "https://apis.google.com https://static.cloudflareinsights.com "
+        "https://challenges.cloudflare.com; "
         "style-src 'self' 'unsafe-inline'; "
         "font-src 'self'; "
         # cwwp2.dot.ca.gov serves the Caltrans camera snapshots; without it
@@ -2165,7 +2210,8 @@ class SecurityHeaders:
         "https://*.google.com https://cloudflareinsights.com "
         "https://*.gstatic.com; "
         "frame-src https://ca-roads-mcp.firebaseapp.com "
-        "https://accounts.google.com https://apis.google.com; "
+        "https://accounts.google.com https://apis.google.com "
+        "https://challenges.cloudflare.com; "
         "worker-src 'self'; manifest-src 'self'"
     )
     HEADERS = [
