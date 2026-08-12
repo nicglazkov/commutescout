@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ArrowUpRight, Bug, ShieldAlert } from "lucide-react";
 
+import { TurnstileWidget } from "@/components/turnstile-widget";
+
 // Contact page takes its own metadata (Task 9 brief). Title/description
 // shape follows the pricing page's metadata export (Task 8); description is
 // one sentence, Google style.
@@ -132,22 +134,17 @@ export default function ContactPage() {
                   aria-hidden="true"
                 />
 
-                {/* Turnstile bot check (implicit rendering: the script
-                    scans for this div and injects the hidden
-                    cf-turnstile-response input the server verifies).
-                    React hoists the async script into <head>. Managed
-                    mode is invisible for most visitors, so reserving no
-                    layout height here is deliberate: the widget only
-                    grows when a visitor is actually challenged. No SRI
-                    hash: Cloudflare rolls this loader continuously, so
-                    pinning would break the widget on their next release
-                    (same reasoning as the Firebase SDK imports). */}
-                <script
-                  src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-                  async
-                  defer
-                />
-                <div className="cf-turnstile" data-sitekey={TURNSTILE_SITEKEY} />
+                {/* Turnstile bot check, rendered post-hydration by the
+                    client component (see turnstile-widget.tsx for why
+                    the implicit script-tag mode broke on fast reloads).
+                    Managed mode is invisible for most visitors, so
+                    reserving no layout height is deliberate: the widget
+                    only grows when a visitor is actually challenged. No
+                    SRI hash on the loader: Cloudflare rolls it
+                    continuously, so pinning would break the widget on
+                    their next release (same reasoning as the Firebase
+                    SDK imports). */}
+                <TurnstileWidget sitekey={TURNSTILE_SITEKEY} />
 
                 <button
                   type="submit"
