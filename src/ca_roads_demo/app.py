@@ -31,6 +31,7 @@ from starlette.responses import (
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
+    RedirectResponse,
     Response,
     StreamingResponse,
 )
@@ -48,6 +49,7 @@ from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_s
 from ca_roads_mcp.ratelimit import (
     RateLimiter,
     RateLimitMiddleware,
+    is_cloudflare_ip,
     trusted_client_ip,
 )
 from ca_roads_mcp.serialize import direction_hint
@@ -1898,6 +1900,79 @@ class ForwardedScheme:
         await self.app(scope, receive, send)
 
 
+class CloudflareOnly:
+    """Refuse traffic that reached the origin without passing Cloudflare.
+
+    commutescout.com is proxied by Cloudflare (WAF, bot filtering), but
+    the run.app origin URL answers anyone who finds it, skipping all of
+    that. When REQUIRE_CLOUDFLARE is set (production only; local dev and
+    tests run without it), a request is served only if the
+    platform-vouched peer - the last X-Forwarded-For entry, the only one
+    Cloud Run itself appends - is a Cloudflare edge address.
+    CF-Connecting-IP is deliberately ignored: it is client-settable on a
+    direct hit.
+
+    Refusals: GET/HEAD aimed at the legacy *.run.app host 301 to the real
+    site so old bookmarks land somewhere useful; everything else gets a
+    403. Only the run.app host earns the redirect, so a stale vendored
+    Cloudflare IP list can never bounce proxied traffic (whose Host is
+    the public domain) back at the proxy in a loop: list drift fails as
+    a visible 403, and setting REQUIRE_CLOUDFLARE=0 is the rollback.
+
+    Exempt: the Cloud Scheduler entry point (it calls the run.app URL
+    directly and verify_scheduler owns its OIDC auth) and /health
+    (deploy verification hits the origin before traffic routing).
+    """
+
+    EXEMPT = frozenset({"/api/check-watches", "/health"})
+
+    def __init__(self, app_):
+        self.app = app_
+
+    @staticmethod
+    def enabled() -> bool:
+        flag = os.environ.get("REQUIRE_CLOUDFLARE", "").strip().lower()
+        return flag not in ("", "0", "false", "no")
+
+    async def __call__(self, scope, receive, send):
+        if (scope["type"] != "http" or not self.enabled()
+                or scope.get("path", "") in self.EXEMPT):
+            await self.app(scope, receive, send)
+            return
+        forwarded = host = None
+        for name, value in scope.get("headers") or []:
+            if name == b"x-forwarded-for":
+                forwarded = value.decode("latin-1")
+            elif name == b"host":
+                host = value.decode("latin-1")
+        vouched = None
+        if forwarded:
+            entries = [e.strip() for e in forwarded.split(",") if e.strip()]
+            if entries:
+                vouched = entries[-1]
+        if vouched is None:
+            client = scope.get("client")
+            vouched = client[0] if client else ""
+        if is_cloudflare_ip(vouched):
+            await self.app(scope, receive, send)
+            return
+        hostname = (host or "").split(":")[0].lower()
+        if (scope.get("method") in ("GET", "HEAD")
+                and hostname.endswith(".run.app")):
+            target = trips.DEMO_URL + scope.get("path", "/")
+            query = scope.get("query_string", b"")
+            if query:
+                target += "?" + query.decode("latin-1")
+            await RedirectResponse(target, status_code=301)(
+                scope, receive, send)
+            return
+        await JSONResponse(
+            {"error": "direct origin access is not allowed; "
+                      f"use {trips.DEMO_URL}"},
+            status_code=403,
+        )(scope, receive, send)
+
+
 class _GuardedStatic(StaticFiles):
     """The /static mount, minus the pages that own their own route.
 
@@ -2328,9 +2403,12 @@ app = RateLimitMiddleware(
     exempt_exact=frozenset({"/"}),
 )
 app = SecurityHeaders(app)
-# Outermost: the scheme must be corrected before any inner layer builds
-# a URL from it.
+# The scheme must be corrected before any inner layer builds a URL
+# from it.
 app = ForwardedScheme(app)
+# Outermost: traffic that bypassed Cloudflare is turned away before any
+# other layer spends work on it (and before it can touch a rate bucket).
+app = CloudflareOnly(app)
 
 
 def main() -> None:
