@@ -74,4 +74,17 @@ the per-state coverage matrix (which categories each state provides) and
 the reasons a state is partial or absent. It is generated from the code,
 so it never drifts; this doc does not duplicate it.
 
+## Licensing notes
+
+All feeds are public agency data served for public consumption. The
+WZDx roadwork feeds are consumed from the federal
+[WZDx Feed Registry](https://datahub.transportation.gov/d/69qe-yiui)
+(re-verified 2026-08-18): each entry, including Maryland's RITIS-hosted
+feed, Hawaii's Blyncsy-hosted feed, and Florida's one.network feed with
+its registry-published app key, is issued by the state DOT itself and
+listed as active in the registry, which exists to make these feeds
+publicly consumable. Basemap tiles, routing, and geocoding are licensed
+commercially from Stadia Maps; map data is (c) OpenStreetMap
+contributors (ODbL; rendered maps and routes are Produced Works).
+
 Want to add a feed? See [adding a data source](adding-a-source.md).

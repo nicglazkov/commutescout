@@ -95,6 +95,16 @@ gcloud run deploy ca-roads-demo \
   --set-env-vars DEMO_MODEL=claude-sonnet-5,TELEMETRY_SALT=<random 32 chars>
 ```
 
+Map tiles, routing, and geocoding go through Stadia Maps. Create a
+Stadia account, allowlist your domain in their dashboard (browser
+requests authenticate by Origin, no key in the client), put an API key
+in Secret Manager, and mount it on BOTH services as `STADIA_API_KEY`
+(`--update-secrets STADIA_API_KEY=<secret-name>:latest`). The server
+uses it for alert-email and trip static maps, closure road-snapping,
+and geocoding. With the variable unset everything degrades softly:
+static maps compose without a basemap, closures render as dots, and
+place names resolve through the offline gazetteer only.
+
 To require a Cloudflare Turnstile check on the contact form, create a
 Turnstile widget for your domain (managed mode), put its secret key in
 Secret Manager, and mount it as `TURNSTILE_SECRET_KEY`
@@ -126,7 +136,8 @@ time.
 
 ## Notes
 
-- The MCP service needs no secrets: all upstream feeds are free and public.
+- The MCP service needs only the optional `STADIA_API_KEY` (network
+  geocoding); every upstream data feed is free and public.
 - Rate limiting is per-IP in process (token bucket, 20 burst / 30 per
   minute sustained), which is also why `--max-instances 1` matters.
 - Costs: requests are tiny and infrequent; with scale-to-zero this should
