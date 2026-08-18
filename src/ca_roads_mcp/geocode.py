@@ -1,4 +1,4 @@
-"""Place-name geocoding via Nominatim (OpenStreetMap).
+"""Place-name geocoding via Stadia Maps (Pelias).
 
 check_route used to trust the coordinates the calling model recalled for a
 place. For cities that works; for landmarks it can be miles off (a request
@@ -6,35 +6,48 @@ for Alice's Restaurant once pinned a spot deep in the Saratoga hills). Names
 now resolve through a real geocoder, and model-recalled coordinates are the
 fallback.
 
-Nominatim usage policy: identify the app, one request per second. The
-throttle enforces that, the in-process cache absorbs repeats, results are
-sanity-checked against a California-and-borders box, and failures degrade
-to the fallback coordinates.
+The offline gazetteer stays the primary resolver; only its misses reach
+the network. Stadia is keyed by env STADIA_API_KEY; without one (dev, CI,
+self-hosters) the module is gazetteer-only and misses fall through to the
+caller's fallback coordinates without being cached as definitive.
 """
 
 from __future__ import annotations
 
 import asyncio
 import csv
+import os
 import re
-import time
 from collections import OrderedDict
 from importlib.resources import files
 
 import httpx
 
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-PHOTON_URL = "https://photon.komoot.io/api/"
+STADIA_SEARCH_URL = "https://api.stadiamaps.com/geocoding/v1/search"
+STADIA_AUTOCOMPLETE_URL = "https://api.stadiamaps.com/geocoding/v1/autocomplete"
 try:
     from importlib.metadata import version as _pkg_version
     _VERSION = _pkg_version("ca-roads-mcp")
 except Exception:  # noqa: BLE001 - not installed (e.g. source checkout)
     _VERSION = "dev"
 USER_AGENT = f"ca-roads-mcp/{_VERSION} (github.com/nicglazkov/ca-roads-mcp)"
-# lon_min, lat_max, lon_max, lat_min (Nominatim viewbox order)
-CALIFORNIA_VIEWBOX = "-124.6,42.1,-114.0,32.4"
+# California and its border towns: lon_min, lat_min, lon_max, lat_max.
+_RECT = (-124.6, 32.4, -114.0, 42.1)
 TIMEOUT_SECONDS = 6.0
-THROTTLE_SECONDS = 1.1  # tests set this to 0
+
+
+def _api_key() -> str:
+    return os.environ.get("STADIA_API_KEY", "").strip()
+
+
+def _rect_params() -> dict:
+    return {
+        "boundary.country": "US",
+        "boundary.rect.min_lon": _RECT[0],
+        "boundary.rect.min_lat": _RECT[1],
+        "boundary.rect.max_lon": _RECT[2],
+        "boundary.rect.max_lat": _RECT[3],
+    }
 
 _CACHE_MAX = 4096
 _cache: OrderedDict[str, tuple[float, float, str] | None] = OrderedDict()
@@ -101,13 +114,8 @@ def gazetteer_lookup(place: str) -> tuple[float, float, str] | None:
         words = words[:-1]
     return None
 
-# Nominatim's policy is one request per second; the throttle keeps ladder
-# retries polite and stops degraded answers under bursts.
-_throttle = asyncio.Lock()
-_last_request = 0.0
-
 # Corridor endpoints just over the state line; appending ", California" to
-# these sends Nominatim hunting for the wrong place.
+# these sends the geocoder hunting for the wrong place.
 _BORDER_TOWNS = ("reno", "sparks", "las vegas", "vegas", "carson city",
                  "primm", "stateline", "minden", "gardnerville")
 
@@ -122,107 +130,54 @@ def _plausible(hit: dict) -> bool:
     return 32.0 <= lat <= 42.5 and -125.0 <= lon <= -113.5
 
 
-async def _search(
-    client: httpx.AsyncClient, q: str, bounded: int, limit: int = 1
-) -> list | None:
-    global _last_request
-    try:
-        async with _throttle:
-            wait = THROTTLE_SECONDS - (time.monotonic() - _last_request)
-            if wait > 0:
-                await asyncio.sleep(wait)
-            _last_request = time.monotonic()
-            resp = await client.get(
-                NOMINATIM_URL,
-                params={
-                    "q": q,
-                    "format": "json",
-                    "limit": limit,
-                    "countrycodes": "us",
-                    "viewbox": CALIFORNIA_VIEWBOX,
-                    "bounded": bounded,
-                },
-                headers={"User-Agent": USER_AGENT},
-                timeout=TIMEOUT_SECONDS,
-            )
-        resp.raise_for_status()
-        return resp.json()
-    except Exception:  # noqa: BLE001 - failure means "use the fallback"
-        return None
-
-
-async def _search_photon(
-    client: httpx.AsyncClient, q: str
-) -> tuple[float, float, str] | None:
-    """Second provider, best single hit. See _photon_hits."""
-    hits = await _photon_hits(client, q)
-    return hits[0] if hits else None
-
-
-async def _photon_hits(
+async def _search_stadia(
     client: httpx.AsyncClient,
     q: str,
     near: tuple[float, float] | None = None,
-    limit: int = 3,
-) -> list[tuple[float, float, str]]:
-    """Photon (Komoot's OSM geocoder). Different infra and a fuzzier
-    matcher than Nominatim, so it survives Nominatim outages, catches
-    phrasings Nominatim misses, and its lat/lon bias surfaces the match
-    NEAR the user that Nominatim's importance ranking buries."""
-    global _last_request
-    bias_lat, bias_lon = near or (37.5, -120.5)
+    limit: int = 1,
+) -> list[tuple[float, float, str]] | None:
+    """Stadia (Pelias) search inside the California rectangle.
+
+    Returns (lat, lon, label) hits, [] for a clean miss, or None for
+    network trouble or a missing key (callers must not cache None-shaped
+    results as definitive misses)."""
+    key = _api_key()
+    if not key:
+        return None
+    params = {"text": q, "size": limit, "api_key": key, **_rect_params()}
+    if near:
+        params["focus.point.lat"], params["focus.point.lon"] = near
     try:
-        async with _throttle:
-            wait = THROTTLE_SECONDS - (time.monotonic() - _last_request)
-            if wait > 0:
-                await asyncio.sleep(wait)
-            _last_request = time.monotonic()
-            resp = await client.get(
-                PHOTON_URL,
-                params={"q": q, "limit": limit,
-                        "lat": bias_lat, "lon": bias_lon},
-                headers={"User-Agent": USER_AGENT},
-                timeout=TIMEOUT_SECONDS,
-            )
+        resp = await client.get(
+            STADIA_SEARCH_URL, params=params,
+            headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT_SECONDS)
         resp.raise_for_status()
         features = resp.json().get("features", [])
-        # Photon fuzzy-matches aggressively: a house-number query once
-        # returned an entirely unrelated street, and a locality qualifier
-        # can match by itself ("Riverside Drive, San Jose" matched "San
-        # Jose Drive, San Jacinto"). Require the FIRST significant token -
-        # the street or place name itself - to appear in the hit.
-        significant = [
-            t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()
-        ]
-        tokens = set(significant[:1])
-        # Two passes: an explicit California match beats a merely-plausible
-        # one ("Grapevine" exists in several states and canyons).
-        out: list[tuple[float, float, str]] = []
-        for require_ca in (True, False):
-            for feature in features:
-                lon, lat = feature["geometry"]["coordinates"][:2]
-                if not _plausible({"lat": lat, "lon": lon}):
-                    continue
-                props = feature.get("properties", {})
-                if require_ca and props.get("state") not in ("California", "CA"):
-                    continue
-                hit_text = _norm(" ".join(
-                    str(props.get(k) or "")
-                    for k in ("name", "street", "city", "district")
-                ))
-                if tokens and not any(t in hit_text for t in tokens):
-                    continue
-                name = ", ".join(
-                    str(props[k])
-                    for k in ("name", "street", "city", "state")
-                    if props.get(k)
-                )
-                out.append((float(lat), float(lon), name))
-            if out:
-                return out
-        return out
-    except Exception:  # noqa: BLE001
-        return []
+    except Exception:  # noqa: BLE001 - failure means "use the fallback"
+        return None
+    # Fuzzy-match guard, kept from the Photon era: a house-number query
+    # once returned an entirely unrelated street, and a locality
+    # qualifier can match by itself ("Riverside Drive, San Jose"
+    # matching "San Jose Drive, San Jacinto"). Require the FIRST
+    # significant token - the street or place name itself - in the hit.
+    significant = [
+        t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()
+    ]
+    tokens = set(significant[:1])
+    out: list[tuple[float, float, str]] = []
+    for f in features:
+        coords = (f.get("geometry") or {}).get("coordinates") or []
+        if len(coords) < 2:
+            continue
+        lon, lat = coords[:2]
+        if not _plausible({"lat": lat, "lon": lon}):
+            continue
+        props = f.get("properties", {})
+        label = props.get("label") or props.get("name") or ""
+        if tokens and not any(t in _norm(label) for t in tokens):
+            continue
+        out.append((float(lat), float(lon), label))
+    return out
 
 
 async def geocode(
@@ -249,42 +204,29 @@ async def geocode(
         _cache_put(key, offline)
         return offline
 
-    # Network ladder for non-place-name queries (addresses, landmarks),
-    # trimmed to two Nominatim candidates; Photon is the cross-provider
-    # fallback. The gazetteer already handled locality-style fallbacks.
+    # Network ladder for non-place-name queries (addresses, landmarks).
+    # The gazetteer already handled locality-style fallbacks.
     is_border = any(t in key for t in _BORDER_TOWNS)
     ca_ok = "california" not in key and not key.endswith(" ca") and not is_border
-    candidates: list[tuple[str, int]] = []
+    candidates: list[str] = []
     if ca_ok:
-        candidates.append((f"{query}, California", 1))
-    candidates.append((query, 0))
+        candidates.append(f"{query}, California")
+    candidates.append(query)
     words = query.split()
+    # Trailing-word trim for phrasings the geocoder names differently
+    # ("X Caltrain station" resolves as "X").
+    if len(words) > 1:
+        candidates.append(" ".join(words[:-1]))
 
-    results: list = []
     saw_network_failure = False
-    for q, bounded in candidates:
-        got = await _search(client, q, bounded)
+    for q in candidates:
+        got = await _search_stadia(client, q)
         if got is None:
             saw_network_failure = True
             continue
-        if got and _plausible(got[0]):
-            results = got
-            break
-    if results:
-        hit = results[0]
-        resolved = (
-            float(hit["lat"]), float(hit["lon"]), hit.get("display_name", "")
-        )
-        _cache_put(key, resolved)
-        return resolved
-
-    # Nominatim came up empty or is unavailable; try Photon.
-    photon = await _search_photon(client, query)
-    if photon is None and len(words) > 1:
-        photon = await _search_photon(client, " ".join(words[:-1]))
-    if photon:
-        _cache_put(key, photon)
-        return photon
+        if got:
+            _cache_put(key, got[0])
+            return got[0]
     if not saw_network_failure:
         _cache_put(key, None)  # definitive miss; network trouble retries later
     return None
@@ -299,10 +241,10 @@ async def geocode_candidates(
     """Like geocode(), but returns the distinct plausible matches so the
     caller can detect ambiguity ("Main St" exists in half the state).
 
-    Gazetteer hits are single-answer by construction. Nominatim supplies
-    the importance-ranked matches; Photon, biased toward `near` (the trip
-    origin), supplies the match by the user that importance ranking buries
-    under a big city's street. Results dedupe within 2 km, nearest first.
+    Gazetteer hits are single-answer by construction. The search runs
+    biased toward `near` (the trip origin) so the match by the user
+    beats the one importance ranking would bury under a big city's
+    street. Results dedupe within 2 km, nearest first.
     """
     query = place.strip()
     if not query:
@@ -315,15 +257,7 @@ async def geocode_candidates(
     is_border = any(t in key for t in _BORDER_TOWNS)
     ca_ok = "california" not in key and not key.endswith(" ca") and not is_border
     q = f"{query}, California" if ca_ok else query
-    raw: list[tuple[float, float, str]] = []
-    got = await _search(client, q, bounded=0, limit=limit)
-    for hit in got or []:
-        if _plausible(hit):
-            raw.append((
-                float(hit["lat"]), float(hit["lon"]),
-                hit.get("display_name", ""),
-            ))
-    raw.extend(await _photon_hits(client, query, near=near))
+    raw = list(await _search_stadia(client, q, near=near, limit=limit) or [])
 
     distinct: list[tuple[float, float, str]] = []
     for cand in raw:
@@ -345,15 +279,13 @@ def _rough_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 # ── Autocomplete (search-as-you-type) ───────────────────────────────────────
-# Per-keystroke lookups have their own rules: Nominatim's usage policy
-# forbids autocomplete, and the 1.1s politeness throttle above would make
-# typing feel broken. Photon is built for exactly this use (typo-tolerant
-# prefix search with location bias), so suggestions go gazetteer + Photon
-# only, with a small concurrency cap instead of a fixed delay. The precise
-# Nominatim ladder still validates whatever the user finally picks or types.
+# Per-keystroke lookups go gazetteer first (instant, offline), then
+# Stadia's autocomplete endpoint (prefix search with location bias),
+# with a small concurrency cap so a burst of keystrokes cannot pile up.
+# The precise search ladder still validates whatever the user finally
+# picks or types.
 
 _suggest_sem = asyncio.Semaphore(4)
-_CA_BBOX_PARAM = "-124.6,32.4,-114.0,42.1"  # minLon,minLat,maxLon,maxLat
 
 
 def gazetteer_suggest(q: str, limit: int = 3) -> list[dict]:
@@ -377,7 +309,8 @@ def gazetteer_suggest(q: str, limit: int = 3) -> list[dict]:
     return [e for _, _, e in (starts + contains)[:limit]]
 
 
-# Photon prefix-matches literally, so "kestrel rd" misses "Kestrel Road".
+# The geocoder prefix-matches literally, so "kestrel rd" can miss
+# "Kestrel Road"; expand common abbreviations before the request.
 _ABBREV = {
     "rd": "road", "st": "street", "ave": "avenue", "av": "avenue",
     "blvd": "boulevard", "dr": "drive", "hwy": "highway", "ln": "lane",
@@ -390,23 +323,26 @@ def _expand_abbrev(q: str) -> str:
     return " ".join(_ABBREV.get(w.lower().rstrip("."), w) for w in words)
 
 
-async def photon_suggest(
+async def stadia_suggest(
     client: httpx.AsyncClient,
     q: str,
     bias_lat: float,
     bias_lon: float,
     limit: int = 6,
 ) -> list[dict]:
+    key = _api_key()
+    if not key:
+        return []
     q = _expand_abbrev(q)
     try:
         async with _suggest_sem:
             resp = await client.get(
-                PHOTON_URL,
+                STADIA_AUTOCOMPLETE_URL,
                 params={
-                    "q": q, "limit": limit,
-                    "lat": bias_lat, "lon": bias_lon,
-                    "bbox": _CA_BBOX_PARAM,
-                    "zoom": 10,
+                    "text": q, "size": limit, "api_key": key,
+                    "focus.point.lat": bias_lat,
+                    "focus.point.lon": bias_lon,
+                    **_rect_params(),
                 },
                 headers={"User-Agent": USER_AGENT},
                 timeout=4.0,
@@ -426,33 +362,34 @@ async def photon_suggest(
             if not primary:
                 continue
             approx = False
-            # When the exact house number is not in OSM, Photon answers with
-            # the street itself and the typed number silently disappears.
-            # Keep it: label the row "<number> <Street>" and mark it
-            # approximate so selection can interpolate a precise position.
+            # When the exact house number is not in the data, the
+            # geocoder answers with the street itself and the typed
+            # number silently disappears. Keep it: label the row
+            # "<number> <Street>" and mark it approximate so selection
+            # can interpolate a precise position.
             if (
                 number_match
                 and not props.get("housenumber")
-                and props.get("osm_key") == "highway"
+                and props.get("layer") == "street"
                 and _norm(number_match.group(2)).split()[0] in _norm(primary)
             ):
                 primary = number_match.group(1) + " " + primary
                 approx = True
             secondary = ", ".join(
-                str(props[k]) for k in ("city", "state") if props.get(k)
+                str(props[k]) for k in ("locality", "region_a")
+                if props.get(k)
             )
             entry = {
                 "name": primary + (", " + secondary if secondary else ""),
                 "lat": float(lat), "lon": float(lon),
-                "kind": props.get("osm_value") or "place",
+                "kind": props.get("layer") or "place",
             }
             if approx:
                 entry["approx"] = True
             out.append(entry)
-        # Rank rows that actually contain the typed street/place word above
-        # Photon's fuzzy fallbacks (a house-number query once led with an
-        # unrelated street);
-        # the fallbacks stay visible but sink to the bottom of the list.
+        # Rank rows that actually contain the typed street/place word
+        # above fuzzy fallbacks; the fallbacks stay visible but sink to
+        # the bottom of the list.
         tokens = [t for t in _norm(q).split() if len(t) >= 4 and not t.isdigit()]
         if tokens:
             out.sort(key=lambda s: 0 if tokens[0] in _norm(s["name"]) else 1)

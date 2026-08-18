@@ -54,7 +54,7 @@ from ca_roads_demo import (
 )
 from ca_roads_demo.prompt import SYSTEM, TOOL_DEFS, TOOL_FUNCS  # noqa: F401
 from ca_roads_mcp import server as tools
-from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_suggest
+from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, stadia_suggest
 from ca_roads_mcp.ratelimit import (
     RateLimiter,
     RateLimitMiddleware,
@@ -511,7 +511,7 @@ async def api_suggest(request: Request):
         bias_lat, bias_lon = 37.4, -120.9
 
     local = gazetteer_suggest(q, limit=3)
-    remote = await photon_suggest(
+    remote = await stadia_suggest(
         tools.get_road().client, q, bias_lat, bias_lon, limit=6
     )
     merged: list[dict] = []
