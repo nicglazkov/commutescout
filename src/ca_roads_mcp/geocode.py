@@ -258,6 +258,12 @@ async def geocode_candidates(
     ca_ok = "california" not in key and not key.endswith(" ca") and not is_border
     q = f"{query}, California" if ca_ok else query
     raw = list(await _search_stadia(client, q, near=near, limit=limit) or [])
+    # The ", California" suffix can mislead Pelias into matching the
+    # state itself (the token guard filters those hits away). The raw
+    # query catches the venue or street the suffix hid.
+    if ca_ok:
+        raw.extend(
+            await _search_stadia(client, query, near=near, limit=limit) or [])
 
     distinct: list[tuple[float, float, str]] = []
     for cand in raw:
