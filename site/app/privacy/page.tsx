@@ -44,7 +44,7 @@ export default function PrivacyPage() {
           Privacy
         </h1>
         <p className="text-cs-ink/70 mt-3 text-sm">
-          Effective July 20, 2026. Material changes will be posted here with
+          Effective August 18, 2026. Material changes will be posted here with
           a new effective date; account holders get an email when a change
           affects them.
         </p>
