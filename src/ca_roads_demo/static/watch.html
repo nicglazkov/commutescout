@@ -799,6 +799,27 @@ function setMode(m) {
 }
 $('mode-route').addEventListener('click', () => setMode('route'));
 
+// Valhalla (Stadia's router) encodes geometry as a precision-6
+// polyline; same decoder as map.html.
+function decodePolyline6(str) {
+  let index = 0, lat = 0, lon = 0;
+  const out = [];
+  while (index < str.length) {
+    for (const which of [0, 1]) {
+      let shift = 0, result = 0, byte;
+      do {
+        byte = str.charCodeAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      const delta = (result & 1) ? ~(result >> 1) : (result >> 1);
+      if (which === 0) lat += delta; else lon += delta;
+    }
+    out.push([lat / 1e6, lon / 1e6]);
+  }
+  return out;
+}
+
 async function geocodeOne(q) {
   const res = await fetch('/api/geocode?q=' + encodeURIComponent(q));
   if (!res.ok) throw new Error('address lookup failed');
@@ -817,13 +838,20 @@ $('rw-preview').addEventListener('click', async () => {
   msg('createmsg', 'Routing\u2026');
   try {
     const [a, b] = await Promise.all([geocodeOne(fromQ), geocodeOne(toQ)]);
-    const res = await fetch('https://router.project-osrm.org/route/v1/driving/'
-      + a.lon + ',' + a.lat + ';' + b.lon + ',' + b.lat
-      + '?overview=full&geometries=geojson');
+    const res = await fetch('https://api.stadiamaps.com/route/v1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        locations: [{ lat: a.lat, lon: a.lon }, { lat: b.lat, lon: b.lon }],
+        costing: 'auto',
+      }),
+    });
     if (!res.ok) throw new Error('routing service unavailable, try again');
-    const route = (await res.json()).routes[0];
-    if (!route) throw new Error('no drivable route found');
-    routePts = route.geometry.coordinates.map((c) => [c[1], c[0]]);
+    const trip = (await res.json()).trip;
+    if (!trip || !trip.legs || !trip.legs.length) {
+      throw new Error('no drivable route found');
+    }
+    routePts = trip.legs.flatMap((l) => decodePolyline6(l.shape));
     if (routeLine) map.removeLayer(routeLine);
     routeLine = L.polyline(routePts, { color: '#2f81f7', weight: 4,
       opacity: 0.8 }).addTo(map);

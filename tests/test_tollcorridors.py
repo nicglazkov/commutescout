@@ -177,45 +177,46 @@ def test_apply_toll_directional_snap_and_recenter(snap_mem):
     assert m["entries"][1]["pts"][0] == snapped_b
 
 
-def test_snap_toll_rejects_off_route_and_accepts_on_route(snap_mem):
+def test_snap_toll_rejects_off_route_and_accepts_on_route(
+        snap_mem, monkeypatch):
     import httpx
     import respx
+
+    monkeypatch.setenv("STADIA_API_KEY", "test-key")
+
+    from test_valhalla import encode_polyline6
 
     a = (37.600, -122.400)
     b = (37.640, -122.405)
     brg = roadsnap._bearing(a[0], a[1], b[0], b[1])
 
-    def osrm(steps_ref, wp_b=None):
-        return {
-            "routes": [{
-                "distance": 4600,
-                "geometry": {"coordinates": [
-                    [-122.3995, 37.6001], [-122.402, 37.62],
-                    [-122.4045, 37.6401]]},
-                "legs": [{"steps": [
-                    {"distance": 4600, "ref": steps_ref, "name": ""}]}],
-            }],
-            "waypoints": [
-                {"location": [-122.3995, 37.6001]},
-                {"location": wp_b or [-122.4045, 37.6401]},
-            ],
-        }
+    def valhalla_trip(street, points=None):
+        pts = points or [[37.6001, -122.3995], [37.62, -122.402],
+                         [37.6401, -122.4045]]
+        return {"trip": {
+            "legs": [{"shape": encode_polyline6(pts),
+                      "maneuvers": [{"street_names": [street],
+                                     "length": 4.6}]}],
+            "summary": {"length": 4.6, "time": 300},
+        }}
 
     async def run(payload):
         with respx.mock:
-            respx.get(url__regex=r".*router\.project-osrm.*").mock(
+            respx.post(url__regex=r".*api\.stadiamaps\.com/route/v1.*").mock(
                 return_value=httpx.Response(200, json=payload))
             async with httpx.AsyncClient() as client:
                 return await roadsnap._snap_toll(
                     client, a[0], a[1], b[0], b[1], brg, "101")
 
-    # On US 101 for the whole leg: accepted, endpoints recentered.
-    good = __import__("asyncio").run(run(osrm("US 101")))
+    # On US 101 for the whole leg: accepted, endpoints recentered onto
+    # the snapped shape.
+    good = __import__("asyncio").run(run(valhalla_trip("US 101")))
     assert good and good["a"] == [37.6001, -122.3995]
     # The Airport Blvd case: full leg on a side street is rejected.
-    assert __import__("asyncio").run(run(osrm("Airport Blvd"))) is None
+    assert __import__("asyncio").run(run(valhalla_trip("Airport Blvd"))) is None
     # Backwards snap (net bearing opposite the corridor): rejected.
-    back = osrm("US 101", wp_b=[-122.3995, 37.56])
+    back = valhalla_trip("US 101", points=[[37.6001, -122.3995],
+                                           [37.56, -122.3995]])
     assert __import__("asyncio").run(run(back)) is None
 
 
