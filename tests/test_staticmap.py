@@ -32,9 +32,10 @@ def test_staticmap_validates_inputs(client):
 
 
 @respx.mock
-def test_staticmap_composes_and_caches(client):
+def test_staticmap_composes_and_caches(client, monkeypatch):
+    monkeypatch.setenv("STADIA_API_KEY", "test-key")
     tile_route = respx.get(
-        url__regex=r"https://a\.basemaps\.cartocdn\.com/.*"
+        url__regex=r"https://tiles\.stadiamaps\.com/tiles/alidade_smooth/.*"
     ).mock(return_value=HttpxResponse(200, content=fake_tile()))
     r = client.get("/api/staticmap?lat=37.3382&lon=-121.8863&z=11&k=incident")
     assert r.status_code == 200
@@ -48,6 +49,22 @@ def test_staticmap_composes_and_caches(client):
     r2 = client.get("/api/staticmap?lat=37.3382&lon=-121.8863&z=11&k=incident")
     assert r2.status_code == 200
     assert tile_route.call_count == calls_first  # served from cache
+    # The key travels as a query param, never a header.
+    assert tile_route.calls[0].request.url.params["api_key"] == "test-key"
+
+
+@respx.mock
+def test_staticmap_without_key_skips_tiles(client, monkeypatch):
+    """No STADIA_API_KEY: the map still renders (flat background plus
+    marker) and no tile request leaves the process."""
+    monkeypatch.delenv("STADIA_API_KEY", raising=False)
+    tile_route = respx.get(
+        url__regex=r"https://tiles\.stadiamaps\.com/.*"
+    ).mock(return_value=HttpxResponse(200, content=fake_tile()))
+    r = client.get("/api/staticmap?lat=37.3382&lon=-121.8863&z=11&k=incident")
+    assert r.status_code == 200
+    assert Image.open(io.BytesIO(r.content)).size == (560, 300)
+    assert tile_route.call_count == 0
 
 
 def test_email_cards_carry_maps_meta_and_focus_links():

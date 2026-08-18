@@ -667,10 +667,17 @@ async def api_staticmap(request: Request):
     async def fetch_tile(tx, ty):
         if not (0 <= ty < n):
             return tx, ty, None
+        # Server-side tile fetches need the Stadia key; without one the
+        # map composes as flat background plus marker instead of 401ing
+        # per tile (self-hosters and CI never need a key).
+        api_key = os.environ.get("STADIA_API_KEY", "").strip()
+        if not api_key:
+            return tx, ty, None
         try:
             resp = await road.client.get(
-                f"https://a.basemaps.cartocdn.com/rastertiles/voyager/"
+                f"https://tiles.stadiamaps.com/tiles/alidade_smooth/"
                 f"{z}/{tx % n}/{ty}.png",
+                params={"api_key": api_key},
                 headers={"User-Agent": "ca-roads-mcp staticmap"},
                 timeout=10,
             )
@@ -2184,8 +2191,8 @@ class SecurityHeaders:
         # cwwp2.dot.ca.gov serves the Caltrans camera snapshots; without it
         # here the browser blocks every popup image and cameras all read
         # "snapshot unavailable".
-        "img-src 'self' data: https://*.basemaps.cartocdn.com "
-        "https://*.cartocdn.com https://cwwp2.dot.ca.gov "
+        "img-src 'self' data: https://tiles.stadiamaps.com "
+        "https://cwwp2.dot.ca.gov "
         # Expansion-state camera hosts (WSDOT, TripCheck, OHGO).
         "https://images.wsdot.wa.gov https://*.tripcheck.com "
         "https://itscameras.dot.state.oh.us "
