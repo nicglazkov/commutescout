@@ -1288,7 +1288,7 @@ def render_alert_email(watch_name: str, events: list[dict],
       You get these because your
       <a href="{DEMO_URL}/watch" style="color:#8a94a3">CommuteScout watch
       area</a> matched new events. Delete the watch there to stop them.
-      Maps &copy; OpenStreetMap &copy; CARTO.
+      Maps &copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap.
     </div>
   </td></tr>
 </table>

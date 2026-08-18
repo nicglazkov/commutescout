@@ -145,8 +145,9 @@ document.getElementById('sub').textContent =
   (TRIP.via ? ' · via ' + TRIP.via : '');
 
 const map = L.map('tmap');
-L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-  maxZoom: 18, attribution: '&copy; OpenStreetMap &copy; CARTO',
+L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
+  maxZoom: 18,
+  attribution: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap contributors',
 }).addTo(map);
 const line = L.polyline(pts, { color: '#0b1f33', weight: 4.5, opacity: 0.85 })
   .addTo(map);

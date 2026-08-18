@@ -38,10 +38,7 @@
 <link rel="preload" as="script" href="/static/vendor/deck-slim.min.js">
 <!-- Map tiles are the LCP element (measured via Web Analytics); warming
      the tile CDN connections shaves the TLS handshake off first paint. -->
-<link rel="preconnect" href="https://a.basemaps.cartocdn.com">
-<link rel="preconnect" href="https://b.basemaps.cartocdn.com">
-<link rel="preconnect" href="https://c.basemaps.cartocdn.com">
-<link rel="preconnect" href="https://d.basemaps.cartocdn.com">
+<link rel="preconnect" href="https://tiles.stadiamaps.com">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
@@ -1125,11 +1122,10 @@ function ensureMap() {
     if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 1000 });
     else setTimeout(run, 200);
   });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
     keepBuffer: 4,
     maxZoom: 17,
-    subdomains: 'abcd',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
   layerPrimary = L.featureGroup().addTo(map);
   layerFires = L.featureGroup().addTo(map);
