@@ -26,11 +26,10 @@ import os
 import re
 import time
 
+from ca_roads_demo import valhalla
+
 log = logging.getLogger("roadsnap")
 
-OSRM_URL = "https://router.project-osrm.org/route/v1/driving/"
-UA = {"User-Agent":
-      "commutescout.com closure snapper (https://commutescout.com)"}
 # Pairs closer than this render fine as short straight segments (the
 # client draws sub-800m two-point paths as-is); farther than the max
 # is a data smell, not a drawable closure.
@@ -57,6 +56,20 @@ MAX_TRANSIENT_TRIES = 5
 
 class TransientSnapError(Exception):
     """The router had no answer this time; the pair stays retryable."""
+
+
+def _ready() -> bool:
+    """Routing needs the Stadia key. A keyless process must not drain
+    the queue: a missing key looks like "unroutable" and would tombstone
+    every pair in Firestore forever."""
+    return bool(os.environ.get("STADIA_API_KEY", "").strip())
+
+
+def _api_key() -> str:
+    key = os.environ.get("STADIA_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("STADIA_API_KEY is not set")
+    return key
 
 
 def _key(lat1: float, lon1: float, lat2: float, lon2: float) -> str:
@@ -270,100 +283,98 @@ async def _snap_toll(client, lat1, lon1, lat2, lon2, brg, token):
     straight = _straight_meters(lat1, lon1, lat2, lon2)
     if straight < MIN_METERS or straight > MAX_METERS:
         return None
+    key = _api_key()
     coords = f"{lon1:.5f},{lat1:.5f};{lon2:.5f},{lat2:.5f}"
-    bearings = f"{brg:.0f},{TOLL_BEARING_TOL};{brg:.0f},{TOLL_BEARING_TOL}"
-    data = None
-    for radius in ("60;60", "150;150"):
-        resp = await client.get(
-            f"{OSRM_URL}{coords}", headers=UA, timeout=20.0,
-            params={"overview": "full", "geometries": "geojson",
-                    "steps": "true", "continue_straight": "true",
-                    "bearings": bearings, "radiuses": radius})
-        if resp.status_code == 400:
-            continue  # no candidate within radius+bearing: widen once
-        resp.raise_for_status()
-        body = resp.json() or {}
-        if (body.get("routes") or []):
-            data = body
+    trip = None
+    for radius in (60, 150):
+        locations = [
+            {"lat": lat1, "lon": lon1, "heading": round(brg),
+             "heading_tolerance": TOLL_BEARING_TOL, "radius": radius},
+            {"lat": lat2, "lon": lon2, "heading": round(brg),
+             "heading_tolerance": TOLL_BEARING_TOL, "radius": radius},
+        ]
+        try:
+            trip = await valhalla.route(client, locations, api_key=key)
+        except valhalla.NoCandidateError:
+            continue  # no candidate within radius+heading: widen once
+        if trip:
             break
-    if not data:
-        # The public router intermittently finds no candidate under
-        # load; that is a transient miss, not a verdict. Raising lets
-        # the worker retry instead of tombstoning a routable pair.
+    if not trip:
+        # The router intermittently finds no candidate; that is a
+        # transient miss, not a verdict. Raising lets the worker retry
+        # instead of tombstoning a routable pair.
         raise TransientSnapError(f"no directional route {token} {coords}")
-    route = data["routes"][0]
-    dist = route.get("distance") or 0
+    dist = valhalla.trip_meters(trip)
     if dist > straight * MAX_RATIO or dist > straight + MAX_EXTRA_METERS:
         log.info("toll snap rejected (detour %sm vs %sm) %s %s",
                  int(dist), int(straight), token, coords)
         return None
     # Validation 1: the leg must actually run on the designated
     # highway. Any meaningful share on side streets (Airport Blvd
-    # beside 101) is a wrong snap, not a drawable corridor.
+    # beside 101) is a wrong snap, not a drawable corridor. Valhalla
+    # maneuvers carry street names and per-maneuver length (km).
     if token:
         pat = re.compile(rf"\b{re.escape(token)}\b")
         total = on_route = 0.0
-        for leg in route.get("legs") or []:
-            for s in leg.get("steps") or []:
-                d = s.get("distance") or 0
+        for leg in trip.get("legs") or []:
+            for m in leg.get("maneuvers") or []:
+                d = float(m.get("length") or 0) * 1000.0
                 total += d
-                names = " ".join(str(s.get(k) or "")
-                                 for k in ("ref", "name", "destinations"))
+                names = " ".join(
+                    (m.get("street_names") or [])
+                    + (m.get("begin_street_names") or []))
                 if pat.search(names):
                     on_route += d
         if total > 0 and on_route / total < TOLL_ON_ROUTE_MIN:
             log.info("toll snap rejected (%d%% on route %s) %s",
                      int(100 * on_route / total), token, coords)
             return None
+    pts = valhalla.trip_points(trip)
+    if len(pts) < 2:
+        return None
     # Validation 2: the snapped endpoints must move in the corridor
     # direction (a backwards or wrong-carriageway snap fails here).
-    wps = data.get("waypoints") or []
-    if len(wps) < 2:
-        return None
-    a_loc = wps[0].get("location") or [lon1, lat1]
-    b_loc = wps[1].get("location") or [lon2, lat2]
-    net = _bearing(a_loc[1], a_loc[0], b_loc[1], b_loc[0])
+    # The decoded shape starts and ends on the snapped carriageway.
+    a_loc, b_loc = pts[0], pts[-1]
+    net = _bearing(a_loc[0], a_loc[1], b_loc[0], b_loc[1])
     if _bearing_gap(net, brg) > 60:
         log.info("toll snap rejected (net bearing %d vs %d) %s %s",
                  int(net), int(brg), token, coords)
         return None
-    pts = (route.get("geometry") or {}).get("coordinates") or []
-    if len(pts) < 2:
-        return None
     step = max(1, len(pts) // 80)
-    path = [[round(p[1], 5), round(p[0], 5)] for p in pts[::step]]
-    tail = [round(pts[-1][1], 5), round(pts[-1][0], 5)]
+    path = [[round(p[0], 5), round(p[1], 5)] for p in pts[::step]]
+    tail = [round(pts[-1][0], 5), round(pts[-1][1], 5)]
     if path[-1] != tail:
         path.append(tail)
     if len(path) < 2:
         return None
     return {"path": path,
-            "a": [round(a_loc[1], 5), round(a_loc[0], 5)],
-            "b": [round(b_loc[1], 5), round(b_loc[0], 5)]}
+            "a": [round(a_loc[0], 5), round(a_loc[1], 5)],
+            "b": [round(b_loc[0], 5), round(b_loc[1], 5)]}
 
 
 async def _snap(client, lat1, lon1, lat2, lon2) -> list | None:
     straight = _straight_meters(lat1, lon1, lat2, lon2)
     if straight < MIN_METERS or straight > MAX_METERS:
         return None
-    coords = f"{lon1:.5f},{lat1:.5f};{lon2:.5f},{lat2:.5f}"
-    resp = await client.get(
-        f"{OSRM_URL}{coords}", headers=UA, timeout=20.0,
-        params={"overview": "full", "geometries": "geojson"})
-    resp.raise_for_status()
-    routes = (resp.json() or {}).get("routes") or []
-    if not routes:
+    try:
+        trip = await valhalla.route(
+            client,
+            [{"lat": lat1, "lon": lon1}, {"lat": lat2, "lon": lon2}],
+            api_key=_api_key())
+    except valhalla.NoCandidateError:
         return None
-    route = routes[0]
-    dist = route.get("distance") or 0
+    if not trip:
+        return None
+    dist = valhalla.trip_meters(trip)
     if dist > straight * MAX_RATIO or dist > straight + MAX_EXTRA_METERS:
         return None
-    pts = (route.get("geometry") or {}).get("coordinates") or []
+    pts = valhalla.trip_points(trip)
     if len(pts) < 2:
         return None
     step = max(1, len(pts) // 80)
-    path = [[round(p[1], 5), round(p[0], 5)] for p in pts[::step]]
-    tail = [round(pts[-1][1], 5), round(pts[-1][0], 5)]
+    path = [[round(p[0], 5), round(p[1], 5)] for p in pts[::step]]
+    tail = [round(pts[-1][0], 5), round(pts[-1][1], 5)]
     if path[-1] != tail:
         path.append(tail)
     return path if len(path) > 1 else None
@@ -372,6 +383,9 @@ async def _snap(client, lat1, lon1, lat2, lon2) -> list | None:
 async def _drain(client) -> None:
     await load_persisted()
     while True:
+        if not _ready():
+            await asyncio.sleep(300)
+            continue
         if not _queue:
             await asyncio.sleep(5)
             continue
