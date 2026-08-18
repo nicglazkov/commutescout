@@ -136,6 +136,30 @@ async def test_search_guard_ignores_locality_qualifier_matches():
 
 
 @respx.mock
+async def test_candidates_recover_when_ca_suffix_misleads():
+    """Appending ", California" can make Pelias match the state itself
+    (observed live: "Santa Cruz Beach Boardwalk, California" returned
+    "California, USA"). The token guard filters that junk; candidates
+    must then retry the raw query, which matches the venue."""
+    def responder(request):
+        text = request.url.params.get("text", "")
+        if text.endswith(", California"):
+            return pelias([feature(36.7783, -119.4179, "California, USA",
+                                   layer="region")])
+        return pelias([feature(
+            36.9636, -122.0176,
+            "Santa Cruz Beach Boardwalk, Santa Cruz, CA, USA",
+            layer="venue")])
+
+    respx.get(geo.STADIA_SEARCH_URL).mock(side_effect=responder)
+    async with httpx.AsyncClient() as client:
+        cands = await geo.geocode_candidates(
+            client, "Santa Cruz Beach Boardwalk")
+    assert len(cands) == 1
+    assert "Boardwalk" in cands[0][2]
+
+
+@respx.mock
 async def test_candidates_surface_ambiguity():
     respx.get(geo.STADIA_SEARCH_URL).mock(
         return_value=pelias([
