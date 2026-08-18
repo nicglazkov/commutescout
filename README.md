@@ -216,7 +216,6 @@ NWS, and USGS. Not affiliated with any agency. Conditions change faster
 than any feed; verify before you drive (511 or your state DOT, and
 [quickmap.dot.ca.gov](https://quickmap.dot.ca.gov) in California).
 
-Place names resolve through the Nominatim and Photon OpenStreetMap
-geocoders; the web app loads map tiles from CARTO and route previews from
-the public OSRM and Valhalla routers, so those services see the
-coordinates involved. Fonts and map libraries are served locally.
+Map tiles, routing, and place-name lookup come from Stadia Maps (data
+(c) OpenStreetMap contributors), so that service sees the coordinates
+involved. Fonts and map libraries are served locally.

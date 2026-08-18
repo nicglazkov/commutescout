@@ -44,7 +44,7 @@ export default function PrivacyPage() {
           Privacy
         </h1>
         <p className="text-cs-ink/70 mt-3 text-sm">
-          Effective July 20, 2026. Material changes will be posted here with
+          Effective August 18, 2026. Material changes will be posted here with
           a new effective date; account holders get an email when a change
           affects them.
         </p>
@@ -159,11 +159,11 @@ export default function PrivacyPage() {
                 any image load does.
               </li>
               <li>
-                <strong>OpenStreetMap public services</strong> (OSRM,
-                Valhalla, Nominatim, Photon) and <strong>CARTO</strong>{" "}
-                provide routing, address lookup, and map tiles; they see
-                the coordinates and place names involved in what you look
-                up, as your browser or our server queries them.
+                <strong>Stadia Maps</strong> provides map tiles, routing,
+                and address lookup; it sees the coordinates and place
+                names involved in what you look up, as your browser or
+                our server queries it. Map data comes from OpenStreetMap
+                contributors.
               </li>
             </ul>
           </div>

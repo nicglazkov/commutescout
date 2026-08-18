@@ -496,11 +496,10 @@ async def api_suggest(request: Request):
     """Search-as-you-type suggestions for the route planner.
 
     The Google-style recipe: instant offline matches from the CA place
-    gazetteer, merged with Photon (built for autocomplete: typo-tolerant,
-    biased toward the caller's position, restricted to a California
-    bounding box). Nominatim never sees keystrokes - its policy forbids
-    autocomplete - and stays the precision backstop when a freeform entry
-    is validated on selection."""
+    gazetteer, merged with Stadia's autocomplete endpoint (typo-tolerant
+    prefix search, biased toward the caller's position, restricted to a
+    California bounding box). The precise search ladder stays the
+    backstop when a freeform entry is validated on selection."""
     q = (request.query_params.get("q") or "").strip()
     if len(q) < 2 or len(q) > 120:
         return JSONResponse({"suggestions": []})
@@ -633,7 +632,7 @@ _STATICMAP_COLORS = {
 
 
 async def api_staticmap(request: Request):
-    """Small server-composed map image for alert emails: the same CARTO
+    """Small server-composed map image for alert emails: the same Stadia
     raster tiles the site uses, with the event marked. Email clients
     cannot run Leaflet, so the server does the compositing; results are
     cached because Gmail's image proxy refetches per open."""
@@ -714,7 +713,7 @@ async def api_staticmap(request: Request):
         draw.ellipse([mx - 11, my - 11, mx + 11, my + 11],
                      fill=(255, 255, 255))
         draw.ellipse([mx - 8, my - 8, mx + 8, my + 8], fill=color)
-        note = "(c) OpenStreetMap (c) CARTO"
+        note = "(c) Stadia Maps (c) OpenStreetMap"
         tw = draw.textlength(note)
         draw.rectangle([_STATICMAP_W - tw - 10, _STATICMAP_H - 16,
                         _STATICMAP_W, _STATICMAP_H],
@@ -2260,7 +2259,7 @@ class SecurityHeaders:
 class SoftLimit:
     """A second, roomier bucket for endpoints exempt from the strict
     limiter because normal browsing hits them constantly - but which
-    still burn upstream quota (TomTom, CARTO, OSM geocoders) or CPU
+    still burn upstream quota (TomTom, Stadia) or CPU
     when scripted. Sixty-burst at two per second never touches a
     human; it stops a curl loop."""
 

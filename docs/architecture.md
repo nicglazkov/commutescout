@@ -36,7 +36,7 @@ Three packages, cleanly layered:
 - **`ca_roads_demo`**: the web app at
   [commutescout.com](https://commutescout.com). The standalone map and
   route planner (viewport-driven data API, address autocomplete,
-  turn-by-turn via OSRM with a Valhalla fallback), watch-area alerts
+  turn-by-turn via Stadia Maps Valhalla), watch-area alerts
   (web push + email), trip share pages, plus Claude in a tool loop over
   the same tool functions, streaming SSE with map geometry and hard
   cost caps: per-IP rate limits, daily question caps, a global daily
