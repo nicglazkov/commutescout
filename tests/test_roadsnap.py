@@ -5,7 +5,6 @@ import pytest
 import respx
 
 from ca_roads_demo import roadsnap
-
 from test_valhalla import encode_polyline6
 
 ROUTE_RE = r".*api\.stadiamaps\.com/route/v1.*"
