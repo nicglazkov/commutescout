@@ -65,16 +65,18 @@ def test_suggest_keeps_typed_house_number(client, monkeypatch):
 
     from ca_roads_mcp import geocode as geo
 
+    monkeypatch.setenv("STADIA_API_KEY", "test-key")
     with respx.mock:
-        respx.get(geo.PHOTON_URL).mock(return_value=httpx.Response(200, json={
-            "features": [{
-                "geometry": {"coordinates": [-122.26, 37.39]},
-                "properties": {"name": "Skyline Boulevard",
-                               "osm_key": "highway",
-                               "osm_value": "residential",
-                               "city": "Woodside", "state": "California"},
-            }]
-        }))
+        respx.get(geo.STADIA_AUTOCOMPLETE_URL).mock(
+            return_value=httpx.Response(200, json={
+                "features": [{
+                    "geometry": {"coordinates": [-122.26, 37.39]},
+                    "properties": {"name": "Skyline Boulevard",
+                                   "layer": "street",
+                                   "locality": "Woodside",
+                                   "region_a": "CA"},
+                }]
+            }))
         r = client.get("/api/suggest?q=2101%20skyline%20blvd&lat=37.35&lon=-121.94")
     s = r.json()["suggestions"][0]
     assert s["name"].startswith("2101 Skyline Boulevard")
