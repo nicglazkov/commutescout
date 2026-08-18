@@ -43,7 +43,15 @@ from ca_roads.feeds import calfire as calfire_feed
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
-from ca_roads_demo import analytics, roadsnap, snapshot, states, trips, watch
+from ca_roads_demo import (
+    analytics,
+    roadsnap,
+    snapshot,
+    states,
+    trips,
+    valhalla,
+    watch,
+)
 from ca_roads_demo.prompt import SYSTEM, TOOL_DEFS, TOOL_FUNCS  # noqa: F401
 from ca_roads_mcp import server as tools
 from ca_roads_mcp.geocode import gazetteer_suggest, geocode_candidates, photon_suggest
@@ -1853,9 +1861,9 @@ def _snap_path(coords: list, straight_km: float,
                route_km: float) -> list | None:
     """Downsampled [lat, lon] path, or None when the route is suspect.
 
-    A snapped route much longer than the crow-flies distance means OSRM
-    had to wander (endpoints on different roads, one-way detours): the
-    straight line misleads less than a tour of the county."""
+    A snapped route much longer than the crow-flies distance means the
+    router had to wander (endpoints on different roads, one-way
+    detours): the straight line misleads less than a county tour."""
     if len(coords) < 2 or straight_km <= 0:
         return None
     if route_km > max(3 * straight_km, straight_km + 8):
@@ -1877,26 +1885,27 @@ async def _snap_closures_loop() -> None:
             lcs = await road.lane_closures()
             fresh = [c for c in lcs.records if _closure_has_stretch(c)
                      and _closure_key(c) not in _CLOSURE_PATHS]
+            # Without a routing key the paths stay None (closures render
+            # as dots) and nothing is fetched.
+            snap_key = os.environ.get("STADIA_API_KEY", "").strip()
             for c in fresh[:120]:
                 path = None
-                with contextlib.suppress(Exception):
-                    resp = await road.client.get(
-                        "https://router.project-osrm.org/route/v1/driving/"
-                        f"{c.begin_lon},{c.begin_lat};{c.end_lon},{c.end_lat}",
-                        params={"overview": "full", "geometries": "geojson"},
-                        timeout=10,
-                    )
-                    if resp.status_code == 200:
-                        routes = resp.json().get("routes") or []
-                        if routes:
-                            coords = (routes[0].get("geometry") or {}).get(
-                                "coordinates") or []
+                if snap_key:
+                    with contextlib.suppress(Exception):
+                        trip = await valhalla.route(
+                            road.client,
+                            [{"lat": c.begin_lat, "lon": c.begin_lon},
+                             {"lat": c.end_lat, "lon": c.end_lon}],
+                            api_key=snap_key, timeout=10.0)
+                        if trip:
+                            coords = [[p[1], p[0]]
+                                      for p in valhalla.trip_points(trip)]
                             straight = watch.haversine_km(
                                 c.begin_lat, c.begin_lon,
                                 c.end_lat, c.end_lon)
                             path = _snap_path(
                                 coords, straight,
-                                (routes[0].get("distance") or 0) / 1000)
+                                valhalla.trip_meters(trip) / 1000)
                 _CLOSURE_PATHS[_closure_key(c)] = path
                 await asyncio.sleep(1.1)
             current = {_closure_key(c) for c in lcs.records
@@ -2212,8 +2221,7 @@ class SecurityHeaders:
         # to /api/mapdata) which is exactly why it is easy to miss: the
         # map keeps working while quietly using the slow path.
         "connect-src 'self' https://data.commutescout.com "
-        "https://router.project-osrm.org "
-        "https://valhalla1.openstreetmap.de https://*.googleapis.com "
+        "https://api.stadiamaps.com https://*.googleapis.com "
         "https://*.google.com https://cloudflareinsights.com "
         "https://*.gstatic.com; "
         "frame-src https://ca-roads-mcp.firebaseapp.com "

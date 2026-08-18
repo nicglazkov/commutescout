@@ -1140,25 +1140,9 @@ function resetMap() {
   document.getElementById('roadinfo').textContent = '';
 }
 
-// Fetch road-following geometry from OSRM so the drawn route hugs the
-// actual highway and ends at the true destination. The corridor skeleton
-// draws immediately as a fallback and is replaced when OSRM answers.
-async function osrmRoute(points) {
-  const pts = points
-    .map(([lat, lon]) => `${lon.toFixed(5)},${lat.toFixed(5)}`).join(';');
-  const res = await fetch(
-    `https://router.project-osrm.org/route/v1/driving/${pts}` +
-    '?overview=full&geometries=geojson', { signal: AbortSignal.timeout(6000) }
-  );
-  const data = await res.json();
-  if (data.code !== 'Ok' || !data.routes?.length) return null;
-  const r = data.routes[0];
-  return {
-    latlngs: r.geometry.coordinates.map(([lon, lat]) => [lat, lon]),
-    distance: r.distance,
-    duration: r.duration,
-  };
-}
+// Road-following geometry comes from Stadia's Valhalla endpoint. The
+// browser authenticates by Origin (domain auth), so no key ships here.
+const VALHALLA_URL = 'https://api.stadiamaps.com/route/v1';
 
 // Valhalla encodes geometry as a precision-6 polyline.
 function decodePolyline6(str) {
@@ -1185,11 +1169,12 @@ async function valhallaRoute(points) {
     lat, lon,
     type: (i === 0 || i === points.length - 1) ? 'break' : 'through',
   }));
-  const res = await fetch(
-    'https://valhalla1.openstreetmap.de/route?json=' +
-    encodeURIComponent(JSON.stringify({ locations, costing: 'auto' })),
-    { signal: AbortSignal.timeout(6000) }
-  );
+  const res = await fetch(VALHALLA_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ locations, costing: 'auto' }),
+    signal: AbortSignal.timeout(6000),
+  });
   const data = await res.json();
   if (!data.trip?.legs?.length) return null;
   return {
@@ -1199,9 +1184,7 @@ async function valhallaRoute(points) {
   };
 }
 
-// Public routers come and go; try OSRM, fall back to Valhalla.
 async function anyRoute(points) {
-  try { return await osrmRoute(points); } catch (e) { /* next provider */ }
   try { return await valhallaRoute(points); } catch (e) { return null; }
 }
 
@@ -1213,11 +1196,10 @@ async function roadSnap(geo, fallbackLine) {
   const step = Math.max(1, Math.ceil(inner.length / 7));
   const vias = inner.filter((_, i) => i % step === 0);
   try {
-    // The corridor-following route AND the unconstrained fastest route
-    // (sequentially, gently on the public servers); the faster wins unless
-    // the corridor route is close - the reported events sit on it.
+    // The corridor-following route AND the unconstrained fastest route;
+    // the faster wins unless the corridor route is close - the reported
+    // events sit on it.
     const viaRoute = await anyRoute([start, ...vias, end]);
-    await new Promise(r => setTimeout(r, 500));
     const direct = await anyRoute([start, end]);
     let road = viaRoute || direct;
     if (viaRoute && direct && viaRoute.duration > direct.duration * 1.15) {
@@ -3904,58 +3886,19 @@ const fromF = wireAddress('from', 'fromval', 'fromsugg', true);
 const toF = wireAddress('to', 'toval', 'tosugg', false);
 
 // ── Routing with turn-by-turn directions ─────────────────────────────
-function fmtOsrmStep(s) {
-  const name = s.name || (s.ref || '');
-  const mod = (s.maneuver.modifier || '').replace('slight ', 'slightly ');
-  const t = s.maneuver.type;
-  if (t === 'depart') return 'Head out' + (name ? ' on ' + name : '');
-  if (t === 'arrive') return 'Arrive at your destination';
-  if (t === 'turn' || t === 'end of road') return 'Turn ' + mod + (name ? ' onto ' + name : '');
-  if (t === 'new name' || t === 'continue') return 'Continue' + (name ? ' on ' + name : '');
-  if (t === 'merge') return 'Merge' + (name ? ' onto ' + name : '');
-  if (t === 'on ramp') return 'Take the ramp' + (name ? ' onto ' + name : '');
-  if (t === 'off ramp') return 'Take the exit' + (name ? ' toward ' + name : '');
-  if (t === 'fork') return 'Keep ' + (mod || 'ahead') + (name ? ' toward ' + name : '');
-  if (t === 'roundabout' || t === 'rotary') return 'Take the roundabout' + (name ? ' onto ' + name : '');
-  return (t.charAt(0).toUpperCase() + t.slice(1)) + (name ? ' - ' + name : '');
-}
-function osrmToRoute(r) {
-  // The public server leaves legs[].summary empty, so name the route by
-  // the road you spend the longest stretch on.
-  let via = (r.legs[0] && r.legs[0].summary) || '';
-  if (!via) {
-    let best = null;
-    for (const s of r.legs.flatMap(l => l.steps)) {
-      if (!best || s.distance > best.distance) best = s;
-    }
-    via = best ? (best.ref || best.name || '').split(';')[0] : '';
-  }
-  return {
-    latlngs: r.geometry.coordinates.map(c => [c[1], c[0]]),
-    distance: r.distance, duration: r.duration,
-    via: via,
-    steps: r.legs.flatMap(l => l.steps).map(s => ({
-      text: fmtOsrmStep(s), miles: s.distance / 1609.344,
-    })).filter(s => s.miles > 0.005 || /Arrive|Head/.test(s.text)),
-  };
-}
-async function osrmDirections(points) {
-  const pts = points.map(p => p[1].toFixed(5) + ',' + p[0].toFixed(5)).join(';');
-  // OSRM only offers alternatives for two-point requests.
-  const alts = points.length === 2 ? '&alternatives=2' : '';
-  const res = await fetch('https://router.project-osrm.org/route/v1/driving/' + pts +
-    '?overview=full&geometries=geojson&steps=true' + alts,
-    { signal: AbortSignal.timeout(8000) });
-  const data = await res.json();
-  if (data.code !== 'Ok' || !data.routes?.length) return null;
-  return data.routes.slice(0, 3).map(osrmToRoute);
-}
 function valhallaTripToRoute(trip) {
+  // Name the route by the road you spend the longest stretch on.
+  let best = null;
+  for (const m of trip.legs.flatMap(l => l.maneuvers || [])) {
+    if ((m.street_names || []).length && (!best || m.length > best.length)) {
+      best = m;
+    }
+  }
   return {
     latlngs: trip.legs.flatMap(l => decodePolyline6(l.shape)),
     distance: trip.summary.length * 1609.344,
     duration: trip.summary.time,
-    via: '',
+    via: best ? best.street_names[0].split(';')[0] : '',
     steps: trip.legs.flatMap(l => l.maneuvers || []).map(s => ({
       text: s.instruction.replace(/\.$/, ''), miles: s.length,
     })),
@@ -3965,8 +3908,12 @@ async function valhallaDirections(points) {
   const req = { locations: points.map(p => ({ lat: p[0], lon: p[1] })),
     costing: 'auto', alternates: points.length === 2 ? 2 : 0,
     directions_options: { units: 'miles' } };
-  const res = await fetch('https://valhalla1.openstreetmap.de/route?json=' +
-    encodeURIComponent(JSON.stringify(req)), { signal: AbortSignal.timeout(8000) });
+  const res = await fetch(VALHALLA_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+    signal: AbortSignal.timeout(8000),
+  });
   const data = await res.json();
   if (!data.trip?.legs?.length) return null;
   const routes = [valhallaTripToRoute(data.trip)];
@@ -3976,7 +3923,6 @@ async function valhallaDirections(points) {
   return routes.slice(0, 3);
 }
 async function anyDirections(points) {
-  try { const r = await osrmDirections(points); if (r && r.length) return r; } catch (e) {}
   try { return await valhallaDirections(points); } catch (e) { return null; }
 }
 
