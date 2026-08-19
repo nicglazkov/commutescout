@@ -146,7 +146,7 @@ document.getElementById('sub').textContent =
 
 const map = L.map('tmap');
 L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
-  maxZoom: 18,
+  maxZoom: 18, crossOrigin: 'anonymous',
   attribution: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap contributors',
 }).addTo(map);
 const line = L.polyline(pts, { color: '#0b1f33', weight: 4.5, opacity: 0.85 })

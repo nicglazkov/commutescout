@@ -628,7 +628,7 @@ $('redeembtn').addEventListener('click', async () => {
 
 const map = L.map('wmap', { zoomControl: true }).setView([37.5, -120.5], 6);
 L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
-  maxZoom: 18,
+  maxZoom: 18, crossOrigin: 'anonymous',
   attribution: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap contributors',
 }).addTo(map);
 const drawLayer = L.layerGroup().addTo(map);

@@ -4,6 +4,15 @@
 const ASSET_CACHE = 'ca-roads-assets-v2';
 const SNAP_CACHE = 'ca-roads-snap-v1';
 const SNAP_HOST = 'data.commutescout.com';
+// Basemap tiles, cached on-device only. Stadia's terms allow standard
+// client-side caching (local to the device, up to the HTTP header or 7
+// days) and prohibit server-side caching; this honors their 6h
+// max-age and never exceeds it. Bounded so a long pan session cannot
+// eat the visitor's disk.
+const TILE_CACHE = 'ca-roads-tiles-v1';
+const TILE_HOST = 'tiles.stadiamaps.com';
+const TILE_FRESH_MS = 6 * 60 * 60 * 1000;
+const TILE_MAX_ENTRIES = 800;
 
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
@@ -19,9 +28,18 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => e.waitUntil((async () => {
   for (const key of await caches.keys()) {
     if ((key.startsWith('ca-roads-assets-') && key !== ASSET_CACHE)
-        || (key.startsWith('ca-roads-snap-') && key !== SNAP_CACHE)) {
+        || (key.startsWith('ca-roads-snap-') && key !== SNAP_CACHE)
+        || (key.startsWith('ca-roads-tiles-') && key !== TILE_CACHE)) {
       await caches.delete(key);
     }
+  }
+  // Stadia's terms cap client retention at 7 days; sweep anything a
+  // long-idle device may still hold past that.
+  const tiles = await caches.open(TILE_CACHE);
+  for (const req of await tiles.keys()) {
+    const hit = await tiles.match(req);
+    const at = Number(hit && hit.headers.get('sw-fetched-on') || 0);
+    if (Date.now() - at > 7 * 24 * 60 * 60 * 1000) await tiles.delete(req);
   }
   await self.clients.claim();
 })()));
@@ -50,10 +68,56 @@ async function snapshotFirst(request) {
   }
 }
 
+// Tiles: cache-first while fresh, refresh from the network after 6h,
+// and fall back to a stale tile when offline (a stale basemap beats a
+// gray one; the DATA layers are never cached here, so dots stay live).
+async function tileFirst(request) {
+  const cache = await caches.open(TILE_CACHE);
+  const hit = await cache.match(request);
+  if (hit) {
+    const at = Number(hit.headers.get('sw-fetched-on') || 0);
+    if (Date.now() - at < TILE_FRESH_MS) return hit;
+  }
+  try {
+    const res = await fetch(request);
+    if (res && res.ok) {
+      const body = await res.clone().arrayBuffer();
+      const headers = new Headers(res.headers);
+      headers.set('sw-fetched-on', String(Date.now()));
+      await cache.put(request, new Response(body, { status: 200, headers }));
+      trimTiles(cache); // fire and forget
+    }
+    return res;
+  } catch (err) {
+    if (hit) return hit;
+    throw err;
+  }
+}
+
+// Keep the tile cache bounded: drop the oldest entries (insertion
+// order) once over the cap. Runs occasionally, not on the hot path.
+let tileTrimPending = false;
+async function trimTiles(cache) {
+  if (tileTrimPending) return;
+  tileTrimPending = true;
+  try {
+    const keys = await cache.keys();
+    for (let i = 0; i < keys.length - TILE_MAX_ENTRIES; i++) {
+      await cache.delete(keys[i]);
+    }
+  } finally {
+    tileTrimPending = false;
+  }
+}
+
 // Cache-first for vendored assets only: Leaflet, fonts, icons. Pages
 // and API calls always hit the network, so deploys stay instant.
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
+  if (url.hostname === TILE_HOST && e.request.method === 'GET') {
+    e.respondWith(tileFirst(e.request));
+    return;
+  }
   if (url.hostname === SNAP_HOST && e.request.method === 'GET') {
     e.respondWith(snapshotFirst(e.request));
     return;

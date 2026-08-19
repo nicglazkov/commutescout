@@ -1122,11 +1122,38 @@ function ensureMap() {
     if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 1000 });
     else setTimeout(run, 200);
   });
-  L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
-    keepBuffer: 4,
-    maxZoom: 17,
-    attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  }).addTo(map);
+  // Basemap picker: Leaflet's collapsed layers control in the top-right
+  // corner (the sidebar is spoken for). Choice sticks per device via
+  // localStorage. crossOrigin makes tile loads CORS requests so the
+  // service worker can cache them on-device (Stadia's terms allow
+  // client-local caching; server-side caching is prohibited).
+  const CS_ATTR = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>'
+    + ' &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a>'
+    + ' &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  const CS_STAMEN_ATTR = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>'
+    + ' &copy; <a href="https://stamen.com/">Stamen Design</a>'
+    + ' &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a>'
+    + ' &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  const CS_BASEMAPS = {
+    'Smooth': ['alidade_smooth', CS_ATTR],
+    'Bright': ['osm_bright', CS_ATTR],
+    'Outdoors': ['outdoors', CS_ATTR],
+    'Terrain': ['stamen_terrain', CS_STAMEN_ATTR],
+  };
+  const baseLayers = {};
+  for (const [label, [style, attr]] of Object.entries(CS_BASEMAPS)) {
+    baseLayers[label] = L.tileLayer(
+      'https://tiles.stadiamaps.com/tiles/' + style + '/{z}/{x}/{y}{r}.png',
+      { keepBuffer: 4, maxZoom: 17, crossOrigin: 'anonymous',
+        attribution: attr });
+  }
+  let savedBase = null;
+  try { savedBase = localStorage.getItem('cs-basemap'); } catch (e) { /* private mode */ }
+  (baseLayers[savedBase] || baseLayers.Smooth).addTo(map);
+  L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
+  map.on('baselayerchange', (ev) => {
+    try { localStorage.setItem('cs-basemap', ev.name); } catch (e) { /* private mode */ }
+  });
   layerPrimary = L.featureGroup().addTo(map);
   layerFires = L.featureGroup().addTo(map);
 }
