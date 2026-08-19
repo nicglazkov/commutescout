@@ -1842,6 +1842,41 @@ async def _prewarm() -> None:
 # server pace (about one request per second) and shared by every
 # visitor; a missing or None entry falls back to the straight line.
 _CLOSURE_PATHS: dict[tuple, list | None] = {}
+_closure_paths_loaded = False
+
+
+def _closure_doc_id(key: tuple) -> str:
+    return "_".join(f"{v:.4f}" for v in key)
+
+
+async def _closure_paths_load() -> None:
+    """Boot: mirror previously snapped closure paths from Firestore so a
+    redeploy never re-buys routing for stretches already computed (each
+    snap is a paid Stadia routing call)."""
+    global _closure_paths_loaded
+    if _closure_paths_loaded:
+        return
+    _closure_paths_loaded = True
+    with contextlib.suppress(Exception):
+        db = roadsnap._get_db()
+        async for doc in db.collection("closure_paths").stream():
+            d = doc.to_dict() or {}
+            key = tuple(float(p) for p in doc.id.split("_"))
+            _CLOSURE_PATHS[key] = (json.loads(d["path"])
+                                   if d.get("path") else None)
+
+
+async def _closure_path_store(key: tuple, path: list | None) -> None:
+    with contextlib.suppress(Exception):
+        await roadsnap._get_db().collection("closure_paths").document(
+            _closure_doc_id(key)).set(
+            {"path": json.dumps(path) if path else None, "ts": time.time()})
+
+
+async def _closure_path_drop(key: tuple) -> None:
+    with contextlib.suppress(Exception):
+        await roadsnap._get_db().collection("closure_paths").document(
+            _closure_doc_id(key)).delete()
 _SNAP_MIN_DELTA = 0.002  # same threshold mapdata uses for "has an end"
 
 
@@ -1879,6 +1914,7 @@ async def _snap_closures_loop() -> None:
     """Every five minutes, fetch road geometry for closure stretches the
     cache does not know yet, then drop entries for closures that ended."""
     road = tools.get_road()
+    await _closure_paths_load()
     while True:
         with contextlib.suppress(Exception):
             lcs = await road.lane_closures()
@@ -1906,12 +1942,14 @@ async def _snap_closures_loop() -> None:
                                 coords, straight,
                                 valhalla.trip_meters(trip) / 1000)
                 _CLOSURE_PATHS[_closure_key(c)] = path
+                await _closure_path_store(_closure_key(c), path)
                 await asyncio.sleep(1.1)
             current = {_closure_key(c) for c in lcs.records
                        if _closure_has_stretch(c)}
             for key in list(_CLOSURE_PATHS):
                 if key not in current:
                     _CLOSURE_PATHS.pop(key, None)
+                    await _closure_path_drop(key)
         await asyncio.sleep(300)
 
 
