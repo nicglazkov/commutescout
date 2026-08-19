@@ -2257,8 +2257,13 @@ class SecurityHeaders:
         # Leaving it out does not break the site (the client falls back
         # to /api/mapdata) which is exactly why it is easy to miss: the
         # map keeps working while quietly using the slow path.
+        # tiles.stadiamaps.com appears here as well as img-src: the
+        # service worker re-fetches tiles with fetch(), and a worker's
+        # fetch() is governed by connect-src, not img-src. Without it
+        # every SW-controlled (repeat) visit gets a blank basemap.
         "connect-src 'self' https://data.commutescout.com "
-        "https://api.stadiamaps.com https://*.googleapis.com "
+        "https://api.stadiamaps.com https://tiles.stadiamaps.com "
+        "https://*.googleapis.com "
         "https://*.google.com https://cloudflareinsights.com "
         "https://*.gstatic.com; "
         "frame-src https://ca-roads-mcp.firebaseapp.com "
