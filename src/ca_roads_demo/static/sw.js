@@ -4,7 +4,10 @@
 const ASSET_CACHE = 'ca-roads-assets-v2';
 const SNAP_CACHE = 'ca-roads-snap-v1';
 const SNAP_HOST = 'data.commutescout.com';
-// Basemap tiles, cached on-device only. Stadia's terms allow standard
+// Basemap tiles, cached on-device only (rev 2: the server's CSP now
+// lists the tile host in connect-src, which governs fetch() in this
+// worker; the byte change here forces installed workers to update and
+// pick up that policy). Stadia's terms allow standard
 // client-side caching (local to the device, up to the HTTP header or 7
 // days) and prohibit server-side caching; this honors their 6h
 // max-age and never exceeds it. Bounded so a long pan session cannot
