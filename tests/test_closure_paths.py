@@ -66,6 +66,9 @@ async def test_closure_paths_round_trip(monkeypatch):
 
     loaded: dict = {}
     monkeypatch.setattr(demo_app, "_CLOSURE_PATHS", loaded)
+    # Another test's TestClient may have booted the app lifespan and
+    # tripped the load-once guard; reset it for this test.
+    monkeypatch.setattr(demo_app, "_closure_paths_loaded", False)
     await demo_app._closure_paths_load()
     assert loaded[key] == path
     # A stored None (unroutable stretch) survives as None, not a refetch.
@@ -81,5 +84,6 @@ async def test_closure_paths_load_survives_no_firestore(monkeypatch):
         raise RuntimeError("no ADC")
     monkeypatch.setattr(roadsnap, "_get_db", boom)
     monkeypatch.setattr(demo_app, "_CLOSURE_PATHS", {})
+    monkeypatch.setattr(demo_app, "_closure_paths_loaded", False)
     await demo_app._closure_paths_load()  # must not raise
     assert demo_app._CLOSURE_PATHS == {}
