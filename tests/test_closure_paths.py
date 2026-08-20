@@ -61,8 +61,10 @@ async def test_closure_paths_round_trip(monkeypatch):
     path = [[37.3382, -121.8863], [37.5, -122.0], [37.7749, -122.4194]]
     await demo_app._closure_path_store(key, path)
     await demo_app._closure_path_store((38.0, -120.0, 38.1, -120.1), None)
-    assert json.loads(db.store["37.3382_-121.8863_37.7749_-122.4194"]["path"]) \
-        == path
+    doc = db.store["37.3382_-121.8863_37.7749_-122.4194"]
+    assert json.loads(doc["path"]) == path
+    # TTL field present so Firestore can sweep long-unused geometry.
+    assert doc["expire_at"] is not None
 
     loaded: dict = {}
     monkeypatch.setattr(demo_app, "_CLOSURE_PATHS", loaded)
@@ -73,9 +75,6 @@ async def test_closure_paths_round_trip(monkeypatch):
     assert loaded[key] == path
     # A stored None (unroutable stretch) survives as None, not a refetch.
     assert loaded[(38.0, -120.0, 38.1, -120.1)] is None
-
-    await demo_app._closure_path_drop(key)
-    assert "37.3382_-121.8863_37.7749_-122.4194" not in db.store
 
 
 async def test_closure_paths_load_survives_no_firestore(monkeypatch):
