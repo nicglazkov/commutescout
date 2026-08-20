@@ -1867,16 +1867,16 @@ async def _closure_paths_load() -> None:
 
 
 async def _closure_path_store(key: tuple, path: list | None) -> None:
+    # Never deleted when the closure ends: the road between two fixed
+    # coordinates does not move, and recurring night-work closures
+    # reappear at identical keys, so deleting meant re-buying the same
+    # routing call every night (~7k credits/day observed). expire_at
+    # feeds a Firestore TTL policy that sweeps year-old geometry.
     with contextlib.suppress(Exception):
         await roadsnap._get_db().collection("closure_paths").document(
             _closure_doc_id(key)).set(
-            {"path": json.dumps(path) if path else None, "ts": time.time()})
-
-
-async def _closure_path_drop(key: tuple) -> None:
-    with contextlib.suppress(Exception):
-        await roadsnap._get_db().collection("closure_paths").document(
-            _closure_doc_id(key)).delete()
+            {"path": json.dumps(path) if path else None, "ts": time.time(),
+             "expire_at": datetime.now(UTC) + timedelta(days=365)})
 _SNAP_MIN_DELTA = 0.002  # same threshold mapdata uses for "has an end"
 
 
@@ -1944,12 +1944,10 @@ async def _snap_closures_loop() -> None:
                 _CLOSURE_PATHS[_closure_key(c)] = path
                 await _closure_path_store(_closure_key(c), path)
                 await asyncio.sleep(1.1)
-            current = {_closure_key(c) for c in lcs.records
-                       if _closure_has_stretch(c)}
-            for key in list(_CLOSURE_PATHS):
-                if key not in current:
-                    _CLOSURE_PATHS.pop(key, None)
-                    await _closure_path_drop(key)
+            # Ended closures stay in the cache on purpose: entries are
+            # keyed by coordinates, tomorrow night's recurring closure
+            # reuses the same key, and only live closures are ever
+            # looked up. Firestore TTL handles long-term cleanup.
         await asyncio.sleep(300)
 
 
