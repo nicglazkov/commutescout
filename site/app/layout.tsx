@@ -87,6 +87,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             __html: JSON.stringify(SITE_SCHEMA).replace(/</g, "\\u003c"),
           }}
         />
+        {/* Cloudflare Web Analytics: cookieless RUM, disclosed on the
+            privacy page. The token is the public site tag of the
+            commutescout.com property the admin analytics panel reads
+            (CLOUDFLARE_SITE_TAG). Static export renders this tag
+            directly, so it never touches React-managed DOM. */}
+        <script
+          defer
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon={'{"token": "d2d77aff6dfe4462b09ca501c9151de4"}'}
+        />
       </head>
       <body className="flex min-h-full flex-col bg-cs-bg text-cs-ink">
         {/* Skip link: first focusable element in the body, invisible until
