@@ -49,7 +49,6 @@ from ca_roads_demo import (
     snapshot,
     states,
     trips,
-    valhalla,
     watch,
 )
 from ca_roads_demo.prompt import SYSTEM, TOOL_DEFS, TOOL_FUNCS  # noqa: F401
@@ -889,9 +888,6 @@ async def build_markers(box, want, *, geo_only: bool = False):
             if _closure_has_stretch(c):
                 marker["end"] = [round(c.end_lat, 5),
                                  round(c.end_lon, 5)]
-                snapped = _CLOSURE_PATHS.get(_closure_key(c))
-                if snapped:
-                    marker["path"] = snapped
             strips[key] = [rank, marker, (entry[2] + 1) if entry else 1]
         for _, marker, count in strips.values():
             if count > 1:
@@ -1837,52 +1833,14 @@ async def _prewarm() -> None:
         roadsnap.start_worker(lambda: tools.get_road().client)
 
 
-# Road-following geometry for closure stretches, keyed by rounded
-# begin/end coordinates. Filled by a background loop at OSRM public-
-# server pace (about one request per second) and shared by every
-# visitor; a missing or None entry falls back to the straight line.
-_CLOSURE_PATHS: dict[tuple, list | None] = {}
-_closure_paths_loaded = False
-
-
-def _closure_doc_id(key: tuple) -> str:
-    return "_".join(f"{v:.4f}" for v in key)
-
-
-async def _closure_paths_load() -> None:
-    """Boot: mirror previously snapped closure paths from Firestore so a
-    redeploy never re-buys routing for stretches already computed (each
-    snap is a paid Stadia routing call)."""
-    global _closure_paths_loaded
-    if _closure_paths_loaded:
-        return
-    _closure_paths_loaded = True
-    with contextlib.suppress(Exception):
-        db = roadsnap._get_db()
-        async for doc in db.collection("closure_paths").stream():
-            d = doc.to_dict() or {}
-            key = tuple(float(p) for p in doc.id.split("_"))
-            _CLOSURE_PATHS[key] = (json.loads(d["path"])
-                                   if d.get("path") else None)
-
-
-async def _closure_path_store(key: tuple, path: list | None) -> None:
-    # Never deleted when the closure ends: the road between two fixed
-    # coordinates does not move, and recurring night-work closures
-    # reappear at identical keys, so deleting meant re-buying the same
-    # routing call every night (~7k credits/day observed). expire_at
-    # feeds a Firestore TTL policy that sweeps year-old geometry.
-    with contextlib.suppress(Exception):
-        await roadsnap._get_db().collection("closure_paths").document(
-            _closure_doc_id(key)).set(
-            {"path": json.dumps(path) if path else None, "ts": time.time(),
-             "expire_at": datetime.now(UTC) + timedelta(days=365)})
+# Closure stretch geometry is owned entirely by roadsnap: mapdata
+# ships marker["end"], roadsnap.apply() attaches the road-following
+# path once the queue worker has bought and persisted it. A dedicated
+# closure snap loop used to run here too; the two systems keyed the
+# same stretches differently and bought every new closure TWICE, which
+# the Stadia usage dashboard surfaced (~15k credits/day). One snapper,
+# one Firestore store (road_snaps), one purchase per stretch, ever.
 _SNAP_MIN_DELTA = 0.002  # same threshold mapdata uses for "has an end"
-
-
-def _closure_key(c) -> tuple:
-    return (round(c.begin_lat, 4), round(c.begin_lon, 4),
-            round(c.end_lat, 4), round(c.end_lon, 4))
 
 
 def _closure_has_stretch(c) -> bool:
@@ -1891,77 +1849,15 @@ def _closure_has_stretch(c) -> bool:
                      or abs(c.end_lon - c.begin_lon) > _SNAP_MIN_DELTA))
 
 
-def _snap_path(coords: list, straight_km: float,
-               route_km: float) -> list | None:
-    """Downsampled [lat, lon] path, or None when the route is suspect.
-
-    A snapped route much longer than the crow-flies distance means the
-    router had to wander (endpoints on different roads, one-way
-    detours): the straight line misleads less than a county tour."""
-    if len(coords) < 2 or straight_km <= 0:
-        return None
-    if route_km > max(3 * straight_km, straight_km + 8):
-        return None
-    step = max(1, len(coords) // 60)
-    path = [[round(lat, 5), round(lon, 5)] for lon, lat in coords[::step]]
-    last = [round(coords[-1][1], 5), round(coords[-1][0], 5)]
-    if path[-1] != last:
-        path.append(last)
-    return path
-
-
-async def _snap_closures_loop() -> None:
-    """Every five minutes, fetch road geometry for closure stretches the
-    cache does not know yet, then drop entries for closures that ended."""
-    road = tools.get_road()
-    await _closure_paths_load()
-    while True:
-        with contextlib.suppress(Exception):
-            lcs = await road.lane_closures()
-            fresh = [c for c in lcs.records if _closure_has_stretch(c)
-                     and _closure_key(c) not in _CLOSURE_PATHS]
-            # Without a routing key the paths stay None (closures render
-            # as dots) and nothing is fetched.
-            snap_key = os.environ.get("STADIA_API_KEY", "").strip()
-            for c in fresh[:120]:
-                path = None
-                if snap_key:
-                    with contextlib.suppress(Exception):
-                        trip = await valhalla.route(
-                            road.client,
-                            [{"lat": c.begin_lat, "lon": c.begin_lon},
-                             {"lat": c.end_lat, "lon": c.end_lon}],
-                            api_key=snap_key, timeout=10.0)
-                        if trip:
-                            coords = [[p[1], p[0]]
-                                      for p in valhalla.trip_points(trip)]
-                            straight = watch.haversine_km(
-                                c.begin_lat, c.begin_lon,
-                                c.end_lat, c.end_lon)
-                            path = _snap_path(
-                                coords, straight,
-                                valhalla.trip_meters(trip) / 1000)
-                _CLOSURE_PATHS[_closure_key(c)] = path
-                await _closure_path_store(_closure_key(c), path)
-                await asyncio.sleep(1.1)
-            # Ended closures stay in the cache on purpose: entries are
-            # keyed by coordinates, tomorrow night's recurring closure
-            # reuses the same key, and only live closures are ever
-            # looked up. Firestore TTL handles long-term cleanup.
-        await asyncio.sleep(300)
-
-
 @contextlib.asynccontextmanager
 async def _lifespan(app_):
     task = asyncio.create_task(_prewarm())
-    snap_task = asyncio.create_task(_snap_closures_loop())
     # Publishes the map's boot payload to GCS so visitors read it from
     # the edge instead of from this instance. No-op without
     # SNAPSHOT_BUCKET, so local runs and tests are unaffected.
     pub_task = asyncio.create_task(snapshot.run())
     yield
     task.cancel()
-    snap_task.cancel()
     pub_task.cancel()
 
 
