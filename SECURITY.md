@@ -21,8 +21,9 @@ if they want to be.
   no social engineering.
 
 Out of scope: vulnerabilities in the upstream public data feeds (CHP,
-Caltrans, etc.) or in third-party services the app calls (CARTO, OSRM,
-Nominatim); report those to their owners.
+Caltrans, etc.) or in third-party services the app calls (Stadia Maps,
+which provides map tiles, routing, and place-name lookup); report those
+to their owners.
 
 ## Supported versions
 

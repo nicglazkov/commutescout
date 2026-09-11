@@ -237,7 +237,11 @@ def test_state_counts_are_current():
         ("src/ca_roads_demo/prompt.py", r"(\d+) covered states"),
         ("src/ca_roads_mcp/server.py", r"just California: (\d+) states today"),
         ("README.md", r"across \*\*(\d+) states\*\*|across (\d+) states"),
-        ("docs/registry.md", r"across (\d+) states"),
+        # Two counts in this file, and the long connector description
+        # says "across N US states" with the wrap falling between "US"
+        # and "states". A pattern anchored on "states" saw only the short
+        # description, so the long one sat at 32 while the rest said 37.
+        ("docs/registry.md", r"across (\d+) (?:US\b|states)"),
         ("site/lib/stats.ts", r"STATE_COUNT = (\d+)"),
         # The marketing pages state it in prose, outside stats.ts, so the
         # constant alone was not enough to keep them honest.

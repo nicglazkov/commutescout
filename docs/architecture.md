@@ -14,7 +14,7 @@ flowchart LR
         D["cross-source dedupe"]
     end
     subgraph srv["ca_roads_mcp"]
-        T["9 MCP tools<br/>corridors + regions<br/>closure taxonomy<br/>gazetteer geocoding"]
+        T["10 MCP tools<br/>corridors + regions<br/>closure taxonomy<br/>gazetteer geocoding"]
     end
     CHP & CT & WF & WX & OPT --> F --> D --> T
     T -->|"stdio / streamable HTTP"| MCP["Claude & MCP clients"]
@@ -74,9 +74,10 @@ once.
 - **Feeds fail loudly, serve quietly.** Upstream failures never blank a
   layer: the last good data is served, flagged stale, with the error
   attached and surfaced all the way to the UI and the MCP response.
-- **Evals gate releases.** Recorded-fixture scenarios and 91 golden
-  questions run against every release tag; the scorecard and its full
-  history are committed to the repo. See [EVALS.md](../EVALS.md).
+- **Evals run on demand, not per release.** Recorded-fixture scenarios
+  and 91 golden questions are triggered manually, when a prompt or tool
+  change warrants re-scoring; the scorecard and its full history are
+  committed to the repo. See [EVALS.md](../EVALS.md).
 
 ## Related docs
 

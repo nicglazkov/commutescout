@@ -266,6 +266,10 @@ def write_report(all_results: list[dict], models: list[str], path: Path) -> None
         f"judge scored against ground truth. Judge: `{JUDGE_MODEL}` "
         "(not an evaluated model).",
         "",
+        "The suite is run on demand rather than on every release, so these "
+        "numbers describe the version named above and not necessarily the "
+        "current release.",
+        "",
         "## Scorecard",
         "",
         "| Scenario | " + " | ".join(f"`{m}`" for m in models) + " |",
