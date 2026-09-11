@@ -31,7 +31,7 @@ Submission form asks for a name, the connector URL, and a description.
 
 - Longer description:
 
-  > CommuteScout gives your assistant live road intelligence across 32 US
+  > CommuteScout gives your assistant live road intelligence across 37 US
   > states. Ask "do I need chains to get to Tahoe?", "is 17 clear right
   > now?", or "any roadwork near Salt Lake City?" and it answers from the
   > same feeds state transportation agencies publish: real-time incidents,

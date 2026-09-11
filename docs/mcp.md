@@ -62,8 +62,9 @@ cadence, and its limits.
 
 ## How good are the answers?
 
-An eval suite with recorded fixtures and 91 golden questions gates
-every release; the scorecard is public. See [EVALS.md](../EVALS.md).
+An eval suite with recorded fixtures and 91 golden questions scores the
+assistant. Runs are triggered manually rather than on every release,
+and the scorecard is public. See [EVALS.md](../EVALS.md).
 
 ## Registry
 
