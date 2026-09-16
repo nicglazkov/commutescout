@@ -132,15 +132,22 @@ CORRIDORS: tuple[Corridor, ...] = (
     ),
     Corridor(
         id="i15-barstow-vegas",
-        name="I-15: Barstow to the Nevada state line (Las Vegas)",
+        name="I-15: Los Angeles basin to the Nevada state line (Las Vegas)",
         routes=("I-15",),
+        # Begins at the I-10 junction in Ontario and climbs Cajon Pass:
+        # "Los Angeles to Las Vegas" is the trip people ask about, and
+        # the corridor used to start at Barstow, 100 km past the basin.
         waypoints=(
-            (34.90, -117.02), (34.91, -116.82), (35.03, -116.38), (35.27, -116.07),
-            (35.47, -115.55), (35.61, -115.39),
+            (34.07, -117.55), (34.14, -117.47), (34.23, -117.44), (34.34, -117.45),
+            (34.42, -117.36), (34.53, -117.29), (34.72, -117.15), (34.90, -117.02),
+            (34.91, -116.82), (35.03, -116.38), (35.27, -116.07), (35.47, -115.55),
+            (35.61, -115.39),
         ),
-        aliases_a=("barstow", "san bernardino", "victorville"),
+        aliases_a=("los angeles", "ontario", "rancho cucamonga", "fontana",
+                   "san bernardino", "riverside", "victorville", "barstow"),
         aliases_b=("las vegas", "vegas", "primm", "stateline nevada"),
-        aliases_mid=("yermo", "baker", "mountain pass", "halloran"),
+        aliases_mid=("cajon pass", "hesperia", "yermo", "baker",
+                     "mountain pass", "halloran"),
     ),
     Corridor(
         id="sr99",
