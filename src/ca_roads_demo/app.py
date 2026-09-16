@@ -49,6 +49,7 @@ from ca_roads_demo import (
     snapshot,
     states,
     trips,
+    vitals,
     watch,
 )
 from ca_roads_demo.prompt import SYSTEM, TOOL_DEFS, TOOL_FUNCS  # noqa: F401
@@ -1856,9 +1857,12 @@ async def _lifespan(app_):
     # the edge instead of from this instance. No-op without
     # SNAPSHOT_BUCKET, so local runs and tests are unaffected.
     pub_task = asyncio.create_task(snapshot.run())
+    # Memory and cache sizes every ten minutes (see vitals.py).
+    vitals_task = asyncio.create_task(vitals.run())
     yield
     task.cancel()
     pub_task.cancel()
+    vitals_task.cancel()
 
 
 class ForwardedScheme:
