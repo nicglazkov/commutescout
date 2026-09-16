@@ -561,6 +561,10 @@ async def api_watch_config(_: Request) -> JSONResponse:
         },
         "vapidPublicKey": public,
         "emailEnabled": bool(RESEND_API_KEY and ALERT_FROM_EMAIL),
+        # Where a watch may be drawn. The page validates against this
+        # instead of carrying its own copy of the outline.
+        "coverage": {"california": CA_BOUNDARY,
+                     "states": _coverage_areas()},
         "limits": {"watches": MAX_WATCHES, "radius_km": MAX_RADIUS_KM,
                    "polygon_points": MAX_POLY_POINTS,
                    "free_watches": FREE_MAX_WATCHES,
@@ -623,6 +627,30 @@ def in_california(lat: float, lon: float) -> bool:
     return point_in_polygon(lat, lon, CA_BOUNDARY)
 
 
+def _coverage_areas() -> list[dict]:
+    from ca_roads_demo import states as expansion
+
+    return expansion.coverage_areas()
+
+
+def in_coverage(lat: float, lon: float) -> bool:
+    """Anywhere CommuteScout has road data: the California outline, or
+    the bounds of any state in the feed registry. The checker already
+    collects every state's events; this is the only place that decides
+    where a watch may be drawn."""
+    if in_california(lat, lon):
+        return True
+    from ca_roads_demo import states as expansion
+
+    return any(b[0] <= lat <= b[2] and b[1] <= lon <= b[3]
+               for b in (a["bounds"] for a in expansion.coverage_areas()))
+
+
+COVERAGE_ERROR = ("must be inside a state CommuteScout covers "
+                  "(offshore California is fine); the data-sources page "
+                  "lists them")
+
+
 def _parse_polygon_points(raw) -> tuple[list | None, str | None]:
     """Validated polygon points as Firestore-safe {lat, lon} maps
     (nested arrays are rejected by Firestore), or an error string."""
@@ -633,9 +661,8 @@ def _parse_polygon_points(raw) -> tuple[list | None, str | None]:
     try:
         for p in raw:
             lat, lon = float(p[0]), float(p[1])
-            if not in_california(lat, lon):
-                return None, ("every corner must stay in California "
-                              "(offshore is fine)")
+            if not in_coverage(lat, lon):
+                return None, f"every corner {COVERAGE_ERROR}"
             points.append({"lat": lat, "lon": lon})
     except (TypeError, ValueError, IndexError):
         return None, "points must be [lat, lon] pairs"
@@ -676,8 +703,8 @@ async def api_watch_create(request: Request) -> JSONResponse:
             radius = float(body.get("radius_km"))
         except (TypeError, ValueError):
             return _err("circle needs center {lat, lon} and radius_km")
-        if not in_california(lat, lon):
-            return _err("center must be in California (offshore is fine)")
+        if not in_coverage(lat, lon):
+            return _err(f"center {COVERAGE_ERROR}")
         if radius > FREE_MAX_RADIUS_KM:
             return _err(f"circles above {FREE_MAX_RADIUS_KM:g} km radius "
                         "are over the free limit")
@@ -707,9 +734,8 @@ async def api_watch_create(request: Request) -> JSONResponse:
             prev = None
             for pt in sampled:
                 lat, lon = float(pt[0]), float(pt[1])
-                if not in_california(lat, lon):
-                    return _err("routes must stay in California "
-                                "(offshore is fine)")
+                if not in_coverage(lat, lon):
+                    return _err(f"every route point {COVERAGE_ERROR}")
                 if prev:
                     total_km += haversine_km(prev[0], prev[1], lat, lon)
                 prev = (lat, lon)

@@ -296,10 +296,13 @@ def test_polygon_area_math():
     assert 90 < polygon_area_sq_km(box) < 106
 
 
-def test_rejects_outside_california(approved_client):
-    body = {**CIRCLE, "center": {"lat": 40.7, "lon": -74.0}}  # NYC
+def test_rejects_outside_coverage(approved_client):
+    # Boston: Massachusetts has no feed. New York City is covered (511NY)
+    # and is the positive case in test_watch_coverage.py.
+    body = {**CIRCLE, "center": {"lat": 42.36, "lon": -71.06}}
     r = approved_client.post("/api/watch/create", json=body, headers=auth())
     assert r.status_code == 400
+    assert "CommuteScout covers" in r.json()["error"]
 
 
 def test_polygon_needs_three_points_inside_ca(approved_client):
@@ -644,7 +647,7 @@ def test_update_shape_validates(approved_client, store):
                                  headers=auth()).status_code == 400
     assert approved_client.patch(
         "/api/watch/" + wid,
-        json={"points": [[40.7, -74.0], [40.8, -74.0], [40.8, -73.9]]},
+        json={"points": [[42.3, -71.1], [42.4, -71.1], [42.4, -71.0]]},  # Boston: no feed
         headers=auth()).status_code == 400
     cid = approved_client.post("/api/watch/create", json=CIRCLE,
                                headers=auth()).json()["id"]

@@ -2721,6 +2721,28 @@ def _state_key(label: str) -> str:
     return label.split("(")[0].strip()
 
 
+def coverage_areas() -> list[dict]:
+    """Every state with road data right now, as {state, bounds} with
+    bounds (lat_min, lon_min, lat_max, lon_max). This is what a watch
+    area may cover: a state added to any registry becomes watchable
+    with no other change. Keyed states count only while their key is
+    mounted (no key, no data, no alerts); the nationwide wildfire feed
+    is not a state."""
+    seen: dict[str, tuple] = {}
+    for _code, (state, bounds, _f) in KEYLESS_STATES.items():
+        if state != "Nationwide":
+            seen.setdefault(state, bounds)
+    for _code, (state, bounds, _f, ready) in KEYED_STATES.items():
+        if ready():
+            seen.setdefault(state, bounds)
+    for _code, (state, _src, bounds, _url) in WZDX_FEEDS.items():
+        seen.setdefault(state, bounds)
+    for code, (_net, _agency, bounds) in NEC_STATES.items():
+        seen.setdefault(_STATE_NAMES[code], bounds)
+    return [{"state": s, "bounds": [float(v) for v in b]}
+            for s, b in sorted(seen.items())]
+
+
 def coverage_summary() -> dict:
     """How many sources and states are live right now (topbar text)."""
     entries = source_status()
