@@ -214,7 +214,8 @@
         <div><b id="k-cam">–</b>cameras online</div>
         <div><b id="k-st">–</b>states covered</div>
       </div>
-      <p class="panenote">Counts across every covered state, refreshed every 30 seconds. A list of what is in view, worst first, comes next.</p>
+      <h4 class="subhead">In view, worst first</h4>
+      <div class="alertlist" id="alertlist"><p class="panenote">Move the map to list what is in view.</p></div>
     </section>
     <section id="pane-about" data-tool="about">
       <h3 class="panehead">About the data</h3>
@@ -246,6 +247,11 @@
     <div class="pickhint" id="pickhint" hidden></div>
     <div class="roadinfo" id="roadinfo"></div>
   </div>
+  <aside class="inspector" id="inspector" hidden aria-label="Details">
+    <div class="insphead"><b id="insptitle">Details</b>
+      <button type="button" class="inspx" id="inspclose" aria-label="Close the details pane">&times;</button></div>
+    <div class="inspbody" id="inspbody"></div>
+  </aside>
 </div>
 
 <script src="/static/vendor/leaflet.js"></script>

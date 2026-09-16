@@ -59,9 +59,43 @@ body { background:var(--bg); color:var(--ink);
    Columns: rail | handle | panel | handle | map. Both handles drag
    (and take arrow keys); widths live in CSS variables the script sets
    from localStorage, clamped to the bounds in the spec. */
-.shell { flex:1; display:grid; min-height:0;
-  --rail-w:64px; --panel-w:360px;
-  grid-template-columns:var(--rail-w) 6px var(--panel-w) 6px 1fr }
+.shell { flex:1; display:grid; min-height:0; position:relative;
+  --rail-w:64px; --panel-w:360px; --insp-w:0px;
+  grid-template-columns:var(--rail-w) 6px var(--panel-w) 6px 1fr var(--insp-w) }
+/* The inspector docks as a sixth column on wide screens and overlays
+   the map's right edge below 1280px. Opened only on demand (a popup's
+   "Show in inspector" button or an Alerts row); popups stay popups. */
+.shell.insp { --insp-w:340px }
+.inspector { background:var(--card); border-left:1px solid var(--line);
+  display:flex; flex-direction:column; min-height:0; overflow:hidden }
+.inspector[hidden] { display:none }
+.insphead { display:flex; align-items:center; justify-content:space-between;
+  gap:10px; padding:12px 14px; border-bottom:1px solid var(--line);
+  font:600 .9rem Inter }
+.inspx { width:28px; height:28px; border-radius:8px; border:1px solid var(--line);
+  background:var(--card); color:var(--dim); font:400 18px/1 Inter; cursor:pointer }
+.inspx:hover { color:var(--ink); border-color:var(--sky) }
+.inspbody { overflow-y:auto; padding:12px 14px; flex:1 }
+.inspbody .p2, .inspbody .pop { max-width:none; width:auto; min-width:0 }
+.inspbody img { width:100%; height:auto }
+.inspbody .dets { max-height:none }
+.inspbody .inspbtn { display:none }
+.subhead { font:600 .68rem Inter; letter-spacing:.7px; text-transform:uppercase;
+  color:var(--dim); margin:16px 0 4px }
+.alertrow { display:flex; gap:9px; align-items:flex-start; width:100%;
+  text-align:left; border:0; border-top:1px solid var(--line); background:transparent;
+  padding:8px 2px; cursor:pointer; font:inherit; color:var(--ink) }
+.alertrow:hover { background:var(--sky-soft) }
+.alertrow:focus-visible { outline:2px solid var(--sky); outline-offset:-2px }
+.alertrow i { width:9px; height:9px; border-radius:99px; flex:none; margin-top:6px;
+  background:var(--dot) }
+.alertrow b { display:block; font:600 .8rem Inter }
+.alertrow small { display:block; color:var(--dim); font-size:.72rem }
+@media (max-width: 1279px) {
+  .shell.insp { --insp-w:0px }
+  .inspector { position:absolute; right:0; top:0; bottom:0; z-index:1100;
+    width:min(340px, 90vw); box-shadow:-8px 0 24px rgba(15,28,43,.18) }
+}
 .rail { background:var(--navy); display:flex; flex-direction:column;
   align-items:stretch; padding:8px 6px; gap:4px; overflow:hidden }
 .rail .tool { display:flex; flex-direction:column; align-items:center;
@@ -96,7 +130,7 @@ aside section[data-tool].on { display:block }
   font:500 .72rem Inter; color:var(--dim); display:flex; flex-direction:column }
 .kpis b { color:var(--ink); font:600 1.15rem Inter; margin-bottom:2px }
 /* Collapsed: the rail alone; the map takes the rest. */
-.shell.nopanel { grid-template-columns:var(--rail-w) 6px 0 0 1fr }
+.shell.nopanel { grid-template-columns:var(--rail-w) 6px 0 0 1fr var(--insp-w) }
 .shell.nopanel aside, .shell.nopanel #panelresize { display:none }
 .sharemenu { position:relative }
 .sharemenu summary { list-style:none; cursor:pointer; font:600 .76rem Inter;
@@ -626,6 +660,10 @@ aside section[data-tool].on { display:block }
   .rail .tool.small { flex:1 1 0; min-width:0; opacity:1 }
   .resizer { display:none }
   .shell.nopanel aside { display:flex }
+  .inspector { position:fixed; left:0; right:0; top:auto; bottom:0; width:auto;
+    max-height:70dvh; border-left:0; border-top:1px solid var(--line);
+    border-radius:14px 14px 0 0; box-shadow:0 -8px 24px rgba(15,28,43,.18) }
+  .inspector[hidden] { display:none }
   .sysok, #ver { display:none }
   /* position:fixed, not absolute: the panel escapes the map card's
      56dvh height and its overflow:hidden, so it uses the whole viewport
