@@ -30,9 +30,9 @@ def test_three_stops_and_the_map_fills_the_screen():
 
 
 def test_rail_is_the_tab_bar_under_the_sheet():
-    assert ".rail { position:absolute; left:0; right:0; bottom:0; z-index:1001;" in PHONE
+    assert ".rail { position:absolute; left:0; right:0; bottom:0; z-index:1201;" in PHONE
     assert "flex-direction:row" in PHONE
-    assert "bottom:var(--tab-h);\n    height:var(--sheet-h); z-index:1000" in PHONE
+    assert "bottom:var(--tab-h);\n    height:var(--sheet-h); z-index:1200" in PHONE
     # Leaflet's attribution rides above the sheet instead of under it.
     assert ".map-card .leaflet-bottom { bottom:calc(var(--sheet-h) + var(--tab-h))" in PHONE
 
