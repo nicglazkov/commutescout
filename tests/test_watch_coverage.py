@@ -229,7 +229,8 @@ async def test_nevada_watch_alerts_on_a_nevada_event_only_once(store, monkeypatc
 
 def test_watch_page_has_one_coverage_source():
     html = Path("src/ca_roads_demo/static/watch.html").read_text(encoding="utf-8")
-    assert "insideCA" not in html and "CA_BOUNDARY" not in html
-    assert "insideCoverage" in html and "CFG.coverage" in html
+    js = Path("src/ca_roads_demo/static/watch-app.js").read_text(encoding="utf-8")
+    assert "insideCA" not in html + js and "CA_BOUNDARY" not in html + js
+    assert "insideCoverage" in js and "CFG.coverage" in js
     assert "Draw an area of California" not in html
     assert re.search(r"anywhere CommuteScout covers", html)

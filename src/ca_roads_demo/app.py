@@ -1437,27 +1437,37 @@ async def sitemap_xml(_: Request):
 _INDEX_CACHE: dict = {}
 _GEO_SLOT = "<!--BOOT_GEO-->"
 _ASSET_SLOT = "__ASSET_V__"
-_MAP_ASSETS = ("map.css", "map-assistant.js", "map-app.js")
+_MAP_ASSETS = ("map.css", "map-assistant.js", "map-app.js", "watch.css", "watch-app.js")
+_WATCH_ASSETS = ("watch.css", "watch-app.js")
+_WATCH_CACHE: dict = {}
 
 
-def _index_template() -> str:
-    """map.html with its asset links stamped by content hash. The page
-    itself is no-cache; its stylesheet and scripts are cached an hour,
+def _stamped_template(page: str, assets: tuple, cache: dict) -> str:
+    """A page with its asset links stamped by content hash. The page
+    itself is no-cache; its stylesheets and scripts are cached an hour,
     so the stamp is what keeps a deploy from pairing new HTML with an
     old script in a visitor's cache."""
-    path = STATIC_DIR / "map.html"
-    stamp = tuple((STATIC_DIR / n).stat().st_mtime for n in _MAP_ASSETS)
+    path = STATIC_DIR / page
+    stamp = tuple((STATIC_DIR / n).stat().st_mtime for n in assets)
     stamp = (path.stat().st_mtime, *stamp)
-    if _INDEX_CACHE.get("stamp") != stamp:
+    if cache.get("stamp") != stamp:
         import hashlib as _hashlib
 
         digest = _hashlib.sha1()
-        for n in _MAP_ASSETS:
+        for n in assets:
             digest.update((STATIC_DIR / n).read_bytes())
-        _INDEX_CACHE["stamp"] = stamp
-        _INDEX_CACHE["text"] = path.read_text(encoding="utf-8").replace(
+        cache["stamp"] = stamp
+        cache["text"] = path.read_text(encoding="utf-8").replace(
             _ASSET_SLOT, digest.hexdigest()[:10])
-    return _INDEX_CACHE["text"]
+    return cache["text"]
+
+
+def _index_template() -> str:
+    return _stamped_template("map.html", _MAP_ASSETS, _INDEX_CACHE)
+
+
+def _watch_template() -> str:
+    return _stamped_template("watch.html", _WATCH_ASSETS, _WATCH_CACHE)
 
 
 def _visitor_view(request: Request) -> dict | None:
@@ -1507,7 +1517,7 @@ async def logo(_: Request):
 
 
 async def watch_page(_: Request):
-    return FileResponse(STATIC_DIR / "watch.html")
+    return HTMLResponse(_watch_template(), headers={"Cache-Control": "no-cache"})
 
 
 async def admin_page(_: Request):
