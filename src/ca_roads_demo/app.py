@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import math
 import os
 import secrets
 import time
@@ -803,6 +804,13 @@ async def api_geocode(request: Request):
     })
 
 
+# Viewports snap outward to this grid before they become a build box
+# and a cache key. A client varying the sixth decimal of its bbox once
+# defeated the cache on every request, and each miss is a full
+# nationwide build plus gzip (about a second of the single CPU).
+_BBOX_GRID = 0.05
+
+
 def _bbox_params(request: Request):
     try:
         parts = [float(x) for x in (request.query_params.get("bbox") or "").split(",")]
@@ -811,7 +819,11 @@ def _bbox_params(request: Request):
         lat_min, lon_min, lat_max, lon_max = parts
         if lat_min >= lat_max or lon_min >= lon_max:
             return None
-        return lat_min, lon_min, lat_max, lon_max
+        g = _BBOX_GRID
+        return (max(-90.0, math.floor(lat_min / g) * g),
+                max(-180.0, math.floor(lon_min / g) * g),
+                min(90.0, math.ceil(lat_max / g) * g),
+                min(180.0, math.ceil(lon_max / g) * g))
     except ValueError:
         return None
 
@@ -1096,30 +1108,34 @@ async def api_mapdata(request: Request):
                 "incident,closure,chain,fire").split(","))
     slim = request.query_params.get("slim") == "1"
     geo_only = request.query_params.get("fields") == "geo"
-    markers, warm_ready, warm_total, _degraded = await build_markers(
-        box, want, geo_only=geo_only)
-    warming = warm_ready < warm_total
-
-    markers = shape_markers(markers, slim=slim, geo_only=geo_only)
-
-    # Everything, gzipped: compresses roughly 5:1. No caps - the map
-    # IS the product. Content-hash ETag lets the interval refresh cost
-    # a 304 when nothing changed; X-Raw-Length powers the client's
-    # byte-true download progress (fetch() readers see decompressed
-    # bytes, so Content-Length alone cannot drive a percentage).
-    # json.dumps + gzip of the big payloads run OFF the event loop and
-    # the finished bytes are cached: identical concurrent boot
-    # requests must not stack up compression work behind one another.
+    # Served-response cache, checked BEFORE the build: a hit skips the
+    # nationwide marker build as well as the json.dumps + gzip that
+    # were measured blocking the event loop for ~1 s. A 30 s TTL
+    # matches the response's Cache-Control. The key is the grid-snapped
+    # box, so near-identical viewports share one entry.
     import gzip as _gzip
     import hashlib as _hashlib
 
-    cache_key = (request.query_params.get("bbox") or "",
+    cache_key = (tuple(round(v, 4) for v in box),
                  request.query_params.get("kinds") or "", slim, geo_only)
     now_mono = time.monotonic()
-    hit = None if warming else _MAPDATA_CACHE.get(cache_key)
+    hit = _MAPDATA_CACHE.get(cache_key)
     if hit and now_mono - hit[0] < _MAPDATA_CACHE_TTL:
-        _ts, etag, raw_len, gz_body, raw_body = hit
+        (_ts, etag, raw_len, gz_body, raw_body, marker_count,
+         warm_ready, warm_total) = hit
+        warming = False
     else:
+        markers, warm_ready, warm_total, _degraded = await build_markers(
+            box, want, geo_only=geo_only)
+        warming = warm_ready < warm_total
+        markers = shape_markers(markers, slim=slim, geo_only=geo_only)
+        marker_count = len(markers)
+
+        # Everything, gzipped: compresses roughly 5:1. No caps - the
+        # map IS the product. Content-hash ETag lets the interval
+        # refresh cost a 304 when nothing changed; X-Raw-Length powers
+        # the client's byte-true download progress. The work runs OFF
+        # the event loop.
         def _build(ms):
             raw = json.dumps({"markers": ms}).encode()
             return raw, _gzip.compress(raw, 6)
@@ -1131,7 +1147,8 @@ async def api_mapdata(request: Request):
         # the very next poll should see more feeds, not this snapshot.
         if not warming:
             _MAPDATA_CACHE[cache_key] = (now_mono, etag, raw_len, gz_body,
-                                         raw_body)
+                                         raw_body, marker_count,
+                                         warm_ready, warm_total)
             while len(_MAPDATA_CACHE) > _MAPDATA_CACHE_MAX:
                 _MAPDATA_CACHE.pop(next(iter(_MAPDATA_CACHE)))
 
@@ -1149,7 +1166,7 @@ async def api_mapdata(request: Request):
               # Response headers land before the body streams, so the
               # page can say "loading N reports" from the first chunk
               # instead of counting up from an unknown total.
-              "X-Marker-Count": str(len(markers)),
+              "X-Marker-Count": str(marker_count),
               "X-Warm-Ready": str(warm_ready),
               "X-Warm-Total": str(warm_total)}
     inm = request.headers.get("if-none-match") or ""
@@ -2272,7 +2289,11 @@ class SoftLimit:
 
     PREFIXES = ("/api/suggest", "/api/geocode", "/api/flow",
                 "/api/staticmap", "/api/traffictile", "/api/contact",
-                "/api/waitlist", "/api/signin-link")
+                "/api/waitlist", "/api/signin-link",
+                # A cache miss here is a nationwide build; the grid
+                # snap in _bbox_params makes misses rare and this
+                # bucket makes a scripted miss loop cost nothing.
+                "/api/mapdata")
 
     def __init__(self, app_):
         self.app = app_
