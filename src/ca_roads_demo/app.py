@@ -1850,8 +1850,23 @@ def _closure_has_stretch(c) -> bool:
                      or abs(c.end_lon - c.begin_lon) > _SNAP_MIN_DELTA))
 
 
+# Startup budget for mirroring the road snaps from Firestore. A
+# request-billed Cloud Run instance has full CPU only during startup
+# and while a request is in flight; this service sees about two
+# requests a minute, so the same load in the background crawled at a
+# few documents a second and hit Firestore's server-side deadline
+# (seen three times in a row on 2026-09-16). Uvicorn opens the port
+# only after lifespan startup returns, so the load runs with the CPU
+# boost and finishes in seconds; the budget keeps a bad day inside the
+# 240 s startup probe, and the worker retries a load that did not fit.
+SNAP_LOAD_STARTUP_SECONDS = 150
+
+
 @contextlib.asynccontextmanager
 async def _lifespan(app_):
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(roadsnap.load_persisted(),
+                               SNAP_LOAD_STARTUP_SECONDS)
     task = asyncio.create_task(_prewarm())
     # Publishes the map's boot payload to GCS so visitors read it from
     # the edge instead of from this instance. No-op without
