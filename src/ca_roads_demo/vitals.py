@@ -14,10 +14,18 @@ import json
 import logging
 import os
 import time
+import tracemalloc
 
 log = logging.getLogger("vitals")
 
 INTERVAL = 600
+# Set VITALS_TRACEMALLOC=1 to add the top allocation sites to each line.
+# tracemalloc costs memory and CPU, so it is a switch for a day of
+# diagnosis, not a default: RSS was measured climbing ~120 MB an hour
+# between restarts with every counted cache flat.
+TRACE = os.environ.get("VITALS_TRACEMALLOC", "").strip() == "1"
+if TRACE:
+    tracemalloc.start(1)
 # Injectable so tests can drive the loop without wall-clock waits.
 _sleep = asyncio.sleep
 _started = time.monotonic()
@@ -38,7 +46,7 @@ def snapshot() -> dict:
     # Local imports: app imports this module at load time.
     from ca_roads_demo import app, roadsnap, states
 
-    return {
+    out = {
         "log_type": "vitals",
         "uptime_min": round((time.monotonic() - _started) / 60, 1),
         "rss_mb": rss_mb(),
@@ -51,6 +59,16 @@ def snapshot() -> dict:
         "perim_cache": len(app._PERIM_CACHE),
         "states_cache": len(states._cache._entries),
     }
+    if TRACE and tracemalloc.is_tracing():
+        current, peak = tracemalloc.get_traced_memory()
+        stats = tracemalloc.take_snapshot().statistics("filename")[:8]
+        out["traced_mb"] = round(current / 1e6, 1)
+        out["traced_peak_mb"] = round(peak / 1e6, 1)
+        out["top_alloc"] = [
+            {"file": os.sep.join(s.traceback[0].filename.split(os.sep)[-3:]),
+             "mb": round(s.size / 1e6, 1), "n": s.count}
+            for s in stats]
+    return out
 
 
 async def run() -> None:

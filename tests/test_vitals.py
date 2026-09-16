@@ -43,3 +43,20 @@ async def test_run_logs_one_json_line_per_tick(monkeypatch, caplog):
     parsed = json.loads(lines[0].split(" ", 1)[1])
     assert parsed["log_type"] == "vitals" and "snaps_mem" in parsed
     assert ticks == [vitals.INTERVAL, vitals.INTERVAL]
+
+
+def test_snapshot_adds_allocation_sites_when_tracing(monkeypatch):
+    import tracemalloc
+
+    monkeypatch.setattr(vitals, "TRACE", True)
+    tracemalloc.start(1)
+    try:
+        got = vitals.snapshot()
+    finally:
+        tracemalloc.stop()
+    assert got["traced_mb"] >= 0 and got["traced_peak_mb"] >= got["traced_mb"]
+    assert got["top_alloc"] and {"file", "mb", "n"} <= set(got["top_alloc"][0])
+
+
+def test_snapshot_has_no_allocation_sites_by_default():
+    assert "top_alloc" not in vitals.snapshot()
