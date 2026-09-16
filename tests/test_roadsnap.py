@@ -1,5 +1,8 @@
 """Road snapper: quality gates, caching, and marker application."""
 
+import asyncio
+import logging
+
 import httpx
 import pytest
 import respx
@@ -15,6 +18,8 @@ def setup_function(_fn):
     roadsnap._queue.clear()
     roadsnap._queued.clear()
     roadsnap._pairs.clear()
+    roadsnap._tries.clear()
+    roadsnap._loaded = False
 
 
 @pytest.fixture(autouse=True)
@@ -141,3 +146,162 @@ def test_failed_snaps_are_remembered_as_no_line():
          "end": [37.33, -121.92]}
     roadsnap.apply([m])
     assert "path" not in m and not roadsnap._queue
+
+
+# --- boot mirror + worker gate -------------------------------------------
+
+class _FakeSnap:
+    def __init__(self, id_, doc):
+        self.id = id_
+        self._doc = doc
+
+    def to_dict(self):
+        return self._doc
+
+
+class _FakeDb:
+    """Just enough Firestore: one collection, a stream of docs, and a
+    record of every document().set() the worker performs."""
+
+    def __init__(self, docs=None, fail_stream=False):
+        self.docs = docs or {}
+        self.fail_stream = fail_stream
+        self.sets: list[tuple[str, dict]] = []
+
+    def collection(self, _name):
+        return self
+
+    async def stream(self):
+        if self.fail_stream:
+            raise RuntimeError("stream broke")
+        for k, v in self.docs.items():
+            yield _FakeSnap(k, v)
+
+    def document(self, key):
+        db = self
+
+        class _Doc:
+            async def set(self, data):
+                db.sets.append((key, data))
+        return _Doc()
+
+
+async def test_load_persisted_mirrors_docs(monkeypatch, caplog):
+    db = _FakeDb({
+        "aaa": {"ok": True, "path": "[[37.3, -121.9], [37.33, -121.92]]"},
+        "bbb": {"ok": False, "path": None},
+    })
+    monkeypatch.setattr(roadsnap, "_get_db", lambda: db)
+    with caplog.at_level(logging.INFO, logger="roadsnap"):
+        assert await roadsnap.load_persisted() is True
+    assert roadsnap._loaded is True
+    assert roadsnap._mem["aaa"] == [[37.3, -121.9], [37.33, -121.92]]
+    assert roadsnap._mem["bbb"] is None
+    assert "road_snaps loaded: 2 docs" in caplog.text
+
+
+async def test_load_persisted_failure_is_not_loaded(monkeypatch, caplog):
+    """A failed or partial mirror must not read as 'nothing is known':
+    the worker would then re-buy every pair it sees."""
+    monkeypatch.setattr(roadsnap, "_get_db", lambda: _FakeDb(fail_stream=True))
+    with caplog.at_level(logging.ERROR, logger="roadsnap"):
+        assert await roadsnap.load_persisted() is False
+    assert roadsnap._loaded is False
+    assert not roadsnap._mem
+    assert "road_snaps load failed" in caplog.text
+
+
+async def test_drain_never_buys_before_load_succeeds(monkeypatch):
+    monkeypatch.setattr(roadsnap, "_get_db", lambda: _FakeDb(fail_stream=True))
+    waits: list[float] = []
+
+    async def fake_sleep(seconds):
+        waits.append(seconds)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(roadsnap, "_sleep", fake_sleep)
+    assert roadsnap.path_for(37.3, -121.9, 37.33, -121.92) is None
+    with respx.mock:
+        route = respx.post(url__regex=ROUTE_RE).mock(
+            return_value=httpx.Response(200, json=_trip([[37.3, -121.9],
+                                                         [37.33, -121.92]], 4.0)))
+        async with httpx.AsyncClient() as client:
+            with pytest.raises(asyncio.CancelledError):
+                await roadsnap._drain(client)
+    assert route.call_count == 0
+    assert waits == [roadsnap.LOAD_RETRY_SECONDS]
+    assert roadsnap._queue  # the pair is still waiting, not lost
+
+
+async def test_drain_logs_and_persists_each_purchase(monkeypatch, caplog):
+    db = _FakeDb()
+    monkeypatch.setattr(roadsnap, "_get_db", lambda: db)
+
+    async def fake_sleep(seconds):
+        if seconds == roadsnap.PACE_SECONDS:
+            raise asyncio.CancelledError  # one purchase, then stop
+
+    monkeypatch.setattr(roadsnap, "_sleep", fake_sleep)
+    key = roadsnap._key(37.3, -121.9, 37.33, -121.92)
+    assert roadsnap.path_for(37.3, -121.9, 37.33, -121.92) is None
+    points = [[37.3, -121.9], [37.31, -121.91], [37.33, -121.92]]
+    with respx.mock, caplog.at_level(logging.INFO, logger="roadsnap"):
+        respx.post(url__regex=ROUTE_RE).mock(
+            return_value=httpx.Response(200, json=_trip(points, 4.0)))
+        async with httpx.AsyncClient() as client:
+            with pytest.raises(asyncio.CancelledError):
+                await roadsnap._drain(client)
+    assert roadsnap._mem[key][0] == [37.3, -121.9]
+    assert db.sets and db.sets[0][0] == key and db.sets[0][1]["ok"] is True
+    assert f"snap closure {key} ok=True queue=0" in caplog.text
+
+
+async def test_drain_warns_when_persist_fails(monkeypatch, caplog):
+    """A purchase that never reaches Firestore is bought again after
+    the next restart; that must be visible, not silent."""
+    db = _FakeDb()
+
+    class _Broken:
+        async def set(self, _data):
+            raise RuntimeError("firestore down")
+
+    db.document = lambda _key: _Broken()
+    monkeypatch.setattr(roadsnap, "_get_db", lambda: db)
+
+    async def fake_sleep(seconds):
+        if seconds == roadsnap.PACE_SECONDS:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(roadsnap, "_sleep", fake_sleep)
+    roadsnap.path_for(37.3, -121.9, 37.33, -121.92)
+    with respx.mock, caplog.at_level(logging.WARNING, logger="roadsnap"):
+        respx.post(url__regex=ROUTE_RE).mock(
+            return_value=httpx.Response(200, json=_trip(
+                [[37.3, -121.9], [37.33, -121.92]], 4.0)))
+        async with httpx.AsyncClient() as client:
+            with pytest.raises(asyncio.CancelledError):
+                await roadsnap._drain(client)
+    assert "snap persist failed" in caplog.text
+
+
+async def test_drain_logs_router_errors_and_requeues(monkeypatch, caplog):
+    db = _FakeDb()
+    monkeypatch.setattr(roadsnap, "_get_db", lambda: db)
+    waits: list[float] = []
+
+    async def fake_sleep(seconds):
+        waits.append(seconds)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(roadsnap, "_sleep", fake_sleep)
+    key = roadsnap._key(37.3, -121.9, 37.33, -121.92)
+    roadsnap.path_for(37.3, -121.9, 37.33, -121.92)
+    with respx.mock, caplog.at_level(logging.WARNING, logger="roadsnap"):
+        respx.post(url__regex=ROUTE_RE).mock(
+            return_value=httpx.Response(503))
+        async with httpx.AsyncClient() as client:
+            with pytest.raises(asyncio.CancelledError):
+                await roadsnap._drain(client)
+    assert waits == [30]
+    assert key in roadsnap._queue and key not in roadsnap._mem
+    assert "snap retry later" in caplog.text and "HTTPStatusError" in caplog.text
