@@ -129,10 +129,6 @@
           </details>
           <button type="button" id="clearroutebtn">Clear route</button>
         </div>
-        <div class="routeasks-wrap" id="routeasks-wrap">
-          <b>Questions people ask about this drive</b>
-          <div class="routeasks" id="routeasks"></div>
-        </div>
         <details class="stepsdrop" id="stepsdrop">
           <summary id="stepssummary">Turn-by-turn directions</summary>
           <ol class="steps" id="steps"></ol>
@@ -144,7 +140,7 @@
       <div class="askhead">
         <h3>Ask about your drive</h3>
         <p>Ask the way you'd say it out loud. The answer reads the live
-        feeds on the map. Deepest detail in California.</p>
+        feeds on the map.</p>
       </div>
     <form id="form">
       <div class="searchrow">
@@ -171,6 +167,10 @@
           <button type="button" data-fb="feedback_down" aria-label="No">&#128078;</button>
         </div>
       </div>
+    </div>
+    <div class="routeasks-wrap" id="routeasks-wrap" style="display:none">
+      <b>Questions people ask about this drive</b>
+      <div class="routeasks" id="routeasks"></div>
     </div>
     </section>
     <section id="pane-layers" data-tool="layers">
@@ -414,6 +414,7 @@
     <div class="pickhint" id="pickhint" hidden></div>
     <div class="roadinfo" id="roadinfo"></div>
   </div>
+  <div class="resizer" id="inspresize" role="separator" aria-orientation="vertical" aria-label="Resize the details pane" tabindex="0" hidden></div>
   <aside class="inspector" id="inspector" hidden aria-label="Details">
     <div class="insphead"><b id="insptitle">Details</b>
       <button type="button" class="inspx" id="inspclose" aria-label="Close the details pane">&times;</button></div>

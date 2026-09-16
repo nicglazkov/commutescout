@@ -105,8 +105,8 @@ def test_resize_bounds_and_persistence_follow_the_spec():
     for key in ("cs-tool", "cs-rail-w", "cs-panel-w"):
         assert key in APP
     assert "panelhidden" not in APP and "paneltab" not in APP and "paneltab" not in CSS
-    # Rail handle, panel handle, and the phone sheet's grab handle.
-    assert 'role="separator"' in HTML and HTML.count('role="separator"') == 3
+    # Rail handle, panel handle, inspector handle, and the phone sheet's grab.
+    assert 'role="separator"' in HTML and HTML.count('role="separator"') == 4
     assert "ArrowRight" in APP and "ArrowLeft" in APP  # keyboard resize
 
 
