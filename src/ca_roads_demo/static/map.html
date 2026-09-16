@@ -72,17 +72,25 @@
      had no heading element at all: no h1, no outline, nothing for a
      crawler or a screen reader to anchor on. -->
 <h1 class="visually-hidden">Live US road conditions map</h1>
-<div class="kpis" id="kpis">
-  <div><b id="k-inc">–</b>active incidents</div>
-  <div><b id="k-clo">–</b>closures in place</div>
-  <div><b id="k-cc">–</b>chain controls</div>
-  <div><b id="k-wf">–</b>wildfires tracked</div>
-  <div><b id="k-cam">–</b>cameras online</div>
-  <div><b id="k-st">–</b>states covered</div>
-</div>
-<div class="shell">
-  <aside>
-    <section id="pane-plan">
+<div class="shell" id="shell">
+  <nav class="rail" id="rail" aria-label="Map tools">
+    <button type="button" class="tool on" data-tool="route" aria-pressed="true" title="Plan a route">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M8.5 16.5 15.5 7.5"/></svg><span>Route</span></button>
+    <button type="button" class="tool" data-tool="ask" aria-pressed="false" title="Ask about your drive">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M12 8v3M12 13.5v.01"/></svg><span>Ask</span></button>
+    <button type="button" class="tool" data-tool="layers" aria-pressed="false" title="Show or hide layers">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 4 8 4.5-8 4.5-8-4.5z"/><path d="m4 13 8 4.5 8-4.5M4 17l8 4.5 8-4.5"/></svg><span>Layers</span></button>
+    <a class="tool" href="/watch" data-tool="watch" title="Watch areas">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V7z"/><path d="m9 12 2 2 4-4"/></svg><span>Watch</span></a>
+    <button type="button" class="tool" data-tool="alerts" aria-pressed="false" title="What is live right now">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 16.5v.01"/></svg><span>Alerts</span></button>
+    <span class="railgap" aria-hidden="true"></span>
+    <button type="button" class="tool small" data-tool="about" aria-pressed="false" title="About the data">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.01"/></svg><span>Data</span></button>
+  </nav>
+  <div class="resizer" id="railresize" role="separator" aria-orientation="vertical" aria-label="Resize the tool rail" tabindex="0"></div>
+  <aside id="panel">
+    <section id="pane-plan" data-tool="route" class="on">
       <div class="fld"><label for="from">From</label>
         <button type="button" class="pickmap" id="pickfrom" data-pick="from">Pick on map</button>
         <input id="from" maxlength="200" placeholder="e.g. San Jose or 123 Main St, Davis" autocomplete="off">
@@ -107,11 +115,16 @@
         <div class="routesum" id="routesum"></div>
         <div class="viachips" id="viachips"></div>
         <div class="routebtns">
-          <button type="button" id="printbtn">Print</button>
-          <button type="button" id="exportbtn">Export .txt</button>
-          <button type="button" id="gpxbtn">GPX</button>
-          <button type="button" id="kmlbtn">KML</button>
           <button type="button" id="sharebtn" class="pri">Share link</button>
+          <details class="sharemenu">
+            <summary>Export</summary>
+            <div class="sharelist">
+              <button type="button" id="gpxbtn">GPX</button>
+              <button type="button" id="kmlbtn">KML</button>
+              <button type="button" id="exportbtn">Text</button>
+              <button type="button" id="printbtn">Print</button>
+            </div>
+          </details>
           <button type="button" id="clearroutebtn">Clear route</button>
         </div>
         <div class="routeasks-wrap" id="routeasks-wrap">
@@ -125,13 +138,11 @@
         <div class="routecond" id="routecond"></div>
       </div>
     </section>
-    <section id="pane-ask">
+    <section id="pane-ask" data-tool="ask">
       <div class="askhead">
         <h3>Ask about your drive</h3>
-        <p>Type a question the way you'd say it out loud. An assistant reads
-        the live feeds above and answers in a few seconds - nothing to
-        install or sign up for. It answers anywhere the map has coverage,
-        with the deepest detail in California.</p>
+        <p>Ask the way you'd say it out loud. The answer reads the live
+        feeds on the map. Deepest detail in California.</p>
       </div>
     <form id="form">
       <div class="searchrow">
@@ -160,32 +171,7 @@
       </div>
     </div>
     </section>
-    <p class="legalfoot">
-      Data: CHP, Caltrans, WFIGS, CAL FIRE, NWS, USGS, TomTom, 511 SF Bay,
-      and the state DOT and 511 services listed in the data-sources panel
-      (including data powered by 511NY and TravelMidwest). Independent
-      service, not affiliated with any agency. Conditions change fast; verify
-      before you drive (511 or your state DOT).
-      Questions are logged anonymously to improve answers. Traffic is
-      measured with cookieless Cloudflare Web Analytics.
-      Map tiles, route previews, and place lookup come from Stadia Maps
-      (data (c) OpenStreetMap contributors), which sees the coordinates
-      involved.
-      <a href="/privacy">Privacy</a>
-      <a href="/terms">Terms</a>
-      <a href="/data-sources">Data sources</a>
-      <a href="/pricing">Pricing</a>
-      <a href="/about">About</a>
-      <a href="/contact">Contact</a>
-      <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
-    </p>
-  </aside>
-  <div class="map-card active" id="mapcard">
-    <div id="map"></div>
-    <div class="maploading" id="maploading"><i></i><span id="maploadingtext">Loading live road data&hellip;</span></div>
-    <div class="pickhint" id="pickhint" hidden></div>
-    <div class="roadinfo" id="roadinfo"></div>
-    <button type="button" class="layersbtn" id="layersbtn">Layers</button>
+    <section id="pane-layers" data-tool="layers">
   <div class="filters" id="filters">
       <b>Show on map</b>
       <button type="button" id="allnone" class="allnone">Show all / none</button>
@@ -208,26 +194,57 @@
       <label><input type="checkbox" data-group="toll"><i class="iline" style="--dot:#64748b"></i>Toll prices <em id="n-toll"></em></label>
       <u>Traffic</u>
       <label><input type="checkbox" id="trafficlayer"><i style="--dot:#7a4bd6"></i>Live traffic overlay</label>
+      <label class="subopt"><input type="checkbox" disabled><i style="--dot:#2f9e6e"></i>flowing</label>
+      <label class="subopt"><input type="checkbox" disabled><i style="--dot:#e8a13c"></i>slow</label>
+      <label class="subopt"><input type="checkbox" disabled><i style="--dot:#d64545"></i>congested</label>
       <u>Roadside</u>
       <label><input type="checkbox" data-group="camera"><i style="--dot:#2f81f7"></i>Cameras <em id="n-camera"></em></label>
       <label class="subopt"><input type="checkbox" id="camvideo"><i></i>only with live video <em id="n-camvideo"></em></label>
       <label><input type="checkbox" data-group="sign" checked><i style="--dot:#a16207"></i>Message signs <em id="n-sign"></em></label>
       <label class="subopt"><input type="checkbox" id="signblank"><i></i>include blank signs <em id="n-signblank"></em></label>
     </div>
-    <div class="legend">
-      <span style="--dot:#7f1d1d">road fully closed</span>
-      <span style="--dot:#a02c2c">lanes closed</span>
-      <span class="ring" style="--dot:#a02c2c">one-way / rolling work</span>
-      <span style="--dot:#d9a0a0">ramp closed</span>
-      <span style="--dot:#c9611a">incident</span>
-      <span style="--dot:#2b6cb0">chain control</span>
-      <span style="--dot:#d97706">wildfire</span>
-      <span style="--dot:#2f81f7">camera</span>
-      <span style="--dot:#a16207">sign</span>
-      <span style="--dot:#2f9e6e">flowing</span>
-      <span style="--dot:#e8a13c">slow</span>
-      <span style="--dot:#d64545">congested</span>
-    </div>
+    </section>
+    <section id="pane-alerts" data-tool="alerts">
+      <h3 class="panehead">Live right now</h3>
+      <div class="kpis" id="kpis">
+        <div><b id="k-inc">–</b>active incidents</div>
+        <div><b id="k-clo">–</b>closures in place</div>
+        <div><b id="k-cc">–</b>chain controls</div>
+        <div><b id="k-wf">–</b>wildfires tracked</div>
+        <div><b id="k-cam">–</b>cameras online</div>
+        <div><b id="k-st">–</b>states covered</div>
+      </div>
+      <p class="panenote">Counts across every covered state, refreshed every 30 seconds. A list of what is in view, worst first, comes next.</p>
+    </section>
+    <section id="pane-about" data-tool="about">
+      <h3 class="panehead">About the data</h3>
+    <p class="legalfoot">
+      Data: CHP, Caltrans, WFIGS, CAL FIRE, NWS, USGS, TomTom, 511 SF Bay,
+      and the state DOT and 511 services listed in the data-sources panel
+      (including data powered by 511NY and TravelMidwest). Independent
+      service, not affiliated with any agency. Conditions change fast; verify
+      before you drive (511 or your state DOT).
+      Questions are logged anonymously to improve answers. Traffic is
+      measured with cookieless Cloudflare Web Analytics.
+      Map tiles, route previews, and place lookup come from Stadia Maps
+      (data (c) OpenStreetMap contributors), which sees the coordinates
+      involved.
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/data-sources">Data sources</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
+      <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
+    </p>
+    </section>
+  </aside>
+  <div class="resizer" id="panelresize" role="separator" aria-orientation="vertical" aria-label="Resize the panel" tabindex="0"></div>
+  <div class="map-card active" id="mapcard">
+    <div id="map"></div>
+    <div class="maploading" id="maploading"><i></i><span id="maploadingtext">Loading live road data&hellip;</span></div>
+    <div class="pickhint" id="pickhint" hidden></div>
+    <div class="roadinfo" id="roadinfo"></div>
   </div>
 </div>
 
