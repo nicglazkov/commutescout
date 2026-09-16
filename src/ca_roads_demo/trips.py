@@ -109,9 +109,9 @@ def decode_polyline(encoded: str, precision: int = 5) -> list:
 
 
 async def api_trip_create(request: Request) -> JSONResponse:
-    from ca_roads_demo.app import client_ip
+    from ca_roads_demo.app import client_key
 
-    if not _trip_allowed(client_ip(request)):
+    if not _trip_allowed(client_key(request)):
         return JSONResponse(
             {"error": "daily share-link limit reached; try tomorrow"},
             status_code=429)

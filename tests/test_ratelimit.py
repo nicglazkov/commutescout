@@ -172,3 +172,27 @@ def test_cf_connecting_ip_trusted_only_from_cloudflare():
     # tests): header honored; garbage vouched value never matches.
     assert trusted_client_ip(None, "172.68.1.2", "203.0.113.9") == "203.0.113.9"
     assert trusted_client_ip("junk-not-an-ip", None, "10.0.0.1") == "junk-not-an-ip"
+
+
+def test_limiter_key_folds_ipv6_to_its_64():
+    """A residential IPv6 allocation is a /64: one client can rotate the
+    low 64 bits per request, so keying on the full address would hand it
+    unlimited fresh buckets and daily counters."""
+    from ca_roads_mcp.ratelimit import limiter_key
+
+    a = limiter_key("2001:db8:abcd:1234:1:2:3:4")
+    b = limiter_key("2001:db8:abcd:1234:ffff:ffff:ffff:ffff")
+    c = limiter_key("2001:db8:abcd:1235::1")
+    assert a == b == "2001:db8:abcd:1234::/64"
+    assert c != a
+    assert limiter_key("203.0.113.9") == "203.0.113.9"
+    assert limiter_key("::ffff:203.0.113.9") == "203.0.113.9"  # v4-mapped
+    assert limiter_key("unknown") == "unknown"
+
+
+def test_limiter_shares_a_bucket_across_one_ipv6_64():
+    limiter = RateLimiter(capacity=2, refill_per_second=0)
+    assert limiter.allow("2001:db8:1::1", now=1.0)
+    assert limiter.allow("2001:db8:1::2", now=1.0)
+    assert not limiter.allow("2001:db8:1::3", now=1.0)
+    assert limiter.allow("2001:db8:2::1", now=1.0)  # another /64

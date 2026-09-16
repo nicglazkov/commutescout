@@ -59,6 +59,7 @@ from ca_roads_mcp.ratelimit import (
     RateLimiter,
     RateLimitMiddleware,
     is_cloudflare_ip,
+    limiter_key,
     trusted_client_ip,
 )
 from ca_roads_mcp.serialize import direction_hint
@@ -144,6 +145,13 @@ def client_ip(request: Request) -> str:
         request.client.host if request.client else None,
         request.headers.get("cf-connecting-ip"),
     )
+
+
+def client_key(request: Request) -> str:
+    """Identity for per-client caps: the address, with IPv6 folded to
+    its /64 (see ratelimit.limiter_key). client_ip() stays the real
+    address for callers that need one, such as Turnstile's remoteip."""
+    return limiter_key(client_ip(request))
 
 
 def _sse(payload: dict) -> str:
@@ -463,7 +471,7 @@ async def ask(request: Request):
         prior_a = str(raw_prior.get("answer") or "")[:MAX_PRIOR_ANSWER_CHARS]
         if prior_q and prior_a:
             prior = {"question": prior_q, "answer": prior_a}
-    blocked = guards.try_start_question(client_ip(request))
+    blocked = guards.try_start_question(client_key(request))
     if blocked:
         return JSONResponse({"error": blocked}, status_code=429)
     tz = body.get("tz")
@@ -1693,7 +1701,7 @@ async def api_signin_link(request: Request):
     if not ("@" in email and "." in email.rsplit("@", 1)[-1]):
         return PlainTextResponse("Enter a valid email address.",
                                  status_code=400)
-    if not _signin_allowed(email, client_ip(request)):
+    if not _signin_allowed(email, client_key(request)):
         return PlainTextResponse("Too many sign-in requests. Wait a bit "
                                  "and try again.", status_code=429)
     link = await asyncio.to_thread(watch.generate_signin_link, email)
