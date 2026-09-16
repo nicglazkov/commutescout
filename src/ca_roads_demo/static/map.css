@@ -48,17 +48,68 @@ body { background:var(--bg); color:var(--ink);
 .asof.old { color:#ff9f9f; font-weight:600 }
 #ver { color:#8fa2b8; font-size:.75rem }
 
-.kpis { background:var(--navy2); color:#c8d5e4; display:flex; overflow-x:auto;
+.kpis-old { background:var(--navy2); color:#c8d5e4; display:flex; overflow-x:auto;
   padding:0 20px; flex:none; font-size:.78rem }
 .kpis div { padding:8px 18px 8px 0; margin-right:18px;
   border-right:1px solid rgba(255,255,255,.08); white-space:nowrap }
 .kpis div:last-child { border-right:0 }
 .kpis b { color:#fff; font-size:.95rem; margin-right:5px }
 
-/* ── Shell ──────────────────────────────────────────────────── */
-.shell { flex:1; display:grid; grid-template-columns:440px 1fr; min-height:0 }
+/* ── Shell: icon rail, one panel, the map ─────────────────────
+   Columns: rail | handle | panel | handle | map. Both handles drag
+   (and take arrow keys); widths live in CSS variables the script sets
+   from localStorage, clamped to the bounds in the spec. */
+.shell { flex:1; display:grid; min-height:0;
+  --rail-w:64px; --panel-w:360px;
+  grid-template-columns:var(--rail-w) 6px var(--panel-w) 6px 1fr }
+.rail { background:var(--navy); display:flex; flex-direction:column;
+  align-items:stretch; padding:8px 6px; gap:4px; overflow:hidden }
+.rail .tool { display:flex; flex-direction:column; align-items:center;
+  gap:3px; padding:9px 2px 7px; border:0; border-radius:10px;
+  background:transparent; color:#c9d4e0; font:600 .62rem Inter;
+  letter-spacing:.2px; cursor:pointer; text-decoration:none;
+  text-align:center; min-height:52px }
+.rail .tool svg { width:22px; height:22px; fill:none; stroke:currentColor;
+  stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round }
+.rail .tool:hover { background:var(--navy2); color:#fff }
+.rail .tool.on { background:var(--navy2); color:#fff }
+.rail .tool.on svg { color:#7fb3ee }
+.rail .tool:focus-visible { outline:2px solid #7fb3ee; outline-offset:-2px }
+.rail .railgap { flex:1 }
+.rail .tool.small { min-height:44px; opacity:.85 }
+.resizer { cursor:col-resize; background:transparent; position:relative }
+.resizer::after { content:""; position:absolute; inset:0; margin:auto;
+  width:2px; background:var(--line); transition:background .15s }
+.resizer:hover::after, .resizer.dragging::after, .resizer:focus-visible::after {
+  background:var(--sky) }
+.resizer:focus-visible { outline:none }
+#railresize { background:var(--navy) }
+#railresize::after { background:var(--navy2) }
 aside { background:var(--card); border-right:1px solid var(--line);
   overflow-y:auto; padding:18px; display:flex; flex-direction:column }
+aside section[data-tool] { display:none }
+aside section[data-tool].on { display:block }
+.panehead { font:600 .95rem Inter; margin:0 0 10px }
+.panenote { font-size:.78rem; color:var(--dim); margin-top:10px }
+.kpis { display:grid; grid-template-columns:1fr 1fr; gap:8px }
+.kpis div { background:var(--sky-soft); border-radius:10px; padding:10px 12px;
+  font:500 .72rem Inter; color:var(--dim); display:flex; flex-direction:column }
+.kpis b { color:var(--ink); font:600 1.15rem Inter; margin-bottom:2px }
+/* Collapsed: the rail alone; the map takes the rest. */
+.shell.nopanel { grid-template-columns:var(--rail-w) 6px 0 0 1fr }
+.shell.nopanel aside, .shell.nopanel #panelresize { display:none }
+.sharemenu { position:relative }
+.sharemenu summary { list-style:none; cursor:pointer; font:600 .76rem Inter;
+  border-radius:8px; padding:8px 12px; border:1px solid var(--line);
+  background:var(--card) }
+.sharemenu summary::-webkit-details-marker { display:none }
+.sharemenu[open] summary { border-color:var(--sky) }
+.sharelist { position:absolute; z-index:5; top:calc(100% + 4px); left:0;
+  background:var(--card); border:1px solid var(--line); border-radius:10px;
+  box-shadow:0 8px 24px rgba(15,28,43,.16); padding:6px; display:flex;
+  flex-direction:column; gap:2px; min-width:140px }
+.sharelist button { text-align:left; border:0; background:transparent }
+.sharelist button:hover { background:var(--sky-soft) }
 .searchrow { display:flex; border:1.5px solid var(--line); border-radius:10px;
   overflow:hidden; background:var(--card) }
 .searchrow:focus-within { border-color:var(--sky) }
@@ -448,15 +499,6 @@ aside { background:var(--card); border-right:1px solid var(--line);
   flex:none; position:relative; top:0 }
 /* Edge tab that hides/shows the route-planner sidebar so the map can
    take the full width. */
-.paneltab { position:absolute; z-index:900; left:0; top:50%;
-  transform:translateY(-50%); width:22px; height:64px;
-  border:1px solid var(--line); border-left:0;
-  border-radius:0 10px 10px 0; background:rgba(255,255,255,.96);
-  font:700 13px/62px Inter; text-align:center; cursor:pointer;
-  color:var(--dim); box-shadow:2px 0 8px rgba(15,28,43,.12); padding:0 }
-.paneltab:hover { color:var(--ink) }
-.shell.nopanel aside { display:none }
-.shell.nopanel { grid-template-columns:1fr }
 /* Toll details live in a left-hand panel, not a popup on the road:
    the popup used to cover the very corridor the rate rows highlight. */
 .tollside { position:absolute; z-index:1150; top:12px; left:12px;
@@ -473,10 +515,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
 @media (max-width: 960px) {
   .tollside { top:auto; bottom:0; left:0; right:0; width:auto;
     max-height:55vh; border-radius:14px 14px 0 0 } }
-.filters { position:absolute; z-index:800; top:14px; right:14px;
-  background:rgba(255,255,255,.96); border:1px solid var(--line);
-  border-radius:12px; padding:10px 14px; font-size:.78rem;
-  box-shadow:0 2px 8px rgba(15,28,43,.12); user-select:none }
+.filters { font-size:.78rem; user-select:none }
 .filters b { display:block; font:700 .68rem Inter; letter-spacing:.8px;
   text-transform:uppercase; color:var(--dim); margin-bottom:6px }
 .filters label { display:flex; align-items:center; gap:7px; padding:3px 0;
@@ -504,7 +543,6 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .stackdiv { border-top:2px solid #cbd5e1; margin:10px 0 8px }
 .filters label.subopt { padding-left:16px; font-size:.73rem; color:var(--dim) }
 .filters label.subopt i { width:0; height:0 }
-.filters { max-height:calc(100% - 28px); overflow-y:auto }
 .pop { font:13px/1.45 Inter, sans-serif; min-width:200px }
 .pop .k { display:flex; align-items:center; gap:6px; font:700 .68rem Inter;
   letter-spacing:.8px; text-transform:uppercase; color:var(--dim);
@@ -562,11 +600,6 @@ aside { background:var(--card); border-right:1px solid var(--line);
 .pinchoice button:hover, .pinchoice-single:hover { background:#dbe9fd }
 .viadot { background:#0b1f33; border:3px solid #fff; border-radius:99px;
   box-shadow:0 1px 4px rgba(15,28,43,.45); cursor:grab }
-.layersbtn { display:none; position:absolute; top:12px; right:12px;
-  z-index:900; align-items:center; gap:6px; background:var(--card);
-  border:1px solid var(--line); border-radius:10px; padding:9px 13px;
-  font:600 .8rem Inter; color:var(--ink); cursor:pointer;
-  box-shadow:0 2px 8px rgba(15,28,43,.12) }
 @media (max-width: 960px) {
   /* Phone layout: the map is the product, so it comes first at just
      over half the screen, with the planner/assistant scrolling below.
@@ -580,8 +613,20 @@ aside { background:var(--card); border-right:1px solid var(--line);
   aside { overflow:visible }
   .map-card { order:-1; height:56vh; min-height:340px }
   aside { border-right:0; border-top:1px solid var(--line) }
+  /* Six tools in one row on a 390px phone: equal flex shares, no
+     minimum width, tighter type; the row itself never wraps. */
+  .rail { flex-direction:row; padding:4px 6px; gap:2px; order:0;
+    width:100%; min-width:0; box-sizing:border-box }
+  .rail .tool { flex:1 1 0; min-width:0; min-height:44px; padding:5px 0 4px;
+    font-size:.56rem }
+  .rail .tool span { max-width:100%; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap }
+  .rail .tool svg { width:20px; height:20px }
+  .rail .railgap { display:none }
+  .rail .tool.small { flex:1 1 0; min-width:0; opacity:1 }
+  .resizer { display:none }
+  .shell.nopanel aside { display:flex }
   .sysok, #ver { display:none }
-  .legend { display:none }
   /* position:fixed, not absolute: the panel escapes the map card's
      56dvh height and its overflow:hidden, so it uses the whole viewport
      and needs little or no scrolling instead of a ~90px inner window in
@@ -589,22 +634,14 @@ aside { background:var(--card); border-right:1px solid var(--line);
      handles reliably - unlike the clamped inner scroller this replaced,
      the exact "nested scroll areas feel wrong on iOS and hide content"
      pattern the layout avoids everywhere else (see the note above). */
-  .filters { display:none; position:fixed; top:60px; right:12px;
-    left:auto; width:min(320px, calc(100vw - 24px));
-    max-height:calc(100dvh - 76px); overflow-y:auto;
-    -webkit-overflow-scrolling:touch; touch-action:pan-y }
-  .filters.open { display:block }
   .map-card { overflow:hidden }
-  .layersbtn { display:flex }
   .searchrow button.ask, .planbtn { min-height:44px }
   /* iOS zooms the page when a focused input is under 16px. */
   input, select, textarea { font-size:16px !important }
   .map-card { height:56dvh }
-  .filters { overscroll-behavior:contain }
   body { overflow-x:clip }
   aside { padding-bottom:calc(18px + env(safe-area-inset-bottom)) }
   .examples button { padding:8px 12px }
-  .filters label { padding:3px 0 }
 }
 /* ── Topbar: two rows below 640px ──────────────────────────────
    Row 1 (unchanged flex row, just tighter): brand left, the Live

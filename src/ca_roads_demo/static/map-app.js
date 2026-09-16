@@ -1904,34 +1904,105 @@ map.on('click', (e) => {
 });
 document.getElementById('camvideo').addEventListener('change', rebuildCameras);
 
-document.getElementById('layersbtn').addEventListener('click', () => {
-  document.getElementById('filters').classList.toggle('open');
-});
-// The filters panel overlays the map, so a scroll or tap gesture that
-// starts on it must stay on it and never fall through to the map's own
-// pan/zoom/tap handling - the same treatment the toll panel gets.
-L.DomEvent.disableScrollPropagation(document.getElementById('filters'));
-L.DomEvent.disableClickPropagation(document.getElementById('filters'));
-// Hide/show the route-planner sidebar: an edge tab on the map's left
-// side. The map re-measures after the grid change.
-const panelTab = document.createElement('button');
-panelTab.type = 'button';
-panelTab.className = 'paneltab';
-panelTab.setAttribute('aria-label', 'Hide or show the planner panel');
-document.getElementById('mapcard').appendChild(panelTab);
-function setPanelHidden(hide) {
-  document.querySelector('.shell').classList.toggle('nopanel', hide);
-  panelTab.innerHTML = hide ? '&#x276F;' : '&#x276E;';
-  panelTab.title = hide ? 'Show the planner panel' : 'Hide the planner panel';
-  try { localStorage.setItem('panelhidden', hide ? '1' : ''); }
-  catch (_) { /* private mode */ }
+// ── Rail and panel ───────────────────────────────────────────────
+// One tool open at a time; clicking the open tool collapses the panel
+// so the rail alone remains. The choice and both widths persist per
+// visitor (localStorage, best effort). The map re-measures after any
+// layout change. Phones keep the stacked layout; the rail is a row.
+const shellEl = document.getElementById('shell');
+const railEl = document.getElementById('rail');
+const TOOL_KEY = 'cs-tool';
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* private mode */ } },
+};
+function setTool(name, opts) {
+  const toggle = !(opts && opts.toggle === false);
+  const current = railEl.querySelector('.tool.on');
+  const collapsing = toggle && current && current.dataset.tool === name
+    && !shellEl.classList.contains('nopanel');
+  railEl.querySelectorAll('.tool').forEach((b) => {
+    const on = !collapsing && b.dataset.tool === name;
+    b.classList.toggle('on', on);
+    if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('aside section[data-tool]').forEach((s) => {
+    s.classList.toggle('on', !collapsing && s.dataset.tool === name);
+  });
+  shellEl.classList.toggle('nopanel', !!collapsing);
+  store.set(TOOL_KEY, collapsing ? '' : name);
   setTimeout(() => map.invalidateSize(), 60);
 }
-panelTab.addEventListener('click', () => {
-  setPanelHidden(!document.querySelector('.shell').classList.contains('nopanel'));
+railEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.tool');
+  if (!btn || btn.tagName !== 'BUTTON') return;
+  setTool(btn.dataset.tool);
 });
-try { setPanelHidden(localStorage.getItem('panelhidden') === '1'); }
-catch (_) { setPanelHidden(false); }
+{
+  const saved = store.get(TOOL_KEY);
+  if (saved === '') setTool('route', { toggle: false }), setTool('route');
+  else setTool(saved || 'route', { toggle: false });
+}
+// Drag handles. Bounds from the spec: rail 56-88px; panel 300-520px
+// and never more than 40% of the viewport.
+const BOUNDS = {
+  'cs-rail-w': { min: 56, max: 88, prop: '--rail-w' },
+  'cs-panel-w': { min: 300, max: () => Math.min(520, Math.round(window.innerWidth * 0.4)),
+                  prop: '--panel-w' },
+};
+function clampWidth(key, px) {
+  const b = BOUNDS[key];
+  const max = typeof b.max === 'function' ? b.max() : b.max;
+  return Math.max(b.min, Math.min(max, Math.round(px)));
+}
+function applyWidth(key, px) {
+  const w = clampWidth(key, px);
+  shellEl.style.setProperty(BOUNDS[key].prop, w + 'px');
+  store.set(key, String(w));
+  return w;
+}
+for (const key of Object.keys(BOUNDS)) {
+  const saved = Number(store.get(key));
+  if (saved) applyWidth(key, saved);
+}
+function wireResizer(id, key, leftEdge) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('dragging');
+    const move = (ev) => {
+      const left = leftEdge();
+      applyWidth(key, ev.clientX - left);
+    };
+    const up = () => {
+      el.classList.remove('dragging');
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      setTimeout(() => map.invalidateSize(), 60);
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  });
+  el.addEventListener('keydown', (e) => {
+    const step = e.key === 'ArrowRight' ? 16 : e.key === 'ArrowLeft' ? -16 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const cur = parseInt(getComputedStyle(shellEl).getPropertyValue(BOUNDS[key].prop), 10);
+    applyWidth(key, cur + step);
+    setTimeout(() => map.invalidateSize(), 60);
+  });
+}
+wireResizer('railresize', 'cs-rail-w', () => shellEl.getBoundingClientRect().left);
+wireResizer('panelresize', 'cs-panel-w',
+  () => document.getElementById('panel').getBoundingClientRect().left);
+window.addEventListener('resize', () => {
+  const saved = Number(store.get('cs-panel-w'));
+  if (saved) applyWidth('cs-panel-w', saved);
+});
 map.on('popupopen', async (e) => {
   const mk = (e.popup && e.popup.__m) ? e.popup
     : (e.popup && e.popup._source);
@@ -2058,9 +2129,6 @@ function appendMeasured(popup, html) {
   }
 }
 
-map.on('click', () => {
-  document.getElementById('filters').classList.remove('open');
-});
 
 // ── Data-source status panel: click "live from ..." in the topbar ──
 let srcPanel = null;
