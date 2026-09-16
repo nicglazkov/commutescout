@@ -17,7 +17,6 @@ degrades to in-process caching.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import hashlib
 import json
 import logging
@@ -52,6 +51,11 @@ _db = None
 # Transient router misses retry this many times before a pair is
 # written off as unroutable.
 MAX_TRANSIENT_TRIES = 5
+# A failed boot mirror is retried on this cadence (doubling to ten
+# minutes); the worker buys nothing until the mirror is complete.
+LOAD_RETRY_SECONDS = 60
+# Injectable so tests can stop the worker without wall-clock waits.
+_sleep = asyncio.sleep
 
 
 class TransientSnapError(Exception):
@@ -107,19 +111,35 @@ def _bearing_gap(a: float, b: float) -> float:
     return min(d, 360 - d)
 
 
-async def load_persisted() -> None:
+async def load_persisted() -> bool:
     """Boot: mirror every previously computed snap into memory so a
-    redeploy never re-routes what is already known."""
+    redeploy never re-routes what is already known.
+
+    Returns True once the mirror is complete. A failed or partial load
+    must never read as "nothing is known": the worker would then
+    re-buy every pair the feeds show it, one paid routing call each,
+    and write the same documents again. Callers retry until True."""
     global _loaded
     if _loaded:
-        return
-    _loaded = True
-    with contextlib.suppress(Exception):
+        return True
+    t0 = time.monotonic()
+    loaded: dict[str, list | dict | None] = {}
+    try:
         db = _get_db()
         async for snap in db.collection("road_snaps").stream():
             d = snap.to_dict() or {}
-            _mem[snap.id] = (json.loads(d["path"])
-                             if d.get("ok") and d.get("path") else None)
+            loaded[snap.id] = (json.loads(d["path"])
+                               if d.get("ok") and d.get("path") else None)
+    except Exception as exc:  # noqa: BLE001 - any failure means "not loaded"
+        log.error("road_snaps load failed after %d docs in %.1fs: %s: %s",
+                  len(loaded), time.monotonic() - t0,
+                  type(exc).__name__, exc)
+        return False
+    _mem.update(loaded)
+    _loaded = True
+    log.info("road_snaps loaded: %d docs in %.1fs (%d in memory)",
+             len(loaded), time.monotonic() - t0, len(_mem))
+    return True
 
 
 def path_for(lat1, lon1, lat2, lon2) -> list | None:
@@ -381,13 +401,17 @@ async def _snap(client, lat1, lon1, lat2, lon2) -> list | None:
 
 
 async def _drain(client) -> None:
-    await load_persisted()
+    # No purchases until the boot mirror is complete (see load_persisted).
+    delay = LOAD_RETRY_SECONDS
+    while not await load_persisted():
+        await _sleep(delay)
+        delay = min(delay * 2, 600)
     while True:
         if not _ready():
-            await asyncio.sleep(300)
+            await _sleep(300)
             continue
         if not _queue:
-            await asyncio.sleep(5)
+            await _sleep(5)
             continue
         key = _queue.pop(0)
         _queued.discard(key)
@@ -413,22 +437,38 @@ async def _drain(client) -> None:
                 _queued.add(key)
                 _pairs[key] = pair
                 _queue.append(key)
-                await asyncio.sleep(10)
+                await _sleep(10)
                 continue
-        except Exception:  # noqa: BLE001 - router hiccup: retry later
+        except Exception as exc:  # noqa: BLE001 - router hiccup: retry later
+            # Visible on purpose: a pair that fails the same way every
+            # time would otherwise loop here forever, one paid call per
+            # try, with nothing in the logs.
+            log.warning("snap retry later %s: %s: %s", key,
+                        type(exc).__name__, str(exc)[:160])
             _queued.add(key)
             _pairs[key] = pair
             _queue.append(key)
-            await asyncio.sleep(30)
+            await _sleep(30)
             continue
         _mem[key] = path
-        with contextlib.suppress(Exception):
+        try:
             await _get_db().collection("road_snaps").document(key).set({
                 "ok": path is not None,
                 "path": json.dumps(path) if path else None,
                 "ts": time.time(),
             })
-        await asyncio.sleep(PACE_SECONDS)
+        except Exception as exc:  # noqa: BLE001 - keep serving, but say so
+            # An unpersisted purchase is bought again after the next
+            # restart.
+            log.warning("snap persist failed %s: %s", key,
+                        type(exc).__name__)
+        # One line per paid routing purchase: the audit trail for the
+        # Stadia bill, and the queue depth says whether the worker is
+        # keeping up with the feeds.
+        log.info("snap %s %s ok=%s queue=%d",
+                 "toll" if pair[0] == "T" else "closure", key,
+                 path is not None, len(_queue))
+        await _sleep(PACE_SECONDS)
 
 
 def start_worker(client) -> None:
