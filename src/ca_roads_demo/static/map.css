@@ -558,6 +558,13 @@ aside section[data-tool].on { display:block }
   background:var(--dot); font-style:normal }
 .filters label em { font-style:normal; color:var(--dim); font-size:.7rem;
   margin-left:auto; padding-left:10px }
+.basemap { display:flex; flex-wrap:wrap; gap:6px; padding:4px 0 2px }
+.basemap label { display:inline-flex; align-items:center; gap:6px; padding:4px 10px;
+  border:1px solid var(--line); border-radius:999px; font:500 .74rem Inter;
+  cursor:pointer; color:var(--ink) }
+.basemap label:has(input:checked) { border-color:var(--sky); background:var(--sky-soft) }
+.basemap input { position:absolute; opacity:0; width:0; height:0 }
+.basemap label:has(input:focus-visible) { outline:2px solid var(--sky); outline-offset:1px }
 .filters u { display:block; text-decoration:none; font:700 .62rem Inter;
   letter-spacing:.8px; text-transform:uppercase; color:#9aa8b6;
   margin:7px 0 2px }
