@@ -127,6 +127,7 @@
 .watch .keynew b { display:block; margin-bottom:6px }
 .watch .keynew code { display:block; word-break:break-all; font:500 .78rem ui-monospace,
   Menlo, monospace; margin-bottom:8px; user-select:all }
+.watch .keyrow > div { flex:1; min-width:0 }
 .watch .keyrow small { display:block; color:var(--dim); font-size:.72rem }
 
 /* Map handles for polygon corners live on whichever map draws them. */
