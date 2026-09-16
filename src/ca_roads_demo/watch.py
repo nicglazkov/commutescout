@@ -587,8 +587,30 @@ async def api_watch_me(request: Request) -> JSONResponse:
         "email": user.get("email"),
         "status": user.get("status"),
         "admin": is_admin(claims),
+        "prefs": user.get("prefs") or {},
         "watches": watches,
     })
+
+
+UNITS = ("mi", "km")
+
+
+async def api_watch_prefs(request: Request) -> JSONResponse:
+    """Per-account preferences (distance units today), so a choice made
+    on one device follows the account to the next."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    body = await _read_json(request)
+    if body is None:
+        return _err("JSON body required")
+    units = body.get("units")
+    if units not in UNITS:
+        return _err("units must be mi or km")
+    user = await _load_user(claims)
+    prefs = {**(user.get("prefs") or {}), "units": units}
+    await get_store().upsert_user(claims["sub"], {"prefs": prefs})
+    return JSONResponse({"prefs": prefs})
 
 
 async def api_watch_redeem(request: Request) -> JSONResponse:

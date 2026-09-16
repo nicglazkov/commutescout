@@ -85,6 +85,9 @@ body { background:var(--bg); color:var(--ink);
 .inspbody .inspbtn { display:none }
 .subhead { font:600 .68rem Inter; letter-spacing:.7px; text-transform:uppercase;
   color:var(--dim); margin:16px 0 4px }
+.setgroup { margin-bottom:8px }
+.setgroup .subhead { margin-top:10px }
+.setgroup .panenote .detbtn { margin-left:6px }
 .alertrow { display:flex; gap:9px; align-items:flex-start; width:100%;
   text-align:left; border:0; border-top:1px solid var(--line); background:transparent;
   padding:8px 2px; cursor:pointer; font:inherit; color:var(--ink) }
@@ -135,6 +138,16 @@ aside section[data-tool].on { display:block }
   font:500 .72rem Inter; color:var(--dim); display:flex; flex-direction:column }
 .kpis b { color:var(--ink); font:600 1.15rem Inter; margin-bottom:2px }
 /* Collapsed: the rail alone; the map takes the rest. */
+/* Explicit columns: a hidden panel (display:none) leaves the grid, and
+   auto-placement would then drop the map into the zero-width column
+   meant for the panel. Pinning every child keeps the map at 1fr. */
+.shell > .rail { grid-column:1 }
+.shell > #railresize { grid-column:2 }
+.shell > aside { grid-column:3 }
+.shell > #panelresize { grid-column:4 }
+.shell > .map-card { grid-column:5 }
+.shell > #inspresize { grid-column:6 }
+.shell > .inspector { grid-column:7 }
 .shell.nopanel { grid-template-columns:var(--rail-w) 6px 0 0 1fr var(--insp-gap) var(--insp-w) }
 .shell.nopanel aside, .shell.nopanel #panelresize { display:none }
 .sharemenu { position:relative }
@@ -574,13 +587,13 @@ aside section[data-tool].on { display:block }
   background:var(--dot); font-style:normal }
 .filters label em { font-style:normal; color:var(--dim); font-size:.7rem;
   margin-left:auto; padding-left:10px }
-.basemap { display:flex; flex-wrap:wrap; gap:6px; padding:4px 0 2px }
-.basemap label { display:inline-flex; align-items:center; gap:6px; padding:4px 10px;
+.basemap, .pills { display:flex; flex-wrap:wrap; gap:6px; padding:4px 0 2px }
+.basemap label, .pills label { display:inline-flex; align-items:center; gap:6px; padding:4px 10px;
   border:1px solid var(--line); border-radius:999px; font:500 .74rem Inter;
   cursor:pointer; color:var(--ink) }
-.basemap label:has(input:checked) { border-color:var(--sky); background:var(--sky-soft) }
-.basemap input { position:absolute; opacity:0; width:0; height:0 }
-.basemap label:has(input:focus-visible) { outline:2px solid var(--sky); outline-offset:1px }
+.basemap label:has(input:checked), .pills label:has(input:checked) { border-color:var(--sky); background:var(--sky-soft) }
+.basemap input, .pills input { position:absolute; opacity:0; width:0; height:0 }
+.basemap label:has(input:focus-visible), .pills label:has(input:focus-visible) { outline:2px solid var(--sky); outline-offset:1px }
 .filters u { display:block; text-decoration:none; font:700 .62rem Inter;
   letter-spacing:.8px; text-transform:uppercase; color:#9aa8b6;
   margin:7px 0 2px }
@@ -735,7 +748,7 @@ aside section[data-tool].on { display:block }
   .topbar .navcta { flex:0 0 auto; margin-left:auto; min-height:36px;
     display:flex; align-items:center }
   .topbar nav { order:3; flex:1 1 100%; margin-left:0;
-    display:grid; grid-template-columns:repeat(4, 1fr); gap:4px }
+    display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px }
   .topbar nav a { padding:2px 4px; font-size:.72rem; text-align:center;
     white-space:normal; line-height:1.2; min-height:40px;
     display:flex; align-items:center; justify-content:center }
