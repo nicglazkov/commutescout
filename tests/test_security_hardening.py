@@ -3,13 +3,13 @@
 Each test here fails against the code as it stood before that pass, so a
 regression re-opens a real hole rather than a style nit.
 """
-import pathlib
 import re
 
 import pytest
 from starlette.testclient import TestClient
 
 from ca_roads_demo.app import app
+from mapsrc import map_source
 
 
 @pytest.fixture()
@@ -100,16 +100,14 @@ def test_wildfire_polygon_popup_escapes_its_label():
     The point-marker branch escapes it; the polygon branch did not, so a
     feed carrying markup would execute under the CSP's unsafe-inline.
     """
-    src = pathlib.Path(
-        "src/ca_roads_demo/static/map.html").read_text(encoding="utf-8")
+    src = map_source()
     binds = re.findall(r"\.bindPopup\(([^;]{0,120})", src, re.S)
     raw = [b for b in binds if "m.label" in b and "esc(" not in b]
     assert not raw, f"unescaped label bound into a popup: {raw}"
 
 
 def _map_src():
-    return pathlib.Path(
-        "src/ca_roads_demo/static/map.html").read_text(encoding="utf-8")
+    return map_source()
 
 
 def test_esc_escapes_quotes_not_just_angle_brackets():
