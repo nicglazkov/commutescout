@@ -288,11 +288,23 @@ function ensureMap() {
   }
   let savedBase = null;
   try { savedBase = localStorage.getItem('cs-basemap'); } catch (e) { /* private mode */ }
-  (baseLayers[savedBase] || baseLayers.Smooth).addTo(map);
-  L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
-  map.on('baselayerchange', (ev) => {
-    try { localStorage.setItem('cs-basemap', ev.name); } catch (e) { /* private mode */ }
-  });
+  if (!baseLayers[savedBase]) savedBase = 'Smooth';
+  let baseOn = baseLayers[savedBase].addTo(map);
+  // The style choice lives in the Layers pane with everything else that
+  // is on the map; no second control floats over the map.
+  const basemapEl = document.getElementById('basemap');
+  if (basemapEl) {
+    basemapEl.innerHTML = Object.keys(baseLayers).map((name) =>
+      '<label><input type="radio" name="basemap" value="' + name + '"' +
+      (name === savedBase ? ' checked' : '') + '>' + name + '</label>').join('');
+    basemapEl.addEventListener('change', (e) => {
+      const name = e.target && e.target.value;
+      if (!baseLayers[name] || baseLayers[name] === baseOn) return;
+      map.removeLayer(baseOn);
+      baseOn = baseLayers[name].addTo(map);
+      try { localStorage.setItem('cs-basemap', name); } catch (err) { /* private mode */ }
+    });
+  }
   layerPrimary = L.featureGroup().addTo(map);
   layerFires = L.featureGroup().addTo(map);
 }
