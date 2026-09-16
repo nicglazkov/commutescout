@@ -16,6 +16,26 @@ https://mcp.commutescout.com/mcp
 No key or account needed. It is the same server behind
 [commutescout.com](https://commutescout.com), with the same live feeds.
 
+## Plain HTTP, no MCP client
+
+Every tool is also a `GET` on the same host, for scripts, dashboards and
+anything that is not an MCP client:
+
+```
+https://mcp.commutescout.com/v1/tools/get_incidents?area=Redwood%20City
+https://mcp.commutescout.com/v1/tools/check_route?from_place=Sacramento&to_place=Reno
+```
+
+Arguments are query parameters with the same names as the tool
+parameters below; the body is the tool's JSON. The OpenAPI document is
+generated from the tools' own schemas at
+[`/v1/openapi.json`](https://mcp.commutescout.com/v1/openapi.json), with
+a browsable reference at [`/v1/docs`](https://mcp.commutescout.com/v1/docs)
+and an index at [`/v1`](https://mcp.commutescout.com/v1). Errors come back
+as `{"error": {"code", "message", "hint"}}` with a 400, 404 or 429;
+every response allows cross-origin reads. The same per-address rate limits
+apply as on `/mcp`. Changes within `/v1` are additive.
+
 ## Run it locally (stdio)
 
 The server is a single Python package with zero required keys. Config
