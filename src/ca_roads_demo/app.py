@@ -1436,14 +1436,27 @@ async def sitemap_xml(_: Request):
 # the page falls back to its own timezone guess.
 _INDEX_CACHE: dict = {}
 _GEO_SLOT = "<!--BOOT_GEO-->"
+_ASSET_SLOT = "__ASSET_V__"
+_MAP_ASSETS = ("map.css", "map-assistant.js", "map-app.js")
 
 
 def _index_template() -> str:
+    """map.html with its asset links stamped by content hash. The page
+    itself is no-cache; its stylesheet and scripts are cached an hour,
+    so the stamp is what keeps a deploy from pairing new HTML with an
+    old script in a visitor's cache."""
     path = STATIC_DIR / "map.html"
-    stamp = path.stat().st_mtime
+    stamp = tuple((STATIC_DIR / n).stat().st_mtime for n in _MAP_ASSETS)
+    stamp = (path.stat().st_mtime, *stamp)
     if _INDEX_CACHE.get("stamp") != stamp:
+        import hashlib as _hashlib
+
+        digest = _hashlib.sha1()
+        for n in _MAP_ASSETS:
+            digest.update((STATIC_DIR / n).read_bytes())
         _INDEX_CACHE["stamp"] = stamp
-        _INDEX_CACHE["text"] = path.read_text(encoding="utf-8")
+        _INDEX_CACHE["text"] = path.read_text(encoding="utf-8").replace(
+            _ASSET_SLOT, digest.hexdigest()[:10])
     return _INDEX_CACHE["text"]
 
 
@@ -1474,7 +1487,8 @@ def _visitor_view(request: Request) -> dict | None:
 async def map_page(request: Request):
     view = _visitor_view(request)
     if view is None:
-        return FileResponse(STATIC_DIR / "map.html")
+        return HTMLResponse(_index_template(),
+                            headers={"Cache-Control": "no-cache"})
     html = _index_template().replace(
         _GEO_SLOT,
         '<script type="application/json" id="bootgeo">'

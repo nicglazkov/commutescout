@@ -3,6 +3,7 @@
 from starlette.testclient import TestClient
 
 from ca_roads_demo.app import _visitor_view, app
+from mapsrc import map_source
 
 
 class FakeReq:
@@ -62,9 +63,7 @@ def test_index_serves_island_only_with_headers():
 
 
 def _index_html():
-    import pathlib
-    return pathlib.Path(
-        "src/ca_roads_demo/static/map.html").read_text(encoding="utf-8")
+    return map_source()
 
 
 def test_saved_view_is_per_tab_not_per_browser():

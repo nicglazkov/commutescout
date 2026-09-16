@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from mapsrc import map_source
+
 ROOT = Path(__file__).resolve().parent.parent
 MAP_HTML = ROOT / "src" / "ca_roads_demo" / "static" / "map.html"
 # The real export, same reasoning as test_site_assets: CI always builds
@@ -33,7 +35,8 @@ def test_map_h1_is_hidden_without_being_removed_from_the_tree():
     """display:none would hide it from assistive tech too."""
     html = MAP_HTML.read_text(encoding="utf-8")
     assert 'class="visually-hidden"' in html
-    rule = re.search(r"\.visually-hidden\s*\{([^}]*)\}", html)
+    # The rule lives in the stylesheet the page links (map.css).
+    rule = re.search(r"\.visually-hidden\s*\{([^}]*)\}", map_source())
     assert rule, "the class is used but never defined"
     body = rule.group(1)
     assert "display:none" not in body.replace(" ", "")

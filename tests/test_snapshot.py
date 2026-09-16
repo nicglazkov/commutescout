@@ -3,6 +3,7 @@ import gzip
 import json
 
 from ca_roads_demo import snapshot
+from mapsrc import map_source
 
 # The one hostname the page, the service worker and the CSP must
 # all agree on.
@@ -187,8 +188,7 @@ def test_client_and_csp_agree_on_the_snapshot_host():
     import pathlib
     import re
 
-    html = pathlib.Path(
-        "src/ca_roads_demo/static/map.html").read_text(encoding="utf-8")
+    html = map_source()
     base = re.search(r"const SNAP_BASE = '([^']+)'", html).group(1)
     assert base == "https://" + SNAP_HOST
 
