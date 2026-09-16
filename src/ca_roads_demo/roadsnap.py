@@ -24,6 +24,7 @@ import math
 import os
 import re
 import time
+from datetime import UTC, datetime, timedelta
 
 from ca_roads_demo import valhalla
 
@@ -40,7 +41,12 @@ MAX_RATIO = 3.0
 MAX_EXTRA_METERS = 20_000
 PACE_SECONDS = 0.7
 
-_mem: dict[str, list | dict | None] = {}
+# key -> compact JSON string of the snapped path (a list for closures,
+# a dict for toll pairs), or None for a pair that failed the quality
+# gates. Kept as the string Firestore holds and decoded on use: the
+# same 19,600 paths as nested Python lists cost about 700 MB of RSS on
+# a 2 GiB instance (measured 2026-09-16, the daily memory kill).
+_mem: dict[str, str | None] = {}
 _queue: list[str] = []
 _queued: set[str] = set()
 _pairs: dict[str, tuple] = {}
@@ -129,7 +135,7 @@ async def load_persisted() -> bool:
     if _loaded:
         return True
     t0 = time.monotonic()
-    loaded: dict[str, list | dict | None] = {}
+    loaded: dict[str, str | None] = {}
     try:
         col = _get_db().collection("road_snaps")
         last = None
@@ -142,7 +148,7 @@ async def load_persisted() -> bool:
                 count += 1
                 last = snap
                 d = snap.to_dict() or {}
-                loaded[snap.id] = (json.loads(d["path"])
+                loaded[snap.id] = (d["path"]
                                    if d.get("ok") and d.get("path") else None)
             if count < LOAD_PAGE:
                 break
@@ -166,7 +172,8 @@ def path_for(lat1, lon1, lat2, lon2) -> list | None:
         return None
     key = _key(*vals)
     if key in _mem:
-        return _mem[key]
+        raw = _mem[key]
+        return json.loads(raw) if raw else None
     if key not in _queued:
         _queued.add(key)
         _pairs[key] = vals
@@ -187,7 +194,8 @@ def toll_pair_for(a, b, brg: float, token: str | None) -> dict | None:
            f"{brg:.0f},{token or ''}")
     key = hashlib.sha1(raw.encode()).hexdigest()[:20]
     if key in _mem:
-        got = _mem[key]
+        raw = _mem[key]
+        got = json.loads(raw) if raw else None
         return got if isinstance(got, dict) else None
     if key not in _queued:
         _queued.add(key)
@@ -466,12 +474,18 @@ async def _drain(client) -> None:
             _queue.append(key)
             await _sleep(30)
             continue
-        _mem[key] = path
+        raw = json.dumps(path, separators=(",", ":")) if path else None
+        _mem[key] = raw
         try:
+            # expire_at feeds the Firestore TTL policy on road_snaps:
+            # a stretch nobody has needed for a year is re-bought if
+            # it ever comes back, and storage plus boot memory stay
+            # bounded.
             await _get_db().collection("road_snaps").document(key).set({
                 "ok": path is not None,
-                "path": json.dumps(path) if path else None,
+                "path": raw,
                 "ts": time.time(),
+                "expire_at": datetime.now(UTC) + timedelta(days=365),
             })
         except Exception as exc:  # noqa: BLE001 - keep serving, but say so
             # An unpersisted purchase is bought again after the next

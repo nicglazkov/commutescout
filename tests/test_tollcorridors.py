@@ -1,5 +1,7 @@
 """Toll corridor grouping, typing, and road-following segments."""
 
+import json
+
 import pytest
 
 from ca_roads_demo import roadsnap, states, tollprices
@@ -135,8 +137,8 @@ def test_corridor_segments_bridge_queue_and_merge(snap_mem):
     assert len(roadsnap._queue) == 1
     # Once the pair resolves, the chain merges into one part.
     key = roadsnap._key(a[0], a[1], b[0], b[1])
-    roadsnap._mem[key] = [[37.5, -122.0], [37.51, -122.006],
-                          [37.52, -122.01]]
+    roadsnap._mem[key] = json.dumps([[37.5, -122.0], [37.51, -122.006],
+                                     [37.52, -122.01]])
     segs = roadsnap.corridor_segments([a, b, c])
     assert len(segs) == 1
     assert segs[0][0] == [37.5, -122.0]
@@ -169,8 +171,9 @@ def test_apply_toll_directional_snap_and_recenter(snap_mem):
     assert pair[5] < 20 or pair[5] > 340
     snapped_a = [37.60010, -122.39950]
     snapped_b = [37.64010, -122.40450]
-    roadsnap._mem[key] = {"path": [snapped_a, [37.62, -122.402], snapped_b],
-                          "a": snapped_a, "b": snapped_b}
+    roadsnap._mem[key] = json.dumps(
+        {"path": [snapped_a, [37.62, -122.402], snapped_b],
+         "a": snapped_a, "b": snapped_b})
     roadsnap.apply([m])
     assert m["segs"][0][0] == snapped_a and m["segs"][0][-1] == snapped_b
     assert m["entries"][0]["pts"][0] == snapped_a
@@ -302,8 +305,9 @@ def test_apply_toll_skips_recenter_for_pinned_corridors(snap_mem, monkeypatch):
          ]}
     roadsnap.apply([m])
     (key, _), = roadsnap._pairs.items()
-    roadsnap._mem[key] = {"path": [[37.7, -122.5], [37.71, -122.51]],
-                          "a": [37.7, -122.5], "b": [37.71, -122.51]}
+    roadsnap._mem[key] = json.dumps(
+        {"path": [[37.7, -122.5], [37.71, -122.51]],
+         "a": [37.7, -122.5], "b": [37.71, -122.51]})
     roadsnap.apply([m])
     # Segments attach, but the hand-placed points are untouched.
     assert m["segs"]
