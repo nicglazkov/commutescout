@@ -54,6 +54,12 @@ MAX_TRANSIENT_TRIES = 5
 # A failed boot mirror is retried on this cadence (doubling to ten
 # minutes); the worker buys nothing until the mirror is complete.
 LOAD_RETRY_SECONDS = 60
+# The mirror is read in pages of this many documents. One query over
+# the whole collection times out server-side on a busy boot (seen in
+# production: 503 after 10,401 of 19,624 docs at 166 s, then 504 at
+# 321 s), because the event loop is also warming fifty feeds and the
+# stream is consumed slowly. Each page is its own short RPC.
+LOAD_PAGE = 2000
 # Injectable so tests can stop the worker without wall-clock waits.
 _sleep = asyncio.sleep
 
@@ -125,11 +131,21 @@ async def load_persisted() -> bool:
     t0 = time.monotonic()
     loaded: dict[str, list | dict | None] = {}
     try:
-        db = _get_db()
-        async for snap in db.collection("road_snaps").stream():
-            d = snap.to_dict() or {}
-            loaded[snap.id] = (json.loads(d["path"])
-                               if d.get("ok") and d.get("path") else None)
+        col = _get_db().collection("road_snaps")
+        last = None
+        while True:
+            query = col.order_by("__name__").limit(LOAD_PAGE)
+            if last is not None:
+                query = query.start_after(last)
+            count = 0
+            async for snap in query.stream():
+                count += 1
+                last = snap
+                d = snap.to_dict() or {}
+                loaded[snap.id] = (json.loads(d["path"])
+                                   if d.get("ok") and d.get("path") else None)
+            if count < LOAD_PAGE:
+                break
     except Exception as exc:  # noqa: BLE001 - any failure means "not loaded"
         log.error("road_snaps load failed after %d docs in %.1fs: %s: %s",
                   len(loaded), time.monotonic() - t0,
