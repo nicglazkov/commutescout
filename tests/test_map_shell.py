@@ -107,12 +107,13 @@ def test_resize_bounds_and_persistence_follow_the_spec():
     for key in ("cs-tool", "cs-rail-w", "cs-panel-w"):
         assert key in APP
     assert "panelhidden" not in APP and "paneltab" not in APP and "paneltab" not in CSS
-    assert 'role="separator"' in HTML and HTML.count('role="separator"') == 2
+    # Rail handle, panel handle, and the phone sheet's grab handle.
+    assert 'role="separator"' in HTML and HTML.count('role="separator"') == 3
     assert "ArrowRight" in APP and "ArrowLeft" in APP  # keyboard resize
 
 
 def test_a_question_opens_the_ask_tool():
-    assert "setTool('ask', { toggle: false })" in ASSIST
+    assert "setTool('ask', { toggle: false, reveal: true })" in ASSIST
 
 
 def test_collapsing_and_selecting_tools_are_one_function():
@@ -122,7 +123,7 @@ def test_collapsing_and_selecting_tools_are_one_function():
 
 def test_phone_layout_keeps_the_rail_as_a_row():
     phone = CSS[CSS.index("@media (max-width: 960px)"):]
-    assert ".rail { flex-direction:row" in phone
+    assert re.search(r"\.rail \{[^}]*flex-direction:row", phone)
     assert ".resizer { display:none }" in phone
     assert "layersbtn" not in CSS
 

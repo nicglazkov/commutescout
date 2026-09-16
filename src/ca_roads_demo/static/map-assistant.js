@@ -60,7 +60,7 @@ function startLoader() {
   loadmsg.textContent = LOAD_MSGS[0];
   loadtime.textContent = 'usually 5 to 15 seconds';
   loader.classList.add('active');
-  if (typeof setTool === 'function') setTool('ask', { toggle: false });
+  if (typeof setTool === 'function') setTool('ask', { toggle: false, reveal: true });
   mobileReveal(loader);
   clearInterval(loadTimer);
   loadTimer = setInterval(() => {
