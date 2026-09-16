@@ -38,9 +38,10 @@ def test_dispatch_log_wiring_is_one_function_used_by_both():
 
 
 def test_inspector_docks_wide_and_overlays_narrow():
-    assert "--insp-w:0px" in CSS and ".shell.insp { --insp-w:340px }" in CSS
+    assert "--insp-w:0px" in CSS
+    assert ".shell.insp { --insp-gap:6px; --insp-w:var(--insp-user, 340px) }" in CSS
     narrow = CSS[CSS.index("@media (max-width: 1279px)"):]
-    assert ".shell.insp { --insp-w:0px }" in narrow
+    assert ".shell.insp { --insp-w:0px; --insp-gap:0px }" in narrow
     assert "position:absolute; right:0; top:0; bottom:0" in narrow
     phone = CSS[CSS.index("@media (max-width: 960px)"):]
     assert ".inspector { position:fixed; left:0; right:0" in phone

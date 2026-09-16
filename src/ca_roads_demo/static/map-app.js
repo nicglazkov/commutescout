@@ -2039,6 +2039,7 @@ const BOUNDS = {
   'cs-rail-w': { min: 56, max: 88, prop: '--rail-w' },
   'cs-panel-w': { min: 300, max: () => Math.min(520, Math.round(window.innerWidth * 0.4)),
                   prop: '--panel-w' },
+  'cs-insp-w': { min: 300, max: 480, prop: '--insp-user' },
 };
 function clampWidth(key, px) {
   const b = BOUNDS[key];
@@ -2055,16 +2056,16 @@ for (const key of Object.keys(BOUNDS)) {
   const saved = Number(store.get(key));
   if (saved) applyWidth(key, saved);
 }
-function wireResizer(id, key, leftEdge) {
+function wireResizer(id, key, edge, dir) {
   const el = document.getElementById(id);
   if (!el) return;
+  dir = dir || 1;  // 1: handle on the right edge; -1: on the left edge
   el.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     el.setPointerCapture(e.pointerId);
     el.classList.add('dragging');
     const move = (ev) => {
-      const left = leftEdge();
-      applyWidth(key, ev.clientX - left);
+      applyWidth(key, dir * (ev.clientX - edge()));
     };
     const up = () => {
       el.classList.remove('dragging');
@@ -2081,14 +2082,17 @@ function wireResizer(id, key, leftEdge) {
     const step = e.key === 'ArrowRight' ? 16 : e.key === 'ArrowLeft' ? -16 : 0;
     if (!step) return;
     e.preventDefault();
-    const cur = parseInt(getComputedStyle(shellEl).getPropertyValue(BOUNDS[key].prop), 10);
-    applyWidth(key, cur + step);
+    const cur = parseInt(getComputedStyle(shellEl).getPropertyValue(BOUNDS[key].prop), 10)
+      || BOUNDS[key].min;
+    applyWidth(key, cur + dir * step);
     setTimeout(() => map.invalidateSize(), 60);
   });
 }
 wireResizer('railresize', 'cs-rail-w', () => shellEl.getBoundingClientRect().left);
 wireResizer('panelresize', 'cs-panel-w',
   () => document.getElementById('panel').getBoundingClientRect().left);
+wireResizer('inspresize', 'cs-insp-w',
+  () => document.getElementById('inspector').getBoundingClientRect().right, -1);
 window.addEventListener('resize', () => {
   const saved = Number(store.get('cs-panel-w'));
   if (saved) applyWidth('cs-panel-w', saved);
@@ -2393,12 +2397,49 @@ map.on('popupopen', (e) => wireDispatchLog(e.popup.getElement(), e.popup));
 const inspectorEl = document.getElementById('inspector');
 const inspBody = document.getElementById('inspbody');
 const inspTitle = document.getElementById('insptitle');
+const inspResize = document.getElementById('inspresize');
+// A share link only makes sense for kinds a focus link can find again.
+function focusKind(g) {
+  return Object.keys(FOCUS_GROUPS).find((k) => FOCUS_GROUPS[k].includes(g)) || null;
+}
+function inspectorActions(m, g) {
+  const row = document.createElement('div');
+  row.className = 'inspacts';
+  const kind = focusKind(g);
+  if (kind && Number.isFinite(m.lat) && Number.isFinite(m.lon)) {
+    const share = document.createElement('button');
+    share.type = 'button'; share.className = 'detbtn'; share.id = 'inspshare';
+    share.textContent = 'Copy link';
+    share.addEventListener('click', async () => {
+      const url = location.origin + '/map?focus=' + m.lat.toFixed(5) + ',' +
+        m.lon.toFixed(5) + '&k=' + kind;
+      try {
+        await navigator.clipboard.writeText(url);
+        share.textContent = 'Link copied';
+        setTimeout(() => { share.textContent = 'Copy link'; }, 1800);
+      } catch (_) { window.prompt('Copy this link', url); }
+    });
+    row.appendChild(share);
+  }
+  const watch = document.createElement('button');
+  watch.type = 'button'; watch.className = 'detbtn'; watch.id = 'inspwatch';
+  watch.textContent = 'Watch this stretch';
+  watch.addEventListener('click', () => {
+    closeInspector();
+    setTool('watch', { toggle: false, reveal: true });
+    if (watchLoad) watchLoad.then((w) => { if (w) w.watchHere(m.lat, m.lon); });
+  });
+  row.appendChild(watch);
+  return row;
+}
 function openInspector(m, g) {
   const label = (POP_LABEL[g] || 'Details').toLowerCase();
   inspTitle.textContent = label.charAt(0).toUpperCase() + label.slice(1);
   inspBody.innerHTML = popupFor(m, g);
   wireDispatchLog(inspBody, null);
+  inspBody.appendChild(inspectorActions(m, g));
   inspectorEl.hidden = false;
+  if (inspResize) inspResize.hidden = false;
   shellEl.classList.add('insp');
   if (isPhone()) setSheet('peek');
   setTimeout(() => map.invalidateSize(), 60);
@@ -2406,6 +2447,7 @@ function openInspector(m, g) {
 function closeInspector() {
   if (inspectorEl.hidden) return;
   inspectorEl.hidden = true;
+  if (inspResize) inspResize.hidden = true;
   shellEl.classList.remove('insp');
   inspBody.innerHTML = '';
   setTimeout(() => map.invalidateSize(), 60);

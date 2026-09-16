@@ -10,6 +10,22 @@ import {
 // map to draw on; `opts.active()` says whether drawing clicks count.
 export async function initWatch(opts) {
   let fittedOnce = false;
+  // "Watch this stretch" from the map: the center waits until the
+  // viewer is signed in and approved, then lands as a circle.
+  let pendingCenter = null;
+  function watchHere(lat, lon) {
+    pendingCenter = [lat, lon];
+    applyPending();
+  }
+  function applyPending() {
+    if (!pendingCenter || !me || me.status !== 'approved') return;
+    setMode('circle');
+    center = pendingCenter;
+    pendingCenter = null;
+    redraw();
+    map.setView(center, Math.max(map.getZoom(), 10));
+    msg('createmsg', 'Center placed. Set the radius, name it, and create the watch.', 'ok');
+  }
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[<>&"]/g,
     (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
@@ -101,6 +117,7 @@ export async function initWatch(opts) {
       show('appzone');
       if (CFG.emailEnabled) $('emailchan').classList.remove('hidden');
       renderWatches();
+      applyPending();
       setTimeout(() => map.invalidateSize(), 60);
     } else {
       $('gatetext').textContent = me.status === 'revoked'
@@ -696,5 +713,5 @@ export async function initWatch(opts) {
   });
 
   setVisible(opts.visible !== false);
-  return { setVisible, refresh, reloadWatches };
+  return { setVisible, refresh, reloadWatches, watchHere };
 }
