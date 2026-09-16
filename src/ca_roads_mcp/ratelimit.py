@@ -72,6 +72,24 @@ def trusted_client_ip(
     return vouched
 
 
+def limiter_key(ip: str) -> str:
+    """The identity a limit is keyed on. IPv4 is the address itself.
+    IPv6 is folded to its /64: a residential allocation is one /64 with
+    2**64 addresses, so a client rotating the low bits per request
+    would otherwise get unlimited fresh buckets and daily counters.
+    Non-addresses ("unknown") pass through."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if addr.version == 6:
+        mapped = addr.ipv4_mapped
+        if mapped is not None:
+            return str(mapped)
+        return str(ipaddress.ip_network(f"{addr}/64", strict=False))
+    return ip
+
+
 class TokenBucket:
     """Classic token bucket: ``capacity`` burst, ``refill_per_second`` sustained."""
 
@@ -110,6 +128,7 @@ class RateLimiter:
         self._buckets: dict[str, TokenBucket] = {}
 
     def allow(self, key: str, now: float | None = None) -> bool:
+        key = limiter_key(key)
         bucket = self._buckets.get(key)
         if bucket is None:
             if len(self._buckets) >= self.max_keys:
