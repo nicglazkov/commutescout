@@ -1,8 +1,9 @@
 # The MCP server
 
 CommuteScout exposes its entire data layer as an MCP server, so Claude
-(or any MCP client) can answer questions about California roads with
-live data instead of guesses.
+(or any MCP client) can answer questions about US roads with live data
+instead of guesses: California in the most depth, and live events
+across every covered state.
 
 ## Connect to the hosted server
 
@@ -41,16 +42,24 @@ checks off), so bind it to localhost when running it on your machine:
 
 | Tool | What it answers |
 |------|-----------------|
-| `check_route(from_place, to_place)` | Everything active along a major corridor (17 curated corridors: I-80 Sacramento-Reno, US-50 to Tahoe, I-5, US-101, SR-17, SR-99, SR-1, I-15 to Vegas, Bay Area freeways, Tahoe locals), ordered by miles along the route |
+| `check_route(from_place, to_place, from_coords?, to_coords?)` | Everything active along a major corridor (17 curated corridors: I-80 Sacramento-Reno, US-50 to Tahoe, I-5, US-101, SR-17, SR-99, SR-1, I-15 to Vegas, Bay Area freeways, Tahoe locals), ordered by miles along the route |
 | `check_region(region)` | One-call report for a whole region (Bay Area, SoCal, Sierra, Central Valley, and four more): exact counts, incidents severity-sorted, full closures first, capped lists that say when they truncate |
-| `get_incidents(highway?, area?, center?)` | Live CHP incidents by route, dispatch area, or a point and radius |
-| `get_lane_closures(route?, district?, center?)` | Closures in place right now, classified per the [closure taxonomy](data-sources.md#the-closure-taxonomy) |
-| `get_chain_controls(route?, center?)` | Current chain requirements; says "none active" explicitly in the off-season |
-| `get_wildfires(near_route?, center?)` | Active fires with size, containment, and mapped perimeter edges, flagged near major highways |
-| `get_cameras(center?, route?)` | Roadside camera snapshots, each verified live before it is returned (offline placeholder frames are filtered by image freshness) |
-| `get_road_signs(route?, center?)` | What changeable message signs are displaying right now, verbatim |
+| `get_incidents(highway?, area?, center?, radius_km?)` | Live CHP incidents by route, dispatch area, or a point and radius |
+| `get_lane_closures(route?, district?, center?, radius_km?)` | Closures in place right now, classified per the [closure taxonomy](data-sources.md#the-closure-taxonomy) |
+| `get_chain_controls(route?, center?, radius_km?)` | Current chain requirements; says "none active" explicitly in the off-season |
+| `get_wildfires(near_route?, center?, radius_km?)` | Active fires with size, containment, and mapped perimeter edges, flagged near major highways |
+| `get_cameras(center?, route?, radius_km?, limit?)` | Roadside camera snapshots, each verified live before it is returned (offline placeholder frames are filtered by image freshness) |
+| `get_road_signs(route?, center?, radius_km?)` | What changeable message signs are displaying right now, verbatim |
 | `rank_routes(by?, limit?)` | All 17 corridors ranked by live events or measured congestion, with reasons; answers "what are the busiest routes right now" |
-| `get_nearby_events(center, radius_km?, kinds?)` | Live road events near a point across every covered state, 37 states, not just California; the fallback for locations outside California, near a state border, or when a California tool comes back empty |
+| `get_nearby_events(center, radius_km?, kinds?)` | Live road events near a point across every covered state, 37 states, not just California (California's own feeds are included); the tool for locations outside California or near a state border |
+
+Parameter notes: `center` is `"lat,lon"`; `radius_km` caps at 160 on
+`get_nearby_events`; `get_cameras` returns at most 10 verified cameras
+per call; `get_lane_closures` returns at most 200 closures and says
+when it truncates; pass `from_coords` and `to_coords` to `check_route`
+whenever you have them (they skip geocoding). The hosted server allows
+20 requests in a burst, 30 per minute sustained, and 2,000 per day per
+client address.
 
 Route and region reports also carry context that changes the advice:
 weather alerts sampled along the trip, road-weather stations reporting
