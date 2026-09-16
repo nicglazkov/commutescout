@@ -9,8 +9,11 @@ single instance makes this good enough for v1 - no shared store needed).
 from __future__ import annotations
 
 import ipaddress
+import json
+import logging
 import time
 
+from ca_roads import apikeys
 from ca_roads.budget import DailyCounter
 
 # Cloudflare's published edge ranges (cloudflare.com/ips, vendored
@@ -201,6 +204,10 @@ class RateLimitMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        # A keyed request was already limited by its key (ApiKeyMiddleware).
+        if (scope.get("state") or {}).get("api_key"):
+            await self.app(scope, receive, send)
+            return
         path = scope.get("path", "")
         if path in self.exempt_exact:
             await self.app(scope, receive, send)
@@ -238,3 +245,102 @@ class RateLimitMiddleware:
                                 b'for your address; try tomorrow"}'})
             return
         await self.app(scope, receive, send)
+
+
+def _json_error(status: int, code: str, message: str, hint: str | None = None,
+                headers: tuple = ()) -> tuple[int, list, bytes]:
+    body = {"code": code, "message": message}
+    if hint:
+        body["hint"] = hint
+    raw = json.dumps({"error": body}).encode("utf-8")
+    return status, [(b"content-type", b"application/json"),
+                    (b"access-control-allow-origin", b"*"), *headers], raw
+
+
+class ApiKeyMiddleware:
+    """Resolves an API key and applies its tier's limits.
+
+    Keyless requests pass straight through to the per-address limiter
+    behind this one. A keyed request is limited per key instead (its
+    tier's bucket and daily count), marked in ``scope["state"]`` so the
+    inner limiter steps aside, answered with ``RateLimit-*`` headers,
+    and logged as one JSON line for metering. A bad key is a 401 with
+    the API's error envelope, never a silent fall back to keyless.
+    """
+
+    def __init__(self, app, resolver: apikeys.KeyResolver | None = None) -> None:
+        self.app = app
+        self.resolver = resolver or apikeys.KeyResolver()
+        self.daily = DailyCounter()
+        self.buckets: dict[str, TokenBucket] = {}
+        self.log = logging.getLogger("ca_roads.apikeys")
+
+    async def _send_error(self, send, status, code, message, hint=None, headers=()):
+        status, hdrs, raw = _json_error(status, code, message, hint, headers)
+        await send({"type": "http.response.start", "status": status, "headers": hdrs})
+        await send({"type": "http.response.body", "body": raw})
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1")
+                   for k, v in scope.get("headers") or []}
+        presented = apikeys.from_headers(headers.get)
+        if not presented:
+            await self.app(scope, receive, send)
+            return
+        try:
+            info = await self.resolver.resolve(presented)
+        except Exception:  # noqa: BLE001 - the key store is down
+            self.log.exception("api key lookup failed")
+            await self._send_error(send, 503, "keys_unavailable",
+                                   "Key checks are unavailable right now.",
+                                   "Retry in a minute, or call without a key.")
+            return
+        if not info:
+            await self._send_error(send, 401, "invalid_key",
+                                   "That API key is unknown or revoked.",
+                                   "Create a key under Settings on commutescout.com/map.")
+            return
+        limits = apikeys.tier_limits(info["tier"])
+        bucket = self.buckets.get(info["id"])
+        if bucket is None:
+            if len(self.buckets) > 10_000:
+                self.buckets.clear()
+            bucket = self.buckets[info["id"]] = TokenBucket(
+                limits["burst"], limits["per_second"])
+        if not bucket.allow():
+            await self._send_error(send, 429, "rate_limited",
+                                   "Too many requests at once for this key.",
+                                   "Slow to the sustained rate for your tier.",
+                                   ((b"retry-after", b"2"),))
+            return
+        if not self.daily.allow(info["id"], limits["daily"]):
+            await self._send_error(
+                send, 429, "daily_limit",
+                f"This key has used its {limits['daily']} requests for today (UTC).",
+                "Pro keys get 10,000 a day; ask for more from the contact page.",
+                ((b"retry-after", b"3600"),
+                 (b"ratelimit-limit", str(limits["daily"]).encode()),
+                 (b"ratelimit-remaining", b"0")))
+            return
+        remaining = max(0, limits["daily"] - self.daily.used(info["id"]))
+        scope.setdefault("state", {})["api_key"] = info
+        status_seen = {"status": 0}
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                status_seen["status"] = message["status"]
+                message["headers"] = list(message.get("headers") or []) + [
+                    (b"ratelimit-limit", str(limits["daily"]).encode()),
+                    (b"ratelimit-remaining", str(remaining).encode()),
+                ]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_headers)
+        finally:
+            self.log.info(json.dumps({
+                "log_type": "api_use", "key": info["id"], "tier": info["tier"],
+                "path": scope.get("path", ""), "status": status_seen["status"]}))

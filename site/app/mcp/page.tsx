@@ -180,7 +180,8 @@ export default function McpPage() {
             >
               mcp.commutescout.com/v1
             </Link>
-            , with an OpenAPI reference.
+            , with an OpenAPI reference. Need more than the per-address limits? Sign
+            in on the live map and create a key under Settings.
           </p>
 
           <Link

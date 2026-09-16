@@ -122,6 +122,13 @@
 .watch .gate-ask { color:var(--dim); font-size:.82rem; margin:14px 0 0 }
 .watch .gate-ask a { color:var(--sky) }
 .watch .hidden { display:none !important }
+.watch .keynew { margin-top:10px; padding:10px 12px; border:1px solid #cfe2fd;
+  background:var(--sky-soft); border-radius:9px; font-size:.8rem }
+.watch .keynew b { display:block; margin-bottom:6px }
+.watch .keynew code { display:block; word-break:break-all; font:500 .78rem ui-monospace,
+  Menlo, monospace; margin-bottom:8px; user-select:all }
+.watch .keyrow > div { flex:1; min-width:0 }
+.watch .keyrow small { display:block; color:var(--dim); font-size:.72rem }
 
 /* Map handles for polygon corners live on whichever map draws them. */
 .vhandle { background:#2f81f7; border:2.5px solid #fff;

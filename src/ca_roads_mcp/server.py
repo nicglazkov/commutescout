@@ -1568,7 +1568,7 @@ def main() -> None:
         import uvicorn
         from mcp.server.transport_security import TransportSecuritySettings
 
-        from ca_roads_mcp.ratelimit import RateLimitMiddleware
+        from ca_roads_mcp.ratelimit import ApiKeyMiddleware, RateLimitMiddleware
 
         mcp.settings.host = args.host
         mcp.settings.port = args.port
@@ -1586,6 +1586,9 @@ def main() -> None:
         app = RateLimitMiddleware(
             mcp.streamable_http_app(),
             daily_limit=int(os.environ.get("MCP_PER_CLIENT_DAILY", "10000")))
+        # Keys (from Settings on the map page) sit in front: a keyed
+        # request is limited by its tier instead of its address.
+        app = ApiKeyMiddleware(app)
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:
         mcp.run(transport="stdio")

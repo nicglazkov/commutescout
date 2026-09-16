@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from ca_roads import apikeys
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads_demo import staticmap_sig
 from ca_roads_mcp import server as tools
@@ -595,6 +596,66 @@ async def api_watch_me(request: Request) -> JSONResponse:
 UNITS = ("mi", "km")
 
 
+# ---------------------------------------------------------------- API keys
+
+async def api_keys_list(request: Request) -> JSONResponse:
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    store = apikeys.get_key_store()
+    keys = [apikeys.public_view(k["id"], k) for k in await store.list_for(claims["sub"])]
+    keys.sort(key=lambda k: k.get("created_at") or "", reverse=True)
+    return JSONResponse({"keys": keys, "max_active": apikeys.MAX_KEYS_PER_ACCOUNT,
+                         "tiers": {t: v["daily"] for t, v in apikeys.TIERS.items()}})
+
+
+async def api_keys_create(request: Request) -> JSONResponse:
+    """Mint a key for the signed-in account. Any account can hold keys
+    (the watch-area approval is a separate gate); the full key is in
+    this response and nowhere else."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    body = await _read_json(request) or {}
+    name = clean_text(str(body.get("name") or ""), 40)
+    try:
+        full, view = await apikeys.create_key(
+            apikeys.get_key_store(), claims["sub"], claims.get("email") or "", name)
+    except ValueError as exc:
+        return _err(str(exc))
+    return JSONResponse({"key": full, **view})
+
+
+async def api_keys_revoke(request: Request) -> JSONResponse:
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    key_id = _safe_id(request.path_params.get("key_id", ""))
+    store = apikeys.get_key_store()
+    rec = await store.get(key_id) if key_id else None
+    if not rec or rec.get("uid") != claims["sub"]:
+        return _err("no such key", 404)
+    await store.put(key_id, {"revoked": True,
+                             "revoked_at": datetime.now(UTC).isoformat()})
+    return JSONResponse({"id": key_id, "revoked": True})
+
+
+async def api_admin_key(request: Request) -> JSONResponse:
+    """Set a key's tier (free or pro). More than pro is a conversation."""
+    if not await _require_admin(request):
+        return _err("admin only", 403)
+    body = await _read_json(request) or {}
+    key_id = _safe_id(str(body.get("key_id") or ""))
+    tier = body.get("tier")
+    if not key_id or tier not in apikeys.TIERS:
+        return _err("key_id and tier free|pro required")
+    store = apikeys.get_key_store()
+    if not await store.get(key_id):
+        return _err("no such key", 404)
+    await store.put(key_id, {"tier": tier})
+    return JSONResponse({"id": key_id, "tier": tier})
+
+
 async def api_watch_prefs(request: Request) -> JSONResponse:
     """Per-account preferences (distance units today), so a choice made
     on one device follows the account to the next."""
@@ -874,6 +935,8 @@ async def api_watch_update(request: Request) -> JSONResponse:
 
 
 async def api_account_delete(request: Request) -> JSONResponse:
+    """Removes the account and everything hanging off it, API keys
+    included (see below)."""
     """Self-serve account deletion: removes the user record, every
     watch and its alert state, and all push subscriptions. The privacy
     page promises this is immediate and complete."""

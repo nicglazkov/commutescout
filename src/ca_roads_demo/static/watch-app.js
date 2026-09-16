@@ -115,6 +115,7 @@ export async function initWatch(opts) {
     $('who').append(label, out);
     if ($('acctcard')) $('acctcard').hidden = false;
     if ($('acctnote')) $('acctnote').hidden = true;
+    if ($('keycard')) { $('keycard').hidden = false; renderKeys(); }
     if (me.prefs && me.prefs.units && window.csUnits
         && me.prefs.units !== window.csUnits.get()) {
       window.csUnits.set(me.prefs.units, { fromServer: true });
@@ -139,6 +140,7 @@ export async function initWatch(opts) {
       $('who').innerHTML = '';
       if ($('acctcard')) $('acctcard').hidden = true;
       if ($('acctnote')) $('acctnote').hidden = false;
+      if ($('keycard')) $('keycard').hidden = true;
       show('signin');
       return;
     }
@@ -698,6 +700,72 @@ export async function initWatch(opts) {
       msg('createmsg', 'Watch created.', 'ok');
     } catch (e) { msg('createmsg', e.message, 'err'); }
   });
+
+  // ------------------------------------------------------------ API keys
+  // Only the map page's Settings pane has these elements; the module
+  // runs on /watch too, so every touch is guarded.
+  async function renderKeys() {
+    const list = $('keylist');
+    if (!list) return;
+    try {
+      const data = await api('/api/keys');
+      list.innerHTML = '';
+      if (!data.keys.length) {
+        list.innerHTML = '<div class="hint">No keys yet.</div>';
+      }
+      for (const k of data.keys) {
+        const row = document.createElement('div');
+        row.className = 'witem keyrow' + (k.revoked ? ' paused' : '');
+        const text = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'wname';
+        name.textContent = (k.name || 'Unnamed key') + (k.revoked ? ' (revoked)' : '');
+        const meta = document.createElement('small');
+        meta.textContent = k.prefix + '\u2026 \u00b7 ' + k.tier + ', ' +
+          k.daily_limit.toLocaleString() + ' a day' +
+          (k.last_used_at ? ' \u00b7 last used ' + new Date(k.last_used_at).toLocaleDateString()
+            : ' \u00b7 never used');
+        text.append(name, meta);
+        row.append(text);
+        if (!k.revoked) {
+          const del = document.createElement('button');
+          del.type = 'button';
+          del.textContent = '\u00d7';
+          del.title = 'Revoke this key';
+          del.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm('Revoke "' + (k.name || k.prefix) + '"? Requests with it stop immediately.')) return;
+            try {
+              await api('/api/keys/' + k.id, { method: 'DELETE' });
+              await renderKeys();
+            } catch (err) { msg('keymsg', err.message, 'err'); }
+          });
+          row.append(del);
+        }
+        list.append(row);
+      }
+    } catch (e) { msg('keymsg', e.message, 'err'); }
+  }
+  if ($('keycreate')) {
+    $('keycreate').addEventListener('click', async () => {
+      msg('keymsg', '');
+      try {
+        const r = await api('/api/keys', { method: 'POST',
+          body: JSON.stringify({ name: $('keyname').value.trim() }) });
+        $('keyvalue').textContent = r.key;
+        $('keynew').hidden = false;
+        $('keyname').value = '';
+        await renderKeys();
+      } catch (e) { msg('keymsg', e.message, 'err'); }
+    });
+    $('keycopy').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText($('keyvalue').textContent);
+        $('keycopy').textContent = 'Copied';
+        setTimeout(() => { $('keycopy').textContent = 'Copy'; }, 1800);
+      } catch (e) { /* the code block is selectable */ }
+    });
+  }
 
   // ---------------------------------------------------------------- push
 
