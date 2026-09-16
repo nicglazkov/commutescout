@@ -130,7 +130,7 @@ class RateLimiter:
         self._buckets: dict[str, TokenBucket] = {}
 
     def allow(self, key: str, now: float | None = None) -> bool:
-        key = limiter_key(key)
+        key = limiter_key(key)  # idempotent: middleware may pre-fold
         bucket = self._buckets.get(key)
         if bucket is None:
             if len(self._buckets) >= self.max_keys:
@@ -178,6 +178,9 @@ class RateLimitMiddleware:
         # The bucket bounds the rate; this bounds the day. A client at
         # the sustained rate for 24 hours is 43k requests, which on the
         # MCP service is real CPU money (one client did 60k in a day).
+        # The key is the client address, and hosted MCP clients can
+        # share an egress address, so the limit must stay well above
+        # what a whole office or connector fleet does in a day.
         self.daily_limit = daily_limit
         self.daily = DailyCounter()
 
@@ -205,16 +208,7 @@ class RateLimitMiddleware:
         if any(path.startswith(p) for p in self.exempt_prefixes):
             await self.app(scope, receive, send)
             return
-        key = self._client_key(scope)
-        if (self.daily_limit
-                and not self.daily.allow(limiter_key(key), self.daily_limit)):
-            await send({"type": "http.response.start", "status": 429,
-                        "headers": [(b"content-type", b"application/json"),
-                                    (b"retry-after", b"3600")]})
-            await send({"type": "http.response.body",
-                        "body": b'{"error": "daily request limit reached '
-                                b'for your address; try tomorrow"}'})
-            return
+        key = limiter_key(self._client_key(scope))
         if not self.limiter.allow(key):
             await send(
                 {
@@ -232,5 +226,15 @@ class RateLimitMiddleware:
                     "body": b'{"error": "rate limited, slow down"}',
                 }
             )
+            return
+        # Counted after the bucket: a client the bucket already turned
+        # away has not spent anything, so it must not burn its day.
+        if self.daily_limit and not self.daily.allow(key, self.daily_limit):
+            await send({"type": "http.response.start", "status": 429,
+                        "headers": [(b"content-type", b"application/json"),
+                                    (b"retry-after", b"3600")]})
+            await send({"type": "http.response.body",
+                        "body": b'{"error": "daily request limit reached '
+                                b'for your address; try tomorrow"}'})
             return
         await self.app(scope, receive, send)

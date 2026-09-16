@@ -6,6 +6,9 @@ the trip share page), so those URLs carry an HMAC of their parameters
 and the handler refuses everything else. Gmail's image proxy refetches
 the same URL, so the signature keeps working per open. Without a
 signing key (dev, CI, self-hosters who never set one) the check is off.
+The key is its own secret, STATICMAP_SIGNING_KEY: sharing another
+secret would make rotating that one silently break every image in
+every alert email already sent.
 """
 
 from __future__ import annotations
@@ -16,9 +19,7 @@ import os
 
 
 def _key() -> bytes:
-    raw = (os.environ.get("STATICMAP_SIGNING_KEY")
-           or os.environ.get("TELEMETRY_SALT") or "")
-    return raw.strip().encode()
+    return os.environ.get("STATICMAP_SIGNING_KEY", "").strip().encode()
 
 
 def sign(lat: str, lon: str, z: str, kind: str) -> str:

@@ -10,9 +10,10 @@ precision-6 polylines and reports lengths in kilometers.
 
 import httpx
 
+from ca_roads.stadia import auth_headers
+
 ROUTE_URL = "https://api.stadiamaps.com/route/v1"
-UA = {"User-Agent":
-      "commutescout.com road snapper (https://commutescout.com)"}
+USER_AGENT = "commutescout.com road snapper (https://commutescout.com)"
 
 
 class NoCandidateError(Exception):
@@ -48,8 +49,8 @@ async def route(client: httpx.AsyncClient, locations: list[dict], *,
     near a location (raises NoCandidateError so callers can widen their
     search); other error statuses raise httpx.HTTPStatusError."""
     body = {"locations": locations, "costing": "auto", **options}
-    headers = {**UA, "Authorization": f"Stadia-Auth {api_key}"}
-    resp = await client.post(ROUTE_URL, json=body, headers=headers,
+    resp = await client.post(ROUTE_URL, json=body,
+                             headers=auth_headers(api_key, USER_AGENT),
                              timeout=timeout)
     if resp.status_code == 400:
         raise NoCandidateError(resp.text[:200])

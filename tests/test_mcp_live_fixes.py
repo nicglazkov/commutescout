@@ -50,6 +50,15 @@ class FakeRoad:
     async def wildfires(self):
         return FeedResult(source="wfigs", records=[], data_as_of=AS_OF)
 
+    async def road_weather(self):
+        return FeedResult(source="rwis", records=[], data_as_of=AS_OF)
+
+    async def message_signs(self):
+        return FeedResult(source="cms", records=[], data_as_of=AS_OF)
+
+    async def cameras(self):
+        return FeedResult(source="cctv", records=[], data_as_of=AS_OF)
+
 
 def test_parse_center_rejects_out_of_range_coordinates():
     assert server.parse_center("99,999") is None
@@ -59,15 +68,17 @@ def test_parse_center_rejects_out_of_range_coordinates():
 
 
 def test_los_angeles_to_las_vegas_resolves_to_i15():
-    match = corr.resolve_corridor("Los Angeles", "Las Vegas")
-    assert match is not None and match.corridor.routes == ("I-15",)
+    # Los Angeles is not an alias (basin trips must not resolve here);
+    # its coordinates snap onto the I-10 leg and Las Vegas is the B end.
+    match = corr.resolve_corridor_ext("Los Angeles", "Las Vegas",
+                                      (34.05, -118.24), (36.17, -115.14))
+    assert match is not None and "I-15" in match.corridor.routes
     assert not match.reversed
     back = corr.resolve_corridor("Las Vegas", "Ontario, CA")
     assert back is not None and back.corridor.id == match.corridor.id
     assert back.reversed
-    # The polyline now begins in the basin, so LA-area coordinates snap.
-    dist, _ = corr.distance_to_corridor(match.corridor, 34.07, -117.60)
-    assert dist < corr.SNAP_MAX_METERS
+    dist, _ = corr.distance_to_corridor(match.corridor, 34.05, -118.24)
+    assert dist < 2_000
 
 
 async def test_district_out_of_range_is_an_error_before_any_fetch(monkeypatch):

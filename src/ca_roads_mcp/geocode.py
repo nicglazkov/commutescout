@@ -24,6 +24,7 @@ from importlib.resources import files
 import httpx
 
 from ca_roads.budget import UPSTREAM
+from ca_roads.stadia import auth_headers
 
 STADIA_SEARCH_URL = "https://api.stadiamaps.com/geocoding/v1/search"
 STADIA_AUTOCOMPLETE_URL = "https://api.stadiamaps.com/geocoding/v1/autocomplete"
@@ -49,8 +50,7 @@ STADIA_GEOCODE_DAILY = int(os.environ.get("STADIA_GEOCODE_DAILY", "4000"))
 
 
 def _auth(key: str) -> dict[str, str]:
-    # Header, never a query param: request URLs get logged.
-    return {"User-Agent": USER_AGENT, "Authorization": f"Stadia-Auth {key}"}
+    return auth_headers(key, USER_AGENT)
 
 
 def _rect_params() -> dict:

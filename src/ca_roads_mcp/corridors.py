@@ -132,19 +132,24 @@ CORRIDORS: tuple[Corridor, ...] = (
     ),
     Corridor(
         id="i15-barstow-vegas",
-        name="I-15: Los Angeles basin to the Nevada state line (Las Vegas)",
-        routes=("I-15",),
-        # Begins at the I-10 junction in Ontario and climbs Cajon Pass:
-        # "Los Angeles to Las Vegas" is the trip people ask about, and
-        # the corridor used to start at Barstow, 100 km past the basin.
+        name="I-10 and I-15: Los Angeles to the Nevada state line (Las Vegas)",
+        routes=("I-10", "I-15"),
+        # Downtown Los Angeles east on I-10 to the I-15 junction in
+        # Ontario, then up Cajon Pass: "Los Angeles to Las Vegas" is the
+        # trip people ask about, and the corridor used to start at
+        # Barstow, 100 km past the basin. Los Angeles is deliberately
+        # NOT an alias: basin cities snap by coordinates, and a trip
+        # between two of them is refused by the minimum-span rule
+        # instead of returning a few miles of I-10 as the drive.
         waypoints=(
-            (34.07, -117.55), (34.14, -117.47), (34.23, -117.44), (34.34, -117.45),
+            (34.05, -118.24), (34.06, -118.02), (34.07, -117.80), (34.07, -117.55),
+            (34.14, -117.47), (34.23, -117.44), (34.34, -117.45),
             (34.42, -117.36), (34.53, -117.29), (34.72, -117.15), (34.90, -117.02),
             (34.91, -116.82), (35.03, -116.38), (35.27, -116.07), (35.47, -115.55),
             (35.61, -115.39),
         ),
-        aliases_a=("los angeles", "ontario", "rancho cucamonga", "fontana",
-                   "san bernardino", "riverside", "victorville", "barstow"),
+        aliases_a=("ontario", "rancho cucamonga", "fontana",
+                   "san bernardino", "victorville", "barstow"),
         aliases_b=("las vegas", "vegas", "primm", "stateline nevada"),
         aliases_mid=("cajon pass", "hesperia", "yermo", "baker",
                      "mountain pass", "halloran"),

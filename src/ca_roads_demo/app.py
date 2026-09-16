@@ -45,6 +45,7 @@ from ca_roads.feeds import calfire as calfire_feed
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
+from ca_roads.stadia import auth_headers
 from ca_roads_demo import (
     analytics,
     roadsnap,
@@ -104,7 +105,7 @@ def get_client() -> anthropic.AsyncAnthropic:
 
 
 class DailyGuards:
-    """Per-IP daily question counts and the global daily dollar counter.
+    """Per-client daily question counts and the global daily dollar counter.
 
     In-process: resets on instance restart, which only ever makes the caps
     more generous. Good enough to keep the worst case at a few dollars.
@@ -112,14 +113,13 @@ class DailyGuards:
 
     def __init__(self) -> None:
         self.day = ""
-        self.questions: dict[str, int] = {}
+        self.questions = DailyCounter()
         self.dollars = 0.0
 
     def _roll(self) -> None:
         today = datetime.now(UTC).date().isoformat()
         if today != self.day:
             self.day = today
-            self.questions = {}
             self.dollars = 0.0
 
     def try_start_question(self, ip: str) -> str | None:
@@ -127,9 +127,8 @@ class DailyGuards:
         self._roll()
         if self.dollars >= GLOBAL_DAILY_DOLLARS:
             return "The demo hit its daily budget. Try again tomorrow."
-        if self.questions.get(ip, 0) >= PER_IP_DAILY_QUESTIONS:
+        if not self.questions.allow(ip, PER_IP_DAILY_QUESTIONS):
             return "Daily question limit reached for your address. Try again tomorrow."
-        self.questions[ip] = self.questions.get(ip, 0) + 1
         return None
 
     def add_usage(self, input_tokens: int, output_tokens: int) -> None:
@@ -734,8 +733,7 @@ async def api_staticmap(request: Request):
             resp = await road.client.get(
                 f"https://tiles.stadiamaps.com/tiles/alidade_smooth/"
                 f"{z}/{tx % n}/{ty}.png",
-                headers={"User-Agent": "ca-roads-mcp staticmap",
-                         "Authorization": f"Stadia-Auth {api_key}"},
+                headers=auth_headers(api_key, "ca-roads-mcp staticmap"),
                 timeout=10,
             )
             return tx, ty, resp.content if resp.status_code == 200 else None
@@ -775,6 +773,11 @@ async def api_staticmap(request: Request):
         return out.getvalue()
 
     png = await asyncio.to_thread(compose)
+    if any(t[2] is None for t in tiles):
+        # A tile the budget or the network refused leaves a blank patch;
+        # serve it once but never cache it for six hours.
+        return Response(png, media_type="image/png",
+                        headers={"Cache-Control": "no-store"})
     if len(_STATICMAP_CACHE) >= _STATICMAP_MAX:
         oldest = sorted(_STATICMAP_CACHE.items(), key=lambda kv: kv[1][0])
         for k, _ in oldest[: _STATICMAP_MAX // 4]:
@@ -828,10 +831,10 @@ def _bbox_params(request: Request):
         return None
 
 
-# Built-response cache: every visitor's boot request is the identical
-# whole-world query, and serializing plus gzipping 11 MB on the event
-# loop was measured blocking concurrent static responses for ~1 s.
-# A 30 s TTL matches the response's Cache-Control.
+# Served-response cache keyed by the grid-snapped viewport: a hit skips
+# the nationwide marker build and the json.dumps + gzip that were
+# measured blocking the event loop for ~1 s. A 30 s TTL matches the
+# response's Cache-Control.
 _MAPDATA_CACHE: dict = {}
 _MAPDATA_CACHE_TTL = 30
 # Region-scoped boot payloads mean many more distinct bboxes than the
