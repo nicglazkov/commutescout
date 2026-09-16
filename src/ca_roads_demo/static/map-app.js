@@ -2791,9 +2791,45 @@ async function valhallaDirections(points) {
   }
   return routes.slice(0, 3);
 }
+// The server plans with our own knowledge (full closures excluded,
+// candidates ranked by what lies on them, one-tap presets). Plain
+// keyless routing is the fallback whenever it answers anything else,
+// so the map never loses routing to a spent budget.
+let routePreset = 'fastest';
+let planNote = null;
+async function serverDirections(points, preset) {
+  const res = await fetch('/api/route', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ locations: points.map(p => ({ lat: p[0], lon: p[1] })),
+      preset }),
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.routes || !data.routes.length) return null;
+  planNote = data.note || null;
+  return data.routes.slice(0, 3).map((r) => Object.assign(
+    valhallaTripToRoute(r.trip),
+    { hassles: r.hassles || [], penalty: r.penalty_min || 0 }));
+}
 async function anyDirections(points) {
+  planNote = null;
+  try {
+    const ranked = await serverDirections(points, routePreset);
+    if (ranked && ranked.length) return ranked;
+  } catch (e) { /* fall through to plain routing */ }
   try { return await valhallaDirections(points); } catch (e) { return null; }
 }
+document.getElementById('routepresets').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-preset]');
+  if (!btn || btn.dataset.preset === routePreset) return;
+  routePreset = btn.dataset.preset;
+  document.querySelectorAll('#routepresets button').forEach((b) => {
+    b.classList.toggle('on', b === btn);
+  });
+  if (lastEnds) await replanVias();
+});
 
 const layerRoute = L.layerGroup().addTo(map);
 let plannedRoute = null;
@@ -3187,12 +3223,23 @@ function renderRouteAlts(chosen, a, b) {
       sm.textContent = (r.distance / 1609.344).toFixed(0) + ' mi, ' +
         Math.round(r.duration / 60) + ' min';
       btn.append(bEl, sm);
+      if (r.hassles) {
+        const em = document.createElement('em');
+        em.textContent = r.hassles.length
+          ? 'On it: ' + r.hassles.map((h) => h.label).join(', ')
+          : 'Clear right now';
+        em.className = r.hassles.length ? 'warn' : '';
+        btn.append(em);
+      }
       btn.addEventListener('click', () => renderRouteAlts(i, a, b));
       alts.append(btn);
     });
   }
   showRoute(plannedRoutes[chosen],
     plannedRoutes.filter((_, i) => i !== chosen), a, b);
+  const note = document.getElementById('plannote');
+  note.textContent = planNote || '';
+  note.hidden = !planNote;
 }
 
 function flowColor(ratio) {
@@ -3430,51 +3477,58 @@ function renderRouteConditions(latlngs) {
   const condGroups = ['clo_full', 'clo_lane', 'clo_oneway', 'clo_ramp',
     'inc_collision', 'inc_fire', 'inc_hazard', 'inc_other',
     'chain', 'fire_pt', 'sign'];
+  // Read the marker data, not the Leaflet layer groups: under the WebGL
+  // renderer those groups stay empty and this list said "nothing
+  // notable" on every modern browser.
   for (const g of condGroups) {
-    ambient[g].eachLayer(l => {
-      if (shown >= 12 || !l.getLatLng) return;
-      const p = l.getLatLng();
-      const m = { lat: p.lat, lon: p.lng };
+    for (const it of (items[g] || [])) {
+      if (shown >= 12) break;
+      const m = it.m;
       // 0.35 km: on the roadway itself (plus GPS slop), not "nearby".
-      if (nearRoute(m, latlngs, 0.35)) {
-        const row = document.createElement('div');
-        row.className = 'condrow';
-        const dot = document.createElement('i');
-        dot.style.background = GROUP_DOT[g];
-        const txt = document.createElement('span');
-        const popEl = document.createElement('div');
-        popEl.innerHTML = l.getPopup() ? l.getPopup().getContent() : '';
-        txt.textContent = (popEl.querySelector('.t')?.textContent || POP_LABEL[g]) +
-          (popEl.querySelector('.d')?.textContent ? ' - ' + popEl.querySelector('.d').textContent : '');
-        row.append(dot, txt);
-        if (dep && l.__m) {
-          const [cls, noteTxt] = departNote(l.__m, g, dep);
-          if (noteTxt) {
-            const when = document.createElement('span');
-            when.className = 'when' + (cls ? ' ' + cls : '');
-            when.textContent = noteTxt;
-            txt.append(when);
-          }
+      if (!nearRoute(m, latlngs, 0.35)) continue;
+      const row = document.createElement('div');
+      row.className = 'condrow';
+      const dot = document.createElement('i');
+      dot.style.background = GROUP_DOT[g];
+      const txt = document.createElement('span');
+      const popEl = document.createElement('div');
+      popEl.innerHTML = popupFor(m, g);
+      const head = popEl.querySelector('h4, .t');
+      const sub = popEl.querySelector('.sub, .d');
+      txt.textContent = (head ? head.textContent : POP_LABEL[g]) +
+        (sub && sub.textContent ? ' - ' + sub.textContent : '');
+      row.append(dot, txt);
+      if (dep) {
+        const [cls, noteTxt] = departNote(m, g, dep);
+        if (noteTxt) {
+          const when = document.createElement('span');
+          when.className = 'when' + (cls ? ' ' + cls : '');
+          when.textContent = noteTxt;
+          txt.append(when);
         }
-        const at = [p.lat, p.lng];
-        row.addEventListener('mouseenter', () => {
-          if (condHighlight) map.removeLayer(condHighlight);
-          condHighlight = L.circleMarker(at, {
-            radius: 15, color: '#0b1f33', weight: 3, fill: false,
-          }).addTo(map);
-        });
-        row.addEventListener('mouseleave', () => {
-          if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
-        });
-        row.addEventListener('click', () => {
-          if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
-          map.flyTo(at, Math.max(map.getZoom(), 12), { duration: 0.7 });
-          setTimeout(() => l.openPopup(), 750);
-        });
-        box.append(row);
-        shown++;
       }
-    });
+      const at = [m.lat, m.lon];
+      row.addEventListener('mouseenter', () => {
+        if (condHighlight) map.removeLayer(condHighlight);
+        condHighlight = L.circleMarker(at, {
+          radius: 15, color: '#0b1f33', weight: 3, fill: false,
+        }).addTo(map);
+      });
+      row.addEventListener('mouseleave', () => {
+        if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
+      });
+      row.addEventListener('click', () => {
+        if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
+        map.flyTo(at, Math.max(map.getZoom(), 12), { duration: 0.7 });
+        setTimeout(() => {
+          const p = L.popup({ maxWidth: 320 }).setLatLng(at).setContent(popupFor(m, g));
+          p.__m = m; p.__g = g;
+          p.openOn(map);
+        }, 750);
+      });
+      box.append(row);
+      shown++;
+    }
   }
   if (!shown) {
     const row = document.createElement('div');

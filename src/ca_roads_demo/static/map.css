@@ -509,6 +509,17 @@ aside section[data-tool].on { display:block }
 .routealts button b { display:block; font-size:.84rem }
 .routealts button small { color:var(--dim) }
 .routealts button.on { border-color:var(--sky); background:var(--sky-soft) }
+.routealts button em { display:block; font-style:normal; font-size:.7rem;
+  color:var(--green); margin-top:2px }
+.routealts button em.warn { color:#a02c2c }
+.routepresets { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 2px }
+.routepresets button { font:500 .72rem Inter; padding:4px 10px; border-radius:999px;
+  border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer }
+.routepresets button.on { border-color:var(--sky); background:var(--sky-soft); color:#1d4f9c }
+.routepresets button:disabled { opacity:.6; cursor:default }
+.plannote { font-size:.76rem; color:#7a2020; background:#fbe9e9; border:1px solid #f0c6c6;
+  border-radius:9px; padding:7px 10px; margin:8px 0 2px }
+.plannote[hidden] { display:none }
 .routesum { font:600 .95rem Inter; margin:14px 0 4px }
 .routebtns { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 12px }
 .routebtns button { font:600 .76rem Inter; border-radius:8px; padding:8px 12px;

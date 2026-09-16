@@ -49,6 +49,7 @@ from ca_roads.stadia import auth_headers
 from ca_roads_demo import (
     analytics,
     roadsnap,
+    routing,
     snapshot,
     states,
     staticmap_sig,
@@ -149,9 +150,14 @@ PAID_PER_CLIENT_DAILY = {
     "suggest": int(os.environ.get("SUGGEST_PER_CLIENT_DAILY", "400")),
     "geocode": int(os.environ.get("GEOCODE_PER_CLIENT_DAILY", "150")),
     "flow": int(os.environ.get("FLOW_PER_CLIENT_DAILY", "600")),
+    "route": int(os.environ.get("ROUTE_PER_CLIENT_DAILY", "300")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
 }
 STADIA_TILES_DAILY = int(os.environ.get("STADIA_TILES_DAILY", "20000"))
+# Server-side route plans (20 credits each on plain auto). The map
+# falls back to keyless browser routing when this budget is spent, so
+# the cap costs nothing but the closure-aware ranking.
+STADIA_ROUTE_DAILY = int(os.environ.get("STADIA_ROUTE_DAILY", "4000"))
 TOMTOM_TILES_DAILY = int(os.environ.get("TOMTOM_TILES_DAILY", "20000"))
 paid_use = DailyCounter()
 
@@ -612,6 +618,84 @@ async def api_flow(request: Request):
         else:
             out.append(None)
     return JSONResponse({"flow": out})
+
+
+_ROUTE_CACHE: dict = {}
+_ROUTE_TTL = 300.0
+_ROUTE_MAX = 200
+ROUTE_URL = "https://api.stadiamaps.com/route/v1"
+
+
+def _route_locations(raw) -> list[dict] | None:
+    if not isinstance(raw, list) or not 2 <= len(raw) <= 8:
+        return None
+    out = []
+    for p in raw:
+        try:
+            lat, lon = float(p["lat"]), float(p["lon"])
+        except (TypeError, KeyError, ValueError):
+            return None
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return None
+        out.append({"lat": round(lat, 6), "lon": round(lon, 6)})
+    return out
+
+
+async def api_route(request: Request):
+    """Plan a drive with our own knowledge on top of the router: full
+    closures are excluded, and the candidates come back ranked by what
+    lies on them (see routing.py). The page falls back to plain
+    keyless routing whenever this answers anything but 200, so a spent
+    budget or a missing key only costs the closure-aware ranking."""
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 - any malformed body is a 400
+        body = None
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "JSON body required"}, status_code=400)
+    locations = _route_locations(body.get("locations"))
+    if not locations:
+        return JSONResponse({"error": "locations: 2 to 8 {lat, lon} points"},
+                            status_code=400)
+    preset = str(body.get("preset") or "fastest")
+    if preset not in routing.PRESETS:
+        return JSONResponse({"error": "preset must be one of "
+                             + ", ".join(routing.PRESETS)}, status_code=400)
+    api_key = os.environ.get("STADIA_API_KEY", "").strip()
+    if not api_key:
+        return JSONResponse({"error": "routing is not configured"}, status_code=503)
+    if _client_over_daily(request, "route"):
+        return _daily_cap_response()
+    key = (preset, tuple((p["lat"], p["lon"]) for p in locations))
+    hit = _ROUTE_CACHE.get(key)
+    now = time.monotonic()
+    if hit and now - hit[0] < _ROUTE_TTL:
+        return JSONResponse(hit[1], headers={"Cache-Control": "no-store", "X-Cache": "hit"})
+    if not UPSTREAM.allow("stadia-route", STADIA_ROUTE_DAILY):
+        return JSONResponse({"error": "routing budget spent for today"}, status_code=503)
+    lats = [p["lat"] for p in locations]
+    lons = [p["lon"] for p in locations]
+    box = (max(-90.0, min(lats) - 0.25), max(-180.0, min(lons) - 0.25),
+           min(90.0, max(lats) + 0.25), min(180.0, max(lons) + 0.25))
+    markers, *_ = await build_markers(box, {"incident", "closure", "chain"})
+    road = tools.get_road()
+
+    async def fetch(req_body: dict):
+        resp = await road.client.post(
+            ROUTE_URL, json=req_body,
+            headers=auth_headers(api_key, "commutescout.com route planner"),
+            timeout=20.0)
+        if resp.status_code >= 400:
+            return None
+        return resp.json()
+
+    out = await routing.plan(fetch, markers, locations, preset)
+    if not out["routes"]:
+        return JSONResponse({"error": "no route found"}, status_code=404)
+    if len(_ROUTE_CACHE) >= _ROUTE_MAX:
+        _ROUTE_CACHE.pop(next(iter(_ROUTE_CACHE)))
+    _ROUTE_CACHE[key] = (now, out)
+    return JSONResponse(out, headers={"Cache-Control": "no-store"})
 
 
 _TILE_CACHE: dict[str, tuple[float, bytes]] = {}
@@ -2119,6 +2203,7 @@ app = Starlette(
         Route("/api/geocode", api_geocode, methods=["GET"]),
         Route("/api/suggest", api_suggest, methods=["GET"]),
         Route("/api/flow", api_flow, methods=["GET"]),
+        Route("/api/route", api_route, methods=["POST"]),
         Route("/api/traffictile/{z:int}/{x:int}/{y:int}.png", api_traffic_tile,
               methods=["GET"]),
         Route("/api/staticmap", api_staticmap, methods=["GET"]),
@@ -2314,7 +2399,7 @@ class SoftLimit:
     when scripted. Sixty-burst at two per second never touches a
     human; it stops a curl loop."""
 
-    PREFIXES = ("/api/suggest", "/api/geocode", "/api/flow",
+    PREFIXES = ("/api/suggest", "/api/geocode", "/api/flow", "/api/route",
                 "/api/staticmap", "/api/traffictile", "/api/contact",
                 "/api/waitlist", "/api/signin-link",
                 # A cache miss here is a nationwide build; the grid
