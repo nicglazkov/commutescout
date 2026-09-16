@@ -57,7 +57,11 @@ async def test_route_posts_key_and_returns_trip():
              {"lat": 37.7749, "lon": -122.4194}],
             api_key="test-key")
     req = route.calls[0].request
-    assert req.url.params["api_key"] == "test-key"
+    # The key rides in a header, never in the URL: httpx logs every
+    # request URL at INFO and query params would land in Cloud Logging.
+    assert req.headers["Authorization"] == "Stadia-Auth test-key"
+    assert "api_key" not in req.url.params
+    assert "test-key" not in str(req.url)
     sent = respx.calls[0].request.read()
     assert b'"costing": "auto"' in sent or b'"costing":"auto"' in sent
     assert trip["summary"]["length"] == 77.2

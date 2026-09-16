@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import ipaddress
+import logging
 import os
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
@@ -56,6 +57,14 @@ quickmap.dot.ca.gov). Not affiliated with any government agency.
 """
 
 mcp = FastMCP("CommuteScout", instructions=INSTRUCTIONS)
+
+# FastMCP's constructor runs logging.basicConfig at INFO for the whole
+# process (both services import this module). httpx then logs every
+# request URL at INFO, and the state-feed URLs carry API keys as query
+# parameters, so those lines would put every upstream key into Cloud
+# Logging. Keep the HTTP client loggers at WARNING.
+for _name in ("httpx", "httpcore"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
 
 _road: RoadData | None = None
 
