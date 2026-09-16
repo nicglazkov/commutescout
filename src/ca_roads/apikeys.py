@@ -212,7 +212,10 @@ class KeyResolver:
             return None
         if not hmac.compare_digest(rec.get("hash") or "", digest(secret)):
             return None
-        if now - self._touched.get(key_id, 0.0) > TOUCH_EVERY_S:
+        # None, not 0.0: a monotonic clock can read under five minutes on
+        # a fresh machine, which would skip the first touch entirely.
+        last = self._touched.get(key_id)
+        if last is None or now - last > TOUCH_EVERY_S:
             self._touched[key_id] = now
             with contextlib.suppress(Exception):  # a missed timestamp is fine
                 await self.store.put(key_id, {"last_used_at": datetime.now(UTC).isoformat()})
