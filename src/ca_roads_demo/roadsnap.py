@@ -10,8 +10,10 @@ closure's snap completes it renders as a dot; a snap that fails the
 quality gates (no route, absurd detour, endpoints too far apart) is
 remembered as "no line" so a guess is never drawn.
 
-Local dev has no ADC: Firestore calls are best-effort and the module
-degrades to in-process caching.
+Local dev has no ADC: without a routing key the worker sleeps, and
+with one it retries the boot mirror until Firestore answers, because
+buying routes without a complete mirror is the bug this module exists
+to prevent.
 """
 
 from __future__ import annotations
@@ -425,6 +427,10 @@ async def _snap(client, lat1, lon1, lat2, lon2) -> list | None:
 
 
 async def _drain(client) -> None:
+    # A keyless process never drains, so it never needs the mirror
+    # either (and never logs a load failure every retry in local dev).
+    while not _ready():
+        await _sleep(300)
     # No purchases until the boot mirror is complete (see load_persisted).
     delay = LOAD_RETRY_SECONDS
     while not await load_persisted():

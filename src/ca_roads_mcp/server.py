@@ -258,6 +258,13 @@ CENTER_FORMAT_ERROR = ("center must be 'lat,lon' (lat -90..90, lon -180..180), "
 # An unfiltered closures list is 600 KB and 670 records: more than any
 # model context wants. Callers narrow with route, district, or center.
 CLOSURES_CAP = 200
+# Two places that snap within this distance along a corridor are not a
+# trip on it (Los Angeles and San Bernardino both snapping near the
+# Ontario end of I-15 once returned a few miles of I-15 as the drive).
+MIN_CORRIDOR_SPAN_M = 15_000.0
+# California's bounding box (generous), for "could this query touch CA".
+CA_LAT = (31.0, 43.5)
+CA_LON = (-126.5, -112.5)
 
 
 def incident_severity(log_type: str) -> int:
@@ -435,6 +442,16 @@ async def check_route(
                 f"'{to_place}' is {snap_dist / 1609:.0f} miles off this "
                 "corridor; using the corridor end instead"
             )
+    if abs(along_to - along_from) < MIN_CORRIDOR_SPAN_M:
+        return {
+            "error": (
+                f"'{from_place}' and '{to_place}' both sit near the same "
+                f"stretch of {corridor.name}; that corridor is not the "
+                "drive between them. Use get_nearby_events or the filtered "
+                "tools with center= for local conditions."
+            ),
+            "supported_corridors": corr.corridor_names(),
+        }
     heading_back = along_from > along_to
     window_lo = max(0.0, min(along_from, along_to) - 3_000)
     window_hi = min(total, max(along_from, along_to) + 3_000)
@@ -900,6 +917,11 @@ async def get_lane_closures(
                 and haversine_meters(*point, c.end_lat, c.end_lon) <= limit
             )
         ]
+    if center:
+        records.sort(key=lambda c: haversine_meters(
+            *point, c.begin_lat, c.begin_lon))
+    else:
+        records.sort(key=lambda c: c.start_epoch or 0, reverse=True)
     total = len(records)
     records = records[:CLOSURES_CAP]
     payload = {
@@ -1430,9 +1452,15 @@ async def _california_events(lat: float, lon: float, radius_km: float,
                              want: set[str]) -> list[dict]:
     """The California feeds in get_nearby_events' event shape. Each feed
     is independent: one failing never hides the others."""
+    out: list[dict] = []
+    # A circle that cannot touch California skips the four fetches
+    # (Denver queries used to pull every CA feed on a cold instance).
+    pad = radius_km / 100.0  # degrees, generous
+    if not (CA_LAT[0] - pad <= lat <= CA_LAT[1] + pad
+            and CA_LON[0] - pad <= lon <= CA_LON[1] + pad):
+        return out
     road = get_road()
     limit_m = radius_km * 1000
-    out: list[dict] = []
 
     def dist_m(la, lo) -> float | None:
         if not la or not lo:
@@ -1460,6 +1488,8 @@ async def _california_events(lat: float, lon: float, radius_km: float,
         with contextlib.suppress(Exception):
             for c in (await road.lane_closures()).records:
                 d = dist_m(c.begin_lat, c.begin_lon)
+                if d is None and c.end_lat and c.end_lon:
+                    d = dist_m(c.end_lat, c.end_lon)  # long closure ending nearby
                 if d is not None:
                     cd = closure_dict(c)
                     out.append(event(
@@ -1548,7 +1578,7 @@ def main() -> None:
         # the rate polite; the daily cap keeps the day bounded.
         app = RateLimitMiddleware(
             mcp.streamable_http_app(),
-            daily_limit=int(os.environ.get("MCP_PER_CLIENT_DAILY", "2000")))
+            daily_limit=int(os.environ.get("MCP_PER_CLIENT_DAILY", "10000")))
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:
         mcp.run(transport="stdio")
