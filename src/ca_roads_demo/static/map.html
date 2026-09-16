@@ -44,6 +44,7 @@
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
 <link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="/static/map.css?v=__ASSET_V__">
+<link rel="stylesheet" href="/static/watch.css?v=__ASSET_V__">
 </head>
 <body>
 <header class="topbar">
@@ -80,8 +81,8 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M12 8v3M12 13.5v.01"/></svg><span>Ask</span></button>
     <button type="button" class="tool" data-tool="layers" aria-pressed="false" title="Show or hide layers">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 4 8 4.5-8 4.5-8-4.5z"/><path d="m4 13 8 4.5 8-4.5M4 17l8 4.5 8-4.5"/></svg><span>Layers</span></button>
-    <a class="tool" href="/watch" data-tool="watch" title="Watch areas">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V7z"/><path d="m9 12 2 2 4-4"/></svg><span>Watch</span></a>
+    <button type="button" class="tool" data-tool="watch" aria-pressed="false" title="Watch areas">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V7z"/><path d="m9 12 2 2 4-4"/></svg><span>Watch</span></button>
     <button type="button" class="tool" data-tool="alerts" aria-pressed="false" title="What is live right now">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 16.5v.01"/></svg><span>Alerts</span></button>
     <span class="railgap" aria-hidden="true"></span>
@@ -206,6 +207,169 @@
       <u>Map style</u>
       <div class="basemap" id="basemap" role="radiogroup" aria-label="Map style"></div>
     </div>
+    </section>
+    <section id="pane-watch" data-tool="watch" class="watch" data-src="/static/watch-app.js?v=__ASSET_V__">
+      <h3 class="panehead">Watch areas <span class="badge">TRIAL</span></h3>
+      <div class="who" id="who"></div>
+      <!-- signed out -->
+      <section id="signin" class="hidden">
+        <p class="panenote">Draw an area anywhere CommuteScout covers, once.
+          It is checked every few minutes, and you get an alert the moment an
+          incident, closure, chain control, or wildfire shows up inside it.</p>
+        <div class="card signin-card">
+          <button class="primary" id="googlebtn">Continue with Google</button>
+          <div class="or">or use an email link</div>
+          <input type="email" id="email" placeholder="you@example.com"
+                 aria-label="Email address" autocomplete="email">
+          <div style="height:8px"></div>
+          <button class="ghost" id="emailbtn" style="width:100%">
+            Email me a sign-in link</button>
+          <div class="msg" id="signinmsg"></div>
+        </div>
+      </section>
+      <!-- signed in, not approved -->
+      <section id="gate" class="hidden">
+        <div class="card">
+          <p id="gatetext" class="gate-copy">Watch areas are in a limited
+            trial. Enter an access code to unlock them, or check back once
+            your account is approved.</p>
+          <input type="text" id="code" placeholder="Access code"
+                 aria-label="Access code"
+                 autocomplete="off" style="text-transform:uppercase">
+          <div style="height:8px"></div>
+          <button class="primary" id="redeembtn">Unlock watch areas</button>
+          <div class="msg" id="gatemsg"></div>
+          <p class="gate-ask">No code? <a href="/contact">Ask for access</a>
+            and we'll reply to the email you signed in with.</p>
+        </div>
+      </section>
+      <!-- approved -->
+      <section id="appzone" class="hidden">
+        <div class="sub">Alerts are checked every few minutes.
+          Informational only - verify with 511 before you drive.</div>
+        <div class="card newwatch-card">
+          <h2>New watch</h2>
+          <div class="stepblock">
+            <div class="stepnum">1</div>
+            <div class="stepbody">
+              <div class="steplabel">Choose a shape</div>
+              <div class="modes">
+                <button id="mode-circle" class="on">Circle</button>
+                <button id="mode-polygon">Polygon</button>
+                <button id="mode-route">Route</button>
+              </div>
+            </div>
+          </div>
+          <div class="stepblock">
+            <div class="stepnum">2</div>
+            <div class="stepbody">
+              <div class="steplabel">Draw it in</div>
+              <div class="hint" id="shapehint">Click the map to place the
+                center, then set the radius.</div>
+              <div class="devrow hidden" id="polytools" style="margin-top:8px">
+                <button class="ghost" id="undopt">Undo corner</button>
+                <button class="ghost" id="clearpts">Start over</button>
+              </div>
+              <div class="field hidden" id="routerow" style="margin-top:12px">
+                <label for="rw-from">From</label>
+                <input type="text" id="rw-from" maxlength="200"
+                       placeholder="e.g. San Jose">
+                <div style="height:8px"></div>
+                <label for="rw-to">To</label>
+                <input type="text" id="rw-to" maxlength="200"
+                       placeholder="e.g. South Lake Tahoe">
+                <div style="height:8px"></div>
+                <button class="ghost" id="rw-preview" style="width:100%">
+                  Preview route</button>
+                <div class="field" style="margin:12px 0 0">
+                  <label for="rw-buffer">Alert distance from route</label>
+                  <div class="radius">
+                    <input type="range" id="rw-buffer" min="1" max="2" value="2">
+                    <b id="rw-bufferlabel">2 mi</b>
+                  </div>
+                </div>
+              </div>
+              <div class="field" id="radiusrow" style="margin-top:12px">
+                <label for="radius">Radius</label>
+                <div class="radius">
+                  <input type="range" id="radius" min="1" max="40.2" value="15">
+                  <b id="radiuslabel">15 km</b>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stepblock">
+            <div class="stepnum">3</div>
+            <div class="stepbody">
+              <div class="steplabel">Name it and choose alerts</div>
+              <div class="field">
+                <label for="wname">Name</label>
+                <input type="text" id="wname" maxlength="60"
+                       placeholder="e.g. Commute over 17">
+              </div>
+              <div class="field">
+                <label>Alert me about</label>
+                <div class="kinds">
+                  <label><input type="checkbox" data-kind="incident" checked>Incidents</label>
+                  <label><input type="checkbox" data-kind="closure" checked>Closures</label>
+                  <label><input type="checkbox" data-kind="chain">Chain controls</label>
+                  <label><input type="checkbox" data-kind="fire" checked>Wildfires</label>
+                </div>
+              </div>
+              <div class="field">
+                <label>Deliver via</label>
+                <div class="chans">
+                  <label><input type="checkbox" id="ch-push" checked>Push notification</label>
+                  <label id="emailchan" class="hidden">
+                    <input type="checkbox" id="ch-email">Email</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="primary" id="createbtn">Create watch</button>
+          <button class="ghost hidden" id="canceledit"
+                  style="width:100%;margin-top:8px">Cancel shape edit</button>
+          <div class="msg" id="createmsg"></div>
+        </div>
+        <div class="card">
+          <div class="cardhead">
+            <h2>Your watches</h2>
+            <span class="usage" id="wcount"></span>
+          </div>
+          <div class="usagebar"><div class="usagefill" id="usagefill"></div></div>
+          <div class="wlist" id="wlist"></div>
+          <div class="msg" id="listmsg"></div>
+        </div>
+        <div class="card">
+          <h2>This device</h2>
+          <div class="devrow">
+            <button class="ghost" id="notifbtn">Enable notifications</button>
+            <button class="ghost" id="testbtn">Send test alert</button>
+          </div>
+          <div class="msg" id="devmsg"></div>
+          <div class="hint">On iPhone or iPad, first add this page to
+            your home screen (Share &rarr; Add to Home Screen), then open
+            it from there and enable notifications.</div>
+        </div>
+        <div class="card">
+          <h2>Account</h2>
+          <p class="hint" style="margin-bottom:10px">Deleting your
+            account removes it completely and immediately: every watch
+            area, alert state, and registered device. There is no undo.</p>
+          <button class="ghost" id="deleteacct"
+                  style="color:var(--red);border-color:#e8c9c9">
+            Delete my account</button>
+          <div class="msg" id="acctmsg"></div>
+        </div>
+        <div class="footer-note">
+          Alerts are informational only and may be delayed, incomplete, or
+          wrong. Always verify with <a href="tel:511">511</a> or your state
+          DOT before you drive, and never rely on this service for
+          evacuation or emergency decisions. Your account email and the
+          areas you draw are stored to run your alerts - see the
+          <a href="/privacy">privacy page</a> and <a href="/terms">terms</a>.
+        </div>
+      </section>
     </section>
     <section id="pane-alerts" data-tool="alerts">
       <h3 class="panehead">Live right now</h3>

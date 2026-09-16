@@ -1931,8 +1931,25 @@ function setTool(name, opts) {
   });
   shellEl.classList.toggle('nopanel', !!collapsing);
   store.set(TOOL_KEY, collapsing ? '' : name);
+  showWatch(name === 'watch' && !collapsing);
   if (opts && opts.reveal && isPhone() && sheetState === 'peek') setSheet('half');
   setTimeout(() => map.invalidateSize(), 60);
+}
+
+// ── Watch tool: the /watch flow on this map, loaded on first use ──
+// Firebase and the watch code only download when someone opens the
+// tool. Its layers sit on the map while the tool is open.
+let watchLoad = null;
+function showWatch(on) {
+  const pane = document.getElementById('pane-watch');
+  if (!on && !watchLoad) return;
+  if (!watchLoad) {
+    watchLoad = import(pane.dataset.src)
+      .then((mod) => mod.initWatch({ map, visible: false,
+        active: () => pane.classList.contains('on') }))
+      .catch((err) => { console.error('watch tool failed to load', err); return null; });
+  }
+  watchLoad.then((w) => { if (w) w.setVisible(on && pane.classList.contains('on')); });
 }
 
 // ── Phone: the panel is a bottom sheet, the rail its tab bar ─────

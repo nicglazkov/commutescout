@@ -1,0 +1,138 @@
+/* Watch areas: the sign-in card, the three-step new-watch flow, the
+   list, and the map handles. Shared by /watch and the map page's Watch
+   tool, and scoped under .watch so nothing here leaks into the map
+   page's own controls. Page layout (topbar, pitch, the split with the
+   watch page's own map) stays in watch.html. */
+.watch .card { background:var(--card); border:1px solid var(--line);
+  border-radius:14px; padding:20px; margin-bottom:16px;
+  box-shadow:0 1px 3px rgba(15,28,43,.05) }
+.watch .card h2 { font-size:.95rem; margin:0 0 10px; font-weight:700 }
+.watch .cardhead { display:flex; align-items:center; justify-content:space-between;
+  gap:10px; margin-bottom:6px }
+.watch .cardhead h2 { margin-bottom:0 }
+.watch button.primary { background:var(--sky); color:#fff; border:0;
+  border-radius:9px; padding:10px 18px; font:600 .88rem Inter;
+  cursor:pointer; width:100% }
+.watch button.primary:disabled { opacity:.55; cursor:default }
+.watch button.ghost { background:none; border:1px solid var(--line);
+  color:var(--ink); border-radius:9px; padding:9px 14px;
+  font:500 .84rem Inter; cursor:pointer }
+.watch button.ghost:hover { border-color:var(--sky); color:var(--sky) }
+.watch .or { color:var(--dim); font-size:.76rem; margin:12px 0; display:flex;
+  gap:10px; align-items:center }
+.watch .or::before, .watch .or::after { content:""; flex:1; height:1px;
+  background:var(--line) }
+.watch input[type=text], .watch input[type=email] { width:100%; border:1.5px solid
+  var(--line); border-radius:9px; padding:9px 12px; font:400 .88rem Inter;
+  background:#fff; outline:none }
+.watch input:focus { border-color:var(--sky) }
+/* .msg doubles as the "alert" component: an empty one takes no space,
+   a filled one (err/ok/neutral) renders as a bordered, tinted panel
+   instead of bare colored text. */
+.watch .msg:empty { display:none }
+.watch .msg { font-size:.82rem; margin-top:10px; border-radius:9px; line-height:1.5 }
+.watch .msg:not(:empty) { padding:9px 12px; border:1px solid #cfe2fd;
+  background:var(--sky-soft); color:var(--ink) }
+.watch .msg.err:not(:empty) { color:#7a2020; background:var(--red-soft, #fbe9e9); border-color:#f0c6c6 }
+.watch .msg.ok:not(:empty) { color:#155c3c; background:var(--green-soft); border-color:#bfe6d2 }
+.watch .field { margin-bottom:12px }
+.watch .field:last-child { margin-bottom:0 }
+.watch .field label { display:block; font:600 .72rem Inter; letter-spacing:.6px;
+  text-transform:uppercase; color:var(--dim); margin-bottom:5px }
+.watch .modes { display:flex; gap:6px }
+.watch .modes button { flex:1; border:1.5px solid var(--line); background:#fff;
+  border-radius:9px; padding:8px; font:500 .82rem Inter; cursor:pointer;
+  color:var(--dim) }
+.watch .modes button.on { border-color:var(--sky); color:var(--sky);
+  background:var(--sky-soft) }
+.watch .kinds label, .watch .chans label { display:inline-flex; gap:6px;
+  align-items:center; font:400 .84rem Inter; text-transform:none;
+  letter-spacing:0; color:var(--ink); margin:0 12px 6px 0 }
+.watch .radius { display:flex; gap:10px; align-items:center }
+.watch .radius input { flex:1 }
+.watch .radius b { font-size:.82rem; min-width:52px; text-align:right }
+.watch .hint { color:var(--dim); font-size:.76rem; margin-top:4px }
+.watch .sub { color:var(--dim); font-size:.86rem; margin-bottom:18px }
+
+/* ── Three-step "new watch" flow ───────────────────────────────── */
+.watch .newwatch-card h2 { margin-bottom:14px }
+.watch .stepblock { display:flex; gap:12px; padding:14px 0 4px;
+  border-top:1px dashed var(--line) }
+.watch .stepblock:first-of-type { border-top:0; padding-top:0 }
+.watch .stepnum { flex:none; width:23px; height:23px; border-radius:99px;
+  background:var(--navy); color:#fff; font:700 .76rem Inter;
+  display:grid; place-items:center; margin-top:1px }
+.watch .stepbody { flex:1; min-width:0 }
+.watch .steplabel { font:700 .8rem Inter; color:var(--ink); margin-bottom:9px }
+
+/* ── Usage indicator ────────────────────────────────────────────── */
+.watch .usage { font-size:.76rem; font-weight:600; color:var(--dim);
+  background:var(--bg); border:1px solid var(--line); border-radius:99px;
+  padding:3px 10px; white-space:nowrap }
+.watch .usagebar { height:5px; border-radius:99px; background:var(--bg);
+  overflow:hidden; margin:0 0 14px }
+.watch .usagefill { height:100%; background:var(--sky); border-radius:99px;
+  width:0; transition:width .25s }
+
+/* ── Empty state ────────────────────────────────────────────────── */
+.watch .empty { text-align:center; padding:22px 8px; color:var(--dim) }
+.watch .empty-ico { width:38px; height:38px; margin:0 auto 10px; position:relative }
+.watch .empty-ico::before { content:""; position:absolute; inset:0; border-radius:11px;
+  border:1.5px dashed var(--line) }
+.watch .empty-ico::after { content:""; position:absolute; inset:9px; border-radius:99px;
+  border:1.5px solid var(--sky); opacity:.55 }
+.watch .empty-title { font-weight:700; color:var(--ink); font-size:.87rem; margin-bottom:4px }
+.watch .empty-sub { font-size:.78rem; line-height:1.55; max-width:280px; margin:0 auto }
+
+.watch .wlist { display:flex; flex-direction:column; gap:8px }
+.watch .witem { display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  border:1px solid var(--line); border-radius:10px; padding:9px 12px;
+  background:#fff; cursor:pointer }
+.watch .witem:hover { border-color:var(--sky) }
+.watch .witem i { width:10px; height:10px; border-radius:99px;
+  background:var(--sky); flex:none }
+.watch .witem .wname { font-weight:600; font-size:.86rem }
+.watch .witem .wmeta { color:var(--dim); font-size:.76rem }
+.watch .witem > button { background:none; border:0;
+  color:var(--dim); cursor:pointer; font-size:.95rem; padding:4px 6px }
+.watch .witem > button:first-of-type { margin-left:auto }
+.watch .witem > button:hover { color:var(--sky) }
+.watch .witem > button:last-of-type:hover { color:var(--red) }
+.watch .witem.paused .wname { color:var(--dim) }
+.watch .weditor { flex-basis:100%; border-top:1px dashed var(--line);
+  margin-top:8px; padding-top:10px; display:flex; flex-direction:column;
+  gap:8px; cursor:default }
+.watch .weditor input[type=text] { width:100% }
+.watch .devrow { display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+.watch .footer-note { color:var(--dim); font-size:.72rem; margin-top:22px;
+  border-top:1px solid var(--line); padding-top:12px }
+.watch .footer-note a { color:var(--dim) }
+.watch .badge { display:inline-block; background:var(--amber); color:#fff;
+  font:700 .62rem Inter; letter-spacing:.7px; padding:2px 8px;
+  border-radius:99px; vertical-align:2px }
+/* The signed-in line: who you are and the way out. */
+.watch .who { display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  font-size:.78rem; color:var(--dim); margin-bottom:12px }
+.watch .who:empty { display:none }
+.watch .who button { background:none; border:1px solid var(--line);
+  color:var(--dim); border-radius:7px; padding:3px 10px; font:500 .76rem Inter;
+  cursor:pointer }
+.watch .who button:hover { color:var(--ink); border-color:var(--sky) }
+.watch .gate-copy { color:var(--dim); font-size:.85rem; margin-bottom:14px }
+.watch .gate-ask { color:var(--dim); font-size:.82rem; margin:14px 0 0 }
+.watch .gate-ask a { color:var(--sky) }
+.watch .hidden { display:none !important }
+
+/* Map handles for polygon corners live on whichever map draws them. */
+.vhandle { background:#2f81f7; border:2.5px solid #fff;
+  border-radius:99px; box-shadow:0 1px 4px rgba(15,28,43,.4); cursor:grab }
+.mhandle { background:rgba(47,129,247,.5); border:2px solid #fff;
+  border-radius:99px; cursor:copy }
+
+@media (max-width: 900px) {
+  .watch button.primary, .watch button.ghost { min-height:44px }
+  .watch .witem > button { padding:8px }
+  .watch input, .watch select, .watch textarea { font-size:16px !important }
+  .watch .kinds label, .watch .chans label { padding:4px 0 }
+  .watch .stepblock { gap:10px }
+}
