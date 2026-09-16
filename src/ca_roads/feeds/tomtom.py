@@ -14,6 +14,8 @@ import time
 
 import httpx
 
+from ca_roads.budget import UPSTREAM
+
 FLOW_URL = (
     "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
 )
@@ -21,6 +23,10 @@ TIMEOUT_SECONDS = 8.0
 TTL_SECONDS = 60.0
 
 _cache: dict[tuple[float, float], tuple[float, dict | None]] = {}
+# TomTom's free tier is 2,500 non-tile requests a day for the whole
+# key; past this the flow layer goes grey instead of the key going
+# dark for everyone.
+TOMTOM_FLOW_DAILY = int(os.environ.get("TOMTOM_FLOW_DAILY", "2000"))
 
 
 def api_key() -> str | None:
@@ -38,6 +44,8 @@ async def flow_at_point(
     cached = _cache.get(cache_key)
     if cached and now - cached[0] < TTL_SECONDS:
         return cached[1]
+    if not UPSTREAM.allow("tomtom-flow", TOMTOM_FLOW_DAILY):
+        return None
     try:
         resp = await client.get(
             FLOW_URL,

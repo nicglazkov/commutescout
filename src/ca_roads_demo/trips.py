@@ -25,6 +25,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 
+from ca_roads_demo import staticmap_sig
 from ca_roads_demo import watch as watch_mod
 
 DEMO_URL = os.environ.get(
@@ -200,8 +201,8 @@ async def trip_page(request: Request) -> HTMLResponse:
              f"{pub['miles']:.0f} mi · CommuteScout")
     mid = decode_polyline(pub["polyline"])
     mid = mid[len(mid) // 2] if mid else [37.5, -120.5]
-    og_image = (f"{DEMO_URL}/api/staticmap?lat={mid[0]:.4f}"
-                f"&lon={mid[1]:.4f}&z=9&k=incident")
+    og_image = (f"{DEMO_URL}/api/staticmap?"
+                + staticmap_sig.query(mid[0], mid[1], 9, "incident"))
     # One pass, not a chain of .replace() calls. Chained replaces re-scan
     # the text they just inserted, so a trip name of literally
     # "__TRIP_JSON__" survived escaping (escaping does not touch

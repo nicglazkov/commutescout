@@ -1436,7 +1436,12 @@ def main() -> None:
         mcp.settings.transport_security = TransportSecuritySettings(
             enable_dns_rebinding_protection=False
         )
-        app = RateLimitMiddleware(mcp.streamable_http_app())
+        # One client sent 60k requests in a day (2026-09-15), most of
+        # them 429s, and every one of them billed CPU. The bucket keeps
+        # the rate polite; the daily cap keeps the day bounded.
+        app = RateLimitMiddleware(
+            mcp.streamable_http_app(),
+            daily_limit=int(os.environ.get("MCP_PER_CLIENT_DAILY", "2000")))
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:
         mcp.run(transport="stdio")

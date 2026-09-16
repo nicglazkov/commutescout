@@ -34,6 +34,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from ca_roads.feeds import lcs as lcs_feed
+from ca_roads_demo import staticmap_sig
 from ca_roads_mcp import server as tools
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "ca-roads-mcp")
@@ -1204,8 +1205,8 @@ def render_alert_email(watch_name: str, events: list[dict],
                  if lat and lon else f"{DEMO_URL}/")
         map_html = ""
         if lat and lon and idx < 4:
-            map_src = (f"{DEMO_URL}/api/staticmap?lat={lat:.4f}"
-                       f"&amp;lon={lon:.4f}&amp;z=11&amp;k={kind}")
+            map_src = (f"{DEMO_URL}/api/staticmap?"
+                       + staticmap_sig.query(lat, lon, 11, kind, sep="&amp;"))
             map_html = (
                 f'<a href="{focus}" style="display:block;line-height:0">'
                 f'<img src="{map_src}" width="524" alt="Map of {title}" '

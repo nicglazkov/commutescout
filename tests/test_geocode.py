@@ -36,10 +36,13 @@ async def test_geocode_resolves_and_caches():
         # Second call served from cache.
         await geo.geocode(client, "alice's restaurant, woodside")
         assert route.call_count == 1
-        # Search stays inside the California rectangle, key as param.
-        url = str(route.calls[0].request.url)
+        # Search stays inside the California rectangle; the key rides in
+        # a header, never in the (logged) URL.
+        req = route.calls[0].request
+        url = str(req.url)
         assert "boundary.rect.min_lon" in url
-        assert "api_key=test-key" in url
+        assert "test-key" not in url
+        assert req.headers["Authorization"] == "Stadia-Auth test-key"
 
 
 @respx.mock
@@ -186,8 +189,10 @@ async def test_suggest_maps_autocomplete_features():
         got = await geo.stadia_suggest(client, "skyline blvd", 37.4, -122.2)
     assert got[0]["name"] == "Skyline Boulevard, Woodside, CA"
     assert got[0]["kind"] == "street"
-    url = str(route.calls[0].request.url)
-    assert "focus.point.lat" in url and "api_key=test-key" in url
+    req = route.calls[0].request
+    url = str(req.url)
+    assert "focus.point.lat" in url and "test-key" not in url
+    assert req.headers["Authorization"] == "Stadia-Auth test-key"
     # The abbreviation expands before it reaches the API.
     assert "boulevard" in url
 
