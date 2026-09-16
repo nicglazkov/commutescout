@@ -160,22 +160,43 @@ class _FakeSnap:
 
 
 class _FakeDb:
-    """Just enough Firestore: one collection, a stream of docs, and a
-    record of every document().set() the worker performs."""
+    """Just enough Firestore: one collection, a paged stream of docs
+    (order_by / limit / start_after, the way the loader reads it), and
+    a record of every document().set() the worker performs."""
 
     def __init__(self, docs=None, fail_stream=False):
         self.docs = docs or {}
         self.fail_stream = fail_stream
         self.sets: list[tuple[str, dict]] = []
+        self.pages = 0
+        self._limit = None
+        self._after = None
 
     def collection(self, _name):
         return self
 
+    def order_by(self, _field):
+        return self
+
+    def limit(self, n):
+        self._limit = n
+        return self
+
+    def start_after(self, snap):
+        self._after = snap.id
+        return self
+
     async def stream(self):
+        self.pages += 1
         if self.fail_stream:
             raise RuntimeError("stream broke")
-        for k, v in self.docs.items():
-            yield _FakeSnap(k, v)
+        ids = sorted(self.docs)
+        if self._after is not None:
+            ids = ids[ids.index(self._after) + 1:]
+        if self._limit is not None:
+            ids = ids[:self._limit]
+        for k in ids:
+            yield _FakeSnap(k, self.docs[k])
 
     def document(self, key):
         db = self
@@ -305,3 +326,17 @@ async def test_drain_logs_router_errors_and_requeues(monkeypatch, caplog):
     assert waits == [30]
     assert key in roadsnap._queue and key not in roadsnap._mem
     assert "snap retry later" in caplog.text and "HTTPStatusError" in caplog.text
+
+
+async def test_load_persisted_reads_in_pages(monkeypatch):
+    """A single query over the whole collection times out server-side
+    on a busy boot (seen in production: 503 after 10,401 of 19,624
+    docs). Pages keep every query short."""
+    docs = {f"k{i:02d}": {"ok": True, "path": "[[1, 2], [3, 4]]"}
+            for i in range(5)}
+    db = _FakeDb(docs)
+    monkeypatch.setattr(roadsnap, "_get_db", lambda: db)
+    monkeypatch.setattr(roadsnap, "LOAD_PAGE", 2)
+    assert await roadsnap.load_persisted() is True
+    assert len(roadsnap._mem) == 5
+    assert db.pages == 3  # 2 + 2 + 1
