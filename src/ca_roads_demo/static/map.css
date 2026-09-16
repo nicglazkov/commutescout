@@ -123,6 +123,7 @@ aside { background:var(--card); border-right:1px solid var(--line);
   overflow-y:auto; padding:18px; display:flex; flex-direction:column }
 aside section[data-tool] { display:none }
 aside section[data-tool].on { display:block }
+.grab { display:none }
 .panehead { font:600 .95rem Inter; margin:0 0 10px }
 .panenote { font-size:.78rem; color:var(--dim); margin-top:10px }
 .kpis { display:grid; grid-template-columns:1fr 1fr; gap:8px }
@@ -547,8 +548,8 @@ aside section[data-tool].on { display:block }
   height:28px; cursor:pointer; margin:-2px -2px 0 8px }
 .tollside .tollx:hover { color:#0f172a; border-color:#94a3b8 }
 @media (max-width: 960px) {
-  .tollside { top:auto; bottom:0; left:0; right:0; width:auto;
-    max-height:55vh; border-radius:14px 14px 0 0 } }
+  .tollside { top:auto; bottom:var(--tab-h); left:0; right:0; width:auto;
+    z-index:1250; max-height:55vh; border-radius:14px 14px 0 0 } }
 .filters { font-size:.78rem; user-select:none }
 .filters b { display:block; font:700 .68rem Inter; letter-spacing:.8px;
   text-transform:uppercase; color:var(--dim); margin-bottom:6px }
@@ -642,22 +643,45 @@ aside section[data-tool].on { display:block }
 .viadot { background:#0b1f33; border:3px solid #fff; border-radius:99px;
   box-shadow:0 1px 4px rgba(15,28,43,.45); cursor:grab }
 @media (max-width: 960px) {
-  /* Phone layout: the map is the product, so it comes first at just
-     over half the screen, with the planner/assistant scrolling below.
-     The layer panel collapses behind a Layers button because it
-     otherwise covers the whole map on a phone. */
-  /* One natural document scroll instead of an inner aside scroller:
-     nested scroll areas feel wrong on iOS and hide content. */
-  html, body { height:auto }
-  body { min-height:100dvh }
-  .shell { display:flex; flex-direction:column; flex:none; min-height:0 }
-  aside { overflow:visible }
-  .map-card { order:-1; height:56vh; min-height:340px }
-  aside { border-right:0; border-top:1px solid var(--line) }
+  /* Phone: the map fills the screen. The panel is a bottom sheet with
+     three resting heights (peek, half, full) and the rail is its tab
+     bar. One control per job: the tab bar picks the tool, the handle
+     sets the height, so there are no chips or a second toggle. */
+  html, body { height:100% }
+  body { overflow:hidden }
+  .shell { display:block; flex:1; min-height:0; overflow:hidden;
+    --tab-h:calc(58px + env(safe-area-inset-bottom));
+    --sheet-h:84px }
+  .shell.sheet-half { --sheet-h:44% }
+  .shell.sheet-full { --sheet-h:calc(100% - var(--tab-h) - 12px) }
+  .map-card { position:absolute; inset:0; height:auto; min-height:0;
+    overflow:hidden }
+  /* Leaflet's bottom controls (attribution) ride above the sheet. */
+  .map-card .leaflet-bottom { bottom:calc(var(--sheet-h) + var(--tab-h));
+    transition:bottom .2s ease }
+  .shell.sheet-full .map-card .leaflet-bottom { display:none }
+  aside, .shell.nopanel aside { display:flex; flex-direction:column;
+    position:absolute; left:0; right:0; bottom:var(--tab-h);
+    height:var(--sheet-h); z-index:1200; padding:0; border:0;
+    border-radius:14px 14px 0 0; box-shadow:0 -8px 24px rgba(15,28,43,.18);
+    overflow:hidden; transition:height .2s ease }
+  aside.dragging { transition:none }
+  aside section[data-tool].on { display:block; flex:1; min-height:0;
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:0 16px 16px }
+  .grab { display:block; flex:none; height:24px; position:relative;
+    cursor:grab; touch-action:none }
+  .grab::before { content:""; position:absolute; left:50%; top:9px;
+    width:40px; height:5px; margin-left:-20px; border-radius:99px;
+    background:var(--line) }
+  .grab:focus-visible { outline:none }
+  .grab:focus-visible::before { background:var(--sky) }
   /* Six tools in one row on a 390px phone: equal flex shares, no
      minimum width, tighter type; the row itself never wraps. */
-  .rail { flex-direction:row; padding:4px 6px; gap:2px; order:0;
-    width:100%; min-width:0; box-sizing:border-box }
+  .rail { position:absolute; left:0; right:0; bottom:0; z-index:1201;
+    height:var(--tab-h); flex-direction:row; gap:2px; order:0;
+    width:100%; min-width:0; box-sizing:border-box;
+    padding:4px 6px env(safe-area-inset-bottom) }
   .rail .tool { flex:1 1 0; min-width:0; min-height:44px; padding:5px 0 4px;
     font-size:.56rem }
   .rail .tool span { max-width:100%; overflow:hidden; text-overflow:ellipsis;
@@ -666,26 +690,14 @@ aside section[data-tool].on { display:block }
   .rail .railgap { display:none }
   .rail .tool.small { flex:1 1 0; min-width:0; opacity:1 }
   .resizer { display:none }
-  .shell.nopanel aside { display:flex }
   .inspector { position:fixed; left:0; right:0; top:auto; bottom:0; width:auto;
-    max-height:70dvh; border-left:0; border-top:1px solid var(--line);
+    z-index:1300; max-height:70dvh; border-left:0; border-top:1px solid var(--line);
     border-radius:14px 14px 0 0; box-shadow:0 -8px 24px rgba(15,28,43,.18) }
   .inspector[hidden] { display:none }
   .sysok, #ver { display:none }
-  /* position:fixed, not absolute: the panel escapes the map card's
-     56dvh height and its overflow:hidden, so it uses the whole viewport
-     and needs little or no scrolling instead of a ~90px inner window in
-     landscape. What scrolling remains is a top-level scroller, which iOS
-     handles reliably - unlike the clamped inner scroller this replaced,
-     the exact "nested scroll areas feel wrong on iOS and hide content"
-     pattern the layout avoids everywhere else (see the note above). */
-  .map-card { overflow:hidden }
   .searchrow button.ask, .planbtn { min-height:44px }
   /* iOS zooms the page when a focused input is under 16px. */
   input, select, textarea { font-size:16px !important }
-  .map-card { height:56dvh }
-  body { overflow-x:clip }
-  aside { padding-bottom:calc(18px + env(safe-area-inset-bottom)) }
   .examples button { padding:8px 12px }
 }
 /* ── Topbar: two rows below 640px ──────────────────────────────

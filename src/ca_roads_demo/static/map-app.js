@@ -1931,17 +1931,89 @@ function setTool(name, opts) {
   });
   shellEl.classList.toggle('nopanel', !!collapsing);
   store.set(TOOL_KEY, collapsing ? '' : name);
+  if (opts && opts.reveal && isPhone() && sheetState === 'peek') setSheet('half');
   setTimeout(() => map.invalidateSize(), 60);
 }
+
+// ── Phone: the panel is a bottom sheet, the rail its tab bar ─────
+// Three resting heights. The handle drags (release snaps to the
+// nearest stop) or taps to the next stop; arrow keys step. The tab bar
+// never collapses the panel: the same tab again folds it to a peek.
+const SHEET_KEY = 'cs-sheet';
+const SHEET_STOPS = ['peek', 'half', 'full'];
+const SHEET_PEEK = 84;
+const phoneMq = window.matchMedia('(max-width: 960px)');
+const isPhone = () => phoneMq.matches;
+const panelEl = document.getElementById('panel');
+const grabEl = document.getElementById('sheetgrab');
+let sheetState = SHEET_STOPS.includes(store.get(SHEET_KEY)) ? store.get(SHEET_KEY) : 'half';
+function setSheet(state) {
+  if (!SHEET_STOPS.includes(state)) return;
+  sheetState = state;
+  panelEl.style.height = '';
+  SHEET_STOPS.forEach((s) => shellEl.classList.toggle('sheet-' + s, s === state));
+  store.set(SHEET_KEY, state);
+}
+setSheet(sheetState);
+if (grabEl) {
+  const stopHeights = () => {
+    const h = shellEl.clientHeight;
+    const tab = railEl.offsetHeight;
+    return { peek: SHEET_PEEK, half: Math.round(h * 0.44), full: h - tab - 12 };
+  };
+  let drag = null;
+  grabEl.addEventListener('pointerdown', (e) => {
+    drag = { y: e.clientY, h: panelEl.getBoundingClientRect().height, moved: false };
+    grabEl.setPointerCapture(e.pointerId);
+    panelEl.classList.add('dragging');
+  });
+  grabEl.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dy = drag.y - e.clientY;
+    if (Math.abs(dy) > 4) drag.moved = true;
+    const st = stopHeights();
+    panelEl.style.height = Math.max(st.peek, Math.min(st.full, drag.h + dy)) + 'px';
+  });
+  const release = () => {
+    if (!drag) return;
+    panelEl.classList.remove('dragging');
+    if (!drag.moved) {
+      setSheet(SHEET_STOPS[(SHEET_STOPS.indexOf(sheetState) + 1) % SHEET_STOPS.length]);
+    } else {
+      const st = stopHeights();
+      const h = panelEl.getBoundingClientRect().height;
+      setSheet(SHEET_STOPS.reduce((a, s) =>
+        (Math.abs(st[s] - h) < Math.abs(st[a] - h) ? s : a), 'peek'));
+    }
+    drag = null;
+  };
+  grabEl.addEventListener('pointerup', release);
+  grabEl.addEventListener('pointercancel', release);
+  grabEl.addEventListener('keydown', (e) => {
+    const i = SHEET_STOPS.indexOf(sheetState);
+    if (e.key === 'ArrowUp' && i < SHEET_STOPS.length - 1) { setSheet(SHEET_STOPS[i + 1]); e.preventDefault(); }
+    if (e.key === 'ArrowDown' && i > 0) { setSheet(SHEET_STOPS[i - 1]); e.preventDefault(); }
+  });
+}
+
 railEl.addEventListener('click', (e) => {
   const btn = e.target.closest('.tool');
   if (!btn || btn.tagName !== 'BUTTON') return;
-  setTool(btn.dataset.tool);
+  if (isPhone()) {
+    const same = btn.classList.contains('on');
+    setTool(btn.dataset.tool, { toggle: false });
+    if (same && sheetState !== 'peek') setSheet('peek');
+    else if (sheetState === 'peek') setSheet('half');
+  } else {
+    setTool(btn.dataset.tool);
+  }
   if (btn.dataset.tool === 'alerts' && typeof scheduleAlerts === 'function') scheduleAlerts();
 });
 {
   const saved = store.get(TOOL_KEY);
-  if (saved === '') setTool('route', { toggle: false }), setTool('route');
+  // A panel collapsed on a desktop has no meaning on a phone: the
+  // sheet always shows one tool.
+  if (saved === '' && !isPhone()) setTool('route', { toggle: false }), setTool('route');
   else setTool(saved || 'route', { toggle: false });
 }
 // Drag handles. Bounds from the spec: rail 56-88px; panel 300-520px
@@ -2311,6 +2383,7 @@ function openInspector(m, g) {
   wireDispatchLog(inspBody, null);
   inspectorEl.hidden = false;
   shellEl.classList.add('insp');
+  if (isPhone()) setSheet('peek');
   setTimeout(() => map.invalidateSize(), 60);
 }
 function closeInspector() {
@@ -2337,6 +2410,22 @@ map.on('popupopen', (e) => {
   btn.textContent = 'Show in inspector';
   btn.addEventListener('click', () => { openInspector(m, g); map.closePopup(); });
   box.appendChild(btn);
+});
+
+// On a phone a popup is the point: fold the sheet to a peek and nudge
+// the map so the popup clears both the sheet and the top edge.
+map.on('popupopen', (e) => {
+  if (!isPhone()) return;
+  setSheet('peek');
+  setTimeout(() => {
+    const el = e.popup.getElement();
+    if (!el || !e.popup.isOpen()) return;
+    const r = el.getBoundingClientRect();
+    const box = map.getContainer().getBoundingClientRect();
+    const limit = box.bottom - SHEET_PEEK - railEl.offsetHeight - 8;
+    if (r.bottom > limit) map.panBy([0, r.bottom - limit]);
+    else if (r.top < box.top + 8) map.panBy([0, r.top - box.top - 8]);
+  }, 320);
 });
 
 // ── Alerts: what is in view, worst first ─────────────────────────
@@ -2422,11 +2511,17 @@ function refreshAlerts() {
       const r = top[+btn.dataset.i];
       if (!r) return;
       const m = r.it.m;
-      map.setView([m.lat, m.lon], Math.max(map.getZoom(), 11));
-      const p = L.popup({ maxWidth: 320 }).setLatLng([m.lat, m.lon])
-        .setContent(popupFor(m, r.it.g));
-      p.__m = m; p.__g = r.it.g;
-      setTimeout(() => p.openOn(map), 260);
+      const at = L.latLng(m.lat, m.lon);
+      const z = Math.max(map.getZoom(), 11);
+      const open = () => {
+        const p = L.popup({ maxWidth: 320 }).setLatLng(at).setContent(popupFor(m, r.it.g));
+        p.__m = m; p.__g = r.it.g;
+        p.openOn(map);
+      };
+      // Open once the move has landed, so the popup's auto-pan sees the
+      // final view rather than a frame of the animation.
+      if (map.getCenter().distanceTo(at) < 1 && map.getZoom() === z) open();
+      else { map.once('moveend', open); map.setView(at, z); }
     });
   });
 }
@@ -2929,7 +3024,10 @@ function setPickMode(mode) {
   document.querySelectorAll('.addstop').forEach((b) =>
     b.classList.toggle('armed', pickMode === 'via'));
   map.getContainer().style.cursor = pickMode ? 'crosshair' : '';
-  if (pickMode) { pickHint.textContent = PICK_LABEL[pickMode]; pickHint.hidden = false; }
+  if (pickMode) {
+    pickHint.textContent = PICK_LABEL[pickMode]; pickHint.hidden = false;
+    if (isPhone()) setSheet('peek');
+  }
   else { pickHint.hidden = true; }
 }
 
