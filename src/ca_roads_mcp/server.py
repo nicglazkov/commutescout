@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import ipaddress
 import logging
 import os
@@ -241,12 +242,20 @@ async def _attach_scenery(payload: dict, points: list[tuple[float, float]],
 def parse_center(center: str) -> tuple[float, float] | None:
     try:
         lat_s, lon_s = center.split(",")
-        return float(lat_s), float(lon_s)
+        lat, lon = float(lat_s), float(lon_s)
     except ValueError:
         return None
+    # "99,999" used to pass and return an empty result with no hint.
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None
+    return lat, lon
 
 
-CENTER_FORMAT_ERROR = "center must be 'lat,lon', e.g. '38.58,-121.49'"
+CENTER_FORMAT_ERROR = ("center must be 'lat,lon' (lat -90..90, lon -180..180), "
+                       "e.g. '38.58,-121.49'")
+# An unfiltered closures list is 600 KB and 670 records: more than any
+# model context wants. Callers narrow with route, district, or center.
+CLOSURES_CAP = 200
 
 
 def incident_severity(log_type: str) -> int:
@@ -866,6 +875,9 @@ async def get_lane_closures(
     estimated_delay_minutes is present when crews reported one.
     Shoulder-only work is excluded entirely.
     """
+    if district is not None and not 1 <= district <= 12:
+        return {"error": "district must be a Caltrans district number 1 to 12 "
+                         "(3 = Sacramento/Tahoe, 4 = Bay Area, 7 = Los Angeles)"}
     districts = [district] if district else None
     result = await get_road().lane_closures(districts=districts)
     records = result.records
@@ -886,12 +898,21 @@ async def get_lane_closures(
                 and haversine_meters(*point, c.end_lat, c.end_lon) <= limit
             )
         ]
+    total = len(records)
+    records = records[:CLOSURES_CAP]
     payload = {
         "count": len(records),
+        "total": total,
+        "truncated": total > len(records),
         "filters": {"route": canonical, "district": district, "center": center},
         "closures": [closure_dict(c) for c in records],
         "sources": [source_status(result)],
+        "notes": [],
     }
+    if total > len(records):
+        payload["notes"].append(
+            f"showing {CLOSURES_CAP} of {total} closures; add route, "
+            "district, or center with radius_km to narrow the list")
     if canonical or center:
         await _attach_scenery(
             payload, [(c.begin_lat, c.begin_lon) for c in records]
@@ -1256,6 +1277,9 @@ async def get_cameras(
         records.sort(key=lambda c: haversine_meters(*point, c.lat, c.lon))
     live, dropped = await _live_cameras(records, max(1, min(limit, 10)))
     notes = list(result.notes)
+    if limit > 10:
+        notes.append("limit is capped at 10 live cameras per call; use "
+                     "center with a smaller radius_km to pick a stretch")
     if dropped:
         notes.append(
             f"{dropped} nearby camera(s) were offline or serving a "
@@ -1343,7 +1367,12 @@ async def get_nearby_events(
     point = parse_center(center)
     if point is None:
         return {"error": CENTER_FORMAT_ERROR}
+    notes: list[str] = []
+    requested_radius = radius_km
     radius_km = min(max(radius_km, 1.0), 160.0)
+    if radius_km != requested_radius:
+        notes.append(f"radius_km {requested_radius} was clamped to "
+                     f"{radius_km:g} (the cap is 160)")
     lat, lon = point
     dlat = radius_km / 111.0
     dlon = radius_km / max(20.0, 111.0 * math.cos(math.radians(lat)))
@@ -1368,23 +1397,99 @@ async def get_nearby_events(
             "closure_class": m.get("cls"),
             "source": m.get("src"),
         })
+    # The multi-state feeds do not carry California (the dedicated tools
+    # own it), so this tool used to answer "quiet" for the Bay Area. The
+    # same four California feeds ride along in the same event shape.
+    events.extend(await _california_events(lat, lon, radius_km, want))
     events.sort(key=lambda e: e["miles_away"])
     trimmed = events[:80]
+    if len(events) > 80:
+        notes.append(f"showing the nearest 80 of {len(events)} events; "
+                     "reduce radius_km or kinds to narrow")
     payload = {
         "count": len(trimmed),
         "total_in_radius": len(events),
         "filters": {"center": center, "radius_km": radius_km,
                     "kinds": sorted(want)},
         "events": trimmed,
+        "notes": notes,
         "data_as_of": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     if not trimmed:
         payload["message"] = (
-            "No live events in the covered feeds within this radius. "
-            "If this state only publishes roadwork, quiet is normal; "
-            "coverage notes: docs/state-coverage.md."
+            "No live events in the covered feeds within this radius, "
+            "California included. If this state only publishes roadwork, "
+            "quiet is normal; coverage notes: docs/state-coverage.md."
         )
     return payload
+
+
+async def _california_events(lat: float, lon: float, radius_km: float,
+                             want: set[str]) -> list[dict]:
+    """The California feeds in get_nearby_events' event shape. Each feed
+    is independent: one failing never hides the others."""
+    road = get_road()
+    limit_m = radius_km * 1000
+    out: list[dict] = []
+
+    def dist_m(la, lo) -> float | None:
+        if not la or not lo:
+            return None
+        d = haversine_meters(lat, lon, la, lo)
+        return d if d <= limit_m else None
+
+    def event(kind, la, lo, d, **fields) -> dict:
+        return {"kind": kind, "lat": round(la, 4), "lon": round(lo, 4),
+                "miles_away": round(d * MILES_PER_METER, 1),
+                "type": None, "summary": None, "route": None,
+                "closure_class": None, "source": None, **fields}
+
+    if "incident" in want:
+        with contextlib.suppress(Exception):
+            for i in (await road.incidents()).records:
+                d = dist_m(i.lat, i.lon)
+                if d is not None:
+                    where = i.location + (f" ({i.area})" if i.area else "")
+                    out.append(event("incident", i.lat, i.lon, d,
+                                     type=i.log_type,
+                                     summary=f"{i.log_type}: {where}",
+                                     source="CHP"))
+    if "closure" in want:
+        with contextlib.suppress(Exception):
+            for c in (await road.lane_closures()).records:
+                d = dist_m(c.begin_lat, c.begin_lon)
+                if d is not None:
+                    cd = closure_dict(c)
+                    out.append(event(
+                        "closure", c.begin_lat, c.begin_lon, d,
+                        type=c.type_of_closure,
+                        summary=f"{c.type_of_closure} closure, {c.route} "
+                                f"{c.direction}: {c.location_name}",
+                        route=c.route, closure_class=cd.get("closure_class"),
+                        source="Caltrans LCS"))
+    if "chain" in want:
+        with contextlib.suppress(Exception):
+            for c in (await road.chain_controls()).records:
+                d = dist_m(c.lat, c.lon)
+                if d is not None:
+                    out.append(event(
+                        "chain", c.lat, c.lon, d, type=c.status,
+                        summary=f"{c.status} {c.status_description}: "
+                                f"{c.route} {c.location_name}",
+                        route=c.route, source="Caltrans"))
+    if "fire" in want:
+        with contextlib.suppress(Exception):
+            for f in (await road.wildfires()).records:
+                d = dist_m(f.lat, f.lon)
+                if d is not None:
+                    size = (f"{f.size_acres:,.0f} acres"
+                            if f.size_acres else "size unknown")
+                    pct = (f", {f.percent_contained:.0f}% contained"
+                           if f.percent_contained is not None else "")
+                    out.append(event("fire", f.lat, f.lon, d, type="wildfire",
+                                     summary=f"{f.name} wildfire, {size}{pct}",
+                                     source="WFIGS"))
+    return out
 
 
 @mcp.prompt()
