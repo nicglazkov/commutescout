@@ -47,15 +47,16 @@ def test_every_pinned_id_survives():
 def test_rail_has_the_five_tools_plus_data_once_each():
     rail = re.search(r'<nav class="rail"[^>]*>(.*?)</nav>', HTML, re.S).group(1)
     tools = re.findall(r'data-tool="([a-z]+)"', rail)
-    assert tools == ["route", "ask", "layers", "watch", "alerts", "about"]
-    assert rail.count("<button") == 6 and "<a " not in rail
-    for name in ("Route", "Ask", "Layers", "Watch", "Alerts", "Data"):
+    assert tools == ["route", "ask", "layers", "watch", "alerts", "settings", "about"]
+    assert rail.count("<button") == 7 and "<a " not in rail
+    for name in ("Route", "Ask", "Layers", "Watch", "Alerts", "Settings", "Data"):
         assert f"<span>{name}</span>" in rail
 
 
 def test_one_pane_per_tool_and_only_route_open_at_load():
     panes = re.findall(r'<section id="([a-z-]+)" data-tool="([a-z]+)"([^>]*)>', HTML)
-    assert [t for _, t, _ in panes] == ["route", "ask", "layers", "watch", "alerts", "about"]
+    assert [t for _, t, _ in panes] == ["route", "ask", "layers", "watch", "alerts",
+                                        "settings", "about"]
     assert [i for i, t, a in panes if 'class="on"' in a] == ["pane-plan"]
 
 

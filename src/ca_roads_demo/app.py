@@ -661,12 +661,13 @@ async def api_route(request: Request):
     if preset not in routing.PRESETS:
         return JSONResponse({"error": "preset must be one of "
                              + ", ".join(routing.PRESETS)}, status_code=400)
+    units = "kilometers" if body.get("units") == "kilometers" else "miles"
     api_key = os.environ.get("STADIA_API_KEY", "").strip()
     if not api_key:
         return JSONResponse({"error": "routing is not configured"}, status_code=503)
     if _client_over_daily(request, "route"):
         return _daily_cap_response()
-    key = (preset, tuple((p["lat"], p["lon"]) for p in locations))
+    key = (preset, units, tuple((p["lat"], p["lon"]) for p in locations))
     hit = _ROUTE_CACHE.get(key)
     now = time.monotonic()
     if hit and now - hit[0] < _ROUTE_TTL:
@@ -689,7 +690,7 @@ async def api_route(request: Request):
             return None
         return resp.json()
 
-    out = await routing.plan(fetch, markers, locations, preset)
+    out = await routing.plan(fetch, markers, locations, preset, units=units)
     if not out["routes"]:
         return JSONResponse({"error": "no route found"}, status_code=404)
     if len(_ROUTE_CACHE) >= _ROUTE_MAX:
@@ -1521,8 +1522,9 @@ async def sitemap_xml(_: Request):
 _INDEX_CACHE: dict = {}
 _GEO_SLOT = "<!--BOOT_GEO-->"
 _ASSET_SLOT = "__ASSET_V__"
-_MAP_ASSETS = ("map.css", "map-assistant.js", "map-app.js", "watch.css", "watch-app.js")
-_WATCH_ASSETS = ("watch.css", "watch-app.js")
+_MAP_ASSETS = ("map.css", "map-assistant.js", "map-app.js", "watch.css", "watch-app.js",
+               "units.js")
+_WATCH_ASSETS = ("watch.css", "watch-app.js", "units.js")
 _WATCH_CACHE: dict = {}
 
 
@@ -2242,6 +2244,7 @@ app = Starlette(
         Route("/api/watch/account", watch.api_account_delete,
               methods=["DELETE"]),
         Route("/api/watch/test", watch.api_watch_test, methods=["POST"]),
+        Route("/api/watch/prefs", watch.api_watch_prefs, methods=["POST"]),
         Route("/api/watch/{watch_id}", watch.api_watch_delete,
               methods=["DELETE"]),
         Route("/api/watch/{watch_id}", watch.api_watch_update,

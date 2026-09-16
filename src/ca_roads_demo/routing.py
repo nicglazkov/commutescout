@@ -225,7 +225,7 @@ Fetcher = Callable[[dict], Awaitable[dict | None]]
 
 
 async def plan(fetch: Fetcher, markers: list[dict], locations: list[dict],
-               preset: str = "fastest") -> dict:
+               preset: str = "fastest", *, units: str = "miles") -> dict:
     """Plan through ``locations`` and rank what comes back.
 
     ``fetch(body)`` posts a Valhalla request body and returns the parsed
@@ -238,7 +238,7 @@ async def plan(fetch: Fetcher, markers: list[dict], locations: list[dict],
     body: dict[str, Any] = {
         "locations": locations, "costing": "auto",
         "alternates": 2 if len(locations) == 2 else 0,
-        "directions_options": {"units": "miles"},
+        "directions_options": {"units": units},
         **PRESETS[preset],
     }
     if excl:

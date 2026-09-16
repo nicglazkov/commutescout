@@ -1932,6 +1932,8 @@ function setTool(name, opts) {
   shellEl.classList.toggle('nopanel', !!collapsing);
   store.set(TOOL_KEY, collapsing ? '' : name);
   showWatch(name === 'watch' && !collapsing);
+  // Settings shows the account: the watch module owns sign-in state.
+  if (name === 'settings' && !collapsing) loadWatch();
   if (opts && opts.reveal && isPhone() && sheetState === 'peek') setSheet('half');
   setTimeout(() => map.invalidateSize(), 60);
 }
@@ -1940,16 +1942,42 @@ function setTool(name, opts) {
 // Firebase and the watch code only download when someone opens the
 // tool. Its layers sit on the map while the tool is open.
 let watchLoad = null;
-function showWatch(on) {
+function loadWatch() {
   const pane = document.getElementById('pane-watch');
-  if (!on && !watchLoad) return;
   if (!watchLoad) {
     watchLoad = import(pane.dataset.src)
       .then((mod) => mod.initWatch({ map, visible: false,
         active: () => pane.classList.contains('on') }))
       .catch((err) => { console.error('watch tool failed to load', err); return null; });
   }
-  watchLoad.then((w) => { if (w) w.setVisible(on && pane.classList.contains('on')); });
+  return watchLoad;
+}
+function showWatch(on) {
+  const pane = document.getElementById('pane-watch');
+  if (!on && !watchLoad) return;
+  loadWatch().then((w) => { if (w) w.setVisible(on && pane.classList.contains('on')); });
+}
+document.getElementById('settingssignin').addEventListener('click', () => {
+  setTool('watch', { toggle: false, reveal: true });
+});
+
+// ── Settings: distance units ─────────────────────────────────────
+{
+  const pick = document.getElementById('unitpick');
+  const note = document.getElementById('unitnote');
+  const sync = () => {
+    pick.querySelectorAll('input').forEach((i) => { i.checked = i.value === csUnits.get(); });
+    note.textContent = csUnits.chosen()
+      ? 'Saved on this device, and on your account when you are signed in.'
+      : 'Following your device\'s locale (' +
+        (csUnits.localeDefault() === 'mi' ? 'miles' : 'kilometers') + ') until you pick one.';
+  };
+  pick.addEventListener('change', (e) => { if (e.target.value) csUnits.set(e.target.value); });
+  document.addEventListener('cs-units', () => {
+    sync();
+    if (lastEnds) replanVias();  // distances in the directions come from the router
+  });
+  sync();
 }
 
 // ── Phone: the panel is a bottom sheet, the rail its tab bar ─────
@@ -2763,9 +2791,10 @@ function valhallaTripToRoute(trip) {
       best = m;
     }
   }
+  const perUnit = trip.units === 'kilometers' ? 1000 : 1609.344;
   return {
     latlngs: trip.legs.flatMap(l => decodePolyline6(l.shape)),
-    distance: trip.summary.length * 1609.344,
+    distance: trip.summary.length * perUnit,
     duration: trip.summary.time,
     via: best ? best.street_names[0].split(';')[0] : '',
     steps: trip.legs.flatMap(l => l.maneuvers || []).map(s => ({
@@ -2776,7 +2805,7 @@ function valhallaTripToRoute(trip) {
 async function valhallaDirections(points) {
   const req = { locations: points.map(p => ({ lat: p[0], lon: p[1] })),
     costing: 'auto', alternates: points.length === 2 ? 2 : 0,
-    directions_options: { units: 'miles' } };
+    directions_options: { units: csUnits.get() === 'km' ? 'kilometers' : 'miles' } };
   const res = await fetch(VALHALLA_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2802,7 +2831,7 @@ async function serverDirections(points, preset) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ locations: points.map(p => ({ lat: p[0], lon: p[1] })),
-      preset }),
+      preset, units: csUnits.get() === 'km' ? 'kilometers' : 'miles' }),
     signal: AbortSignal.timeout(12000),
   });
   if (!res.ok) return null;
@@ -3220,7 +3249,7 @@ function renderRouteAlts(chosen, a, b) {
       const bEl = document.createElement('b');
       bEl.textContent = r.via ? 'via ' + r.via.split(',')[0] : 'Route ' + (i + 1);
       const sm = document.createElement('small');
-      sm.textContent = (r.distance / 1609.344).toFixed(0) + ' mi, ' +
+      sm.textContent = csUnits.fmt(r.distance / 1000, 0) + ', ' +
         Math.round(r.duration / 60) + ' min';
       btn.append(bEl, sm);
       if (r.hassles) {
@@ -3381,10 +3410,10 @@ function showRoute(route, others, a, b) {
     });
   });
   map.fitBounds(L.latLngBounds(route.latlngs).pad(0.15));
-  const mi = route.distance / 1609.344, min = route.duration / 60;
+  const min = route.duration / 60;
   document.getElementById('routesum').textContent =
     plannedRoute.fromName.split(',')[0] + ' → ' + plannedRoute.toName.split(',')[0] +
-    ', ' + mi.toFixed(0) + ' mi, ~' + Math.round(min) + ' min' +
+    ', ' + csUnits.fmt(route.distance / 1000, 0) + ', ~' + Math.round(min) + ' min' +
     (route.via ? ', via ' + route.via.split(',')[0] : '');
   const ol = document.getElementById('steps');
   ol.innerHTML = '';
@@ -3396,7 +3425,8 @@ function showRoute(route, others, a, b) {
     li.textContent = s.text + ' ';
     if (s.miles >= 0.05) {
       const sm = document.createElement('small');
-      sm.textContent = '(' + (s.miles >= 9.5 ? Math.round(s.miles) : s.miles.toFixed(1)) + ' mi)';
+      sm.textContent = '(' + (s.miles >= 9.5 ? Math.round(s.miles) : s.miles.toFixed(1)) +
+        ' ' + csUnits.label() + ')';
       li.append(sm);
     }
     ol.append(li);

@@ -53,7 +53,6 @@
     <span class="wordmark">CommuteScout</span>
   </a>
   <nav>
-    <a href="/watch">Watch areas</a>
     <a href="/data-sources">Data sources</a>
     <a href="/mcp">Developers</a>
     <a href="/pricing">Pricing</a>
@@ -86,6 +85,8 @@
     <button type="button" class="tool" data-tool="alerts" aria-pressed="false" title="What is live right now">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 16.5v.01"/></svg><span>Alerts</span></button>
     <span class="railgap" aria-hidden="true"></span>
+    <button type="button" class="tool small" data-tool="settings" aria-pressed="false" title="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
     <button type="button" class="tool small" data-tool="about" aria-pressed="false" title="About the data">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.01"/></svg><span>Data</span></button>
   </nav>
@@ -218,7 +219,6 @@
     </section>
     <section id="pane-watch" data-tool="watch" class="watch" data-src="/static/watch-app.js?v=__ASSET_V__">
       <h3 class="panehead">Watch areas <span class="badge">TRIAL</span></h3>
-      <div class="who" id="who"></div>
       <!-- signed out -->
       <section id="signin" class="hidden">
         <p class="panenote">Draw an area anywhere CommuteScout covers, once.
@@ -359,16 +359,6 @@
             your home screen (Share &rarr; Add to Home Screen), then open
             it from there and enable notifications.</div>
         </div>
-        <div class="card">
-          <h2>Account</h2>
-          <p class="hint" style="margin-bottom:10px">Deleting your
-            account removes it completely and immediately: every watch
-            area, alert state, and registered device. There is no undo.</p>
-          <button class="ghost" id="deleteacct"
-                  style="color:var(--red);border-color:#e8c9c9">
-            Delete my account</button>
-          <div class="msg" id="acctmsg"></div>
-        </div>
         <div class="footer-note">
           Alerts are informational only and may be delayed, incomplete, or
           wrong. Always verify with <a href="tel:511">511</a> or your state
@@ -391,6 +381,34 @@
       </div>
       <h4 class="subhead">In view, worst first</h4>
       <div class="alertlist" id="alertlist"><p class="panenote">Move the map to list what is in view.</p></div>
+    </section>
+    <section id="pane-settings" data-tool="settings" class="watch">
+      <h3 class="panehead">Settings</h3>
+      <div class="setgroup">
+        <h4 class="subhead">Distances</h4>
+        <div class="pills" id="unitpick" role="radiogroup" aria-label="Distance units">
+          <label><input type="radio" name="units" value="mi">Miles</label>
+          <label><input type="radio" name="units" value="km">Kilometers</label>
+        </div>
+        <p class="panenote" id="unitnote"></p>
+      </div>
+      <div class="setgroup">
+        <h4 class="subhead">Account</h4>
+        <div class="who" id="who"></div>
+        <p class="panenote" id="acctnote">Signed out. Sign in from the Watch tool to keep
+          settings on your account, manage watch areas, and get API keys.
+          <button type="button" class="detbtn" id="settingssignin">Open Watch</button></p>
+        <div class="card" id="acctcard" hidden>
+          <h2>Delete account</h2>
+          <p class="hint" style="margin-bottom:10px">Deleting your
+            account removes it completely and immediately: every watch
+            area, alert state, and registered device. There is no undo.</p>
+          <button class="ghost" id="deleteacct"
+                  style="color:var(--red);border-color:#e8c9c9">
+            Delete my account</button>
+          <div class="msg" id="acctmsg"></div>
+        </div>
+      </div>
     </section>
     <section id="pane-about" data-tool="about">
       <h3 class="panehead">About the data</h3>
@@ -431,6 +449,7 @@
 </div>
 
 <script src="/static/vendor/leaflet.js"></script>
+<script src="/static/units.js?v=__ASSET_V__"></script>
 <script src="/static/map-assistant.js?v=__ASSET_V__"></script>
 <script src="/static/map-app.js?v=__ASSET_V__"></script>
 <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d2d77aff6dfe4462b09ca501c9151de4"}'></script>

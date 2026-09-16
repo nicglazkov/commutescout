@@ -113,6 +113,12 @@ export async function initWatch(opts) {
     out.textContent = 'Sign out';
     out.addEventListener('click', () => signOut(auth));
     $('who').append(label, out);
+    if ($('acctcard')) $('acctcard').hidden = false;
+    if ($('acctnote')) $('acctnote').hidden = true;
+    if (me.prefs && me.prefs.units && window.csUnits
+        && me.prefs.units !== window.csUnits.get()) {
+      window.csUnits.set(me.prefs.units, { fromServer: true });
+    }
     if (me.status === 'approved') {
       show('appzone');
       if (CFG.emailEnabled) $('emailchan').classList.remove('hidden');
@@ -129,7 +135,13 @@ export async function initWatch(opts) {
 
   onAuthStateChanged(auth, async (u) => {
     user = u;
-    if (!u) { $('who').innerHTML = ''; show('signin'); return; }
+    if (!u) {
+      $('who').innerHTML = '';
+      if ($('acctcard')) $('acctcard').hidden = true;
+      if ($('acctnote')) $('acctnote').hidden = false;
+      show('signin');
+      return;
+    }
     try { await refresh(); }
     catch (e) { show('signin'); msg('signinmsg', e.message, 'err'); }
   });
@@ -246,7 +258,7 @@ export async function initWatch(opts) {
     if (mode === 'circle' && center) {
       L.circleMarker(center, { radius: 5, color: '#fff', weight: 1.5,
         fillColor: '#2f81f7', fillOpacity: 1 }).addTo(drawLayer);
-      L.circle(center, { radius: Number($('radius').value) * 1000,
+      L.circle(center, { radius: (U ? U.toKm(Number($('radius').value)) : Number($('radius').value)) * 1000,
         color: '#2f81f7', weight: 2, fillColor: '#2f81f7', fillOpacity: 0.12 })
         .addTo(drawLayer);
     }
@@ -393,14 +405,50 @@ export async function initWatch(opts) {
     } catch (e) { msg('createmsg', e.message, 'err'); }
   });
 
+  // Units: the radius slider works in the viewer's unit (10 mi or 15 km
+  // by default, 25 mi or 40 km at the free cap); the server always
+  // gets kilometers. The route buffer slider stays 1 to 2 miles wide
+  // and only its label changes.
+  const U = window.csUnits;
+  const unitLabel = () => (U ? U.label() : 'km');
+  const bufferLabel = () => {
+    const v = Number($('rw-buffer').value);
+    return U && U.get() === 'mi' ? v + ' mi' : (v * 1.6).toFixed(1) + ' km';
+  };
+  function applyUnits() {
+    const r = $('radius');
+    const mi = U && U.get() === 'mi';
+    const prev = r.dataset.units;
+    if (prev && prev !== unitLabel()) {
+      const cur = Number(r.value);
+      r.value = String(Math.max(1, Math.round(mi ? cur / 1.609344 : cur * 1.609344)));
+    }
+    r.max = mi ? '25' : '40';
+    if (!prev) r.value = mi ? '10' : '15';
+    r.dataset.units = unitLabel();
+    $('radiuslabel').textContent = r.value + ' ' + unitLabel();
+    $('rw-bufferlabel').textContent = bufferLabel();
+    redraw();
+    if (me && me.status === 'approved') renderWatches();
+  }
   $('rw-buffer').addEventListener('input', () => {
-    $('rw-bufferlabel').textContent = $('rw-buffer').value + ' mi';
+    $('rw-bufferlabel').textContent = bufferLabel();
   });
   $('mode-circle').addEventListener('click', () => setMode('circle'));
   $('mode-polygon').addEventListener('click', () => setMode('polygon'));
   $('radius').addEventListener('input', () => {
-    $('radiuslabel').textContent = $('radius').value + ' km';
+    $('radiuslabel').textContent = $('radius').value + ' ' + unitLabel();
     redraw();
+  });
+  applyUnits();
+  document.addEventListener('cs-units', (e) => {
+    applyUnits();
+    // Mirror a choice to the account; a value that came from the
+    // account is not echoed back.
+    if (user && !(e.detail && e.detail.fromServer)) {
+      api('/api/watch/prefs', { method: 'POST',
+        body: JSON.stringify({ units: e.detail.units }) }).catch(() => {});
+    }
   });
 
   // ------------------------------------------------------------- watches
@@ -532,11 +580,11 @@ export async function initWatch(opts) {
       const chans = [];
       if ((w.channels || {}).push !== false) chans.push('push');
       if ((w.channels || {}).email) chans.push('email');
+      const fmt = (km, d) => (U ? U.fmt(km, d) : Math.round(km) + ' km');
       meta.textContent = (w.type === 'circle'
-        ? Math.round(w.radius_km) + ' km circle'
+        ? fmt(w.radius_km) + ' circle'
         : w.type === 'route'
-          ? Math.round((w.length_km || 0) * 0.6214) + ' mi route \u00b7 '
-            + Math.round((w.buffer_km || 3) * 0.6214) + ' mi buffer'
+          ? fmt(w.length_km || 0, 0) + ' route \u00b7 ' + fmt(w.buffer_km || 3, 1) + ' buffer'
           : 'polygon') +
         ' - ' + (w.kinds || []).join(', ') +
         ' - ' + (chans.join(' + ') || 'no delivery');
@@ -620,9 +668,11 @@ export async function initWatch(opts) {
     };
     if (mode === 'circle') {
       if (!center) { msg('createmsg', 'Click the map to place the center first.', 'err'); return; }
+      // The free cap is 40.2 km; 25 mi converts a hair above it.
+      const km = U ? U.toKm(Number($('radius').value)) : Number($('radius').value);
       Object.assign(body, { type: 'circle',
         center: { lat: center[0], lon: center[1] },
-        radius_km: Number($('radius').value) });
+        radius_km: Math.min(km, (CFG.limits && CFG.limits.free_radius_km) || km) });
     } else if (mode === 'route') {
       if (!routePts || routePts.length < 2) {
         msg('createmsg', 'Preview the route first.', 'err'); return;

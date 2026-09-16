@@ -17,22 +17,31 @@ WATCH_JS = (STATIC / "watch-app.js").read_text(encoding="utf-8")
 WATCH_CSS = (STATIC / "watch.css").read_text(encoding="utf-8")
 
 # Every id the watch module reaches for, in both hosts.
+# Account controls live in the Settings pane on the map page.
+SETTINGS_IDS = ["who", "deleteacct", "acctmsg"]
 WATCH_IDS = [
-    "who", "signin", "googlebtn", "email", "emailbtn", "signinmsg", "gate",
+    "signin", "googlebtn", "email", "emailbtn", "signinmsg", "gate",
     "gatetext", "code", "redeembtn", "gatemsg", "appzone", "mode-circle",
     "mode-polygon", "mode-route", "shapehint", "polytools", "undopt",
     "clearpts", "routerow", "rw-from", "rw-to", "rw-preview", "rw-buffer",
     "rw-bufferlabel", "radiusrow", "radius", "radiuslabel", "wname",
     "ch-push", "emailchan", "ch-email", "createbtn", "canceledit",
     "createmsg", "wcount", "usagefill", "wlist", "listmsg", "notifbtn",
-    "testbtn", "devmsg", "deleteacct", "acctmsg",
+    "testbtn", "devmsg",
 ]
 
 
 def test_the_watch_pane_carries_every_id_the_module_uses_once():
     pane = re.search(r'<section id="pane-watch"[^>]*>(.*?)\n    </section>', HTML, re.S).group(1)
+    settings = re.search(r'<section id="pane-settings"[^>]*>(.*?)\n    </section>',
+                         HTML, re.S).group(1)
     for i in WATCH_IDS:
         assert pane.count(f'id="{i}"') == 1, i
+        assert HTML.count(f'id="{i}"') == 1, i
+        assert WATCH_HTML.count(f'id="{i}"') == 1, i
+    for i in SETTINGS_IDS:
+        assert settings.count(f'id="{i}"') == 1, i
+        assert pane.count(f'id="{i}"') == 0, i
         assert HTML.count(f'id="{i}"') == 1, i
         assert WATCH_HTML.count(f'id="{i}"') == 1, i
     assert 'id="wmap"' not in HTML  # the live map is the watch map here

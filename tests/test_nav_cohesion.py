@@ -47,6 +47,9 @@ LIVE_MAP_LABEL = "Live map"
 REQUIRED_NAV_DESTINATIONS = set(REQUIRED_TEXT_NAV_ORDER) | {LIVE_MAP_HREF}
 
 STATIC_PAGES = ["map", "watch", "trip", "admin"]
+# The map page carries the Watch tool in its rail, so its header drops
+# the /watch text link (one control per job); every other surface keeps it.
+OMITTED_ON = {"map": {"/watch"}}
 
 
 class _AnchorCollector(HTMLParser):
@@ -92,7 +95,8 @@ def _anchors_in(html_fragment: str) -> list[dict]:
     return parser.anchors
 
 
-def _check_surface(name: str, anchors: list[dict]) -> None:
+def _check_surface(name: str, anchors: list[dict], omit: set | None = None) -> None:
+    omit = omit or set()
     logo = [a for a in anchors if a["attrs"].get("aria-label") == "CommuteScout home"]
     assert logo, (
         f"{name}: no logo/wordmark link found "
@@ -107,9 +111,9 @@ def _check_surface(name: str, anchors: list[dict]) -> None:
     # links plus the Live map CTA; the site header's Live map link too,
     # even though it sits outside the <nav> element proper).
     nav_hrefs = {a["href"] for a in anchors} - {"/"}
-    assert nav_hrefs == REQUIRED_NAV_DESTINATIONS, (
+    assert nav_hrefs == REQUIRED_NAV_DESTINATIONS - omit, (
         f"{name}: nav destinations {sorted(nav_hrefs)} != "
-        f"{sorted(REQUIRED_NAV_DESTINATIONS)}"
+        f"{sorted(REQUIRED_NAV_DESTINATIONS - omit)}"
     )
 
     # Order + exact labels for the four text nav links, filtered to just
@@ -118,8 +122,9 @@ def _check_surface(name: str, anchors: list[dict]) -> None:
     # comparison.
     text_links = [a for a in anchors if a["href"] in TEXT_NAV_LABELS]
     actual_order = [a["href"] for a in text_links]
-    assert actual_order == REQUIRED_TEXT_NAV_ORDER, (
-        f"{name}: text nav order {actual_order} != {REQUIRED_TEXT_NAV_ORDER}"
+    expected_order = [h for h in REQUIRED_TEXT_NAV_ORDER if h not in omit]
+    assert actual_order == expected_order, (
+        f"{name}: text nav order {actual_order} != {expected_order}"
     )
     for a in text_links:
         expected_label = TEXT_NAV_LABELS[a["href"]]
@@ -147,7 +152,7 @@ def _check_surface(name: str, anchors: list[dict]) -> None:
 def test_static_page_header_matches_target_nav(page):
     html_text = (STATIC_DIR / f"{page}.html").read_text(encoding="utf-8")
     block = _extract_header_block(html_text, '<header class="topbar">')
-    _check_surface(page, _anchors_in(block))
+    _check_surface(page, _anchors_in(block), OMITTED_ON.get(page))
 
 
 @pytest.mark.skipif(
