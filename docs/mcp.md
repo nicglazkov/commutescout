@@ -36,6 +36,18 @@ as `{"error": {"code", "message", "hint"}}` with a 400, 404 or 429;
 every response allows cross-origin reads. The same per-address rate limits
 apply as on `/mcp`. Changes within `/v1` are additive.
 
+### Keys
+
+Without a key, both `/v1` and `/mcp` work at the per-address limits.
+A key lifts a client onto its own limits and needs a signed-in account:
+open the live map, choose Settings in the rail, sign in, and create a
+key under API keys. Send it as `Authorization: Bearer cs_live_...` or
+`X-API-Key`. Free keys get 2,000 requests a day and 30 in a burst; Pro
+keys get 10,000 a day and 60 in a burst; ask through the contact page
+for more. Every keyed response carries `RateLimit-Limit` and
+`RateLimit-Remaining`; a spent day answers 429 with `Retry-After`. A
+revoked or unknown key answers 401 rather than falling back to keyless.
+
 ## Run it locally (stdio)
 
 The server is a single Python package with zero required keys. Config
