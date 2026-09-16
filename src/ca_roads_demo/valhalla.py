@@ -1,9 +1,11 @@
 """Stadia Maps Valhalla routing client shared by roadsnap and app.
 
-One POST per route request; the api_key travels as a query param (the
-browser pages call the same endpoint keyless under Stadia domain auth,
-this module is only for server-side callers). Valhalla encodes leg
-geometry as precision-6 polylines and reports lengths in kilometers.
+One POST per route request; the api_key travels in the Authorization
+header, never as a query param (httpx logs every request URL at INFO,
+so a query-string key would land in Cloud Logging). The browser pages
+call the same endpoint keyless under Stadia domain auth; this module is
+only for server-side callers. Valhalla encodes leg geometry as
+precision-6 polylines and reports lengths in kilometers.
 """
 
 import httpx
@@ -46,8 +48,9 @@ async def route(client: httpx.AsyncClient, locations: list[dict], *,
     near a location (raises NoCandidateError so callers can widen their
     search); other error statuses raise httpx.HTTPStatusError."""
     body = {"locations": locations, "costing": "auto", **options}
-    resp = await client.post(ROUTE_URL, params={"api_key": api_key},
-                             json=body, headers=UA, timeout=timeout)
+    headers = {**UA, "Authorization": f"Stadia-Auth {api_key}"}
+    resp = await client.post(ROUTE_URL, json=body, headers=headers,
+                             timeout=timeout)
     if resp.status_code == 400:
         raise NoCandidateError(resp.text[:200])
     resp.raise_for_status()
