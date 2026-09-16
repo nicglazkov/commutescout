@@ -66,7 +66,7 @@ type Tool = { signature: string; description: string };
 
 const TOOLS: Tool[] = [
   {
-    signature: "check_route(from_place, to_place)",
+    signature: "check_route(from_place, to_place, from_coords?, to_coords?)",
     description:
       "Everything active along a major corridor (17 curated corridors: " +
       "I-80 Sacramento-Reno, US-50 to Tahoe, I-5, US-101, SR-17, SR-99, " +
@@ -82,33 +82,33 @@ const TOOLS: Tool[] = [
       "they truncate",
   },
   {
-    signature: "get_incidents(highway?, area?, center?)",
+    signature: "get_incidents(highway?, area?, center?, radius_km?)",
     description: "Live CHP incidents by route, dispatch area, or a point and radius",
   },
   {
-    signature: "get_lane_closures(route?, district?, center?)",
+    signature: "get_lane_closures(route?, district?, center?, radius_km?)",
     description: "Closures in place right now, classified per the closure taxonomy",
   },
   {
-    signature: "get_chain_controls(route?, center?)",
+    signature: "get_chain_controls(route?, center?, radius_km?)",
     description:
       'Current chain requirements; says "none active" explicitly in the off-season',
   },
   {
-    signature: "get_wildfires(near_route?, center?)",
+    signature: "get_wildfires(near_route?, center?, radius_km?)",
     description:
       "Active fires with size, containment, and mapped perimeter edges, " +
       "flagged near major highways",
   },
   {
-    signature: "get_cameras(center?, route?)",
+    signature: "get_cameras(center?, route?, radius_km?, limit?)",
     description:
       "Roadside camera snapshots, each verified live before it is " +
       "returned (offline placeholder frames are filtered by image " +
       "freshness)",
   },
   {
-    signature: "get_road_signs(route?, center?)",
+    signature: "get_road_signs(route?, center?, radius_km?)",
     description: "What changeable message signs are displaying right now, verbatim",
   },
   {
@@ -296,7 +296,7 @@ export default function McpPage() {
               </h2>
               <p className="text-cs-ink/60 mt-3 text-sm text-balance">
                 An eval suite with recorded fixtures and 91 golden questions
-                gates every release; the scorecard is public.
+                runs on demand before releases; the scorecard is public.
               </p>
               <a
                 href="https://github.com/nicglazkov/commutescout/blob/main/EVALS.md"

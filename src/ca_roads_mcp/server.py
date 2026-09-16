@@ -1,6 +1,6 @@
-"""MCP server: live California road conditions.
+"""MCP server: live US road conditions, California in the most depth.
 
-Six tools over the ca_roads feed layer, served over stdio (local dev) or
+Ten tools over the ca_roads feed layer, served over stdio (local dev) or
 streamable HTTP (hosted). Docstrings are written for the LLM consuming the
 tools: they say what the data is, how fresh it is, and where it falls short.
 """
@@ -48,8 +48,10 @@ from ca_roads_mcp.serialize import (
 )
 
 INSTRUCTIONS = """\
-Live California road conditions from CHP (incidents), Caltrans (lane
-closures and chain controls), and WFIGS (wildfires). All data is official,
+Live road conditions. California in depth: CHP incidents, Caltrans lane
+closures and chain controls, cameras and message signs, WFIGS wildfires,
+and TomTom traffic on 17 curated corridors. Everywhere else CommuteScout
+covers (37 US states) through get_nearby_events. All data is official,
 public, and read-only. Every response carries a `sources` list with a
 `data_as_of` timestamp per source - always relay meaningful staleness or
 feed errors to the user. This service reports CURRENT conditions only; it
