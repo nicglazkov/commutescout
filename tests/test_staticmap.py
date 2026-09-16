@@ -49,8 +49,10 @@ def test_staticmap_composes_and_caches(client, monkeypatch):
     r2 = client.get("/api/staticmap?lat=37.3382&lon=-121.8863&z=11&k=incident")
     assert r2.status_code == 200
     assert tile_route.call_count == calls_first  # served from cache
-    # The key travels as a query param, never a header.
-    assert tile_route.calls[0].request.url.params["api_key"] == "test-key"
+    # The key travels in a header, never in the (logged) URL.
+    req = tile_route.calls[0].request
+    assert "test-key" not in str(req.url)
+    assert req.headers["Authorization"] == "Stadia-Auth test-key"
 
 
 @respx.mock

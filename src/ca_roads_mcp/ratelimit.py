@@ -11,6 +11,8 @@ from __future__ import annotations
 import ipaddress
 import time
 
+from ca_roads.budget import DailyCounter
+
 # Cloudflare's published edge ranges (cloudflare.com/ips, vendored
 # 2026-07-27). They change rarely; refresh from the same URLs if
 # Cloudflare announces new blocks.
@@ -167,11 +169,17 @@ class RateLimitMiddleware:
         limiter: RateLimiter | None = None,
         exempt_prefixes: tuple[str, ...] = (),
         exempt_exact: frozenset[str] = frozenset(),
+        daily_limit: int | None = None,
     ) -> None:
         self.app = app
         self.limiter = limiter or RateLimiter()
         self.exempt_prefixes = exempt_prefixes
         self.exempt_exact = exempt_exact
+        # The bucket bounds the rate; this bounds the day. A client at
+        # the sustained rate for 24 hours is 43k requests, which on the
+        # MCP service is real CPU money (one client did 60k in a day).
+        self.daily_limit = daily_limit
+        self.daily = DailyCounter()
 
     @staticmethod
     def _client_key(scope) -> str:
@@ -197,7 +205,17 @@ class RateLimitMiddleware:
         if any(path.startswith(p) for p in self.exempt_prefixes):
             await self.app(scope, receive, send)
             return
-        if not self.limiter.allow(self._client_key(scope)):
+        key = self._client_key(scope)
+        if (self.daily_limit
+                and not self.daily.allow(limiter_key(key), self.daily_limit)):
+            await send({"type": "http.response.start", "status": 429,
+                        "headers": [(b"content-type", b"application/json"),
+                                    (b"retry-after", b"3600")]})
+            await send({"type": "http.response.body",
+                        "body": b'{"error": "daily request limit reached '
+                                b'for your address; try tomorrow"}'})
+            return
+        if not self.limiter.allow(key):
             await send(
                 {
                     "type": "http.response.start",

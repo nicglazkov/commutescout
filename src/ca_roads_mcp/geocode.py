@@ -23,6 +23,8 @@ from importlib.resources import files
 
 import httpx
 
+from ca_roads.budget import UPSTREAM
+
 STADIA_SEARCH_URL = "https://api.stadiamaps.com/geocoding/v1/search"
 STADIA_AUTOCOMPLETE_URL = "https://api.stadiamaps.com/geocoding/v1/autocomplete"
 try:
@@ -38,6 +40,17 @@ TIMEOUT_SECONDS = 6.0
 
 def _api_key() -> str:
     return os.environ.get("STADIA_API_KEY", "").strip()
+
+
+# Global daily budget for Stadia geocoding calls across both services.
+# Past it the offline gazetteer is the only resolver until UTC
+# midnight: a degraded answer, never a surprise bill.
+STADIA_GEOCODE_DAILY = int(os.environ.get("STADIA_GEOCODE_DAILY", "4000"))
+
+
+def _auth(key: str) -> dict[str, str]:
+    # Header, never a query param: request URLs get logged.
+    return {"User-Agent": USER_AGENT, "Authorization": f"Stadia-Auth {key}"}
 
 
 def _rect_params() -> dict:
@@ -142,15 +155,15 @@ async def _search_stadia(
     network trouble or a missing key (callers must not cache None-shaped
     results as definitive misses)."""
     key = _api_key()
-    if not key:
+    if not key or not UPSTREAM.allow("stadia-geocode", STADIA_GEOCODE_DAILY):
         return None
-    params = {"text": q, "size": limit, "api_key": key, **_rect_params()}
+    params = {"text": q, "size": limit, **_rect_params()}
     if near:
         params["focus.point.lat"], params["focus.point.lon"] = near
     try:
         resp = await client.get(
             STADIA_SEARCH_URL, params=params,
-            headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT_SECONDS)
+            headers=_auth(key), timeout=TIMEOUT_SECONDS)
         resp.raise_for_status()
         features = resp.json().get("features", [])
     except Exception:  # noqa: BLE001 - failure means "use the fallback"
@@ -337,7 +350,7 @@ async def stadia_suggest(
     limit: int = 6,
 ) -> list[dict]:
     key = _api_key()
-    if not key:
+    if not key or not UPSTREAM.allow("stadia-geocode", STADIA_GEOCODE_DAILY):
         return []
     q = _expand_abbrev(q)
     try:
@@ -345,12 +358,12 @@ async def stadia_suggest(
             resp = await client.get(
                 STADIA_AUTOCOMPLETE_URL,
                 params={
-                    "text": q, "size": limit, "api_key": key,
+                    "text": q, "size": limit,
                     "focus.point.lat": bias_lat,
                     "focus.point.lon": bias_lon,
                     **_rect_params(),
                 },
-                headers={"User-Agent": USER_AGENT},
+                headers=_auth(key),
                 timeout=4.0,
             )
         resp.raise_for_status()

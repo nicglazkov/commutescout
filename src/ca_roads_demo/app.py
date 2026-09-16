@@ -39,6 +39,7 @@ from starlette.responses import (
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
+from ca_roads.budget import UPSTREAM, DailyCounter
 from ca_roads.feeds import calfire as calfire_feed
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import tomtom as tomtom_feed
@@ -48,6 +49,7 @@ from ca_roads_demo import (
     roadsnap,
     snapshot,
     states,
+    staticmap_sig,
     trips,
     vitals,
     watch,
@@ -137,6 +139,32 @@ class DailyGuards:
 
 
 guards = DailyGuards()
+
+# Per-client daily caps on the endpoints that spend upstream quota
+# (Stadia geocoding, TomTom) and on the paid tile proxies. The soft
+# bucket (60 burst, 2/s) never touches a human; these numbers never
+# touch a human either, but stop a scripted client from spending a
+# day's quota. Global budgets live next to each upstream call.
+PAID_PER_CLIENT_DAILY = {
+    "suggest": int(os.environ.get("SUGGEST_PER_CLIENT_DAILY", "400")),
+    "geocode": int(os.environ.get("GEOCODE_PER_CLIENT_DAILY", "150")),
+    "flow": int(os.environ.get("FLOW_PER_CLIENT_DAILY", "600")),
+    "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
+}
+STADIA_TILES_DAILY = int(os.environ.get("STADIA_TILES_DAILY", "20000"))
+TOMTOM_TILES_DAILY = int(os.environ.get("TOMTOM_TILES_DAILY", "20000"))
+paid_use = DailyCounter()
+
+
+def _client_over_daily(request: Request, name: str) -> bool:
+    return not paid_use.allow(f"{name}:{client_key(request)}",
+                              PAID_PER_CLIENT_DAILY[name])
+
+
+def _daily_cap_response():
+    return JSONResponse(
+        {"error": "daily limit reached for your address; try tomorrow"},
+        status_code=429, headers={"Retry-After": "3600"})
 
 
 def client_ip(request: Request) -> str:
@@ -511,6 +539,8 @@ async def api_suggest(request: Request):
     q = (request.query_params.get("q") or "").strip()
     if len(q) < 2 or len(q) > 120:
         return JSONResponse({"suggestions": []})
+    if _client_over_daily(request, "suggest"):
+        return _daily_cap_response()
     try:
         bias_lat = float(request.query_params.get("lat", 37.4))
         bias_lon = float(request.query_params.get("lon", -120.9))
@@ -553,6 +583,8 @@ async def api_flow(request: Request):
     if not pairs:
         return JSONResponse({"error": "pts=lat,lon|lat,lon required"},
                             status_code=400)
+    if _client_over_daily(request, "flow"):
+        return _daily_cap_response()
     road = tools.get_road()
 
     async def cached_flow(lat, lon):
@@ -608,6 +640,9 @@ async def api_traffic_tile(request: Request):
     if hit and now - hit[0] < _TILE_TTL:
         return Response(hit[1], media_type="image/png",
                         headers={"Cache-Control": "public, max-age=60"})
+    if (_client_over_daily(request, "traffictile")
+            or not UPSTREAM.allow("tomtom-tiles", TOMTOM_TILES_DAILY)):
+        return Response(status_code=429, headers={"Retry-After": "3600"})
     road = tools.get_road()
     try:
         resp = await road.client.get(
@@ -652,6 +687,11 @@ async def api_staticmap(request: Request):
         return JSONResponse({"error": "lat and lon required"}, status_code=400)
     if not (5 <= z <= 15 and 31.0 <= lat <= 43.5 and -126.5 <= lon <= -112.5):
         return Response(status_code=404)
+    # Only URLs this app minted (alert emails, trip pages) carry a valid
+    # signature; anything else would be spending Stadia tiles for free.
+    if not staticmap_sig.verify(request.query_params):
+        return JSONResponse({"error": "unsigned static map request"},
+                            status_code=403)
     kind = request.query_params.get("k", "incident")
     color = _STATICMAP_COLORS.get(kind, _STATICMAP_COLORS["incident"])
 
@@ -686,14 +726,15 @@ async def api_staticmap(request: Request):
         # map composes as flat background plus marker instead of 401ing
         # per tile (self-hosters and CI never need a key).
         api_key = os.environ.get("STADIA_API_KEY", "").strip()
-        if not api_key:
+        if not api_key or not UPSTREAM.allow("stadia-tiles",
+                                             STADIA_TILES_DAILY):
             return tx, ty, None
         try:
             resp = await road.client.get(
                 f"https://tiles.stadiamaps.com/tiles/alidade_smooth/"
                 f"{z}/{tx % n}/{ty}.png",
-                params={"api_key": api_key},
-                headers={"User-Agent": "ca-roads-mcp staticmap"},
+                headers={"User-Agent": "ca-roads-mcp staticmap",
+                         "Authorization": f"Stadia-Auth {api_key}"},
                 timeout=10,
             )
             return tx, ty, resp.content if resp.status_code == 200 else None
@@ -749,6 +790,8 @@ async def api_geocode(request: Request):
     q = (request.query_params.get("q") or "").strip()
     if not q or len(q) > 200:
         return JSONResponse({"error": "provide q (max 200 chars)"}, status_code=400)
+    if _client_over_daily(request, "geocode"):
+        return _daily_cap_response()
     road = tools.get_road()
     cands = await geocode_candidates(road.client, q)
     return JSONResponse({
@@ -2391,6 +2434,7 @@ app = StaticCacheHeaders(app)
 app = RateLimitMiddleware(
     app,
     RateLimiter(capacity=20, refill_per_second=0.5),
+    daily_limit=int(os.environ.get("DEMO_PER_CLIENT_DAILY_REQUESTS", "3000")),
     # The bucket protects the model-spending path (/api/ask) and event
     # spam. Data-plane GETs are cheap, feed-cached, and the standalone map
     # legitimately calls them on every pan - throttling them starves
