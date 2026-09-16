@@ -171,7 +171,16 @@ export default function McpPage() {
             <Link href="/" prefetch={false} className="underline underline-offset-2 hover:text-white">
               commutescout.com
             </Link>
-            , with the same live feeds.
+            , with the same live feeds. Not running an MCP client? Every tool is
+            also a plain HTTP GET at{" "}
+            <Link
+              href="https://mcp.commutescout.com/v1/docs"
+              prefetch={false}
+              className="underline underline-offset-2 hover:text-white"
+            >
+              mcp.commutescout.com/v1
+            </Link>
+            , with an OpenAPI reference.
           </p>
 
           <Link

@@ -1546,6 +1546,13 @@ conditions for this trip:
 """
 
 
+# The REST bridge (GET /v1/tools/{name}) rides on the same tool registry;
+# it must be registered before streamable_http_app() builds the app.
+from ca_roads_mcp.rest import register as _register_rest  # noqa: E402
+
+_register_rest(mcp)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="CommuteScout MCP server")
     parser.add_argument(
