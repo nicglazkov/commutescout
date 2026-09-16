@@ -24,7 +24,8 @@ jobs:
         run: |
           set +e
           python scripts/check_models.py | tee changes.txt
-          echo "status=$?" >> "$GITHUB_OUTPUT"
+          # $? here would be tee's exit code (always 0); the script's is in PIPESTATUS.
+          echo "status=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
       - name: Open review issue and update snapshot
         if: steps.check.outputs.status == '3'
         env:
