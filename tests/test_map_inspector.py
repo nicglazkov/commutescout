@@ -27,7 +27,8 @@ def test_popups_get_one_inspector_button_at_open_time():
     # Added on popupopen, never inside the builders: they stay untouched.
     assert APP.count("'Show in inspector'") == 1
     assert "box.querySelector('.inspbtn')" in APP  # never twice on one popup
-    assert "function popupFor(m, g)" in APP and "inspbtn" not in APP[APP.index("function popupFor(m, g)"):APP.index("function pointMarker")]
+    builders = APP[APP.index("function popupFor(m, g)"):APP.index("function pointMarker")]
+    assert "inspbtn" not in builders
 
 
 def test_dispatch_log_wiring_is_one_function_used_by_both():
