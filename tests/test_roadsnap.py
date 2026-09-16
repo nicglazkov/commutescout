@@ -1,7 +1,9 @@
 """Road snapper: quality gates, caching, and marker application."""
 
 import asyncio
+import json
 import logging
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -122,8 +124,8 @@ async def test_snap_toll_widens_then_transient():
 
 def test_apply_attaches_cached_and_queues_unknown():
     key = roadsnap._key(37.3, -121.9, 37.33, -121.92)
-    roadsnap._mem[key] = [[37.3, -121.9], [37.31, -121.905],
-                          [37.33, -121.92]]
+    roadsnap._mem[key] = json.dumps([[37.3, -121.9], [37.31, -121.905],
+                                     [37.33, -121.92]])
     known = {"kind": "lane_closure", "lat": 37.3, "lon": -121.9,
              "end": [37.33, -121.92]}
     unknown = {"kind": "lane_closure", "lat": 38.0, "lon": -120.0,
@@ -216,8 +218,13 @@ async def test_load_persisted_mirrors_docs(monkeypatch, caplog):
     with caplog.at_level(logging.INFO, logger="roadsnap"):
         assert await roadsnap.load_persisted() is True
     assert roadsnap._loaded is True
-    assert roadsnap._mem["aaa"] == [[37.3, -121.9], [37.33, -121.92]]
+    # Mirrored as the compact JSON string Firestore holds, decoded on
+    # use: 19,600 paths as nested Python lists cost ~700 MB of RSS.
+    assert roadsnap._mem["aaa"] == "[[37.3, -121.9], [37.33, -121.92]]"
     assert roadsnap._mem["bbb"] is None
+    assert roadsnap.path_for(37.3, -121.9, 37.33, -121.92) is None  # unknown key
+    roadsnap._mem[roadsnap._key(1, 2, 3, 4)] = "[[1, 2], [3, 4]]"
+    assert roadsnap.path_for(1, 2, 3, 4) == [[1, 2], [3, 4]]
     assert "road_snaps loaded: 2 docs" in caplog.text
 
 
@@ -272,8 +279,10 @@ async def test_drain_logs_and_persists_each_purchase(monkeypatch, caplog):
         async with httpx.AsyncClient() as client:
             with pytest.raises(asyncio.CancelledError):
                 await roadsnap._drain(client)
-    assert roadsnap._mem[key][0] == [37.3, -121.9]
+    assert json.loads(roadsnap._mem[key])[0] == [37.3, -121.9]
+    assert roadsnap._mem[key] == db.sets[0][1]["path"]  # one string, both places
     assert db.sets and db.sets[0][0] == key and db.sets[0][1]["ok"] is True
+    assert db.sets[0][1]["expire_at"] > datetime.now(UTC) + timedelta(days=300)
     assert f"snap closure {key} ok=True queue=0" in caplog.text
 
 
@@ -340,3 +349,14 @@ async def test_load_persisted_reads_in_pages(monkeypatch):
     assert await roadsnap.load_persisted() is True
     assert len(roadsnap._mem) == 5
     assert db.pages == 3  # 2 + 2 + 1
+
+
+def test_toll_pair_for_decodes_cached_dict():
+    a, b, brg, token = (37.30, -121.90), (37.33, -121.92), 330.0, "101"
+    assert roadsnap.toll_pair_for(a, b, brg, token) is None  # queued
+    key = roadsnap._queue[-1]
+    roadsnap._mem[key] = json.dumps({"path": [[1, 2], [3, 4]], "a": [1, 2], "b": [3, 4]})
+    got = roadsnap.toll_pair_for(a, b, brg, token)
+    assert got == {"path": [[1, 2], [3, 4]], "a": [1, 2], "b": [3, 4]}
+    roadsnap._mem[key] = None  # a rejected pair stays "no line"
+    assert roadsnap.toll_pair_for(a, b, brg, token) is None
