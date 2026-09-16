@@ -34,11 +34,12 @@ async def test_run_logs_one_json_line_per_tick(monkeypatch, caplog):
             raise asyncio.CancelledError
 
     monkeypatch.setattr(vitals, "_sleep", fake_sleep)
-    with caplog.at_level(logging.INFO, logger="vitals"):
-        with pytest.raises(asyncio.CancelledError):
-            await vitals.run()
+    with (caplog.at_level(logging.INFO, logger="vitals"),
+          pytest.raises(asyncio.CancelledError)):
+        await vitals.run()
+    # Tick one logs, tick two is cancelled before it logs.
     lines = [r.getMessage() for r in caplog.records if r.name == "vitals"]
-    assert len(lines) == 2
+    assert len(lines) == 1
     parsed = json.loads(lines[0].split(" ", 1)[1])
     assert parsed["log_type"] == "vitals" and "snaps_mem" in parsed
     assert ticks == [vitals.INTERVAL, vitals.INTERVAL]
