@@ -1937,6 +1937,7 @@ railEl.addEventListener('click', (e) => {
   const btn = e.target.closest('.tool');
   if (!btn || btn.tagName !== 'BUTTON') return;
   setTool(btn.dataset.tool);
+  if (btn.dataset.tool === 'alerts' && typeof scheduleAlerts === 'function') scheduleAlerts();
 });
 {
   const saved = store.get(TOOL_KEY);
@@ -2206,8 +2207,7 @@ document.addEventListener('click', (e) => {
 
 // "Show dispatch log" in incident popups: lazy-fetch the full CHP
 // timeline only when someone asks for it, newest entries first.
-map.on('popupopen', (e) => {
-  const el = e.popup.getElement();
+function wireDispatchLog(el, popup) {
   const btn = el && el.querySelector('.detbtn[data-inc]');
   if (!btn || btn.dataset.wired) return;
   btn.dataset.wired = '1';
@@ -2284,17 +2284,161 @@ map.on('popupopen', (e) => {
       // anchored on the dot (skipping _updateContent keeps the
       // injected log; popup.update() would wipe it).
       const cw = el.querySelector('.leaflet-popup-content');
-      if (cw && h) {
+      if (cw && h && popup) {
         cw.style.width = Math.min(500, window.innerWidth - 70) + 'px';
-        e.popup._updateLayout();
-        e.popup._updatePosition();
+        popup._updateLayout();
+        popup._updatePosition();
       }
       btn.remove();
     } catch (_) {
       btn.textContent = 'Log unavailable right now'; btn.disabled = true;
     }
   });
+}
+map.on('popupopen', (e) => wireDispatchLog(e.popup.getElement(), e.popup));
+
+// ── Inspector: a wider pane for what a popup cannot hold ─────────
+// Opened on demand from a popup's button or an Alerts row; the same
+// builder renders it, with room for the full still, the whole dispatch
+// log, and the sign board.
+const inspectorEl = document.getElementById('inspector');
+const inspBody = document.getElementById('inspbody');
+const inspTitle = document.getElementById('insptitle');
+function openInspector(m, g) {
+  const label = (POP_LABEL[g] || 'Details').toLowerCase();
+  inspTitle.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+  inspBody.innerHTML = popupFor(m, g);
+  wireDispatchLog(inspBody, null);
+  inspectorEl.hidden = false;
+  shellEl.classList.add('insp');
+  setTimeout(() => map.invalidateSize(), 60);
+}
+function closeInspector() {
+  if (inspectorEl.hidden) return;
+  inspectorEl.hidden = true;
+  shellEl.classList.remove('insp');
+  inspBody.innerHTML = '';
+  setTimeout(() => map.invalidateSize(), 60);
+}
+document.getElementById('inspclose').addEventListener('click', closeInspector);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInspector(); });
+// Every marker popup gets one "Show in inspector" button, appended at
+// open time so the popup builders stay untouched.
+map.on('popupopen', (e) => {
+  const src = (e.popup && e.popup.__m) ? e.popup : (e.popup && e.popup._source);
+  const m = src && src.__m;
+  const g = src && src.__g;
+  const el = e.popup.getElement();
+  const box = el && el.querySelector('.p2, .pop');
+  if (!m || !g || !box || box.querySelector('.inspbtn')) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'detbtn inspbtn';
+  btn.textContent = 'Show in inspector';
+  btn.addEventListener('click', () => { openInspector(m, g); map.closePopup(); });
+  box.appendChild(btn);
 });
+
+// ── Alerts: what is in view, worst first ─────────────────────────
+// Reads the same items[] the renderer culls from, so it costs nothing
+// extra to fetch; only the groups switched on in Layers count.
+const SEVERITY = { clo_full: 0, inc_collision: 1, inc_fire: 1, chain: 2,
+  inc_hazard: 2, fire_pt: 2, clo_lane: 3, clo_oneway: 4, clo_ramp: 5,
+  inc_other: 5 };
+const SOURCE_DEFAULT = { inc_collision: 'CHP', inc_fire: 'CHP', inc_hazard: 'CHP',
+  inc_other: 'CHP', clo_full: 'Caltrans', clo_lane: 'Caltrans',
+  clo_oneway: 'Caltrans', clo_ramp: 'Caltrans', chain: 'Caltrans',
+  fire_pt: 'WFIGS' };
+const ALERT_CAP = 60;
+const alertList = document.getElementById('alertlist');
+let alertsTimer = null;
+function groupOn(g) {
+  const box = document.querySelector('#filters input[data-group="' + g + '"]');
+  return !box || box.checked;
+}
+// One row reads like the popup head: what it is, then where.
+function alertRow(m, g) {
+  const src = m.src || SOURCE_DEFAULT[g] || '';
+  if (g.startsWith('inc_')) {
+    const parts = splitRoad(m.label || '');
+    // CHP types carry a dispatch code ('1183 Trfc Collision'); the row drops it.
+    return { title: (humanize(m.type) || 'Incident').replace(/^\d{4}[A-Z]?\s*/, ''),
+      sub: [m.location || parts.road || parts.rest || null,
+        m.reported ? agoTxt(m.reported) : null, src].filter(Boolean).join(', ') };
+  }
+  if (g.startsWith('clo_')) {
+    const kind = { clo_full: 'Road closed', clo_lane: 'Lanes closed',
+      clo_oneway: 'One-way traffic', clo_ramp: 'Ramp closed' }[g] || 'Closure';
+    return { title: shapeShout(m.detail || m.label) ||
+        [m.route, m.county].filter(Boolean).join(', ') || kind,
+      sub: [kind, m.county ? m.county + ' County' : null, src].filter(Boolean).join(', ') };
+  }
+  if (g === 'chain') {
+    return { title: (m.status ? m.status.toUpperCase().replace(/^R(\d)$/, 'R-$1') + ' on ' : '') +
+        (m.route || 'Mountain pass'),
+      sub: ['Chain control', (m.label || '').slice(0, 80), src].filter(Boolean).join(', ') };
+  }
+  if (g === 'fire_pt') {
+    const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : null;
+    const cont = (m.contained || m.contained === 0) ? m.contained + '% contained' : null;
+    return { title: (m.name || 'Wildfire') + ' Fire',
+      sub: ['Wildfire', size, cont, src].filter(Boolean).join(', ') };
+  }
+  return { title: m.label || m.name || m.route || POP_LABEL[g] || g, sub: src };
+}
+function refreshAlerts() {
+  if (!alertList || !document.getElementById('pane-alerts').classList.contains('on')) return;
+  const b = map.getBounds();
+  const c = map.getCenter();
+  const rows = [];
+  for (const g of Object.keys(SEVERITY)) {
+    if (!items[g] || !groupOn(g)) continue;
+    for (const it of items[g]) {
+      const m = it.m;
+      if (!b.contains([m.lat, m.lon])) continue;
+      rows.push({ it, sev: SEVERITY[g], d: map.distance(c, [m.lat, m.lon]) });
+    }
+  }
+  rows.sort((x, y) => x.sev - y.sev || x.d - y.d);
+  const top = rows.slice(0, ALERT_CAP);
+  if (!top.length) {
+    alertList.innerHTML = '<p class="panenote">Nothing in view for the layers ' +
+      'you have on. Zoom out or turn on more layers.</p>';
+    return;
+  }
+  alertList.innerHTML = top.map((r, i) => {
+    const m = r.it.m;
+    const g = r.it.g;
+    const row = alertRow(m, g);
+    return '<button type="button" class="alertrow" data-i="' + i + '">' +
+      '<i style="--dot:' + GROUP_DOT[g] + '"></i><span><b>' +
+      esc(String(row.title).slice(0, 110)) + '</b><small>' + esc(row.sub) +
+      '</small></span></button>';
+  }).join('') + (rows.length > ALERT_CAP
+    ? '<p class="panenote">Showing the ' + ALERT_CAP + ' worst of ' + rows.length +
+      ' in view.</p>' : '');
+  alertList.querySelectorAll('.alertrow').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = top[+btn.dataset.i];
+      if (!r) return;
+      const m = r.it.m;
+      map.setView([m.lat, m.lon], Math.max(map.getZoom(), 11));
+      const p = L.popup({ maxWidth: 320 }).setLatLng([m.lat, m.lon])
+        .setContent(popupFor(m, r.it.g));
+      p.__m = m; p.__g = r.it.g;
+      setTimeout(() => p.openOn(map), 260);
+    });
+  });
+}
+function scheduleAlerts() {
+  clearTimeout(alertsTimer);
+  alertsTimer = setTimeout(refreshAlerts, 250);
+}
+map.on('moveend zoomend', scheduleAlerts);
+document.querySelectorAll('#filters input[data-group]').forEach((box) => {
+  box.addEventListener('change', scheduleAlerts);
+});
+setInterval(scheduleAlerts, 30000);
 
 // TomTom flow raster, proxied server-side; 404s harmlessly with no key.
 const trafficTiles = L.tileLayer('/api/traffictile/{z}/{x}/{y}.png', {
