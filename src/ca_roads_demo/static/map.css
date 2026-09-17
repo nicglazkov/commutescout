@@ -250,7 +250,9 @@ aside section[data-tool].on { display:block }
   stroke-width:2; stroke-linecap:round; stroke-linejoin:round }
 .mapbtn.armed, .mapbtn:hover { border-color:var(--sky); color:#1d4f9c; background:var(--sky-soft) }
 .reportform { min-width:240px }
-/* Find box: always on the map, left of the Report button. */
+/* Find box: always on the map, left of the Report button. Leaflet's zoom
+   buttons share that corner, so they start below it. */
+.map-card .leaflet-top.leaflet-left { top:50px }
 .findbox { position:absolute; top:12px; left:12px; z-index:1000;
   width:min(380px, calc(100% - 132px)) }
 .findbox input { width:100%; font:inherit; font-size:.88rem; color:var(--ink);
