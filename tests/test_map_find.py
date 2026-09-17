@@ -45,6 +45,17 @@ def test_coordinates_are_a_place_without_the_geocoder():
     assert "if (coord) { pick(coord); return; }" in APP
 
 
+def test_quick_picks_and_recents_like_the_apps():
+    # Home, Work, up to 5 favorites and the last 10 destinations, each removable.
+    assert "KEY: 'cs.places.v1'" in APP
+    assert ".slice(0, 10)" in APP and ".slice(0, 5)" in APP
+    assert "Places.noteRecent(c)" in APP
+    assert "Places.remove(q.kind, q.c)" in APP
+    for label in ("Save as Home", "Save as Work", "Save to favorites"):
+        assert label in APP
+    assert ".sugg .row.quick .rm" in CSS
+
+
 def test_reports_snap_to_a_nearby_road_but_keep_the_exact_spot_on_offer():
     assert "openReportForm(await snapForReport(e.latlng), e.latlng)" in APP
     assert "fetch('/api/snap?lat='" in APP

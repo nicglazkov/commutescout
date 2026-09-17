@@ -34,12 +34,13 @@ SITE_OUT = REPO_ROOT / "site" / "out"
 
 # Order matters: this is the exact left-to-right sequence the four text nav
 # links must appear in on every surface.
-REQUIRED_TEXT_NAV_ORDER = ["/watch", "/data-sources", "/developers", "/plugins", "/pricing"]
+REQUIRED_TEXT_NAV_ORDER = ["/watch", "/data-sources", "/developers", "/plugins", "/app", "/pricing"]
 TEXT_NAV_LABELS = {
     "/watch": "Watch areas",
     "/data-sources": "Data sources",
     "/developers": "Developers",
     "/plugins": "Plugins",
+    "/app": "Get the app",
     "/pricing": "Pricing",
 }
 LIVE_MAP_HREF = "/map"

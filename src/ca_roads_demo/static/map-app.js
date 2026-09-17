@@ -2671,6 +2671,50 @@ function parseCoords(s) {
   return { name: lat.toFixed(5) + ', ' + lon.toFixed(5), lat, lon };
 }
 
+// Home, Work, favorites and the last 10 destinations, kept in this
+// browser (localStorage), the same shape the phone apps keep. Shown under
+// an empty address field as quick picks; each one can be removed.
+const Places = {
+  KEY: 'cs.places.v1',
+  load() {
+    try { return Object.assign({ home: null, work: null, saved: [], recents: [] }, JSON.parse(store.get(this.KEY) || '{}')); }
+    catch (_) { return { home: null, work: null, saved: [], recents: [] }; }
+  },
+  save(p) { store.set(this.KEY, JSON.stringify(p)); },
+  same(a, b) { return a && b && Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4; },
+  noteRecent(c) {
+    if (!c || c.name === 'My location' || !isFinite(c.lat)) return;
+    const p = this.load();
+    p.recents = [{ name: c.name, lat: +c.lat, lon: +c.lon, at: Date.now() }]
+      .concat(p.recents.filter(r => !this.same(r, c))).slice(0, 10);
+    this.save(p);
+  },
+  set(kind, c) {
+    const p = this.load();
+    const rec = { name: c.name, lat: +c.lat, lon: +c.lon, at: Date.now() };
+    if (kind === 'home' || kind === 'work') p[kind] = rec;
+    else p.saved = [rec].concat(p.saved.filter(r => !this.same(r, c))).slice(0, 5);
+    this.save(p);
+  },
+  remove(kind, c) {
+    const p = this.load();
+    if (kind === 'home' || kind === 'work') p[kind] = null;
+    else if (kind === 'saved') p.saved = p.saved.filter(r => !this.same(r, c));
+    else p.recents = p.recents.filter(r => !this.same(r, c));
+    this.save(p);
+  },
+  // The quick picks, in the order the apps use: Home, Work, favorites, recents.
+  quick() {
+    const p = this.load();
+    const out = [];
+    if (p.home) out.push({ kind: 'home', label: 'Home', c: p.home });
+    if (p.work) out.push({ kind: 'work', label: 'Work', c: p.work });
+    p.saved.slice(0, 5).forEach(c => out.push({ kind: 'saved', label: c.name.split(', ')[0], c }));
+    p.recents.slice(0, 10).forEach(c => out.push({ kind: 'recent', label: c.name.split(', ')[0], c }));
+    return out;
+  },
+};
+
 function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
   const input = document.getElementById(inputId);
   const val = document.getElementById(valId);
@@ -2684,6 +2728,7 @@ function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
     input.dataset.name = c.name;
     val.className = 'val ok'; val.textContent = '\u2713 ' + c.name;
     close();
+    Places.noteRecent(c);
     if (onPick) onPick(c);
     if (c.approx) {
       // The row was a street match with the typed number re-attached; ask
@@ -2722,6 +2767,7 @@ function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
       val.textContent = 'Location was blocked - type an address instead.';
     }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 });
   }
+  const ICON = { home: '\u2302', work: '\u2692', saved: '\u2605', recent: '\u23F1' };
   function render() {
     sugg.innerHTML = '';
     if (withMyLocation) {
@@ -2730,6 +2776,22 @@ function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
       row.textContent = '\u25CE Use my location';
       row.addEventListener('mousedown', (e) => { e.preventDefault(); useMyLocation(); });
       sugg.append(row);
+    }
+    // Nothing typed yet: Home, Work, favorites and recent destinations.
+    if (!items.length && input.value.trim().length < 2) {
+      Places.quick().forEach((q) => {
+        const row = document.createElement('div');
+        row.className = 'row quick ' + q.kind;
+        const b = document.createElement('b'); b.textContent = ICON[q.kind] + ' ' + q.label;
+        const small = document.createElement('small');
+        small.textContent = q.kind === 'home' || q.kind === 'work' ? q.c.name : q.c.name.split(', ').slice(1).join(', ');
+        const x = document.createElement('button');
+        x.type = 'button'; x.className = 'rm'; x.title = 'Remove'; x.setAttribute('aria-label', 'Remove ' + q.label); x.textContent = '\u00d7';
+        x.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); Places.remove(q.kind, q.c); render(); });
+        row.append(b, small, x);
+        row.addEventListener('mousedown', (e) => { e.preventDefault(); pick(Object.assign({}, q.c)); });
+        sugg.append(row);
+      });
     }
     items.forEach((c, i) => {
       const row = document.createElement('div');
@@ -2771,7 +2833,7 @@ function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
     debounce = setTimeout(fetchSuggestions, 250);
   });
   input.addEventListener('focus', () => {
-    if (withMyLocation || items.length) render();
+    if (withMyLocation || items.length || Places.quick().length) render();
   });
   input.addEventListener('blur', () => setTimeout(close, 150));
   input.addEventListener('keydown', (e) => {
@@ -2855,7 +2917,15 @@ function showFound(c) {
   const nav = document.createElement('button');
   nav.type = 'button'; nav.className = 'planbtn'; nav.textContent = 'Navigate here';
   nav.addEventListener('click', () => navigateTo(c));
-  box.append(name, sub, nav);
+  const save = document.createElement('div');
+  save.className = 'saverow';
+  [['home', 'Save as Home'], ['work', 'Save as Work'], ['saved', 'Save to favorites']].forEach(([k, label]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'linkbtn'; btn.textContent = label;
+    btn.addEventListener('click', () => { Places.set(k, c); btn.textContent = 'Saved'; btn.disabled = true; });
+    save.append(btn);
+  });
+  box.append(name, sub, nav, save);
   findPin.bindPopup(box, { maxWidth: 280 });
   map.flyTo(at, Math.max(map.getZoom(), 14), { duration: 0.7 });
   setTimeout(() => findPin && findPin.openPopup(), 750);
