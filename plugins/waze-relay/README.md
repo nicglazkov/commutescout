@@ -151,6 +151,35 @@ gcloud run deploy wz-flare --source plugins/waze-relay \
 Keep `--max-instances 1`: the session, the account and the cache are all in
 process, and a second instance means a second anonymous account.
 
+The CommuteScout deployment runs at
+`https://wz-flare-15002631928.us-west1.run.app`.
+
+### Listing it in the catalog
+
+Sign in at `/admin` as an administrator, paste the manifest into the Flare
+sources box, and submit. The backend validates it, fetches the handshake once
+so a typo fails there rather than silently in the poller, and starts polling
+it on the next cycle.
+
+```json
+{
+  "id": "wz-flare",
+  "name": "Unofficial Waze relay (community)",
+  "base": "https://wz-flare-15002631928.us-west1.run.app",
+  "protocol": "flare/1",
+  "visibility": "public",
+  "trust": "community",
+  "attribution": {
+    "name": "Unofficial Waze relay (community)",
+    "url": "https://commutescout.com/plugins"
+  }
+}
+```
+
+`visibility: public` with `trust: community` is the `unreviewed` tier: drawn
+on the map, labelled "public, not reviewed", and silent unless a person turns
+voice on for it.
+
 ## Reports and confirmations
 
 **Confirmations** stay here. An `up` or `gone` vote raises the confirmation
