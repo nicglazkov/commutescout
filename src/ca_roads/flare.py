@@ -39,6 +39,21 @@ KINDS = frozenset({
 CAPABILITIES = ("alerts", "report", "confirm", "notify")
 VOTES = ("up", "gone")
 TRUST = ("official", "verified", "community", "private")
+TIERS = ("approved", "unreviewed", "private")
+
+
+def tier_of(manifest: dict) -> str:
+    """The three levels a plugin is shown as. Approved: reviewed by
+    CommuteScout (official or verified trust); its notify alerts may
+    speak. Unreviewed: public and listed after the conformance check,
+    but nobody has vouched for it; drawn on the map, labelled as such,
+    voice only if the user turns it on. Private: added by URL on one
+    device; nothing about it leaves the user's own path."""
+    if manifest.get("visibility") == "private" or manifest.get("trust") == "private":
+        return "private"
+    if manifest.get("trust") in ("official", "verified"):
+        return "approved"
+    return "unreviewed"
 VISIBILITY = ("public", "unlisted", "private")
 
 MAX_ALERTS = 500

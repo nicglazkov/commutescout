@@ -145,6 +145,7 @@ def alert_marker(src: dict, a: dict) -> dict:
         "source_id": src["id"],
         "source_url": _https_only(a.get("source_url")) or _https_only(attribution.get("url")),
         "trust": src.get("trust") or "community",
+        "tier": flare.tier_of(src),
     }
     geom = a.get("geometry")
     if isinstance(geom, dict) and geom.get("type") == "LineString":
@@ -298,6 +299,7 @@ class Poller:
             st = self.status.get(sid, {})
             out.append({"id": sid, "name": src.get("name") or sid,
                         "attribution": src.get("attribution"), "trust": src.get("trust"),
+                        "tier": flare.tier_of(src),
                         "count": st.get("count", 0), "ok": st.get("ok"),
                         "last_ok": st.get("last_ok")})
         return out
@@ -315,7 +317,7 @@ poller = Poller()
 
 REPORTS_COLLECTION = "flare_reports"
 REPORTS_SOURCE = {
-    "id": "commutescout", "name": "CommuteScout community", "trust": "community",
+    "id": "commutescout", "name": "CommuteScout community", "trust": "verified",
     "visibility": "public", "base": "https://commutescout.com", "protocol": "flare/1",
     "attribution": {"name": "CommuteScout community reports",
                     "url": "https://commutescout.com/map"},

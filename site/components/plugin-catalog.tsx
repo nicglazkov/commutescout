@@ -10,6 +10,7 @@ type Source = {
   name: string;
   attribution?: { name?: string; url?: string } | null;
   trust?: string | null;
+  tier?: "approved" | "unreviewed" | "private" | null;
   count?: number;
   ok?: boolean | null;
   last_ok?: string | null;
@@ -50,7 +51,19 @@ export function PluginCatalog() {
       {sources.map((s) => (
         <li key={s.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 py-4">
           <div>
-            <p className="font-medium text-cs-ink">{s.name}</p>
+            <p className="font-medium text-cs-ink">
+              {s.name}{" "}
+              <span
+                className={
+                  "ml-1 rounded-full px-2 py-0.5 text-[11px] font-semibold " +
+                  (s.tier === "approved"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-amber-100 text-amber-800")
+                }
+              >
+                {s.tier === "approved" ? "Approved" : "Public, not reviewed"}
+              </span>
+            </p>
             <p className="text-cs-ink/60 text-sm">
               {[s.attribution?.name, s.trust, s.count !== undefined ? `${s.count} alerts` : null,
                 s.ok === false ? "not answering" : null]

@@ -225,6 +225,21 @@ is `official`, `verified`, `community` or `private`; it decides whether
 `notify` alerts may speak (official and verified: yes; community: map
 only until promoted; private: the user's choice).
 
+## Three tiers
+
+Every plugin is shown to people as one of three levels, derived from the
+manifest (`ca_roads.flare.tier_of`) and carried on every marker and
+catalog row as `tier`:
+
+| Tier | Manifest | What it means |
+|---|---|---|
+| `approved` | `visibility: public`, `trust: official` or `verified` | Reviewed by CommuteScout: the operator is known and the feed passed review. Drawn by default, may speak (`notify`), badged "approved". |
+| `unreviewed` | `visibility: public` or `unlisted`, `trust: community` | Anyone who passes the conformance check can be listed. Drawn and labelled "public, not reviewed"; never speaks unless the user turns voice on for that source. |
+| `private` | `visibility: private` (added by URL on one device) | Direct from the phone to the plugin. Whatever the user wants, including voice; nothing leaves the user's own path. |
+
+Official agency data (the state feeds) is not a plugin and always
+outranks all three.
+
 ## Rules for callers
 
 - Never send a user's exact position to a plugin. Mediated: grid-cell
