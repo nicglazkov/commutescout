@@ -31,6 +31,7 @@ const navLinks = [
   { href: "/data-sources", label: "Data sources" },
   { href: "/developers", label: "Developers" },
   { href: "/plugins", label: "Plugins" },
+  { href: "/app", label: "Get the app" },
   { href: "/pricing", label: "Pricing" },
 ];
 

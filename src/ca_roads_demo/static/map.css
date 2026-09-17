@@ -251,6 +251,13 @@ aside section[data-tool].on { display:block }
 .mapbtn.armed, .mapbtn:hover { border-color:var(--sky); color:#1d4f9c; background:var(--sky-soft) }
 .reportform { min-width:240px }
 .reportform .where { font-size:.78rem; color:var(--dim); margin:2px 0 6px }
+.sugg .row.quick { position:relative; padding-right:30px }
+.sugg .row.quick .rm { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:22px; height:22px;
+  border:0; border-radius:50%; background:transparent; color:var(--dim); font:inherit; font-size:1rem; line-height:1; cursor:pointer }
+.sugg .row.quick .rm:hover { background:var(--sky-soft); color:var(--ink) }
+.findpop .saverow { display:flex; gap:10px; flex-wrap:wrap; margin-top:6px }
+.findpop .saverow .linkbtn { background:none; border:0; padding:0; color:var(--sky); font:inherit; font-size:.78rem; cursor:pointer; text-decoration:underline }
+.findpop .saverow .linkbtn:disabled { color:var(--dim); text-decoration:none; cursor:default }
 .reportform .linkbtn { background:none; border:0; padding:0; color:var(--sky); font:inherit; cursor:pointer; text-decoration:underline }
 /* Find box: always on the map, left of the Report button. Leaflet's zoom
    buttons share that corner, so they start below it. */
