@@ -30,6 +30,7 @@ const navLinks = [
   { href: "/watch", label: "Watch areas" },
   { href: "/data-sources", label: "Data sources" },
   { href: "/developers", label: "Developers" },
+  { href: "/plugins", label: "Plugins" },
   { href: "/pricing", label: "Pricing" },
 ];
 
