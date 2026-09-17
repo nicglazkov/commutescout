@@ -221,6 +221,24 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
     </div>
 
     <div class="card">
+      <h2>Flare sources</h2>
+      <p class="hint" style="margin:0 0 8px">Paste a manifest (docs/flare.md). The
+        handshake is checked before it is saved; a token stays server side.</p>
+      <textarea id="fl-manifest" rows="5" style="width:100%;font:.8rem ui-monospace,monospace"
+        placeholder='{"id": "sabreplus", "name": "SABRE Plus", "base": "https://...", "protocol": "flare/1", "visibility": "public", "trust": "community", "attribution": {"name": "...", "url": "https://..."}}'></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="fl-add">Add source</button>
+        <button id="fl-refresh">Refresh</button>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Source</th><th>Visibility</th><th>Trust</th><th>Status</th>
+          <th>Alerts</th><th></th></tr></thead>
+        <tbody id="fl-rows"></tbody>
+      </table></div>
+      <div class="msg" id="fl-msg"></div>
+    </div>
+
+    <div class="card">
       <h2>Checker</h2>
       <div class="row">
         <button id="runcheck">Run check cycle now</button>
@@ -280,10 +298,58 @@ onAuthStateChanged(auth, async (u) => {
     loadAnalytics();
     loadFeedback();
     loadWaitlist();
+    loadFlare();
   } catch (e) {
     $('signin').classList.remove('hidden');
     msg('signinmsg', e.message, 'err');
   }
+});
+
+async function loadFlare() {
+  const rows = $('fl-rows');
+  try {
+    const data = await api('/api/admin/flare');
+    rows.innerHTML = '';
+    for (const src of data.sources) {
+      const st = src.status || {};
+      const tr = document.createElement('tr');
+      const state = src.enabled === false ? 'disabled'
+        : st.ok === true ? 'ok' : st.ok === false ? 'failing' : 'waiting';
+      tr.innerHTML = '<td></td><td>' + (src.visibility || '') + '</td><td>' +
+        (src.trust || '') + '</td><td><span class="pill ' +
+        (state === 'ok' ? 'approved' : state === 'failing' ? 'revoked' : 'pending') +
+        '" title="' + (st.last_error || st.last_ok || '') + '">' + state +
+        '</span></td><td>' + (st.count || 0) + '</td><td></td>';
+      tr.children[0].textContent = (src.name || src.id) + ' (' + src.id + ')';
+      const acts = tr.children[5];
+      for (const action of [src.enabled === false ? 'enable' : 'disable', 'remove']) {
+        const b = document.createElement('button');
+        b.textContent = action;
+        b.addEventListener('click', async () => {
+          if (action === 'remove' && !confirm('Remove ' + src.id + '?')) return;
+          try { await api('/api/admin/flare', { method: 'POST',
+            body: JSON.stringify({ action, id: src.id }) }); await loadFlare(); }
+          catch (e) { msg('fl-msg', e.message, 'err'); }
+        });
+        acts.append(b);
+      }
+      rows.append(tr);
+    }
+    if (!data.sources.length) rows.innerHTML = '<tr><td colspan="6">No sources yet.</td></tr>';
+  } catch (e) { msg('fl-msg', e.message, 'err'); }
+}
+$('fl-refresh').addEventListener('click', loadFlare);
+$('fl-add').addEventListener('click', async () => {
+  let manifest;
+  try { manifest = JSON.parse($('fl-manifest').value); }
+  catch (e) { msg('fl-msg', 'The manifest is not valid JSON.', 'err'); return; }
+  try {
+    await api('/api/admin/flare', { method: 'POST',
+      body: JSON.stringify({ action: 'add', manifest }) });
+    $('fl-manifest').value = '';
+    msg('fl-msg', 'Added. The poller picks it up within a minute.', 'ok');
+    await loadFlare();
+  } catch (e) { msg('fl-msg', e.message, 'err'); }
 });
 
 async function load() {

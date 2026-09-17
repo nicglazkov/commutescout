@@ -44,7 +44,7 @@ def wired(monkeypatch):
     monkeypatch.setattr(tools, "get_road", lambda: _Road(fake))
 
     async def fake_build(box, want, *, geo_only=False):
-        assert want == {"incident", "closure", "chain"}
+        assert want == {"incident", "closure", "chain", "plugin"}
         assert box[0] < 37.5 < box[2] and box[1] < -122.4 and box[3] > -121.9
         return [
             {"kind": "incident", "type": "1183-Trfc Collision", "lat": 37.5, "lon": -122.3},

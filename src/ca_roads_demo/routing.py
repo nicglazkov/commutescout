@@ -43,6 +43,22 @@ PENALTY_MIN: dict[str, float] = {
     "lane": 4, "ramp": 1, "one-way-traffic": 5, "alternating-lanes": 5,
     "closure": 3,
     "R-1": 5, "R-2": 12, "R-3": 30,
+    "police": 1, "jam": 8, "weather": 4,
+}
+# How a Flare plugin alert counts: a road closure is an exclusion (see
+# exclusions()); everything else is a penalty in its nearest class.
+PLUGIN_PENALTY: dict[str, str] = {
+    "CRASH_MINOR": "collision", "CRASH_MAJOR": "collision",
+    "HAZARD_ON_ROAD": "hazard", "HAZARD_OBJECT": "hazard", "HAZARD_POTHOLE": "hazard",
+    "HAZARD_ANIMAL": "hazard", "HAZARD_CONSTRUCTION": "hazard",
+    "HAZARD_SHOULDER": "other", "HAZARD_SHOULDER_CAR": "other",
+    "HAZARD_SHOULDER_ANIMAL": "other",
+    "WEATHER_FLOOD": "weather", "WEATHER_FOG": "weather", "WEATHER_ICE": "weather",
+    "WEATHER_HAIL": "weather", "WEATHER_SNOW": "weather",
+    "LANE_CLOSED": "lane", "RAMP_CLOSED": "ramp",
+    "JAM_MODERATE": "jam", "JAM_HEAVY": "jam", "JAM_STANDSTILL": "jam",
+    "CHAINS_REQUIRED": "R-2",
+    "POLICE_VISIBLE": "police", "POLICE_HIDING": "police", "POLICE_OTHER": "police",
 }
 LABELS = {
     "collision": ("collision", "collisions"),
@@ -57,6 +73,9 @@ LABELS = {
     "R-1": ("R-1 chain control", "R-1 chain controls"),
     "R-2": ("R-2 chain control", "R-2 chain controls"),
     "R-3": ("R-3 chain control", "R-3 chain controls"),
+    "police": ("police report", "police reports"),
+    "jam": ("traffic jam", "traffic jams"),
+    "weather": ("weather hazard", "weather hazards"),
 }
 
 
@@ -140,6 +159,13 @@ def exclusions(markers: list[dict], *, avoid_chains: bool = False) -> list[dict]
         elif avoid_chains and kind == "chain_control":
             if chain_level(m.get("status")) in ("R-2", "R-3"):
                 add(m["lat"], m["lon"])
+        elif kind == "plugin" and m.get("flare_kind") == "ROAD_CLOSED":
+            path = m.get("path")
+            if isinstance(path, list) and len(path) >= 2:
+                for lat, lon in _along(path, EXCLUDE_SPACING_M):
+                    add(lat, lon)
+            else:
+                add(m["lat"], m["lon"])
     return out
 
 
@@ -186,6 +212,8 @@ def penalty_kind(m: dict) -> str | None:
         return cls if cls in PENALTY_MIN else "closure"
     if kind == "chain_control":
         return chain_level(m.get("status"))
+    if kind == "plugin":
+        return PLUGIN_PENALTY.get(m.get("flare_kind") or "")
     return None
 
 
