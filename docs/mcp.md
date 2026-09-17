@@ -18,6 +18,11 @@ No key or account needed. It is the same server behind
 
 ## Plain HTTP, no MCP client
 
+The full developer documentation (base URL, keys and limits, the error
+envelope, conventions, every tool parameter by parameter, bulk snapshots
+and what not to do) is at [commutescout.com/developers](https://commutescout.com/developers).
+This section is the short version.
+
 Every tool is also a `GET` on the same host, for scripts, dashboards and
 anything that is not an MCP client:
 

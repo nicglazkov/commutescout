@@ -167,6 +167,13 @@ export default function McpPage() {
           </div>
 
           <p className="text-white/60 mt-4 text-sm text-balance">
+            Looking for the REST API, keys, limits and the full tool reference? See the{" "}
+            <Link href="/developers" prefetch={false} className="underline underline-offset-2 hover:text-white">
+              developer documentation
+            </Link>
+            .
+          </p>
+          <p className="text-white/60 mt-4 text-sm text-balance">
             No key or account needed. It is the same server behind{" "}
             <Link href="/" prefetch={false} className="underline underline-offset-2 hover:text-white">
               commutescout.com
