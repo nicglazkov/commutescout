@@ -89,10 +89,13 @@ def test_data_sources_and_mcp_serve_from_the_export(tmp_path, monkeypatch):
     (tmp_path / "data-sources.html").write_text("<h1>data sources</h1>",
                                                  encoding="utf-8")
     (tmp_path / "mcp.html").write_text("<h1>mcp</h1>", encoding="utf-8")
+    (tmp_path / "developers.html").write_text("<h1>Tool reference</h1>", encoding="utf-8")
     monkeypatch.setattr(demo_app, "SITE_DIR", tmp_path)
     c = TestClient(demo_app.app)
     assert b"data sources" in c.get("/data-sources").content
     assert b"mcp" in c.get("/mcp").content
+    assert c.get("/developers").status_code == 200
+    assert b"Tool reference" in c.get("/developers").content
 
 
 def test_site_page_falls_back_to_nested_index_html(tmp_path, monkeypatch):

@@ -1650,6 +1650,12 @@ async def site_data_sources(_: Request):
     return _site_response("data-sources")
 
 
+async def site_developers(_: Request):
+    # The developer documentation (site/app/developers/page.tsx): the REST
+    # API in full, keys and limits, every tool parameter by parameter.
+    return _site_response("developers")
+
+
 async def site_mcp(_: Request):
     # Replaces the GitHub-only docs/mcp.md with an on-site page
     # (site/app/mcp/page.tsx): the connector URL, the tool reference, and
@@ -2226,6 +2232,7 @@ app = Starlette(
         Route("/contact", site_contact),
         Route("/data-sources", site_data_sources),
         Route("/mcp", site_mcp),
+        Route("/developers", site_developers),
         Route("/favicon.ico", favicon_ico),
         Route("/sitemap.xml", sitemap_xml),
         Route("/api/contact", api_contact, methods=["POST"]),
@@ -2599,7 +2606,7 @@ app = RateLimitMiddleware(
                      # /data-sources and /mcp added when those docs moved
                      # on-site).
                      "/pricing", "/about", "/contact", "/privacy", "/terms",
-                     "/data-sources", "/mcp",
+                     "/data-sources", "/mcp", "/developers",
                      # A single marketing page load fetches on the order of
                      # ten _next chunks; without this those alone would
                      # drain the strict bucket before the visitor reads
