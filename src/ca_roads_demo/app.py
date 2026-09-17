@@ -1180,7 +1180,7 @@ async def build_markers(box, want, *, geo_only: bool = False):
     # Flare plugin alerts, already validated and capped by the poller.
     if "plugin" in want:
         with contextlib.suppress(Exception):
-            markers.extend(flare_sources.poller.markers_for_bbox(box))
+            markers.extend(flare_sources._all_markers_for_bbox(box))
 
     return markers, warm_ready, warm_total, degraded
 
@@ -2066,7 +2066,10 @@ async def _lifespan(app_):
     pub_task = asyncio.create_task(snapshot.run())
     # Memory and cache sizes every ten minutes (see vitals.py).
     vitals_task = asyncio.create_task(vitals.run())
-    # Flare sources: poll every enabled plugin on its own cadence.
+    # Flare sources: poll every enabled plugin on its own cadence, and
+    # bring back the community reports that were live before a restart.
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(flare_sources.reports.load(), 20)
     flare_task = asyncio.create_task(
         flare_sources.poller.run(lambda: tools.get_road().client))
     yield
@@ -2267,6 +2270,8 @@ app = Starlette(
         Route("/api/admin/key", watch.api_admin_key, methods=["POST"]),
         Route("/api/admin/flare", flare_sources.api_admin_flare, methods=["GET", "POST"]),
         Route("/api/flare/sources", flare_sources.api_flare_sources, methods=["GET"]),
+        Route("/api/flare/report", flare_sources.api_flare_report, methods=["POST"]),
+        Route("/api/flare/confirm", flare_sources.api_flare_confirm, methods=["POST"]),
         Route("/api/watch/{watch_id}", watch.api_watch_delete,
               methods=["DELETE"]),
         Route("/api/watch/{watch_id}", watch.api_watch_update,
@@ -2424,7 +2429,7 @@ class SoftLimit:
     when scripted. Sixty-burst at two per second never touches a
     human; it stops a curl loop."""
 
-    PREFIXES = ("/api/suggest", "/api/geocode", "/api/flow", "/api/route",
+    PREFIXES = ("/api/suggest", "/api/geocode", "/api/flow", "/api/route", "/api/flare",
                 "/api/staticmap", "/api/traffictile", "/api/contact",
                 "/api/waitlist", "/api/signin-link",
                 # A cache miss here is a nationwide build; the grid

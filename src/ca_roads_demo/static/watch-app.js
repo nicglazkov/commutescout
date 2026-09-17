@@ -134,6 +134,9 @@ export async function initWatch(opts) {
     }
   }
 
+  // The map page's report form and confirm votes need a token; the
+  // module owns sign-in, so it lends one out.
+  window.csAuth = { token: async () => (user ? user.getIdToken() : null) };
   onAuthStateChanged(auth, async (u) => {
     user = u;
     if (!u) {
