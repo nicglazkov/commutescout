@@ -46,7 +46,8 @@ async def test_create_resolve_revoke_and_cap():
     info = await r.resolve(full)
     assert info == {"id": view["id"], "tier": "free", "uid": "sam"}
     assert (await store.get(view["id"]))["last_used_at"]  # touched once
-    assert await r.resolve(full[:-1] + "x") is None  # wrong secret
+    wrong = full[:-1] + ("x" if full[-1] != "x" else "y")  # never the real last char
+    assert await r.resolve(wrong) is None  # wrong secret
     assert await r.resolve("cs_live_ffffffff_nope") is None  # unknown id
 
     await store.put(view["id"], {"revoked": True})
