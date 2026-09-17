@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import httpx
 import pytest
 import respx
@@ -182,3 +184,10 @@ def test_lanes_summary():
         make_closure(lanes_closed="Left HOV", total_lanes=None)
     ) == "lanes: Left HOV"
     assert lcs.lanes_summary(make_closure(lanes_closed="")) is None
+
+
+def test_closure_markers_carry_the_direction_of_travel():
+    # Found on a real drive: without a direction, a southbound driver was
+    # told about northbound ramp closures. The marker now says which side.
+    src = (Path(__file__).resolve().parent.parent / "src" / "ca_roads_demo" / "app.py").read_text(encoding="utf-8")
+    assert '"dir": (c.direction or "").strip() or None,' in src
