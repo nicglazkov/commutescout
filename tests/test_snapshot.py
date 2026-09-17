@@ -149,7 +149,7 @@ def test_bundles_cover_every_layer_the_map_renders():
     for _name, kinds, *_rest in snapshot.BUNDLES:
         published |= kinds
     assert published == {"incident", "closure", "chain", "fire", "toll",
-                         "sign", "rwis", "camera"}
+                         "sign", "rwis", "camera", "plugin"}
 
 
 def test_live_bundle_is_the_fast_one():
