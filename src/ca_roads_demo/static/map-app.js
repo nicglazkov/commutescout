@@ -657,7 +657,8 @@ function popupFor(m, g) {
       kindTxt, m.label ? esc(m.label) : null, [], facts, [
         'Source: ' + esc(m.source || 'community plugin') +
           (m.trust ? ' (' + esc(m.trust) + ')' : ''),
-        m.source_url ? '<a href="' + esc(m.source_url) + '" target="_blank" rel="noopener">More</a>' : null,
+        /^https:\/\//.test(m.source_url || '')
+          ? '<a href="' + esc(m.source_url) + '" target="_blank" rel="noopener">More</a>' : null,
       ]);
   }
   if (g && g.startsWith('inc_')) {
@@ -3161,6 +3162,7 @@ const PICK_LABEL = {
   from: 'Click the map to set your start',
   to: 'Click the map to set your destination',
   via: 'Click the map to add a stop',
+  report: 'Click the map where it is',
 };
 function setPickMode(mode) {
   pickMode = (pickMode === mode) ? null : mode;
@@ -3169,6 +3171,7 @@ function setPickMode(mode) {
   }
   document.querySelectorAll('.addstop').forEach((b) =>
     b.classList.toggle('armed', pickMode === 'via'));
+  document.getElementById('reportbtn').classList.toggle('armed', pickMode === 'report');
   map.getContainer().style.cursor = pickMode ? 'crosshair' : '';
   if (pickMode) {
     pickHint.textContent = PICK_LABEL[pickMode]; pickHint.hidden = false;
@@ -3242,6 +3245,7 @@ map.on('click', async (e) => {
   if (!pickMode) return;
   const mode = pickMode;
   setPickMode(null);
+  if (mode === 'report') { openReportForm(e.latlng); return; }
   dropPickMark(mode, e.latlng);
   if (mode === 'from') { setPinField(fromF, e.latlng); return; }
   if (mode === 'to') { setPinField(toF, e.latlng); return; }
@@ -3249,6 +3253,107 @@ map.on('click', async (e) => {
     viaPoints.push([e.latlng.lat, e.latlng.lng]);
     await replanVias();
   }
+});
+
+// ── Community reports (Flare) ────────────────────────────────────
+// One control on the map arms a pick; the click opens the form at that
+// spot. Reporting needs a signed-in account, which the watch module
+// owns: it exposes csAuth.token() once loaded.
+const REPORT_KINDS = [
+  ['POLICE_VISIBLE', 'Police'], ['CRASH_MAJOR', 'Crash'],
+  ['HAZARD_ON_ROAD', 'Hazard on road'], ['HAZARD_SHOULDER_CAR', 'Car on shoulder'],
+  ['ROAD_CLOSED', 'Road closed'], ['LANE_CLOSED', 'Lane closed'],
+  ['JAM_HEAVY', 'Traffic jam'], ['WEATHER_FOG', 'Fog or weather'],
+  ['WEATHER_FLOOD', 'Flooding'], ['WEATHER_ICE', 'Ice or snow'],
+  ['CHAINS_REQUIRED', 'Chains required'], ['CHAINS_NOT_REQUIRED', 'Chains not needed'],
+  ['CAMERA_ISSUE', 'Camera issue'], ['MAP_ISSUE', 'Map issue'],
+];
+document.getElementById('reportbtn').addEventListener('click', () => {
+  loadWatch();  // sign-in state, so the form can send
+  setPickMode(pickMode === 'report' ? null : 'report');
+});
+async function authToken() {
+  const w = await loadWatch();
+  if (!w || !window.csAuth) return null;
+  return window.csAuth.token();
+}
+async function flarePost(path, body) {
+  const token = await authToken();
+  if (!token) return { error: 'signin' };
+  const res = await fetch(path, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { error: data.error || ('failed (' + res.status + ')') };
+  return data;
+}
+function openReportForm(latlng) {
+  let kind = null;
+  const box = document.createElement('div');
+  box.className = 'reportform';
+  box.innerHTML = '<div class="k"><i style="--dot:' + GROUP_DOT.plugin + '"></i>REPORT HERE</div>' +
+    '<div class="kinds"></div><input type="text" maxlength="200" placeholder="What do you see? (optional)">' +
+    '<div class="row"><button type="button" class="detbtn send">Send report</button>' +
+    '<button type="button" class="detbtn cancel">Cancel</button></div><div class="note"></div>';
+  const kinds = box.querySelector('.kinds');
+  for (const [k, label] of REPORT_KINDS) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label; b.dataset.kind = k;
+    b.addEventListener('click', () => {
+      kind = k;
+      kinds.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    });
+    kinds.appendChild(b);
+  }
+  const note = box.querySelector('.note');
+  const pop = L.popup({ maxWidth: 320, closeOnClick: false }).setLatLng(latlng).setContent(box).openOn(map);
+  box.querySelector('.cancel').addEventListener('click', () => map.closePopup(pop));
+  box.querySelector('.send').addEventListener('click', async () => {
+    if (!kind) { note.textContent = 'Pick what you see first.'; return; }
+    note.textContent = 'Sending\u2026';
+    const r = await flarePost('/api/flare/report', { kind, lat: latlng.lat, lon: latlng.lng,
+      description: box.querySelector('input').value.trim() });
+    if (r.error === 'signin') {
+      note.innerHTML = 'Sign in to report. <button type="button" class="detbtn" id="reportsignin">Open Watch</button>';
+      note.querySelector('#reportsignin').addEventListener('click', () => {
+        map.closePopup(pop); setTool('watch', { toggle: false, reveal: true });
+      });
+      return;
+    }
+    if (r.error) { note.textContent = r.error; return; }
+    note.textContent = 'Sent. It shows on the map within a minute' +
+      (r.forwarded && r.forwarded.length ? ' and went to ' + r.forwarded.length + ' source(s).' : '.');
+    box.querySelector('.send').disabled = true;
+    setTimeout(() => map.closePopup(pop), 2500);
+  });
+}
+// Plugin popups get "Still there" and "Not there" votes.
+map.on('popupopen', (e) => {
+  const src = (e.popup && e.popup.__m) ? e.popup : (e.popup && e.popup._source);
+  const m = src && src.__m;
+  const g = src && src.__g;
+  const el = e.popup.getElement();
+  const card = el && el.querySelector('.p2, .pop');
+  if (g !== 'plugin' || !m || !m.id || !card || card.querySelector('.confirmrow')) return;
+  const row = document.createElement('div');
+  row.className = 'confirmrow';
+  for (const [vote, label] of [['up', 'Still there'], ['gone', 'Not there']]) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'detbtn'; b.textContent = label;
+    b.addEventListener('click', async () => {
+      row.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+      const r = await flarePost('/api/flare/confirm', { alert_id: m.id, vote });
+      const msgEl = document.createElement('div');
+      msgEl.className = 'note';
+      if (r.error === 'signin') msgEl.textContent = 'Sign in from the Watch tool to vote.';
+      else if (r.error) msgEl.textContent = r.error;
+      else msgEl.textContent = r.hidden ? 'Thanks. Enough people said it is gone; it is off the map.' : 'Thanks, noted.';
+      row.after(msgEl);
+      if (r.error) row.querySelectorAll('button').forEach((x) => { x.disabled = false; });
+    });
+    row.appendChild(b);
+  }
+  card.appendChild(row);
 });
 
 function mobileReveal(el) {

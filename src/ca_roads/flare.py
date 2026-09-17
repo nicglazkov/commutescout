@@ -208,6 +208,12 @@ def validate_manifest(m: Any) -> list[str]:
         p.append("trust: official, verified, community or private")
     if m.get("visibility") == "public" and m.get("trust") == "private":
         p.append("a public plugin cannot have private trust")
+    attr = m.get("attribution")
+    if attr is not None and (not isinstance(attr, dict) or not isinstance(attr.get("name"), str)):
+        p.append("attribution: {name, url?}")
+    elif isinstance(attr, dict) and "url" in attr and not (
+            isinstance(attr["url"], str) and attr["url"].startswith("https://")):
+        p.append("attribution.url: https URL")
     return p
 
 
