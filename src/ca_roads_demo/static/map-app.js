@@ -3301,6 +3301,7 @@ async function colorRouteByTraffic(route, baseLine, gen) {
     const flow = data.flow || [];
     if (!flow.some(f => f)) return;
     if (gen !== routeGen) return;  // route was replaced mid-fetch
+    showTrafficEta(route, pts, bounds, flow);
     layerRoute.removeLayer(baseLine);
     for (let i = 0; i < segs; i++) {
       const seg = pts.slice(bounds[i], bounds[i + 1] + 1);
@@ -3316,6 +3317,40 @@ async function colorRouteByTraffic(route, baseLine, gen) {
     }
     if (reshapeGrab) reshapeGrab.bringToFront();
   } catch (e) { /* keep the navy line */ }
+}
+
+// The router's time is free-flow (no live speeds on the current plan),
+// so the ETA is re-weighted with the measured speeds along the route:
+// each sampled stretch takes its free-flow share of the trip time
+// divided by measured-over-free-flow speed. Only slower counts; a
+// stretch flowing above free flow does not shorten the trip.
+function showTrafficEta(route, pts, bounds, flow) {
+  const box = document.getElementById('routeeta');
+  if (!box) return;
+  const segLen = (seg) => {
+    let m = 0;
+    for (let k = 1; k < seg.length; k++) m += map.distance(seg[k - 1], seg[k]);
+    return m;
+  };
+  let total = 0, weighted = 0, sampled = 0;
+  for (let i = 0; i < bounds.length - 1; i++) {
+    const len = segLen(pts.slice(bounds[i], bounds[i + 1] + 1));
+    const f = flow[i];
+    total += len;
+    if (f && f.ratio) sampled += len;
+    weighted += (f && f.ratio && f.ratio < 1) ? len / Math.max(0.25, f.ratio) : len;
+  }
+  if (!total || sampled / total < 0.5) { box.hidden = true; return; }
+  const free = Math.round(route.duration / 60);
+  const adjusted = Math.round(route.duration * (weighted / total) / 60);
+  if (adjusted - free < 2) {
+    box.innerHTML = 'Traffic is flowing along this route right now: <b>about ' +
+      free + ' min</b>.';
+  } else {
+    box.innerHTML = 'With current speeds along it: <b>about ' + adjusted +
+      ' min</b>, against ' + free + ' min free-flow.';
+  }
+  box.hidden = false;
 }
 
 function wireReshape(route) {
@@ -3381,6 +3416,8 @@ function showRoute(route, others, a, b) {
   mobileReveal(document.getElementById('routealts'));
   plannedRoute = { route, a, b,
     fromName: fromF.input.dataset.name, toName: toF.input.dataset.name };
+  const eta = document.getElementById('routeeta');
+  if (eta) eta.hidden = true;
   layerRoute.clearLayers();
   for (const alt of others) {
     L.polyline(alt.latlngs, { color: '#7d93ab', weight: 3.5, opacity: 0.65,

@@ -44,3 +44,12 @@ def test_conditions_list_reads_marker_data_not_layer_groups():
     assert "ambient[g].eachLayer" not in block
     assert "for (const it of (items[g] || []))" in block
     assert "popEl.innerHTML = popupFor(m, g);" in block
+
+
+def test_eta_is_reweighted_by_measured_speeds():
+    assert HTML.count('id="routeeta"') == 1
+    assert "function showTrafficEta(route, pts, bounds, flow)" in APP
+    assert "showTrafficEta(route, pts, bounds, flow);" in APP
+    # Only slower stretches lengthen the trip; a fast stretch never shortens it.
+    assert "(f && f.ratio && f.ratio < 1) ? len / Math.max(0.25, f.ratio) : len" in APP
+    assert "if (!total || sampled / total < 0.5) { box.hidden = true; return; }" in APP

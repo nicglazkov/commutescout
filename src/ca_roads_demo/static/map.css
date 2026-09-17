@@ -534,6 +534,10 @@ aside section[data-tool].on { display:block }
   border-radius:9px; padding:7px 10px; margin:8px 0 2px }
 .plannote[hidden] { display:none }
 .routesum { font:600 .95rem Inter; margin:14px 0 4px }
+.routeeta { font-size:.8rem; color:var(--ink); background:var(--sky-soft);
+  border:1px solid #cfe0fb; border-radius:9px; padding:7px 10px; margin:4px 0 6px }
+.routeeta b { color:#1d4f9c }
+.routeeta[hidden] { display:none }
 .routebtns { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 12px }
 .routebtns button { font:600 .76rem Inter; border-radius:8px; padding:8px 12px;
   cursor:pointer; border:1px solid var(--line); background:var(--card) }
