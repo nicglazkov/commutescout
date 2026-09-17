@@ -254,9 +254,15 @@ class Poller:
                                        ("ok", "count", "last_ok", "last_error")})
 
     def due(self, src: dict) -> bool:
+        # A source never polled is due now. (Comparing the monotonic clock
+        # against 0 skipped the first poll on a machine booted less than a
+        # poll period ago, which is what a fresh CI runner is.)
+        last = self._last_poll.get(src["id"])
+        if last is None:
+            return True
         hs = self.handshakes.get(src["id"])
         period = max(POLL_FLOOR_S, int((hs[1].get("refresh_s") if hs else 0) or 0))
-        return time.monotonic() - self._last_poll.get(src["id"], 0.0) >= period
+        return time.monotonic() - last >= period
 
     async def run_once(self, client) -> None:
         if time.monotonic() - self._sources_loaded > 60 or not self._sources_loaded:
