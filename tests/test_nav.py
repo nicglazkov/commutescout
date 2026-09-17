@@ -50,6 +50,17 @@ class _Client:
         return _Resp(200, b"PNG")
 
 
+def _wire(monkeypatch, client):
+    class _Road:
+        pass
+
+    road = _Road()
+    road.client = client
+    monkeypatch.setattr(tools, "get_road", lambda: road)
+    monkeypatch.setenv("STADIA_API_KEY", "k")
+    demo_app.paid_use = demo_app.DailyCounter()
+
+
 @pytest.fixture
 def wired(monkeypatch):
     client = _Client([_Resp(200)])
@@ -128,3 +139,36 @@ def test_budgets_and_limiters_cover_the_new_routes():
     assert demo_app.PAID_PER_CLIENT_DAILY["nav"] == 400
     assert demo_app.PAID_PER_CLIENT_DAILY["tiles"] == 8000
     assert "/api/nav" in demo_app.SoftLimit.PREFIXES
+
+
+LOCATE = (b'[{"edges":[{"correlated_lat":37.3390,"correlated_lon":-121.8860,'
+          b'"edge_info":{"names":["East Santa Clara Street"]}}],"nodes":[]}]')
+
+
+def test_snap_moves_a_report_onto_a_nearby_road(monkeypatch):
+    client = _Client([_Resp(200, LOCATE)])
+    _wire(monkeypatch, client)
+    c = TestClient(demo_app.app)
+    r = c.get("/api/snap?lat=37.33905&lon=-121.88605").json()
+    assert r["snapped"] is True and r["road"] == "East Santa Clara Street"
+    assert r["lat"] == 37.339 and r["lon"] == -121.886 and r["distance_m"] < 60
+    assert client.calls[0]["locations"] == [{"lat": 37.33905, "lon": -121.88605}]
+
+
+def test_snap_leaves_a_far_spot_alone(monkeypatch):
+    client = _Client([_Resp(200, LOCATE)])
+    _wire(monkeypatch, client)
+    c = TestClient(demo_app.app)
+    r = c.get("/api/snap?lat=37.3420&lon=-121.8860").json()   # 330 m north of the road
+    assert r["snapped"] is False and r["lat"] == 37.342 and r["road"] is None
+
+
+def test_snap_without_a_key_or_on_error_is_the_click_itself(monkeypatch):
+    client = _Client([_Resp(500, b"{}")])
+    _wire(monkeypatch, client)
+    c = TestClient(demo_app.app)
+    assert c.get("/api/snap?lat=37.3&lon=-121.9").json()["snapped"] is False
+    monkeypatch.delenv("STADIA_API_KEY", raising=False)
+    assert c.get("/api/snap?lat=37.3&lon=-121.9").json() == {
+        "snapped": False, "lat": 37.3, "lon": -121.9, "road": None, "distance_m": 0}
+    assert c.get("/api/snap?lat=x&lon=1").status_code == 400

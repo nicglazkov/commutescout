@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 
@@ -25,6 +26,10 @@ from ca_roads.stadia import auth_headers
 from ca_roads_demo import routing
 
 ROUTE_URL = "https://api.stadiamaps.com/route/v1"
+LOCATE_URL = "https://api.stadiamaps.com/locate/v1"
+# A report placed within this distance of a road snaps onto it; further
+# away it stays where the person put it (a field, a trailhead, a beach).
+SNAP_MAX_M = 60.0
 TILE_URL = "https://tiles.stadiamaps.com/tiles/{style}/{z}/{x}/{y}{scale}.png"
 USER_AGENT = "commutescout.com drive app (https://commutescout.com/developers)"
 PUBLIC_BASE = os.environ.get("DEMO_URL", "https://commutescout.com").rstrip("/")
@@ -133,6 +138,66 @@ async def api_nav_route(request: Request):
                     headers={"Cache-Control": "no-store",
                              "X-Nav-Costing": NAV_COSTING,
                              "X-Nav-Exclusions": str(len(exclusions))})
+
+
+def _meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    import math
+
+    k = math.cos(math.radians((lat1 + lat2) / 2))
+    dx = (lon2 - lon1) * 111_320 * k
+    dy = (lat2 - lat1) * 110_540
+    return math.hypot(dx, dy)
+
+
+def nearest_road(locate: list, lat: float, lon: float) -> dict | None:
+    """The closest correlated point across the edges Valhalla's locate
+    returned for one input: {lat, lon, road, distance_m}, or None."""
+    best = None
+    entries = locate[0] if locate and isinstance(locate[0], dict) else {}
+    for e in entries.get("edges") or []:
+        try:
+            clat, clon = float(e["correlated_lat"]), float(e["correlated_lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        d = _meters(lat, lon, clat, clon)
+        names = ((e.get("edge_info") or {}).get("names") or [])
+        if best is None or d < best["distance_m"]:
+            best = {"lat": round(clat, 6), "lon": round(clon, 6),
+                    "road": names[0] if names else None, "distance_m": round(d, 1)}
+    return best
+
+
+async def api_snap(request: Request):
+    """Where a report goes: the nearest road point when the click is
+    within SNAP_MAX_M of one, else the click itself. Never refuses a
+    spot; the answer says whether it moved and by how much."""
+    from ca_roads_demo import app as demo
+
+    try:
+        lat, lon = float(request.query_params["lat"]), float(request.query_params["lon"])
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "lat and lon required"}, status_code=400)
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return JSONResponse({"error": "lat and lon out of range"}, status_code=400)
+    same = {"snapped": False, "lat": lat, "lon": lon, "road": None, "distance_m": 0}
+    api_key = os.environ.get("STADIA_API_KEY", "").strip()
+    if not api_key or demo._client_over_daily(request, "snap") \
+            or not UPSTREAM.allow("stadia-nav", STADIA_NAV_DAILY):
+        return JSONResponse(same, headers={"Cache-Control": "no-store"})
+    road = demo.tools.get_road()
+    try:
+        resp = await road.client.post(
+            LOCATE_URL,
+            json={"locations": [{"lat": lat, "lon": lon}], "costing": "auto", "verbose": True},
+            headers=auth_headers(api_key, USER_AGENT), timeout=10.0)
+        if resp.status_code >= 400:
+            return JSONResponse(same, headers={"Cache-Control": "no-store"})
+        near = nearest_road(json.loads(resp.content), lat, lon)
+    except Exception:  # noqa: BLE001 - a report without a snap beats no report
+        return JSONResponse(same, headers={"Cache-Control": "no-store"})
+    if not near or near["distance_m"] > SNAP_MAX_M:
+        return JSONResponse(same, headers={"Cache-Control": "no-store"})
+    return JSONResponse({"snapped": True, **near}, headers={"Cache-Control": "no-store"})
 
 
 def style_json(base: str = PUBLIC_BASE, style: str = "alidade_smooth") -> dict:

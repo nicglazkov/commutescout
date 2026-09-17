@@ -43,3 +43,10 @@ def test_coordinates_are_a_place_without_the_geocoder():
     assert "function parseCoords(s)" in APP
     assert "if (coord) { items = [coord]; active = 0; render(); return; }" in APP
     assert "if (coord) { pick(coord); return; }" in APP
+
+
+def test_reports_snap_to_a_nearby_road_but_keep_the_exact_spot_on_offer():
+    assert "openReportForm(await snapForReport(e.latlng), e.latlng)" in APP
+    assert "fetch('/api/snap?lat='" in APP
+    assert "Use the exact spot" in APP
+    assert ".reportform .where" in CSS

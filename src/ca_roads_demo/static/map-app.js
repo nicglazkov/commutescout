@@ -3318,7 +3318,7 @@ map.on('click', async (e) => {
   if (!pickMode) return;
   const mode = pickMode;
   setPickMode(null);
-  if (mode === 'report') { openReportForm(e.latlng); return; }
+  if (mode === 'report') { openReportForm(await snapForReport(e.latlng), e.latlng); return; }
   dropPickMark(mode, e.latlng);
   if (mode === 'from') { setPinField(fromF, e.latlng); return; }
   if (mode === 'to') { setPinField(toF, e.latlng); return; }
@@ -3360,7 +3360,18 @@ async function flarePost(path, body) {
   if (!res.ok) return { error: data.error || ('failed (' + res.status + ')') };
   return data;
 }
-function openReportForm(latlng) {
+// A report placed near a road lands on it (the server asks the router
+// for the nearest road within 60 m); further away it stays put. The
+// form always offers the exact click back.
+async function snapForReport(latlng) {
+  try {
+    const r = await fetch('/api/snap?lat=' + latlng.lat.toFixed(6) + '&lon=' + latlng.lng.toFixed(6));
+    const d = await r.json();
+    if (d && d.snapped) return Object.assign(L.latLng(d.lat, d.lon), { road: d.road || null });
+  } catch (e) { /* the click itself is the fallback */ }
+  return latlng;
+}
+function openReportForm(latlng, exact) {
   let kind = null;
   const box = document.createElement('div');
   box.className = 'reportform';
@@ -3380,6 +3391,17 @@ function openReportForm(latlng) {
   }
   const note = box.querySelector('.note');
   const pop = L.popup({ maxWidth: 320, closeOnClick: false }).setLatLng(latlng).setContent(box).openOn(map);
+  if (exact && latlng.road !== undefined && (latlng.lat !== exact.lat || latlng.lng !== exact.lng)) {
+    const where = document.createElement('div');
+    where.className = 'where';
+    where.innerHTML = 'On <b></b>. <button type="button" class="linkbtn">Use the exact spot</button>';
+    where.querySelector('b').textContent = latlng.road || 'the road';
+    where.querySelector('button').addEventListener('click', () => {
+      latlng = exact; pop.setLatLng(exact);
+      where.textContent = 'At the exact spot you clicked.';
+    });
+    box.insertBefore(where, kinds);
+  }
   box.querySelector('.cancel').addEventListener('click', () => map.closePopup(pop));
   box.querySelector('.send').addEventListener('click', async () => {
     if (!kind) { note.textContent = 'Pick what you see first.'; return; }
