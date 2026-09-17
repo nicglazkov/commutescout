@@ -250,6 +250,27 @@ aside section[data-tool].on { display:block }
   stroke-width:2; stroke-linecap:round; stroke-linejoin:round }
 .mapbtn.armed, .mapbtn:hover { border-color:var(--sky); color:#1d4f9c; background:var(--sky-soft) }
 .reportform { min-width:240px }
+/* Find box: always on the map, left of the Report button. */
+.findbox { position:absolute; top:12px; left:12px; z-index:1000;
+  width:min(380px, calc(100% - 132px)) }
+.findbox input { width:100%; font:inherit; font-size:.88rem; color:var(--ink);
+  padding:8px 34px 8px 36px; border-radius:999px; border:1px solid var(--line);
+  background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7a8c' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") 12px 50%/16px no-repeat;
+  box-shadow:0 1px 4px rgba(15,28,43,.18) }
+.findbox input:focus { border-color:var(--sky); outline:none }
+.findbox #findclear { position:absolute; right:6px; top:5px; width:26px; height:26px;
+  border:0; border-radius:50%; background:transparent; color:var(--dim);
+  font-size:1.15rem; line-height:1; cursor:pointer }
+.findbox #findclear:hover { background:var(--sky-soft); color:var(--ink) }
+.findbox .sugg { border-radius:12px }
+.findbox .val { background:var(--card); border-radius:8px; padding:3px 10px; margin-top:4px;
+  box-shadow:0 1px 4px rgba(15,28,43,.18) }
+.findbox .val:empty, .findbox .val.ok { display:none }
+.findpin i { display:block; width:18px; height:18px; border-radius:50%; background:#2f80f7;
+  border:3px solid #fff; box-shadow:0 0 0 6px rgba(47,128,247,.28) }
+.findpop b { display:block; font-size:.92rem }
+.findpop small { display:block; color:var(--dim); margin:2px 0 8px }
+.findpop .planbtn { width:100%; margin:0 }
 .reportform .kinds { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 }
 .reportform .kinds button { font:500 .72rem Inter; padding:4px 9px; border-radius:999px;
   border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer }

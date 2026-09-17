@@ -459,6 +459,12 @@
   <div class="map-card active" id="mapcard">
     <div id="map"></div>
     <div class="maploading" id="maploading"><i></i><span id="maploadingtext">Loading live road data&hellip;</span></div>
+    <div class="findbox" id="findbox">
+      <input id="find" maxlength="200" placeholder="Search a place, address or coordinates" autocomplete="off" aria-label="Find a place on the map">
+      <button type="button" id="findclear" aria-label="Clear the search" hidden>&times;</button>
+      <div class="sugg" id="findsugg"></div>
+      <div class="val" id="findval"></div>
+    </div>
     <button type="button" class="mapbtn" id="reportbtn" title="Report something on the road">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 16.5v.01"/></svg>Report</button>
     <div class="pickhint" id="pickhint" hidden></div>
