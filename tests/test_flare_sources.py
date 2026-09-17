@@ -127,3 +127,13 @@ def test_admin_adds_validates_and_manages_sources(admin_app):
     assert c.post("/api/admin/flare", json={"action": "remove", "id": "nope"},
                   headers=auth("tok-admin")).status_code == 404
     assert c.get("/api/flare/sources").json()["sources"] == []
+
+
+def test_a_source_never_polled_is_due_even_on_a_freshly_booted_machine(monkeypatch):
+    # CI runners boot seconds before the tests run: the monotonic clock is
+    # below the poll floor, and "clock - 0 >= period" said "not yet".
+    monkeypatch.setattr(flare_sources.time, "monotonic", lambda: 3.0)
+    p = flare_sources.Poller(flare_sources.MemorySourceStore(), now=lambda: NOW)
+    assert p.due({"id": "sabreplus"})
+    p._last_poll["sabreplus"] = 3.0
+    assert not p.due({"id": "sabreplus"})
