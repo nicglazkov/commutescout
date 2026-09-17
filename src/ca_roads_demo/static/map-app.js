@@ -8,7 +8,7 @@ const GROUP_DOT = {
   inc_other: '#c9611a', clo_full: '#7f1d1d', clo_lane: '#a02c2c',
   clo_oneway: '#a02c2c', clo_ramp: '#d9a0a0', chain: '#2b6cb0',
   rwis: '#2f9e6e', fire_pt: '#d97706', fire_poly: '#d97706',
-  toll: '#7c3aed',
+  toll: '#7c3aed', plugin: '#0e9f9f',
   camera: '#2f81f7', sign: '#a16207',
 };
 const POP_LABEL = {
@@ -16,7 +16,7 @@ const POP_LABEL = {
   inc_other: 'INCIDENT', clo_full: 'FULL CLOSURE', clo_lane: 'LANE CLOSURE',
   clo_oneway: 'ONE-WAY / ROLLING WORK', clo_ramp: 'RAMP CLOSED',
   chain: 'CHAIN CONTROL', rwis: 'ROAD WEATHER', fire_pt: 'WILDFIRE',
-  toll: 'TOLL PRICE',
+  toll: 'TOLL PRICE', plugin: 'COMMUNITY REPORT',
   fire_poly: 'BURN FOOTPRINT', camera: 'LIVE CAMERA', sign: 'MESSAGE SIGN',
 };
 const ambient = {};
@@ -52,6 +52,7 @@ function classify(m) {
   if (m.kind === 'wildfire') return 'fire_pt';
   if (m.kind === 'camera') return 'camera';
   if (m.kind === 'sign') return 'sign';
+  if (m.kind === 'plugin') return 'plugin';
   return null;
 }
 
@@ -259,7 +260,7 @@ function histBlock(bits) {
 // One accent color per kind, used only in the header chip and rail.
 const ACC = { inc: '#c9611a', clo: '#a02c2c', clo_full: '#7f1d1d',
   chain: '#2b6cb0', rwis: '#2f9e6e', fire: '#d97706', camera: '#2f81f7',
-  sign: '#a16207' };
+  sign: '#a16207', plugin: '#0e9f9f' };
 const humanize = (t) => {
   if (!t) return null;
   let s = String(t).replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -642,6 +643,22 @@ function popupFor(m, g) {
       [none ? { text: 'This station is online. It has no readings right now.', gloss: true } : null],
       facts, ['Source: ' + (m.src ? esc(m.src) + ' weather station'
         : 'Caltrans roadside weather station')]);
+  }
+  if (g === 'plugin') {
+    // A Flare plugin alert: what it is, where, how sure, and who says so.
+    const kindTxt = esc(humanize((m.flare_kind || 'OTHER').toLowerCase().replace(/_/g, ' ')));
+    const n = Number(m.confirmations) || 0;
+    const facts = [
+      m.road ? ['Road', esc(m.road)] : null,
+      n ? ['Confirmed', n + (n === 1 ? ' time' : ' times')] : null,
+      (m.reliability != null) ? ['Reliability', Math.round(m.reliability * 100) + '%'] : null,
+    ];
+    return v2(ACC.plugin, 'Community report', m.reported ? agoTxt(m.reported) : null,
+      kindTxt, m.label ? esc(m.label) : null, [], facts, [
+        'Source: ' + esc(m.source || 'community plugin') +
+          (m.trust ? ' (' + esc(m.trust) + ')' : ''),
+        m.source_url ? '<a href="' + esc(m.source_url) + '" target="_blank" rel="noopener">More</a>' : null,
+      ]);
   }
   if (g && g.startsWith('inc_')) {
     const parts = splitRoad(m.label || '');
@@ -1593,7 +1610,7 @@ let incomingCount = 0;
 // rather than to a blank map.
 const SNAP_BASE = 'https://data.commutescout.com';
 const SNAP_BUNDLES = {
-  live: { file: 'live.json.gz', kinds: 'incident,closure,chain,fire,toll' },
+  live: { file: 'live.json.gz', kinds: 'incident,closure,chain,fire,toll,plugin' },
   cameras: { file: 'cameras.json.gz', kinds: 'camera' },
   signs: { file: 'signs.json.gz', kinds: 'sign,rwis' },
 };
@@ -2519,12 +2536,12 @@ map.on('popupopen', (e) => {
 // Reads the same items[] the renderer culls from, so it costs nothing
 // extra to fetch; only the groups switched on in Layers count.
 const SEVERITY = { clo_full: 0, inc_collision: 1, inc_fire: 1, chain: 2,
-  inc_hazard: 2, fire_pt: 2, clo_lane: 3, clo_oneway: 4, clo_ramp: 5,
+  inc_hazard: 2, fire_pt: 2, plugin: 2, clo_lane: 3, clo_oneway: 4, clo_ramp: 5,
   inc_other: 5 };
 const SOURCE_DEFAULT = { inc_collision: 'CHP', inc_fire: 'CHP', inc_hazard: 'CHP',
   inc_other: 'CHP', clo_full: 'Caltrans', clo_lane: 'Caltrans',
   clo_oneway: 'Caltrans', clo_ramp: 'Caltrans', chain: 'Caltrans',
-  fire_pt: 'WFIGS' };
+  fire_pt: 'WFIGS', plugin: 'community' };
 const ALERT_CAP = 60;
 const alertList = document.getElementById('alertlist');
 let alertsTimer = null;
@@ -2553,6 +2570,11 @@ function alertRow(m, g) {
     return { title: (m.status ? m.status.toUpperCase().replace(/^R(\d)$/, 'R-$1') + ' on ' : '') +
         (m.route || 'Mountain pass'),
       sub: ['Chain control', (m.label || '').slice(0, 80), src].filter(Boolean).join(', ') };
+  }
+  if (g === 'plugin') {
+    return { title: esc(humanize((m.flare_kind || 'OTHER').toLowerCase().replace(/_/g, ' '))),
+      sub: [m.label || m.road || null, m.reported ? agoTxt(m.reported) : null,
+        m.source || 'community'].filter(Boolean).join(', ') };
   }
   if (g === 'fire_pt') {
     const size = m.acres ? Math.round(m.acres).toLocaleString() + ' acres' : null;

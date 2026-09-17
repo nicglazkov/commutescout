@@ -63,7 +63,7 @@ BUCKET = os.environ.get("SNAPSHOT_BUCKET", "")
 # of" chip, and letting it sit still for minutes during a quiet night
 # would make a perfectly healthy display look stale.
 BUNDLES: tuple[tuple[str, set[str], int, str, int], ...] = (
-    ("live.json.gz", {"incident", "closure", "chain", "fire", "toll"}, 30,
+    ("live.json.gz", {"incident", "closure", "chain", "fire", "toll", "plugin"}, 30,
      "public, max-age=15, stale-while-revalidate=180", 60),
     ("signs.json.gz", {"sign", "rwis"}, 300,
      "public, max-age=120, stale-while-revalidate=3600", 1800),

@@ -48,6 +48,7 @@ from ca_roads.feeds import wildfire as wildfire_feed
 from ca_roads.stadia import auth_headers
 from ca_roads_demo import (
     analytics,
+    flare_sources,
     roadsnap,
     routing,
     snapshot,
@@ -678,7 +679,7 @@ async def api_route(request: Request):
     lons = [p["lon"] for p in locations]
     box = (max(-90.0, min(lats) - 0.25), max(-180.0, min(lons) - 0.25),
            min(90.0, max(lats) + 0.25), min(180.0, max(lons) + 0.25))
-    markers, *_ = await build_markers(box, {"incident", "closure", "chain"})
+    markers, *_ = await build_markers(box, {"incident", "closure", "chain", "plugin"})
     road = tools.get_road()
 
     async def fetch(req_body: dict):
@@ -1176,6 +1177,10 @@ async def build_markers(box, want, *, geo_only: bool = False):
     if "closure" in want or "toll" in want:
         with contextlib.suppress(Exception):
             roadsnap.apply(markers)
+    # Flare plugin alerts, already validated and capped by the poller.
+    if "plugin" in want:
+        with contextlib.suppress(Exception):
+            markers.extend(flare_sources.poller.markers_for_bbox(box))
 
     return markers, warm_ready, warm_total, degraded
 
@@ -2061,7 +2066,11 @@ async def _lifespan(app_):
     pub_task = asyncio.create_task(snapshot.run())
     # Memory and cache sizes every ten minutes (see vitals.py).
     vitals_task = asyncio.create_task(vitals.run())
+    # Flare sources: poll every enabled plugin on its own cadence.
+    flare_task = asyncio.create_task(
+        flare_sources.poller.run(lambda: tools.get_road().client))
     yield
+    flare_task.cancel()
     task.cancel()
     pub_task.cancel()
     vitals_task.cancel()
@@ -2256,6 +2265,8 @@ app = Starlette(
         Route("/api/keys", watch.api_keys_create, methods=["POST"]),
         Route("/api/keys/{key_id}", watch.api_keys_revoke, methods=["DELETE"]),
         Route("/api/admin/key", watch.api_admin_key, methods=["POST"]),
+        Route("/api/admin/flare", flare_sources.api_admin_flare, methods=["GET", "POST"]),
+        Route("/api/flare/sources", flare_sources.api_flare_sources, methods=["GET"]),
         Route("/api/watch/{watch_id}", watch.api_watch_delete,
               methods=["DELETE"]),
         Route("/api/watch/{watch_id}", watch.api_watch_update,
