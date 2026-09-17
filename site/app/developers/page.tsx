@@ -561,9 +561,16 @@ export default function DevelopersPage() {
             small HTTPS contract a plugin server implements (handshake, alerts by
             radius, reports, confirmations) so that anyone can run a public or private
             source that shows on the map and in the app, with full read and write
-            support. The specification and a conformance test suite are being
-            published in the open-source repository; this section will link to them
-            when they land.
+            support.{" "}
+            <a
+              href="https://github.com/nicglazkov/commutescout/blob/main/docs/flare.md"
+              className="text-cs-sky hover:underline"
+            >
+              Read the specification
+            </a>
+            , then run the conformance check against your plugin:{" "}
+            {code("python -m ca_roads.flare check https://your-plugin.example")}. The
+            backend and the apps accept exactly what the check accepts.
           </p>
         </div>
       </section>
