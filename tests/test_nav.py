@@ -96,6 +96,17 @@ def test_nav_route_without_key_is_503(wired, monkeypatch):
     assert TestClient(demo_app.app).post("/api/nav/route", json=FERROSTAR_BODY).status_code == 503
 
 
+def test_style_can_be_dark_or_outdoors_but_nothing_else(wired):
+    c = wired
+    dark = c.get("/api/tiles/style.json?style=alidade_smooth_dark").json()
+    assert "/api/tiles/alidade_smooth_dark/" in dark["sources"]["base"]["tiles"][0]
+    out = c.get("/api/tiles/style.json?style=outdoors").json()
+    assert "/api/tiles/outdoors/" in out["sources"]["base"]["tiles"][0]
+    assert c.get("/api/tiles/style.json?style=satellite").status_code == 400
+    plain = c.get("/api/tiles/style.json").json()
+    assert "/api/tiles/alidade_smooth/" in plain["sources"]["base"]["tiles"][0]
+
+
 def test_style_points_at_the_proxy_and_tiles_are_cached(wired):
     c = TestClient(demo_app.app)
     style = c.get("/api/tiles/style.json").json()

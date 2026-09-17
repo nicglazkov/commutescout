@@ -135,21 +135,30 @@ async def api_nav_route(request: Request):
                              "X-Nav-Exclusions": str(len(exclusions))})
 
 
-def style_json(base: str = PUBLIC_BASE) -> dict:
+def style_json(base: str = PUBLIC_BASE, style: str = "alidade_smooth") -> dict:
+    """A MapLibre style for one of TILE_STYLES: the apps pick light,
+    dark or outdoors and every tile still comes through the proxy."""
+    if style not in TILE_STYLES:
+        style = "alidade_smooth"
     return {
         "version": 8,
-        "name": "CommuteScout",
+        "name": f"CommuteScout {style}",
         "sources": {"base": {
             "type": "raster", "tileSize": 256,
-            "tiles": [f"{base}/api/tiles/alidade_smooth/{{z}}/{{x}}/{{y}}@2x.png"],
+            "tiles": [f"{base}/api/tiles/{style}/{{z}}/{{x}}/{{y}}@2x.png"],
             "minzoom": 0, "maxzoom": 18, "attribution": ATTRIBUTION,
         }},
         "layers": [{"id": "base", "type": "raster", "source": "base"}],
     }
 
 
-async def api_tile_style(_: Request):
-    return JSONResponse(style_json(), headers={"Cache-Control": "public, max-age=3600"})
+async def api_tile_style(request: Request):
+    style = request.query_params.get("style") or "alidade_smooth"
+    if style not in TILE_STYLES:
+        return JSONResponse({"error": {
+            "code": "unknown_style",
+            "message": "style must be one of " + ", ".join(TILE_STYLES)}}, status_code=400)
+    return JSONResponse(style_json(style=style), headers={"Cache-Control": "public, max-age=3600"})
 
 
 async def api_tile(request: Request):
