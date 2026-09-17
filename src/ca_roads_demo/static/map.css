@@ -376,7 +376,8 @@ aside section[data-tool].on { display:block }
 .p2 .sched span { color:#64748b }
 .p2 .sched .tzl { display:block; margin-top:5px; padding-top:5px;
   border-top:1px dashed #e2e8f0; color:#475569; font-size:12px }
-.p2 .detbtn, .inspacts button { margin-top:8px; display:inline-block; font:600 12px Inter;
+.p2 .detbtn, .inspacts button, .reportform .detbtn, .confirmrow .detbtn { margin-top:8px;
+  display:inline-block; font:600 12px Inter;
   color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe;
   border-radius:7px; padding:5px 10px; cursor:pointer }
 .p2 img { border-radius:8px; margin-top:6px; max-width:100% }
