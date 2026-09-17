@@ -1032,6 +1032,10 @@ async def build_markers(box, want, *, geo_only: bool = False):
                 "lon": c.begin_lon,
                 "label": lcs_feed.describe(c),
                 "cls": cls,
+                # Direction of travel the closure applies to (NB/SB/EB/WB
+                # or blank): the apps skip closures for the other side of
+                # a divided road while navigating.
+                "dir": (c.direction or "").strip() or None,
                 "route": c.route, "county": c.county,
                 "lanes": lcs_feed.lanes_summary(c),
                 "work": c.type_of_work or None,
