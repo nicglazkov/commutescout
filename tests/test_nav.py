@@ -97,7 +97,7 @@ def test_nav_route_without_key_is_503(wired, monkeypatch):
 
 
 def test_style_can_be_dark_or_outdoors_but_nothing_else(wired):
-    c = wired
+    c = TestClient(demo_app.app)
     dark = c.get("/api/tiles/style.json?style=alidade_smooth_dark").json()
     assert "/api/tiles/alidade_smooth_dark/" in dark["sources"]["base"]["tiles"][0]
     out = c.get("/api/tiles/style.json?style=outdoors").json()
