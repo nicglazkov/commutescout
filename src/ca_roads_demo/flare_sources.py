@@ -587,6 +587,25 @@ async def api_admin_flare(request: Request) -> JSONResponse:
     action = body.get("action") or "add"
     if action == "add":
         manifest = body.get("manifest") or {}
+        if not manifest and isinstance(body.get("base"), str):
+            # Add by URL: the plugin's own handshake supplies id, name and
+            # attribution; the tier is public and unreviewed unless said.
+            base = body["base"].strip().rstrip("/")
+            if not base.startswith("https://"):
+                return JSONResponse({"error": "base: https URL"}, status_code=400)
+            try:
+                from ca_roads_mcp import server as tools
+
+                hs = await poller.handshake({"id": "probe", "base": base}, tools.get_road().client)
+            except Exception as exc:  # noqa: BLE001
+                return JSONResponse({"error": f"handshake failed: {str(exc)[:160]}"},
+                                    status_code=422)
+            manifest = {"id": hs.get("id"), "name": hs.get("name"), "base": base,
+                        "protocol": "flare/1",
+                        "visibility": body.get("visibility") or "public",
+                        "trust": body.get("trust") or "community",
+                        "attribution": hs.get("attribution")
+                        or {"name": hs.get("name"), "url": base}}
         errs = flare.validate_manifest(manifest)
         if errs:
             return JSONResponse({"error": "manifest: " + "; ".join(errs)}, status_code=400)

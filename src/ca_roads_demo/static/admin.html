@@ -224,7 +224,7 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
 
     <div class="card">
       <h2>Flare sources</h2>
-      <p class="hint" style="margin:0 0 8px">Paste a manifest (docs/flare.md). The
+      <p class="hint" style="margin:0 0 8px">Paste the plugin's https URL, or a manifest (docs/flare.md). The
         handshake is checked before it is saved; a token stays server side.</p>
       <textarea id="fl-manifest" rows="5" style="width:100%;font:.8rem ui-monospace,monospace"
         placeholder='{"id": "sabreplus", "name": "SABRE Plus", "base": "https://...", "protocol": "flare/1", "visibility": "public", "trust": "community", "attribution": {"name": "...", "url": "https://..."}}'></textarea>
@@ -342,12 +342,19 @@ async function loadFlare() {
 }
 $('fl-refresh').addEventListener('click', loadFlare);
 $('fl-add').addEventListener('click', async () => {
-  let manifest;
-  try { manifest = JSON.parse($('fl-manifest').value); }
-  catch (e) { msg('fl-msg', 'The manifest is not valid JSON.', 'err'); return; }
+  // A bare https URL adds the plugin from its own handshake; otherwise a manifest.
+  const raw = $('fl-manifest').value.trim();
+  let payload;
+  if (/^https:\/\//.test(raw)) {
+    payload = { action: 'add', base: raw };
+  } else {
+    let manifest;
+    try { manifest = JSON.parse(raw); }
+    catch (e) { msg('fl-msg', 'Paste a manifest (JSON) or the plugin's https URL.', 'err'); return; }
+    payload = { action: 'add', manifest };
+  }
   try {
-    await api('/api/admin/flare', { method: 'POST',
-      body: JSON.stringify({ action: 'add', manifest }) });
+    await api('/api/admin/flare', { method: 'POST', body: JSON.stringify(payload) });
     $('fl-manifest').value = '';
     msg('fl-msg', 'Added. The poller picks it up within a minute.', 'ok');
     await loadFlare();

@@ -137,3 +137,19 @@ def test_a_source_never_polled_is_due_even_on_a_freshly_booted_machine(monkeypat
     assert p.due({"id": "sabreplus"})
     p._last_poll["sabreplus"] = 3.0
     assert not p.due({"id": "sabreplus"})
+
+
+def test_admin_adds_a_plugin_by_its_url(admin_app):
+    # The plugin's own handshake supplies id, name and attribution; the tier
+    # is public and unreviewed unless the body says otherwise.
+    c, mem = admin_app
+    r = c.post("/api/admin/flare", json={"action": "add", "base": "http://plugins.example.com"},
+               headers=auth("tok-admin"))
+    assert r.status_code == 400
+    r = c.post("/api/admin/flare", json={"action": "add", "base": "https://plugins.example.com/"},
+               headers=auth("tok-admin"))
+    assert r.status_code == 200, r.text
+    src = r.json()["source"]
+    assert src["id"] in mem.docs and src["base"] == "https://plugins.example.com"
+    assert src["visibility"] == "public" and src["trust"] == "community"
+    assert mem.docs[src["id"]]["enabled"] is True
