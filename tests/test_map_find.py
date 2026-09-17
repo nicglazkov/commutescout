@@ -20,6 +20,7 @@ def test_find_box_sits_on_the_map_next_to_report():
     assert 'aria-label="Find a place on the map"' in HTML
     assert ".findbox { position:absolute; top:12px; left:12px" in CSS
     assert ".findbox .val:empty, .findbox .val.ok { display:none }" in CSS
+    assert ".map-card .leaflet-top.leaflet-left { top:50px }" in CSS  # zoom buttons below the box
 
 
 def test_planner_fields_stay():
