@@ -141,25 +141,29 @@ def test_budgets_and_limiters_cover_the_new_routes():
     assert "/api/nav" in demo_app.SoftLimit.PREFIXES
 
 
-LOCATE = (b'[{"edges":[{"correlated_lat":37.3390,"correlated_lon":-121.8860,'
-          b'"edge_info":{"names":["East Santa Clara Street"]}}],"nodes":[]}]')
+# A zero-length route: the shape starts at the road point nearest the
+# click and the first maneuver names the street (East Santa Clara Street
+# at 37.339235, -121.885653).
+ROUTE0 = (b'{"trip":{"status":0,"legs":[{"shape":"ee_ffAh|hngF??",'
+          b'"maneuvers":[{"type":2,"street_names":["East Santa Clara Street"]},{"type":5}]}]}}')
 
 
 def test_snap_moves_a_report_onto_a_nearby_road(monkeypatch):
-    client = _Client([_Resp(200, LOCATE)])
+    client = _Client([_Resp(200, ROUTE0)])
     _wire(monkeypatch, client)
     c = TestClient(demo_app.app)
     r = c.get("/api/snap?lat=37.33905&lon=-121.88605").json()
     assert r["snapped"] is True and r["road"] == "East Santa Clara Street"
-    assert r["lat"] == 37.339 and r["lon"] == -121.886 and r["distance_m"] < 60
-    assert client.calls[0]["locations"] == [{"lat": 37.33905, "lon": -121.88605}]
+    assert r["lat"] == 37.339235 and r["lon"] == -121.885653 and 0 < r["distance_m"] < 60
+    assert client.calls[0]["locations"] == [
+        {"lat": 37.33905, "lon": -121.88605}, {"lat": 37.33905, "lon": -121.88605}]
 
 
 def test_snap_leaves_a_far_spot_alone(monkeypatch):
-    client = _Client([_Resp(200, LOCATE)])
+    client = _Client([_Resp(200, ROUTE0)])
     _wire(monkeypatch, client)
     c = TestClient(demo_app.app)
-    r = c.get("/api/snap?lat=37.3420&lon=-121.8860").json()   # 330 m north of the road
+    r = c.get("/api/snap?lat=37.3420&lon=-121.8860").json()   # 310 m north of the road
     assert r["snapped"] is False and r["lat"] == 37.342 and r["road"] is None
 
 

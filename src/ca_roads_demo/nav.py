@@ -26,7 +26,6 @@ from ca_roads.stadia import auth_headers
 from ca_roads_demo import routing
 
 ROUTE_URL = "https://api.stadiamaps.com/route/v1"
-LOCATE_URL = "https://api.stadiamaps.com/locate/v1"
 # A report placed within this distance of a road snaps onto it; further
 # away it stays where the person put it (a field, a trailhead, a beach).
 SNAP_MAX_M = 60.0
@@ -149,22 +148,22 @@ def _meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return math.hypot(dx, dy)
 
 
-def nearest_road(locate: list, lat: float, lon: float) -> dict | None:
-    """The closest correlated point across the edges Valhalla's locate
-    returned for one input: {lat, lon, road, distance_m}, or None."""
-    best = None
-    entries = locate[0] if locate and isinstance(locate[0], dict) else {}
-    for e in entries.get("edges") or []:
-        try:
-            clat, clon = float(e["correlated_lat"]), float(e["correlated_lon"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        d = _meters(lat, lon, clat, clon)
-        names = ((e.get("edge_info") or {}).get("names") or [])
-        if best is None or d < best["distance_m"]:
-            best = {"lat": round(clat, 6), "lon": round(clon, 6),
-                    "road": names[0] if names else None, "distance_m": round(d, 1)}
-    return best
+def nearest_road(trip: dict) -> dict | None:
+    """The road point a zero-length route (both ends at the click) starts
+    from: {lat, lon, road}, or None. The plan has no locate endpoint, but
+    a route's shape begins at the correlated point and its first maneuver
+    names the street."""
+    from ca_roads_demo.valhalla import decode_polyline6
+
+    legs = (trip or {}).get("legs") or []
+    if not legs:
+        return None
+    pts = decode_polyline6(legs[0].get("shape") or "")
+    if not pts:
+        return None
+    names = ((legs[0].get("maneuvers") or [{}])[0].get("street_names") or [])
+    return {"lat": round(pts[0][0], 6), "lon": round(pts[0][1], 6),
+            "road": names[0] if names else None}
 
 
 async def api_snap(request: Request):
@@ -185,19 +184,23 @@ async def api_snap(request: Request):
             or not UPSTREAM.allow("stadia-nav", STADIA_NAV_DAILY):
         return JSONResponse(same, headers={"Cache-Control": "no-store"})
     road = demo.tools.get_road()
+    here = {"lat": lat, "lon": lon}
     try:
         resp = await road.client.post(
-            LOCATE_URL,
-            json={"locations": [{"lat": lat, "lon": lon}], "costing": "auto", "verbose": True},
+            ROUTE_URL, json={"locations": [here, dict(here)], "costing": "auto"},
             headers=auth_headers(api_key, USER_AGENT), timeout=10.0)
         if resp.status_code >= 400:
             return JSONResponse(same, headers={"Cache-Control": "no-store"})
-        near = nearest_road(json.loads(resp.content), lat, lon)
+        near = nearest_road(json.loads(resp.content).get("trip") or {})
     except Exception:  # noqa: BLE001 - a report without a snap beats no report
         return JSONResponse(same, headers={"Cache-Control": "no-store"})
-    if not near or near["distance_m"] > SNAP_MAX_M:
+    if not near:
         return JSONResponse(same, headers={"Cache-Control": "no-store"})
-    return JSONResponse({"snapped": True, **near}, headers={"Cache-Control": "no-store"})
+    d = round(_meters(lat, lon, near["lat"], near["lon"]), 1)
+    if d > SNAP_MAX_M:
+        return JSONResponse(same, headers={"Cache-Control": "no-store"})
+    return JSONResponse({"snapped": True, **near, "distance_m": d},
+                        headers={"Cache-Control": "no-store"})
 
 
 def style_json(base: str = PUBLIC_BASE, style: str = "alidade_smooth") -> dict:
