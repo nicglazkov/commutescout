@@ -156,6 +156,8 @@ PAID_PER_CLIENT_DAILY = {
     # The app: a navigation session reroutes a few times an hour; a
     # map session loads a few hundred tiles (the edge serves repeats).
     "nav": int(os.environ.get("NAV_PER_CLIENT_DAILY", "400")),
+    # Report placement asks the road once per click.
+    "snap": int(os.environ.get("SNAP_PER_CLIENT_DAILY", "300")),
     "tiles": int(os.environ.get("APP_TILES_PER_CLIENT_DAILY", "8000")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
 }
@@ -2236,6 +2238,7 @@ app = Starlette(
         Route("/api/flow", api_flow, methods=["GET"]),
         Route("/api/route", api_route, methods=["POST"]),
         Route("/api/nav/route", nav.api_nav_route, methods=["POST"]),
+        Route("/api/snap", nav.api_snap, methods=["GET"]),
         Route("/api/tiles/style.json", nav.api_tile_style, methods=["GET"]),
         Route("/api/tiles/{style}/{z:int}/{x:int}/{yfile}", nav.api_tile, methods=["GET"]),
         Route("/api/traffictile/{z:int}/{x:int}/{y:int}.png", api_traffic_tile,
@@ -2445,7 +2448,7 @@ class SoftLimit:
     human; it stops a curl loop."""
 
     PREFIXES = ("/api/suggest", "/api/geocode", "/api/flow", "/api/route", "/api/flare",
-                "/api/nav",
+                "/api/nav", "/api/snap",
                 "/api/staticmap", "/api/traffictile", "/api/contact",
                 "/api/waitlist", "/api/signin-link",
                 # A cache miss here is a nationwide build; the grid

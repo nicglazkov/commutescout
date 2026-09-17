@@ -143,7 +143,7 @@ def test_confirm_routes_to_our_source_or_the_plugin(api):
 def test_map_has_one_report_control_and_votes_on_plugin_popups():
     assert HTML.count('id="reportbtn"') == 1
     assert "report: 'Click the map where it is'," in APP
-    assert "if (mode === 'report') { openReportForm(e.latlng); return; }" in APP
+    assert "if (mode === 'report') { openReportForm(await snapForReport(e.latlng), e.latlng); return; }" in APP
     block = APP[APP.index("const REPORT_KINDS"):APP.index("async function authToken")]
     kinds = re.findall(r"\['([A-Z_]+)', '", block)
     assert set(kinds) <= flare.KINDS and "POLICE_VISIBLE" in kinds and "ROAD_CLOSED" in kinds
