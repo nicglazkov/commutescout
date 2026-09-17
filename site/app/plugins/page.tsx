@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 
 const SECTIONS = [
   { id: "what", label: "What a plugin is" },
-  { id: "ways", label: "Private, unlisted, public" },
+  { id: "ways", label: "Three tiers" },
   { id: "catalog", label: "Public catalog" },
   { id: "start", label: "Run one in five minutes" },
   { id: "endpoints", label: "Endpoints" },
@@ -40,6 +40,7 @@ const SECTIONS = [
   { id: "rules", label: "Rules" },
   { id: "conformance", label: "Conformance" },
   { id: "listing", label: "Get listed" },
+  { id: "roadmap", label: "Roadmap" },
 ];
 
 const CAPABILITIES = [
@@ -250,34 +251,46 @@ export default function PluginsPage() {
 
       <section className="bg-cs-bg py-14 md:py-16" aria-labelledby="ways">
         <div className="mx-auto max-w-3xl px-6">
-          <H2 id="ways">Private, unlisted, public</H2>
+          <H2 id="ways">Three tiers</H2>
+          <p className="text-cs-ink/70 mt-4 text-balance">
+            Every plugin is shown to people as one of three levels. The level comes from the
+            manifest and travels on every marker and catalog row as {code("tier")}, so the map
+            and the apps can always say who is behind an alert.
+          </p>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-emerald-200 bg-white p-5">
+              <h3 className="font-semibold text-cs-ink">Approved</h3>
+              <p className="text-cs-ink/60 mt-1 font-mono text-xs">public · official or verified</p>
+              <p className="text-cs-ink/70 mt-2 text-sm">
+                Reviewed by CommuteScout: the operator is known and the feed passed review. Drawn
+                by default, may speak out loud ({code("notify")}), badged as approved. Always
+                mediated: the plugin never sees a user, a device or an exact position.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-white p-5">
+              <h3 className="font-semibold text-cs-ink">Public, not reviewed</h3>
+              <p className="text-cs-ink/60 mt-1 font-mono text-xs">public or unlisted · community</p>
+              <p className="text-cs-ink/70 mt-2 text-sm">
+                Anyone who passes the conformance check can be listed. Drawn on the map and
+                labelled &quot;public, not reviewed&quot;; it never speaks unless a person turns
+                voice on for that source. Unlisted plugins are the same tier, reachable by id
+                for a group that knows they exist.
+              </p>
+            </div>
             <div className="rounded-2xl border border-cs-ink/10 bg-white p-5">
               <h3 className="font-semibold text-cs-ink">Private</h3>
+              <p className="text-cs-ink/60 mt-1 font-mono text-xs">added by URL on one device</p>
               <p className="text-cs-ink/70 mt-2 text-sm">
                 Something you run on your own network for your own devices. The apps call it
-                directly (add its URL under Sources), send only a snapped map tile and no
-                account identifier, and can present your own bearer token. Nothing leaves your
-                own path, so it may show anything, including personal data.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-cs-ink/10 bg-white p-5">
-              <h3 className="font-semibold text-cs-ink">Unlisted</h3>
-              <p className="text-cs-ink/70 mt-2 text-sm">
-                Mediated by CommuteScout but not in the catalog: reachable by id, for a group
-                that knows it exists. The backend polls it, validates and caps what comes back,
-                and forwards reports under CommuteScout&apos;s own identity.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-cs-ink/10 bg-white p-5">
-              <h3 className="font-semibold text-cs-ink">Public</h3>
-              <p className="text-cs-ink/70 mt-2 text-sm">
-                Listed in the catalog and drawn for everyone, always mediated. The plugin never
-                sees a user, a device, an address or an exact position; abuse control is
-                CommuteScout&apos;s. Passes the conformance check on every release.
+                directly, send only a snapped map tile and no account identifier, and can present
+                your own bearer token. Nothing leaves your own path, so it may show anything,
+                including personal data, and speak if you want it to.
               </p>
             </div>
           </div>
+          <p className="text-cs-ink/70 mt-4 text-sm">
+            Official agency data (the state feeds) is not a plugin and always outranks all three.
+          </p>
         </div>
       </section>
 
@@ -490,6 +503,34 @@ export default function PluginsPage() {
             </Link>
             .
           </p>
+        </div>
+      </section>
+
+      <section className="bg-cs-bg py-14 md:py-16" aria-labelledby="roadmap">
+        <div className="mx-auto max-w-3xl px-6">
+          <H2 id="roadmap">Roadmap</H2>
+          <ul className="text-cs-ink/70 mt-4 list-disc space-y-2 pl-5 text-sm">
+            <li>
+              An unofficial Waze relay as a public, unreviewed plugin: police, crashes, hazards
+              and jams from the crowd, mapped onto the Flare kinds, with confirmations kept here.
+              The{" "}
+              <a
+                href="https://github.com/nicglazkov/commutescout/blob/main/docs/plugins-waze-google-plan.md"
+                className="text-cs-sky hover:underline"
+              >
+                plan and wireframe
+              </a>{" "}
+              explain the gray zone, what Google does and does not offer, and the steps.
+            </li>
+            <li>
+              Plugin ideas on the list: red light cameras, aircraft enforcement (ADS-B), license
+              plate readers (Flock), air quality, EV charging, and radar detector integration.
+            </li>
+            <li>
+              Per-account subscriptions, so the plugins you use follow you between the web and
+              the apps.
+            </li>
+          </ul>
         </div>
       </section>
     </>

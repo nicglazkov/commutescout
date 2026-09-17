@@ -154,3 +154,13 @@ async def test_conformance_passes_a_good_plugin_and_names_what_breaks():
 async def test_conformance_refuses_plain_http_off_localhost():
     rep = await flare.check_plugin("http://plugins.example.com")
     assert rep.failed == ["base: must be https:// (localhost allowed for development)"]
+
+
+def test_tiers_follow_trust_and_visibility():
+    assert flare.tier_of({"visibility": "public", "trust": "official"}) == "approved"
+    assert flare.tier_of({"visibility": "public", "trust": "verified"}) == "approved"
+    assert flare.tier_of({"visibility": "public", "trust": "community"}) == "unreviewed"
+    assert flare.tier_of({"visibility": "unlisted", "trust": "community"}) == "unreviewed"
+    assert flare.tier_of({"visibility": "private", "trust": "community"}) == "private"
+    assert flare.tier_of({"visibility": "public", "trust": "private"}) == "private"
+

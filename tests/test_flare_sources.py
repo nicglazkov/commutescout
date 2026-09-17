@@ -45,7 +45,7 @@ async def test_poller_accepts_valid_alerts_and_serves_markers():
     m = markers[0]
     assert m["kind"] == "plugin" and m["id"] == "sabreplus:" + GOOD["id"]
     assert m["flare_kind"] == "POLICE_VISIBLE" and m["road"] == "I-280 N"
-    assert m["source"] == "SABRE Plus" and m["trust"] == "community"
+    assert m["source"] == "SABRE Plus" and m["trust"] == "community" and m["tier"] == "unreviewed"
     assert m["path"] == [[37.34, -121.89], [37.35, -121.87]]  # GeoJSON lon,lat -> lat,lon
     assert p.markers_for_bbox((40.0, -122.5, 41.0, -121.0)) == []
     assert p.public_sources()[0]["count"] == 1

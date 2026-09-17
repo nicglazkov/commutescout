@@ -656,7 +656,9 @@ function popupFor(m, g) {
     return v2(ACC.plugin, 'Community report', m.reported ? agoTxt(m.reported) : null,
       kindTxt, m.label ? esc(m.label) : null, [], facts, [
         'Source: ' + esc(m.source || 'community plugin') +
-          (m.trust ? ' (' + esc(m.trust) + ')' : ''),
+          (m.tier === 'approved' ? ' (approved by CommuteScout)'
+            : m.tier === 'unreviewed' ? ' (public, not reviewed)'
+            : m.trust ? ' (' + esc(m.trust) + ')' : ''),
         /^https:\/\//.test(m.source_url || '')
           ? '<a href="' + esc(m.source_url) + '" target="_blank" rel="noopener">More</a>' : null,
       ]);
