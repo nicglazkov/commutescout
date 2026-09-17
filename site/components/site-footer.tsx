@@ -27,6 +27,7 @@ const productLinks = [
 
 const resourceLinks = [
   { href: "https://github.com/nicglazkov/commutescout", label: "GitHub" },
+  { href: "/developers", label: "Developers" },
   { href: "/mcp", label: "MCP server" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },

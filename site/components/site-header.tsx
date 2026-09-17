@@ -29,7 +29,7 @@ import { usePathname } from "next/navigation";
 const navLinks = [
   { href: "/watch", label: "Watch areas" },
   { href: "/data-sources", label: "Data sources" },
-  { href: "/mcp", label: "Developers" },
+  { href: "/developers", label: "Developers" },
   { href: "/pricing", label: "Pricing" },
 ];
 

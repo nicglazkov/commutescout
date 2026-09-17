@@ -3,7 +3,7 @@ CommuteScout header - the four legacy static pages under
 src/ca_roads_demo/static/ and the Next site's global SiteHeader, exported to
 site/out/index.html - must all expose the same header shape: the
 logo/wordmark links home, the nav destination set is exactly
-{/watch, /data-sources, /mcp, /pricing, /map}, the four text nav links
+{/watch, /data-sources, /developers, /pricing, /map}, the four text nav links
 appear in that exact order with their exact labels, the /map link's label
 is exactly "Live map", and none of them has a leftover "Home" nav item
 (the logo IS the home affordance now).
@@ -34,11 +34,11 @@ SITE_OUT = REPO_ROOT / "site" / "out"
 
 # Order matters: this is the exact left-to-right sequence the four text nav
 # links must appear in on every surface.
-REQUIRED_TEXT_NAV_ORDER = ["/watch", "/data-sources", "/mcp", "/pricing"]
+REQUIRED_TEXT_NAV_ORDER = ["/watch", "/data-sources", "/developers", "/pricing"]
 TEXT_NAV_LABELS = {
     "/watch": "Watch areas",
     "/data-sources": "Data sources",
-    "/mcp": "Developers",
+    "/developers": "Developers",
     "/pricing": "Pricing",
 }
 LIVE_MAP_HREF = "/map"
