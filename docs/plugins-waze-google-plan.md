@@ -5,7 +5,7 @@ A rough plan and wireframe for pulling crowd-sourced reports from Waze
 a Flare plugin. It is written so the plugin can be built as a separate
 service later, without touching the map, the apps or the backend, which
 already speak Flare. Reference implementation for the shape of the work:
-Nic's highway-radar-sabre-plus, which does the same for a radar app.
+highway-radar-sabre-plus, which does the same for a radar app.
 
 ## Now live
 
@@ -70,11 +70,11 @@ JSON feed per viewport (`live-map/api/georss` with a bounding box and
 
 The feed is what the browser map uses, not a supported product. Terms of
 service forbid scraping for commercial use; there is no key, no quota
-contract, and the shape can change any day. That is the gray zone Nic
-named: the plugin is an external, unofficial source that a person or
-group adds knowingly, never a CommuteScout data source. The public
-listing says so in its attribution and never uses the Waze name as its
-own. Volume stays low (one fetch per grid cell per minute, cells the
+contract, and the shape can change any day. That is the gray zone this
+plan is written around: the plugin is an external, unofficial source
+that a person or group adds knowingly, never a CommuteScout data
+source. The public listing says so in its attribution and never uses
+the Waze name as its own. Volume stays low (one fetch per grid cell per minute, cells the
 size of a county, cached), which is far below what a single open browser
 tab generates.
 

@@ -16,11 +16,11 @@ ten minutes, maps what comes back to the Flare vocabulary, and serves it.
 - It is **not affiliated with, endorsed by, or supported by Waze or Google**,
   and it never presents their name as its own. It is listed and labelled as
   "Unofficial Waze relay (community)".
-- It reaches Waze the same way Nic Glazkov's
+- It reaches Waze the same way the
   [highway-radar-sabre-plus](https://github.com/nicglazkov/highway-radar-sabre-plus)
-  does: by emulating the mobile app's private, undocumented protocol over an
-  anonymous session. That is not a supported product and it may be contrary
-  to Waze's terms of service.
+  project does: by emulating the mobile app's private, undocumented protocol
+  over an anonymous session. That is not a supported product and it may be
+  contrary to Waze's terms of service.
 - **It can stop working any day**, without notice, if the protocol changes or
   the traffic is blocked. Treat everything it serves as a hint, never as the
   official picture. Agency data always outranks it.
@@ -200,11 +200,11 @@ run for yourself.
 
 The upstream client is a port of the `waze` package and the Waze half of
 `AlertMapper.java` from
-[highway-radar-sabre-plus](https://github.com/nicglazkov/highway-radar-sabre-plus)
-by Nic Glazkov, used under the MIT licence. The port keeps the same
-endpoints, the same request and response encoding, the same session
-handling, and the same cadence, caching and backoff. `tests/test_waze_client.py`
-is that project's own test suite ported case for case.
+[highway-radar-sabre-plus](https://github.com/nicglazkov/highway-radar-sabre-plus),
+used under the MIT licence. The port keeps the same endpoints, the same
+request and response encoding, the same session handling, and the same
+cadence, caching and backoff. `tests/test_waze_client.py` is that project's
+own test suite ported case for case.
 
 `AlertDeduper.java` is deliberately not ported: it collapses pins that
 different sources report for the same event, and a plugin sees only its own
