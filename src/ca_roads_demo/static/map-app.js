@@ -2656,7 +2656,20 @@ document.getElementById('trafficlayer').addEventListener('change', (e) => {
 document.getElementById('signblank').addEventListener('change', rebuildSigns);
 
 // ── Address fields: autocomplete + validation ────────────────────────
-function wireAddress(inputId, valId, suggId, withMyLocation) {
+// "37.35, -121.94", "37.35 -121.94", or with N/S/E/W letters: typed
+// coordinates become a place without asking the geocoder.
+function parseCoords(s) {
+  const m = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*([NS])?\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*([EW])?\s*$/i
+    .exec(String(s || '').replace(/\u00b0/g, ' '));
+  if (!m) return null;
+  let lat = parseFloat(m[1]), lon = parseFloat(m[3]);
+  if ((m[2] || '').toUpperCase() === 'S') lat = -Math.abs(lat);
+  if ((m[4] || '').toUpperCase() === 'W') lon = -Math.abs(lon);
+  if (!(lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180)) return null;
+  return { name: lat.toFixed(5) + ', ' + lon.toFixed(5), lat, lon };
+}
+
+function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
   const input = document.getElementById(inputId);
   const val = document.getElementById(valId);
   const sugg = document.getElementById(suggId);
@@ -2669,6 +2682,7 @@ function wireAddress(inputId, valId, suggId, withMyLocation) {
     input.dataset.name = c.name;
     val.className = 'val ok'; val.textContent = '\u2713 ' + c.name;
     close();
+    if (onPick) onPick(c);
     if (c.approx) {
       // The row was a street match with the typed number re-attached; ask
       // the precise geocoder to interpolate the actual house position and
@@ -2731,6 +2745,8 @@ function wireAddress(inputId, valId, suggId, withMyLocation) {
   async function fetchSuggestions() {
     const q = input.value.trim();
     if (q.length < 2 || q === input.dataset.name) { items = []; render(); return; }
+    const coord = parseCoords(q);
+    if (coord) { items = [coord]; active = 0; render(); return; }
     const mine = ++seq;
     if (aborter) aborter.abort();
     aborter = new AbortController();
@@ -2774,6 +2790,8 @@ function wireAddress(inputId, valId, suggId, withMyLocation) {
     if (input.dataset.name === q && input.dataset.lat) return;  // picked
     delete input.dataset.lat;
     if (!q) { val.textContent = ''; val.className = 'val'; return; }
+    const coord = parseCoords(q);
+    if (coord) { pick(coord); return; }
     const mine = ++vseq;
     val.className = 'val'; val.textContent = 'Checking address\u2026';
     try {
@@ -2800,10 +2818,63 @@ function wireAddress(inputId, valId, suggId, withMyLocation) {
     }
   }
   input.addEventListener('change', () => setTimeout(validate, 200));
-  return { input, val, validate };
+  return { input, val, validate, pick };
 }
 const fromF = wireAddress('from', 'fromval', 'fromsugg', true);
 const toF = wireAddress('to', 'toval', 'tosugg', false);
+
+// ── Find anything on the map ─────────────────────────────────────────
+// The box over the map takes a place, an address or coordinates and
+// drops a pin with "Navigate here". The From/To planner stays for
+// trips that start somewhere else.
+let findPin = null;
+const findF = wireAddress('find', 'findval', 'findsugg', false, showFound);
+const findClear = document.getElementById('findclear');
+function clearFound() {
+  if (findPin) { map.removeLayer(findPin); findPin = null; }
+  findF.input.value = '';
+  delete findF.input.dataset.lat; delete findF.input.dataset.name;
+  findF.val.textContent = ''; findF.val.className = 'val';
+  findClear.hidden = true;
+}
+function showFound(c) {
+  if (findPin) map.removeLayer(findPin);
+  const at = [c.lat, c.lon];
+  findPin = L.marker(at, {
+    icon: L.divIcon({ className: 'findpin', html: '<i></i>', iconSize: [18, 18], iconAnchor: [9, 9] }),
+    zIndexOffset: 900,
+  }).addTo(map);
+  findClear.hidden = false;
+  const box = document.createElement('div');
+  box.className = 'findpop';
+  const parts = c.name.split(', ');
+  const name = document.createElement('b'); name.textContent = parts[0];
+  const sub = document.createElement('small'); sub.textContent = parts.slice(1).join(', ');
+  const nav = document.createElement('button');
+  nav.type = 'button'; nav.className = 'planbtn'; nav.textContent = 'Navigate here';
+  nav.addEventListener('click', () => navigateTo(c));
+  box.append(name, sub, nav);
+  findPin.bindPopup(box, { maxWidth: 280 });
+  map.flyTo(at, Math.max(map.getZoom(), 14), { duration: 0.7 });
+  setTimeout(() => findPin && findPin.openPopup(), 750);
+  findF.input.blur();   // the popup folds the phone sheet by itself
+}
+// Into the planner: the pin is the destination; the start is the
+// driver's own location unless From already says otherwise.
+function navigateTo(c) {
+  toF.pick(c);
+  setTool('route', { toggle: false, reveal: true });
+  if (fromF.input.dataset.lat) planbtn.click();
+  else fromF.input.focus();
+}
+findClear.addEventListener('click', clearFound);
+findF.input.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  // Nothing chosen from the list: ask the geocoder for the typed text.
+  setTimeout(() => {
+    if (!findF.input.dataset.lat && findF.input.value.trim()) findF.validate();
+  }, 0);
+});
 
 // ── Routing with turn-by-turn directions ─────────────────────────────
 function valhallaTripToRoute(trip) {
