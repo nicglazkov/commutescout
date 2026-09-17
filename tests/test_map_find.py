@@ -11,7 +11,10 @@ APP = (STATIC / "map-app.js").read_text(encoding="utf-8")
 
 
 def test_find_box_sits_on_the_map_next_to_report():
-    card = re.search(r'<div class="map-card active" id="mapcard">(.*?)<div class="resizer" id="inspresize"', HTML, re.S).group(1)
+    card = re.search(
+        r'<div class="map-card active" id="mapcard">(.*?)<div class="resizer" id="inspresize"',
+        HTML, re.S,
+    ).group(1)
     assert card.index('id="findbox"') < card.index('id="reportbtn"')
     assert HTML.count('id="find"') == 1 and HTML.count('id="findsugg"') == 1
     assert 'aria-label="Find a place on the map"' in HTML
