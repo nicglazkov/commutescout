@@ -7,6 +7,43 @@ service later, without touching the map, the apps or the backend, which
 already speak Flare. Reference implementation for the shape of the work:
 Nic's highway-radar-sabre-plus, which does the same for a radar app.
 
+## Now live
+
+The plugin is built and deployed. It is
+[`plugins/waze-relay`](../plugins/waze-relay/README.md), running on Cloud
+Run at `https://wz-flare-15002631928.us-west1.run.app`, and
+`python -m ca_roads.flare check` passes against it. Listing it in the
+catalog is the one step left, and it needs an admin sign-in.
+
+Four things came out differently from the plan below, and the plugin's
+README covers each in full:
+
+- **The protocol.** The `live-map/api/georss` feed this plan describes now
+  answers 403. The plugin speaks the mobile app's RT protocol instead, the
+  same one highway-radar-sabre-plus uses, ported to Python under
+  `plugins/waze-relay/waze`. Two fields go with the old feed: jams arrive as
+  points rather than polylines, so there is no `geometry`, and there is no
+  upstream `reliability`, so confidence is derived from the confirmation
+  count.
+- **The kind mapping** follows the table below, except where it and
+  sabre-plus's `AlertMapper.java` disagree, where sabre-plus wins. Two cases
+  follow neither, both because Flare has a kind that neither could use:
+  sabre-plus folds cameras into hidden police, and jams and closures into a
+  congestion hazard, only because Highway Radar draws nothing else.
+- **A cell is swept, not sampled.** A one-degree cell is 110 km across and a
+  city can sit at its edge, so each cell holds a lattice of squares that take
+  turns, stalest first. Asking from cell centers alone left downtown Los
+  Angeles with a third of the alerts its own cell was carrying.
+- **Coverage starts smaller than a state.** One instance holds one upstream
+  session, and that session runs one query at a time, so the ground one
+  instance keeps fresh is a function of the query rate. The default box is
+  Southern California; widening it is one environment variable, and the
+  squares simply come round less often.
+
+Reporting to Waze is off, as planned. The endpoint and the client under it
+are written and tested, and an operator running the plugin privately can turn
+them on.
+
 ## Where it lands in the three tiers
 
 - Ships as **public, unreviewed** first (`trust: community`), because
