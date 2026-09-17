@@ -1666,6 +1666,12 @@ async def site_developers(_: Request):
     return _site_response("developers")
 
 
+async def site_plugins(_: Request):
+    # The standalone plugins section (site/app/plugins/page.tsx): the Flare
+    # protocol restyled from docs/flare.md, the live catalog, how to run one.
+    return _site_response("plugins")
+
+
 async def site_mcp(_: Request):
     # Replaces the GitHub-only docs/mcp.md with an on-site page
     # (site/app/mcp/page.tsx): the connector URL, the tool reference, and
@@ -2252,6 +2258,7 @@ app = Starlette(
         Route("/contact", site_contact),
         Route("/data-sources", site_data_sources),
         Route("/mcp", site_mcp),
+        Route("/plugins", site_plugins),
         Route("/developers", site_developers),
         Route("/favicon.ico", favicon_ico),
         Route("/sitemap.xml", sitemap_xml),

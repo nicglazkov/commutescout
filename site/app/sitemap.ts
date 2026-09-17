@@ -26,7 +26,7 @@ const BASE_URL = "https://commutescout.com";
 // straight from src/ca_roads_demo/static/map.html - so it is listed here
 // by hand alongside the exported routes below.
 const MARKETING_PATHS = ["", "/pricing", "/about", "/contact", "/privacy",
-  "/terms", "/data-sources", "/mcp", "/developers"];
+  "/terms", "/data-sources", "/mcp", "/developers", "/plugins"];
 
 // No lastModified: stamping every URL with `new Date()` at build time gave
 // every entry in the sitemap the identical build timestamp, which is not a

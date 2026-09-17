@@ -3,12 +3,12 @@ CommuteScout header - the four legacy static pages under
 src/ca_roads_demo/static/ and the Next site's global SiteHeader, exported to
 site/out/index.html - must all expose the same header shape: the
 logo/wordmark links home, the nav destination set is exactly
-{/watch, /data-sources, /developers, /pricing, /map}, the four text nav links
+{/watch, /data-sources, /developers, /plugins, /pricing, /map}, the five text nav links
 appear in that exact order with their exact labels, the /map link's label
 is exactly "Live map", and none of them has a leftover "Home" nav item
 (the logo IS the home affordance now).
 
-Order/label checks look only at the four text-nav anchors' relative order
+Order/label checks look only at the five text-nav anchors' relative order
 among themselves (filtering out the logo and the /map link first), not at
 their raw position in the DOM: the site header's two-row mobile layout
 (components/site-header.tsx) puts the Live map CTA before <nav> in source
@@ -34,11 +34,12 @@ SITE_OUT = REPO_ROOT / "site" / "out"
 
 # Order matters: this is the exact left-to-right sequence the four text nav
 # links must appear in on every surface.
-REQUIRED_TEXT_NAV_ORDER = ["/watch", "/data-sources", "/developers", "/pricing"]
+REQUIRED_TEXT_NAV_ORDER = ["/watch", "/data-sources", "/developers", "/plugins", "/pricing"]
 TEXT_NAV_LABELS = {
     "/watch": "Watch areas",
     "/data-sources": "Data sources",
     "/developers": "Developers",
+    "/plugins": "Plugins",
     "/pricing": "Pricing",
 }
 LIVE_MAP_HREF = "/map"
@@ -116,7 +117,7 @@ def _check_surface(name: str, anchors: list[dict], omit: set | None = None) -> N
         f"{sorted(REQUIRED_NAV_DESTINATIONS - omit)}"
     )
 
-    # Order + exact labels for the four text nav links, filtered to just
+    # Order + exact labels for the five text nav links, filtered to just
     # those hrefs so an unrelated anchor (the logo, or /map, which sits on
     # either side of <nav> depending on the surface) can't shift the
     # comparison.

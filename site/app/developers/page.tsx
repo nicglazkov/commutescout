@@ -562,12 +562,9 @@ export default function DevelopersPage() {
             radius, reports, confirmations) so that anyone can run a public or private
             source that shows on the map and in the app, with full read and write
             support.{" "}
-            <a
-              href="https://github.com/nicglazkov/commutescout/blob/main/docs/flare.md"
-              className="text-cs-sky hover:underline"
-            >
-              Read the specification
-            </a>
+            <Link href="/plugins" prefetch={false} className="text-cs-sky hover:underline">
+              Read the plugins page
+            </Link>
             , then run the conformance check against your plugin:{" "}
             {code("python -m ca_roads.flare check https://your-plugin.example")}. The
             backend and the apps accept exactly what the check accepts.
