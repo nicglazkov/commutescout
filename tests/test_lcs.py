@@ -189,5 +189,6 @@ def test_lanes_summary():
 def test_closure_markers_carry_the_direction_of_travel():
     # Found on a real drive: without a direction, a southbound driver was
     # told about northbound ramp closures. The marker now says which side.
-    src = (Path(__file__).resolve().parent.parent / "src" / "ca_roads_demo" / "app.py").read_text(encoding="utf-8")
+    app_py = Path(__file__).resolve().parent.parent / "src" / "ca_roads_demo" / "app.py"
+    src = app_py.read_text(encoding="utf-8")
     assert '"dir": (c.direction or "").strip() or None,' in src
