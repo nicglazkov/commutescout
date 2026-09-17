@@ -1,0 +1,119 @@
+"""The app's server side: /api/nav/route keeps the Stadia key here,
+forces the profile, adds closure exclusions and alternates, and relays
+the OSRM answer; the tile proxy serves the base map with a day of edge
+cache; the style points at it."""
+
+import pytest
+from starlette.testclient import TestClient
+
+from ca_roads_demo import app as demo_app
+from ca_roads_demo import nav
+from ca_roads_mcp import server as tools
+
+LOCS = [{"lat": 37.35, "lon": -121.94, "type": "break", "heading": 90},
+        {"lat": 37.37, "lon": -122.11, "type": "break"}]
+FERROSTAR_BODY = {"format": "osrm", "filters": {"action": "include", "attributes": ["x"]},
+                  "banner_instructions": True, "voice_instructions": True, "costing": "bicycle",
+                  "locations": LOCS, "units": "miles", "api_key": "leak-me"}
+
+
+def test_nav_body_owns_the_profile_exclusions_and_alternates(monkeypatch):
+    monkeypatch.setattr(nav, "NAV_COSTING", "auto_traffic")
+    body = nav.nav_body(FERROSTAR_BODY, nav._locations(LOCS), [{"lat": 1, "lon": 2}])
+    assert body["costing"] == "auto_traffic"
+    assert body["alternates"] == 2 and body["exclude_locations"] == [{"lat": 1, "lon": 2}]
+    assert body["format"] == "osrm" and body["banner_instructions"] is True
+    assert "api_key" not in body
+    assert body["locations"][0]["heading"] == 90
+    three = nav.nav_body(FERROSTAR_BODY, nav._locations(LOCS + [LOCS[0]]), [])
+    assert "alternates" not in three and "exclude_locations" not in three
+
+
+class _Resp:
+    def __init__(self, status, content=b'{"code":"Ok","routes":[]}'):
+        self.status_code = status
+        self.content = content
+        self.headers = {"content-type": "application/json"}
+
+
+class _Client:
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    async def post(self, url, *, json, headers, timeout):
+        self.calls.append(dict(json))  # a copy: the handler mutates its body on retry
+        return self.replies.pop(0)
+
+    async def get(self, url, *, headers, timeout):
+        self.calls.append(url)
+        return _Resp(200, b"PNG")
+
+
+@pytest.fixture
+def wired(monkeypatch):
+    client = _Client([_Resp(200)])
+
+    class _Road:
+        pass
+
+    road = _Road()
+    road.client = client
+    monkeypatch.setattr(tools, "get_road", lambda: road)
+
+    async def fake_build(box, want, *, geo_only=False):
+        assert want == {"closure", "plugin"}
+        closure = {"kind": "lane_closure", "cls": "full-roadway", "lat": 37.36, "lon": -122.0}
+        return [closure], 1, 1, False
+
+    monkeypatch.setattr(demo_app, "build_markers", fake_build)
+    monkeypatch.setenv("STADIA_API_KEY", "k")
+    nav._TILES.clear()
+    return client
+
+
+def test_nav_route_relays_osrm_with_exclusions(wired):
+    c = TestClient(demo_app.app)
+    assert c.post("/api/nav/route", json={"locations": [LOCS[0]]}).status_code == 400
+    r = c.post("/api/nav/route", json=FERROSTAR_BODY)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"code": "Ok", "routes": []}
+    assert r.headers["x-nav-exclusions"] == "1" and r.headers["x-nav-costing"] == "auto"
+    sent = wired.calls[0]
+    assert sent["exclude_locations"] == [{"lat": 37.36, "lon": -122.0}]
+    assert sent["costing"] == "auto" and "api_key" not in sent
+
+
+def test_nav_route_retries_without_exclusions_when_stadia_refuses(wired):
+    wired.replies = [_Resp(400, b'{"error":"no path"}'), _Resp(200)]
+    r = TestClient(demo_app.app).post("/api/nav/route", json=FERROSTAR_BODY)
+    assert r.status_code == 200
+    assert "exclude_locations" in wired.calls[0] and "exclude_locations" not in wired.calls[1]
+
+
+def test_nav_route_without_key_is_503(wired, monkeypatch):
+    monkeypatch.delenv("STADIA_API_KEY")
+    assert TestClient(demo_app.app).post("/api/nav/route", json=FERROSTAR_BODY).status_code == 503
+
+
+def test_style_points_at_the_proxy_and_tiles_are_cached(wired):
+    c = TestClient(demo_app.app)
+    style = c.get("/api/tiles/style.json").json()
+    base = style["sources"]["base"]
+    assert base["tiles"][0].endswith("/api/tiles/alidade_smooth/{z}/{x}/{y}@2x.png")
+    assert base["tileSize"] == 256 and "Stadia" in base["attribution"]
+    r = c.get("/api/tiles/alidade_smooth/12/655/1583@2x.png")
+    assert r.status_code == 200 and r.content == b"PNG"
+    assert r.headers["cache-control"].startswith("public, max-age=86400")
+    assert wired.calls[-1].endswith("/alidade_smooth/12/655/1583@2x.png")
+    n = len(wired.calls)
+    assert c.get("/api/tiles/alidade_smooth/12/655/1583@2x.png").status_code == 200
+    assert len(wired.calls) == n  # served from memory
+    assert c.get("/api/tiles/evil/1/0/0.png").status_code == 404
+    assert c.get("/api/tiles/alidade_smooth/1/9/0.png").status_code == 404  # x out of range
+
+
+def test_budgets_and_limiters_cover_the_new_routes():
+    assert demo_app.PAID_PER_CLIENT_DAILY["nav"] == 400
+    assert demo_app.PAID_PER_CLIENT_DAILY["tiles"] == 8000
+    assert "/api/nav" in demo_app.SoftLimit.PREFIXES

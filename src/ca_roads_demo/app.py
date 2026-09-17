@@ -49,6 +49,7 @@ from ca_roads.stadia import auth_headers
 from ca_roads_demo import (
     analytics,
     flare_sources,
+    nav,
     roadsnap,
     routing,
     snapshot,
@@ -152,6 +153,10 @@ PAID_PER_CLIENT_DAILY = {
     "geocode": int(os.environ.get("GEOCODE_PER_CLIENT_DAILY", "150")),
     "flow": int(os.environ.get("FLOW_PER_CLIENT_DAILY", "600")),
     "route": int(os.environ.get("ROUTE_PER_CLIENT_DAILY", "300")),
+    # The app: a navigation session reroutes a few times an hour; a
+    # map session loads a few hundred tiles (the edge serves repeats).
+    "nav": int(os.environ.get("NAV_PER_CLIENT_DAILY", "400")),
+    "tiles": int(os.environ.get("APP_TILES_PER_CLIENT_DAILY", "8000")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
 }
 STADIA_TILES_DAILY = int(os.environ.get("STADIA_TILES_DAILY", "20000"))
@@ -2224,6 +2229,9 @@ app = Starlette(
         Route("/api/suggest", api_suggest, methods=["GET"]),
         Route("/api/flow", api_flow, methods=["GET"]),
         Route("/api/route", api_route, methods=["POST"]),
+        Route("/api/nav/route", nav.api_nav_route, methods=["POST"]),
+        Route("/api/tiles/style.json", nav.api_tile_style, methods=["GET"]),
+        Route("/api/tiles/{style}/{z:int}/{x:int}/{yfile}", nav.api_tile, methods=["GET"]),
         Route("/api/traffictile/{z:int}/{x:int}/{y:int}.png", api_traffic_tile,
               methods=["GET"]),
         Route("/api/staticmap", api_staticmap, methods=["GET"]),
@@ -2430,6 +2438,7 @@ class SoftLimit:
     human; it stops a curl loop."""
 
     PREFIXES = ("/api/suggest", "/api/geocode", "/api/flow", "/api/route", "/api/flare",
+                "/api/nav",
                 "/api/staticmap", "/api/traffictile", "/api/contact",
                 "/api/waitlist", "/api/signin-link",
                 # A cache miss here is a nationwide build; the grid
@@ -2607,6 +2616,9 @@ app = RateLimitMiddleware(
                      "/api/geocode",
                      "/api/incident/", "/api/sources", "/api/stcam/",
                      "/api/suggest", "/api/flow", "/api/traffictile",
+                     # The app's base map: hundreds of tiles a session,
+                     # edge-cached a day; the daily caps bound the rest.
+                     "/api/tiles/",
                      # Watch pages + public bootstrap config are as cheap
                      # as static files; the mutating watch APIs stay
                      # inside the bucket (and are token-gated anyway).
