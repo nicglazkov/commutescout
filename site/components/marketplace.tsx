@@ -77,10 +77,14 @@ export function Marketplace() {
   const [off, setOff] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    setOff(offSet());
+    // The browser's own switches are read once the catalog arrives, so no
+    // state is set synchronously inside the effect.
     fetch("/api/flare/sources", { headers: { Accept: "application/json" } })
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((d) => setSources(Array.isArray(d.sources) ? d.sources : []))
+      .then((d) => {
+        setOff(offSet());
+        setSources(Array.isArray(d.sources) ? d.sources : []);
+      })
       .catch(() => setFailed(true));
   }, []);
 
