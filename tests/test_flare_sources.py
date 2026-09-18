@@ -187,3 +187,40 @@ async def test_polling_follows_viewed_cells_and_sweeps_the_rest(monkeypatch):
         assert hot in asked
         assert set(asked) != set(first)
         assert p.status["sabreplus"]["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_catalog_holds_the_last_good_count_and_flags_staleness():
+    plugin = FakePlugin()
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+    clock = {"now": NOW}
+    p = flare_sources.Poller(mem, now=lambda: clock["now"])
+    async with httpx.AsyncClient(transport=httpx.MockTransport(plugin.handler)) as c:
+        await p.run_once(c)
+    src = p.public_sources()[0]
+    assert src["count"] == 1 and src["stale"] is False
+    # Every cell expires while nobody looks: the catalog still says 1, not 0.
+    p.cells["sabreplus"].clear()
+    p._last_poll.clear()
+    plugin.alerts.clear()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(plugin.handler)) as c:
+        await p.run_once(c)
+    assert p.status["sabreplus"]["count"] == 0
+    src = p.public_sources()[0]
+    assert src["count"] == 1 and src["stale"] is False
+    # A failing poll keeps the count and says so.
+    p._last_poll.clear()
+
+    def down(request):
+        return httpx.Response(503)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(down)) as c:
+        await p.run_once(c)
+    src = p.public_sources()[0]
+    assert src["count"] == 1 and src["stale"] is True
+    # An hour of nothing: the held count lapses.
+    clock["now"] = NOW + timedelta(seconds=flare_sources.COUNT_HOLD_S + 1)
+    src = p.public_sources()[0]
+    assert src["count"] == 0 and src["stale"] is True
+
