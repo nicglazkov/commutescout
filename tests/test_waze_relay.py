@@ -21,7 +21,8 @@ from waze.source import WazeSource
 
 from ca_roads import flare
 
-BBOX = [32.5, -119.5, 35.5, -115.5]
+BBOX = relay.BBOX                  # the shipped default: the United States
+SOCAL = [32.5, -119.5, 35.5, -115.5]
 LA = (34.05, -118.25)
 NOW = 1_700_000_000.0
 
@@ -37,14 +38,14 @@ def _alert(uuid="abc-123", *, waze_type="POLICE", subtype="POLICE_VISIBLE",
                      int(pub_s * 1000), thumbs, street, city)
 
 
-def _store(*alerts: WazeAlert, clock=None, wall=None) -> Store:
+def _store(*alerts: WazeAlert, clock=None, wall=None, bbox=None) -> Store:
     clock = clock or (lambda: 1000.0)
     wall = wall or (lambda: NOW)
     client = httpx.AsyncClient(transport=httpx.MockTransport(_no_network))
     source = WazeSource(client, now=clock, wall_clock=wall)
     source.cache.submit(AlertQueryResult(list(alerts), []))
     source.last_ok = clock()
-    return Store(source, bbox=BBOX, refresh_s=60, now=clock, wall_clock=wall)
+    return Store(source, bbox=bbox or BBOX, refresh_s=60, now=clock, wall_clock=wall)
 
 
 # ---------------------------------------------------------------- mapping
@@ -216,10 +217,58 @@ def test_only_cells_asked_about_recently_are_kept_in_the_rotation():
 
 
 def test_coverage_is_the_box_with_a_degree_of_slack():
-    store = _store()
+    store = _store(bbox=SOCAL)
     assert store.in_coverage(*LA)
     assert store.in_coverage(36.4, -115.0)       # a degree outside is allowed
     assert not store.in_coverage(45.0, -122.0)
+
+
+def test_the_shipped_coverage_answers_for_anywhere_in_the_country():
+    store = _store()
+    for place in (LA, (40.7, -74.0), (47.6, -122.3), (25.8, -80.2),
+                  (61.2, -149.9), (21.3, -157.8)):
+        assert store.in_coverage(*place), place
+    assert not store.in_coverage(51.5, -0.12)    # London is not the United States
+
+
+def test_the_busiest_cells_are_the_ones_kept_fresh():
+    clock = [1000.0]
+    store = _store(clock=lambda: clock[0])
+    store.hot_limit = 2
+    busy, quieter, quietest = (34.05, -118.25), (40.7, -74.0), (41.9, -87.6)
+    for _ in range(5):
+        store.want(*busy)
+    for _ in range(3):
+        store.want(*quieter)
+    store.want(*quietest)
+    assert store.wanted_cells() == [(34, -119), (40, -74), (41, -88)]
+    assert store.hot_cells() == [(34, -119), (40, -74)]
+    assert len(store.wanted_points()) == 2 * 4    # only the hot cells are swept
+
+
+def test_the_hot_set_holds_still_while_a_sweep_runs():
+    clock = [1000.0]
+    store = _store(clock=lambda: clock[0])
+    store.hot_limit = 1
+    store.want(34.05, -118.25)
+    assert store.hot_cells() == [(34, -119)]
+    # A busier newcomer does not yank the sweep away mid-flight.
+    for _ in range(9):
+        store.want(40.7, -74.0)
+    assert store.hot_cells() == [(34, -119)]
+    clock[0] += 31                                 # ...but it wins on recheck
+    assert store.hot_cells() == [(40, -74)]
+
+
+def test_a_cell_that_stops_being_asked_about_leaves_the_hot_set():
+    clock = [1000.0]
+    store = _store(clock=lambda: clock[0])
+    store.want(34.05, -118.25)
+    assert store.hot_cells() == [(34, -119)]
+    clock[0] += 601                                # past the ten-minute window
+    assert store.wanted_cells() == []
+    assert store.hot_cells() == []
+    assert store.wanted_points() == []
 
 
 def test_a_cell_is_swept_by_a_lattice_that_covers_its_corners():
@@ -297,6 +346,14 @@ async def test_the_handshake_is_valid_and_says_what_it_is():
     assert flare.validate_handshake(handshake) == []
     assert handshake["attribution"]["name"] == "Unofficial Waze relay (community)"
     assert handshake["attribution"]["url"] == "https://commutescout.com/plugins"
+    # The marketplace card reads this, so it says what it is and what it is not.
+    assert handshake["description"] == (
+        "Crowd reports from Waze: police, crashes, hazards, jams. "
+        "Unofficial, at your own risk.")
+    # Coverage is the United States, Alaska and Hawaii included.
+    south, west, north, east = handshake["coverage"]["bbox"]
+    for lat, lon in ((34.05, -118.25), (40.7, -74.0), (61.2, -149.9), (21.3, -157.8)):
+        assert south <= lat <= north and west <= lon <= east
     assert handshake["capabilities"] == {"alerts": True, "report": False,
                                          "confirm": True, "notify": False}
     assert flare.tier_of({"visibility": "public", "trust": "community"}) == "unreviewed"
@@ -308,13 +365,15 @@ async def test_alerts_answers_inside_the_box_and_refuses_outside_it():
         inside = await client.get("/flare/v1/alerts",
                                   params={"lat": LA[0], "lon": LA[1], "r": 25_000})
         outside = await client.get("/flare/v1/alerts",
-                                   params={"lat": 47.6, "lon": -122.3, "r": 25_000})
+                                   params={"lat": 51.5, "lon": -0.12, "r": 25_000})
         missing = await client.get("/flare/v1/alerts")
     assert inside.status_code == 200
     body = inside.json()
     assert [a["id"] for a in body["alerts"]] == ["wz:abc-123"]
     assert body["ttl_s"] == 60 and flare.parse_ts(body["as_of"]) is not None
     assert store.wanted_cells() == [(34, -119)]       # the ask joined the rotation
+    # A refusal must not put the caller's cell into the rotation.
+    assert (51, -1) not in store.wanted_cells()
     assert outside.status_code == 422
     assert outside.json()["error"]["code"] == "outside_coverage"
     assert missing.status_code == 400

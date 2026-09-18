@@ -9,11 +9,11 @@ highway-radar-sabre-plus, which does the same for a radar app.
 
 ## Now live
 
-The plugin is built and deployed. It is
+The plugin is built, deployed and listed. It is
 [`plugins/waze-relay`](../plugins/waze-relay/README.md), running on Cloud
-Run at `https://wz-flare-15002631928.us-west1.run.app`, and
-`python -m ca_roads.flare check` passes against it. Listing it in the
-catalog is the one step left, and it needs an admin sign-in.
+Run at `https://wz-flare-15002631928.us-west1.run.app`, listed in the
+catalog as tier `unreviewed`, and `python -m ca_roads.flare check` passes
+against it.
 
 Four things came out differently from the plan below, and the plugin's
 README covers each in full:
@@ -34,11 +34,14 @@ README covers each in full:
   city can sit at its edge, so each cell holds a lattice of squares that take
   turns, stalest first. Asking from cell centers alone left downtown Los
   Angeles with a third of the alerts its own cell was carrying.
-- **Coverage starts smaller than a state.** One instance holds one upstream
-  session, and that session runs one query at a time, so the ground one
-  instance keeps fresh is a function of the query rate. The default box is
-  Southern California; widening it is one environment variable, and the
-  squares simply come round less often.
+- **Coverage follows demand, nationwide.** The plugin answers for anywhere in
+  the United States but fetches nothing on a schedule: a cell is fetched only
+  after somebody asks about it, and only while somebody asked in the last ten
+  minutes. One instance holds one upstream session running one query at a
+  time, so among the asked cells the busiest win: the top `WAZE_HOT_CELLS`
+  (eight) are swept and the rest wait to become busy. A quiet night costs
+  nothing; a busy evening spends the whole session on the places people are
+  looking at.
 
 Reporting to Waze is off, as planned. The endpoint and the client under it
 are written and tested, and an operator running the plugin privately can turn

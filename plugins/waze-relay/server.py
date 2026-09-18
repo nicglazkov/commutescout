@@ -32,8 +32,13 @@ from starlette.routing import Route
 from store import CELL_RADIUS_M, Store
 from waze.source import WazeSource
 
-VERSION = "1.0.0"
-DEFAULT_BBOX = "32.5,-119.5,35.5,-115.5"
+VERSION = "1.1.0"
+# The United States, Alaska and Hawaii included. Coverage is what the plugin
+# will answer for, not what it fetches: it only ever fetches the one-degree
+# cells somebody asked about, so a wide box costs nothing on its own.
+DEFAULT_BBOX = "18.0,-168.0,71.5,-66.5"
+DESCRIPTION = ("Crowd reports from Waze: police, crashes, hazards, jams. "
+               "Unofficial, at your own risk.")
 MAX_RADIUS_M = 100_000
 RATE_PER_MIN = 120
 HTTP_TIMEOUT_S = 30.0
@@ -52,6 +57,7 @@ BBOX = _bbox(os.environ.get("WAZE_BBOX") or DEFAULT_BBOX)
 REFRESH_S = int(os.environ.get("WAZE_REFRESH_S") or 60)
 SHRINK_STEPS = int(os.environ.get("WAZE_SHRINK_STEPS") or 2)
 SUB_CELLS = int(os.environ.get("WAZE_SUB_CELLS") or store_module.SUB_CELLS)
+HOT_CELLS = int(os.environ.get("WAZE_HOT_CELLS") or store_module.HOT_CELLS)
 QUERY_BUDGET_S = float(os.environ.get("WAZE_QUERY_BUDGET_S") or 10)
 STATE_FILE = os.environ.get("WAZE_STATE_FILE") or None
 # Reporting to Waze is off unless the operator turns it on: the approved plan
@@ -64,6 +70,7 @@ PLUGIN = {
     "protocol": "flare/1",
     "id": os.environ.get("FLARE_ID") or "wz-flare",
     "name": os.environ.get("FLARE_NAME") or "Unofficial Waze relay (community)",
+    "description": DESCRIPTION,
     "version": VERSION,
     "capabilities": {"alerts": True, "report": REPORTS, "confirm": True, "notify": False},
     "kinds": mapping.KINDS if not REPORTS else sorted(
@@ -201,7 +208,8 @@ async def lifespan(_: Starlette) -> AsyncIterator[None]:
     client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_S, follow_redirects=False)
     source = WazeSource(client, shrink_steps=SHRINK_STEPS,
                         query_budget_s=QUERY_BUDGET_S, state_path=STATE_FILE)
-    store = Store(source, bbox=BBOX, refresh_s=REFRESH_S, sub_cells=SUB_CELLS)
+    store = Store(source, bbox=BBOX, refresh_s=REFRESH_S, sub_cells=SUB_CELLS,
+                  hot_cells=HOT_CELLS)
     task = asyncio.create_task(store.run())
     try:
         yield

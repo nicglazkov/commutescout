@@ -8,6 +8,14 @@ client.
 It is a small Starlette service. It holds one anonymous upstream session,
 sweeps the one-degree grid cells that callers have asked about in the last
 ten minutes, maps what comes back to the Flare vocabulary, and serves it.
+It answers for anywhere in the United States; see
+[Coverage follows demand](#coverage-follows-demand) for what that does and
+does not mean.
+
+The handshake carries a one-line `description` for the marketplace card:
+"Crowd reports from Waze: police, crashes, hazards, jams. Unofficial, at
+your own risk." A card that shows the name without that second sentence is
+showing half of it.
 
 ## Read this before you install it
 
@@ -80,25 +88,38 @@ source could use:
 Chit-chat and parking reports are dropped. Anything unrecognized becomes
 `OTHER` rather than disappearing.
 
-## Coverage, and why the default box is not a whole country
+## Coverage follows demand
+
+The plugin answers for anywhere in the United States. It does not fetch
+anywhere in the United States, and the difference is the whole design.
 
 The relay holds **one** upstream session, and that session is stateful and
 serialized: one query at a time, one to two seconds each. So how much ground
-one instance keeps fresh is a straight function of the query rate, not of
-ambition.
+stays fresh is a straight function of the query rate, and a wide coverage box
+cannot change that. What a wide box does change is where the queries are
+allowed to go.
 
-A one-degree cell is about 110 km across, which is far too wide to fetch in
-one go: the upstream thins a wide viewport hard, and asking from the cell's
-center leaves its corners barely covered. Los Angeles, for one, sits at the
-edge of its cell. So each cell is divided into a `WAZE_SUB_CELLS` lattice
-(two by two by default) and the squares take turns, stalest first, each one
-fetched with the shrinking-box series around its own middle.
+Nothing is fetched on a schedule. A one-degree cell is fetched only after
+somebody asks about it, and only while somebody has asked in the last ten
+minutes. Among those cells, the busiest win: cells are ranked by how many
+times they were asked about inside that window, and the top `WAZE_HOT_CELLS`
+(eight by default) are the ones the session sweeps. The ranking is
+recalculated every thirty seconds rather than on every request, so a sweep in
+progress is not thrown away the moment the order shifts.
 
-The default `WAZE_BBOX` is Southern California: twelve cells, forty-eight
-lattice squares, a full sweep every two to three minutes. Widen it and the
-squares simply take longer to come round again. Nothing breaks, and `ttl_s`
-keeps every record honest about its age. Run an instance per region rather
-than one instance for everywhere.
+Within a hot cell, the fetch is a sweep rather than a sample. A one-degree
+cell is about 110 km across, the upstream thins a wide viewport hard, and
+asking from the cell's center leaves its corners barely covered: Los Angeles,
+for one, sits at the edge of its cell. So each cell is divided into a
+`WAZE_SUB_CELLS` lattice (two by two by default) and the squares take turns,
+stalest first, each fetched with the shrinking-box series around its own
+middle. Eight hot cells is thirty-two squares, a full sweep in a minute or
+two.
+
+So a quiet night costs nothing at all, and a busy evening spends everything
+the one session has on the handful of places people are actually looking at.
+Raise `WAZE_HOT_CELLS` and each cell simply comes round less often; run an
+instance per region if you want more ground fresh at once.
 
 If no refresh has succeeded for the refresh window plus five minutes, the
 plugin serves nothing at all. Stale police and crash alerts presented as
@@ -127,7 +148,8 @@ phone then reads it directly and nothing goes through CommuteScout.
 | `FLARE_NAME` | Unofficial Waze relay (community) | The name shown in the sources list |
 | `FLARE_CONTACT` | the contact page | Where to reach the operator |
 | `FLARE_ATTRIBUTION_URL` | the plugins page | Where the attribution links |
-| `WAZE_BBOX` | `32.5,-119.5,35.5,-115.5` | Coverage, as `south,west,north,east` |
+| `WAZE_BBOX` | `18.0,-168.0,71.5,-66.5` | Coverage, as `south,west,north,east`. The default is the United States |
+| `WAZE_HOT_CELLS` | `8` | How many cells the session keeps fresh at once |
 | `WAZE_REFRESH_S` | `60` | How often one lattice square comes round again |
 | `WAZE_SUB_CELLS` | `2` | The lattice inside one cell, per side; more is finer and costs more |
 | `WAZE_SHRINK_STEPS` | `2` | Query boxes per square; more finds smaller alerts and costs more |
