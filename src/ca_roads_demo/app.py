@@ -1203,6 +1203,8 @@ async def api_mapdata(request: Request):
     geometry (57% of bytes, invisible below zoom 8); fields=geo returns
     ONLY that geometry for a viewport, fetched lazily when zoomed in."""
     box = _bbox_params(request)
+    if box:
+        flare_sources.poller.note_view(box)
     if box is None:
         return JSONResponse(
             {"error": "bbox=lat_min,lon_min,lat_max,lon_max required"},
@@ -1670,6 +1672,11 @@ async def site_developers(_: Request):
     # The developer documentation (site/app/developers/page.tsx): the REST
     # API in full, keys and limits, every tool parameter by parameter.
     return _site_response("developers")
+
+
+async def site_marketplace(_: Request):
+    # The plugin marketplace (site/app/marketplace/page.tsx): tiles only.
+    return _site_response("marketplace")
 
 
 async def site_app(_: Request):
@@ -2272,6 +2279,7 @@ app = Starlette(
         Route("/mcp", site_mcp),
         Route("/plugins", site_plugins),
         Route("/app", site_app),
+        Route("/marketplace", site_marketplace),
         Route("/developers", site_developers),
         Route("/favicon.ico", favicon_ico),
         Route("/sitemap.xml", sitemap_xml),
