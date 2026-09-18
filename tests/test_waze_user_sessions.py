@@ -298,7 +298,7 @@ def test_turning_the_flag_on_advertises_the_extension(monkeypatch):
         assert relay.USER_SESSIONS is True
         assert relay.PLUGIN["extensions"]["user_sessions"] == {
             "path": "/flare/v1/me/alerts", "auth": "firebase",
-            "idle_s": 900, "max_concurrent": 3}
+            "idle_s": 900, "max_concurrent": 3, "poll_s": 15}
         # Everything a caller already relied on is still exactly as it was.
         assert relay.PLUGIN["auth"] == "none"
         assert relay.PLUGIN["capabilities"]["report"] is False
@@ -333,6 +333,10 @@ async def test_a_signed_in_caller_gets_their_own_session(monkeypatch):
     assert response.status_code == 200
     assert body["session"] == "user"
     assert body["alerts"] == []          # cold, and it does not block to fill
+    # A personal answer from a moving phone must not be cached for a minute
+    # the way a mediated grid-cell answer is.
+    assert body["ttl_s"] == relay.USER_POLL_S == 15
+    assert body["ttl_s"] < relay.REFRESH_S
     assert len(users) == 1
     await users.close_all()
 
@@ -352,6 +356,7 @@ async def test_a_full_relay_serves_the_shared_feed_and_says_so(monkeypatch):
     body = response.json()
     assert response.status_code == 200
     assert body["session"] == "shared"
+    assert body["ttl_s"] == relay.USER_POLL_S, "the fallback keeps the phone's cadence"
     assert [a["id"] for a in body["alerts"]] == ["wz:abc-123"]
     await users.close_all()
 
