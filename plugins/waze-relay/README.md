@@ -155,6 +155,11 @@ phone then reads it directly and nothing goes through CommuteScout.
 | `WAZE_SHRINK_STEPS` | `2` | Query boxes per square; more finds smaller alerts and costs more |
 | `WAZE_QUERY_BUDGET_S` | `10` | Wall-clock budget for one square's box series |
 | `WAZE_RATE_PER_MIN` | `600` | Requests one address may make a minute. A mediated caller asks per grid cell, so this has to fit a few hundred |
+| `WAZE_USER_SESSIONS` | off | Let a signed-in phone hold a session of its own. See below |
+| `WAZE_USER_SESSIONS_MAX` | `5` | How many of those may exist at once. The rest fall back to the shared feed |
+| `WAZE_USER_IDLE_S` | `600` | How long a user session survives without a request |
+| `WAZE_USER_SALT` | random at boot | Keys the hash that stands in for a person. Leave it unset unless you need the keys to outlive a restart |
+| `FIREBASE_PROJECT` | `ca-roads-mcp` | Whose sign-in tokens are accepted |
 | `WAZE_STATE_FILE` | none | Where to keep the anonymous account, so a restart does not mint another |
 | `WAZE_REPORTS` | off | Pass user reports upstream. See below |
 | `PORT` | `8300` | The port to listen on |
@@ -202,6 +207,85 @@ it on the next cycle.
 `visibility: public` with `trust: community` is the `unreviewed` tier: drawn
 on the map, labelled "public, not reviewed", and silent unless a person turns
 voice on for it.
+
+## A session of your own
+
+The relay holds one upstream session for everybody, which is what the web map
+and signed-out phones get. A signed-in phone can do better. The upstream
+protocol sends each alert **once per session**, so a phone with a session of
+its own gets a stream shaped by where that phone is, rather than alerts
+arriving mixed in with everyone else's.
+
+That is the highway-radar-sabre-plus model moved one step in from the device,
+and the step costs something worth naming. sabre-plus runs on the phone: the
+phone's own address, its own account, its own ten-a-day minting cap. Its
+traffic looks like one more phone. Run the same thing here and every user's
+session leaves from **one** address on **one** container. An account per user
+from a single address is how a single address stops being served, and it
+would take the shared relay down with it.
+
+So sessions are pooled rather than granted per person, and the limits are
+what make the mode honest:
+
+- At most `WAZE_USER_SESSIONS_MAX` sessions exist at once. Somebody who signs
+  in when they are all taken is served by the shared feed, and the response
+  says `"session": "shared"` so the app can tell them.
+- Accounts are lent out and handed back as sessions retire, never minted per
+  person, and the day's minting budget is shared with the shared relay.
+- Two sessions cannot share an account, because the upstream login logs the
+  other device out. That is what makes the concurrency limit a physical
+  limit rather than a tuning knob.
+
+**The honest end state is the phone running its own session**, as sabre-plus
+does, with its own address. This mode is the stepping stone, and it is true
+for the first few signed-in people at a time rather than for everybody.
+
+```
+GET /flare/v1/me/alerts?lat&lon&r
+Authorization: Bearer <Firebase ID token>
+
+{"alerts": [...], "ttl_s": 60, "as_of": "...", "session": "user" | "shared"}
+```
+
+A separate path from `/flare/v1/alerts` on purpose: the shared endpoint stays
+unauthenticated and conformance-clean. The answer comes from that person's
+own cache **at once** and never waits on the upstream, because an upstream
+query long-polls for up to ten and a half seconds. A refresh runs behind the
+answer when their cache is older than twelve seconds or they have moved more
+than four kilometres; a jump over twenty-five kilometres throws the old city
+away rather than showing it; and a cache nobody could refresh for ten minutes
+stops being served. So the first call after signing in returns little and
+fills within seconds.
+
+The mode is off unless `WAZE_USER_SESSIONS` is set, and when it is off the
+path answers 404 and the handshake says nothing about it. When it is on, the
+handshake carries an extension so an app can find it without hardcoding:
+
+```json
+"extensions": {"user_sessions": {"path": "/flare/v1/me/alerts",
+                                 "auth": "firebase",
+                                 "idle_s": 600, "max_concurrent": 5}}
+```
+
+That is a plugin extension, not part of flare/1.
+
+### What it knows about you
+
+The token is checked and then almost all of it is thrown away: what is kept
+is a keyed hash of the subject, long enough to tell two people apart and
+useless for anything else. The token, the account id, the email and the name
+are never stored, never logged and never reach the upstream. The hashing key
+is generated at boot unless one is configured, so the keys do not outlive a
+restart. Positions are rounded to two decimals, about 1.1 km, before they are
+used, and the raw value is never logged.
+
+**An app must only ever send a sign-in token to a plugin base it trusts** and
+that means one that came from the CommuteScout catalog, never a plugin URL a
+user typed in. A plugin is third party by definition, and Flare's own rules
+say it must never see a user identity. The cleaner long-term shape is the
+backend minting a per-plugin pseudonym, the way `flare.reporter_pseudonym`
+already does, and the app sending that instead; this endpoint would take it
+with no change to the path or the response.
 
 ## Reports and confirmations
 

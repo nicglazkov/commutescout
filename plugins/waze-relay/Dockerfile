@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py store.py mapping.py ./
+COPY server.py store.py mapping.py sessions.py auth.py ./
 COPY waze ./waze
 
 # Nothing in the image needs write access.
