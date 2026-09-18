@@ -86,9 +86,29 @@ def sub_cell_radius_m(lat: float, per_side: int) -> float:
 class Votes:
     """The confirmations this plugin collected, kept in memory.
 
-    Waze itself gets nothing from them on the public deployment: they raise
-    the confirmation count and the confidence the plugin reports, and enough
-    "not there" votes hide the alert.
+    Waze itself gets nothing from them: they raise the confirmation count and
+    the confidence the plugin reports, and enough "not there" votes hide the
+    alert.
+
+    Hiding an alert is the one destructive thing a caller can ask for, and
+    these alerts are drawn on a map people drive by, so who is allowed to ask
+    matters. A vote used to be counted once per ``reporter`` string taken
+    straight from the request body. On a listing that advertises no
+    authentication that is not an identity, it is a field: three requests
+    with three invented strings hid any alert the plugin served.
+
+    So a vote is counted once per VOTER, and a voter is:
+
+    * ``t:<reporter>`` when the caller presented the configured confirm
+      token. A mediated backend forwarding many people's votes is one
+      address but many reporters, and its reporter strings are pseudonyms it
+      derived, so they can be trusted once the caller has been.
+    * ``a:<address>`` otherwise. An unauthenticated caller counts once per
+      address however many strings it invents, so hiding an alert costs
+      three distinct addresses rather than three lines of shell.
+
+    The two namespaces never collide, so an unauthenticated caller cannot
+    dress its votes up as trusted ones.
     """
 
     def __init__(self, now: Callable[[], float] | None = None) -> None:
@@ -98,14 +118,19 @@ class Votes:
         self._confirmed_at: dict[str, float] = {}
         self._touched: dict[str, float] = {}
 
-    def add(self, alert_id: str, vote: str, reporter: str) -> None:
+    @staticmethod
+    def voter(reporter: str, address: str, *, trusted: bool) -> str:
+        """Who a vote counts as. See the class docstring for why."""
+        return f"t:{reporter}" if trusted else f"a:{address}"
+
+    def add(self, alert_id: str, vote: str, voter: str) -> None:
         now = self._now()
         self._prune(now)
         self._touched[alert_id] = now
         bucket = self._up if vote == "up" else self._gone
-        if reporter in bucket.setdefault(alert_id, set()):
+        if voter in bucket.setdefault(alert_id, set()):
             return
-        bucket[alert_id].add(reporter)
+        bucket[alert_id].add(voter)
         if vote == "up":
             self._confirmed_at[alert_id] = now
 

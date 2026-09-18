@@ -15,7 +15,7 @@ import mapping
 import pytest
 import server as relay
 import store as store_module
-from store import Store
+from store import Store, Votes
 from waze.cache import AlertQueryResult, WazeAlert
 from waze.source import WazeSource
 
@@ -173,25 +173,29 @@ def test_nothing_is_served_once_the_data_stops_being_refreshed():
     assert store.near(*LA, 50_000) == []
 
 
+def _voter(reporter, address="203.0.113.7", *, trusted=False):
+    return Votes.voter(reporter, address, trusted=trusted)
+
+
 def test_a_confirmation_raises_the_count_and_the_confidence():
     store = _store(_alert(thumbs=0))
     before = store.records()[0]
-    store.votes.add("wz:abc-123", "up", "r:someone")
+    store.votes.add("wz:abc-123", "up", _voter("r:someone", trusted=True))
     after = store.records()[0]
     assert after["n_confirmations"] == before["n_confirmations"] + 1
     assert after["reliability"] > before["reliability"]
     assert "confirm_ts" in after
     # The same voter twice is still one vote.
-    store.votes.add("wz:abc-123", "up", "r:someone")
+    store.votes.add("wz:abc-123", "up", _voter("r:someone", trusted=True))
     assert store.records()[0]["n_confirmations"] == after["n_confirmations"]
 
 
 def test_enough_gone_votes_hide_the_alert():
     store = _store(_alert())
-    for who in ("a", "b"):
-        store.votes.add("wz:abc-123", "gone", who)
+    for address in ("203.0.113.7", "198.51.100.4"):
+        store.votes.add("wz:abc-123", "gone", _voter("whoever", address))
     assert store.records()
-    store.votes.add("wz:abc-123", "gone", "c")
+    store.votes.add("wz:abc-123", "gone", _voter("whoever", "192.0.2.9"))
     assert store.records() == []
 
 
