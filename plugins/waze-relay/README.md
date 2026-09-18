@@ -158,6 +158,7 @@ phone then reads it directly and nothing goes through CommuteScout.
 | `WAZE_USER_SESSIONS` | off | Let a signed-in phone hold a session of its own. See below |
 | `WAZE_USER_SESSIONS_MAX` | `5` | How many of those may exist at once. The rest fall back to the shared feed |
 | `WAZE_USER_IDLE_S` | `600` | How long a user session survives without a request |
+| `WAZE_USER_POLL_S` | `15` | How often a phone should come back, and the `ttl_s` its answers carry |
 | `WAZE_USER_SALT` | random at boot | Keys the hash that stands in for a person. Leave it unset unless you need the keys to outlive a restart |
 | `FIREBASE_PROJECT` | `ca-roads-mcp` | Whose sign-in tokens are accepted |
 | `WAZE_STATE_FILE` | none | Where to keep the anonymous account, so a restart does not mint another |
@@ -264,10 +265,20 @@ handshake carries an extension so an app can find it without hardcoding:
 ```json
 "extensions": {"user_sessions": {"path": "/flare/v1/me/alerts",
                                  "auth": "firebase",
-                                 "idle_s": 600, "max_concurrent": 5}}
+                                 "idle_s": 600, "max_concurrent": 5,
+                                 "poll_s": 15}}
 ```
 
-That is a plugin extension, not part of flare/1.
+That is a plugin extension, not part of flare/1. Read the numbers rather
+than assuming them.
+
+`poll_s`, and the `ttl_s` on the answer, are **not** the handshake's
+`refresh_s`. `refresh_s` is the hint for a mediated caller working through a
+grid a cell at a time, once a minute. A phone holding its own session is a
+different animal: its cache goes stale in twelve seconds and it is moving, so
+caching a personal answer for a minute would show a driver where they were a
+minute ago. Poll this path at `poll_s`, the protocol floor, not at
+`refresh_s`.
 
 ### What it knows about you
 

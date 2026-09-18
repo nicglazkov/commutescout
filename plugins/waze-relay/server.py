@@ -79,6 +79,11 @@ REPORTS = (os.environ.get("WAZE_REPORTS") or "").lower() in ("1", "true", "yes")
 USER_SESSIONS = (os.environ.get("WAZE_USER_SESSIONS") or "").lower() in ("1", "true", "yes")
 USER_MAX = int(os.environ.get("WAZE_USER_SESSIONS_MAX") or sessions_module.MAX_CONCURRENT)
 USER_IDLE_S = float(os.environ.get("WAZE_USER_IDLE_S") or sessions_module.IDLE_S)
+# refresh_s is the hint for a mediated caller polling per grid cell once a
+# minute. A phone holding its own session is a different animal: its cache
+# goes stale in twelve seconds and it is moving, so it is told to come back
+# at the protocol floor instead of caching a personal answer for a minute.
+USER_POLL_S = int(os.environ.get("WAZE_USER_POLL_S") or 15)
 
 PLUGIN = {
     "protocol": "flare/1",
@@ -104,6 +109,7 @@ if USER_SESSIONS:
     PLUGIN["extensions"] = {"user_sessions": {
         "path": "/flare/v1/me/alerts", "auth": "firebase",
         "idle_s": int(USER_IDLE_S), "max_concurrent": USER_MAX,
+        "poll_s": USER_POLL_S,
     }}
 
 store: Store | None = None
@@ -193,11 +199,11 @@ async def my_alerts(request: Request) -> JSONResponse:
         # the shared feed is the honest fallback; nobody gets an error page
         # because the relay is busy.
         store.want(lat, lon)
-        return JSONResponse({"alerts": store.near(lat, lon, radius), "ttl_s": REFRESH_S,
+        return JSONResponse({"alerts": store.near(lat, lon, radius), "ttl_s": USER_POLL_S,
                              "as_of": store.as_of, "session": "shared"})
     session.trigger_refresh_if_stale(lat, lon, radius)
     return JSONResponse({"alerts": session.alerts(lat, lon, radius, store.to_record),
-                         "ttl_s": REFRESH_S, "as_of": session.as_of, "session": "user"})
+                         "ttl_s": USER_POLL_S, "as_of": session.as_of, "session": "user"})
 
 
 async def confirm(request: Request) -> JSONResponse:
