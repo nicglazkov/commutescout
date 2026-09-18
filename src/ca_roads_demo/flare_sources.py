@@ -42,6 +42,11 @@ CELL_KEEP_S = 900
 POLL_FLOOR_S = 60
 HANDSHAKE_TTL_S = 3600
 STATUS_WRITE_EVERY_S = 600
+# The catalog shows a plugin's last good count for this long after its
+# cells expire or a poll fails, so a quiet map or one bad poll does not
+# flash "0 alerts" on the marketplace.
+COUNT_HOLD_S = 3600
+STALE_AFTER_S = 900
 CONCURRENCY = 4
 USER_AGENT = "commutescout.com flare poller (https://commutescout.com/developers)"
 
@@ -281,6 +286,8 @@ class Poller:
                     kept_by_cell[cell] = kept[: flare.MAX_PER_CELL]
 
             await asyncio.gather(*(one(c) for c in self.cells_to_poll(sid, hs["coverage"]["bbox"])))
+            if problems and not kept_by_cell:
+                raise RuntimeError(problems[0])  # every cell failed: the poll failed
             # Cells not polled this cycle keep what they had, for a while.
             t = time.monotonic()
             cells = self.cells.setdefault(sid, {})
@@ -296,12 +303,20 @@ class Poller:
                         seen.setdefault(a["id"], a)
             alerts = list(seen.values())[: flare.MAX_ALERTS]
             self.alerts[sid] = alerts
+            held = self.status.get(sid, {})
+            if alerts or now.timestamp() - held.get("held_at", 0) > COUNT_HOLD_S:
+                held_count, held_at = len(alerts), now.timestamp()
+            else:
+                held_count, held_at = held.get("held_count", 0), held.get("held_at", 0)
             self.status[sid] = {"ok": True, "count": len(alerts), "last_ok": now.isoformat(),
+                                "held_count": held_count, "held_at": held_at,
                                 "problems": problems[:5], "name": hs.get("name")}
         except Exception as exc:  # noqa: BLE001 - one bad source never stops the rest
             self.status[sid] = {**self.status.get(sid, {}), "ok": False,
                                 "last_error": f"{type(exc).__name__}: {str(exc)[:160]}",
                                 "last_error_at": now.isoformat()}
+            if not (self.status[sid].get("held_at") or 0):  # never polled well
+                self.status[sid].setdefault("held_count", 0)
             log.warning("flare source %s failed: %s", sid, self.status[sid]["last_error"])
         self._last_poll[sid] = time.monotonic()
         await self._write_status(sid)
@@ -360,6 +375,23 @@ class Poller:
                 out.append(alert_marker(src, a))
         return out
 
+    def catalog_count(self, sid: str) -> tuple[int, bool]:
+        """(count, stale): the alerts held now, or the last good count while
+        it is recent; stale when the last good poll is old or the last poll
+        failed."""
+        st = self.status.get(sid, {})
+        now = self._now().timestamp()
+        count = st.get("count", 0)
+        if not count and now - (st.get("held_at") or 0) <= COUNT_HOLD_S:
+            count = st.get("held_count", 0)
+        last_ok = st.get("last_ok")
+        try:
+            age = now - datetime.fromisoformat(last_ok).timestamp() if last_ok else None
+        except ValueError:
+            age = None
+        stale = st.get("ok") is False or age is None or age > STALE_AFTER_S
+        return count, stale
+
     def public_sources(self) -> list[dict]:
         out = []
         for sid, src in self.sources.items():
@@ -367,10 +399,11 @@ class Poller:
                 continue
             st = self.status.get(sid, {})
             hs = (self.handshakes.get(sid) or (0, {}))[1]
+            count, stale = self.catalog_count(sid)
             out.append({"id": sid, "name": src.get("name") or sid,
                         "attribution": src.get("attribution"), "trust": src.get("trust"),
                         "tier": flare.tier_of(src),
-                        "count": st.get("count", 0), "ok": st.get("ok"),
+                        "count": count, "stale": stale, "ok": st.get("ok"),
                         "last_ok": st.get("last_ok"),
                         # For the marketplace cards.
                         "description": hs.get("description"),
