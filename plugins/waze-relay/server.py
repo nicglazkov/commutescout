@@ -40,7 +40,12 @@ DEFAULT_BBOX = "18.0,-168.0,71.5,-66.5"
 DESCRIPTION = ("Crowd reports from Waze: police, crashes, hazards, jams. "
                "Unofficial, at your own risk.")
 MAX_RADIUS_M = 100_000
-RATE_PER_MIN = 120
+# A mediated caller asks per grid cell, so one backend covering a lot of
+# ground is a lot of requests from one address: a few hundred a minute is
+# ordinary and must not be throttled into 429s. Answering costs a dictionary
+# lookup, and what actually protects the upstream is the hot-cell limit, not
+# this. Abuse still hits a ceiling.
+RATE_PER_MIN = int(os.environ.get("WAZE_RATE_PER_MIN") or 600)
 HTTP_TIMEOUT_S = 30.0
 
 log = logging.getLogger("waze_relay")

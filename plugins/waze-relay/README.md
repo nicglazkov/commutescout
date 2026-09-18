@@ -154,6 +154,7 @@ phone then reads it directly and nothing goes through CommuteScout.
 | `WAZE_SUB_CELLS` | `2` | The lattice inside one cell, per side; more is finer and costs more |
 | `WAZE_SHRINK_STEPS` | `2` | Query boxes per square; more finds smaller alerts and costs more |
 | `WAZE_QUERY_BUDGET_S` | `10` | Wall-clock budget for one square's box series |
+| `WAZE_RATE_PER_MIN` | `600` | Requests one address may make a minute. A mediated caller asks per grid cell, so this has to fit a few hundred |
 | `WAZE_STATE_FILE` | none | Where to keep the anonymous account, so a restart does not mint another |
 | `WAZE_REPORTS` | off | Pass user reports upstream. See below |
 | `PORT` | `8300` | The port to listen on |
