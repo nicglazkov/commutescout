@@ -104,3 +104,42 @@ def test_plugin_choices_follow_the_account(store):  # noqa: F811 - fixture
     assert c.put("/api/me/plugins", json={"off": "wz-flare"}, headers=auth()).status_code == 400
     # The account summary carries the same choices for the apps' first load.
     assert c.get("/api/watch/me", headers=auth()).json()["plugins"]["off"] == ["wz-flare"]
+
+
+def _places_app():
+    return Starlette(routes=[Route("/api/me/places", watch.api_me_places, methods=["GET", "PUT"])])
+
+
+def test_places_merge_across_devices(store):  # noqa: F811 - fixture
+    c = TestClient(_places_app())
+    assert c.get("/api/me/places").status_code == 401
+    assert c.get("/api/me/places", headers=auth()).json()["places"] == []
+    phone = [{"id": "h", "kind": "home", "name": "Home", "lat": 37.3, "lon": -121.9,
+              "used_at": 100},
+             {"id": "r1", "kind": "recent", "name": "Los Altos", "lat": 37.37, "lon": -122.11,
+              "used_at": 90}]
+    r = c.put("/api/me/places", json={"places": phone}, headers=auth())
+    assert r.status_code == 200 and [p["id"] for p in r.json()["places"]] == ["h", "r1"]
+    # The web sets a newer Home and adds a recent; the phone's old Home loses.
+    web = [{"id": "h2", "kind": "home", "name": "New home", "lat": 37.4, "lon": -121.8,
+            "used_at": 200},
+           {"id": "r2", "kind": "recent", "name": "Gilroy", "lat": 37.0, "lon": -121.57,
+            "used_at": 150}]
+    r = c.put("/api/me/places", json={"places": web}, headers=auth())
+    ids = [p["id"] for p in r.json()["places"]]
+    assert ids == ["h2", "r2", "r1"], ids
+    # Removing on one device: push the list without it.
+    r = c.put("/api/me/places", json={"places": [], "replace": True}, headers=auth())
+    assert r.json()["places"] == []
+    assert c.put("/api/me/places", json={"places": "x"}, headers=auth()).status_code == 400
+    # Junk is dropped, not fatal.
+    junk = [{"kind": "castle", "lat": 1, "lon": 2}, {"kind": "saved", "lat": "x"}]
+    r = c.put("/api/me/places", json={"places": junk}, headers=auth())
+    assert r.status_code == 200 and r.json()["places"] == []
+
+
+def test_merge_caps_recents_and_keeps_newest():
+    recents = [{"kind": "recent", "lat": 37.0, "lon": -122.0 + i * 0.01, "used_at": i}
+               for i in range(30)]
+    out = watch.merge_places([], recents)
+    assert len(out) == watch.MAX_RECENTS and out[0]["used_at"] == 29

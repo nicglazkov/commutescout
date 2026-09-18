@@ -594,6 +594,71 @@ async def api_watch_me(request: Request) -> JSONResponse:
     })
 
 
+# ---------------------------------------------------------------- places
+
+PLACE_KINDS = ("home", "work", "saved", "recent")
+MAX_SAVED = 20
+MAX_RECENTS = 20
+
+
+def _clean_place(p) -> dict | None:
+    if not isinstance(p, dict) or p.get("kind") not in PLACE_KINDS:
+        return None
+    try:
+        lat, lon = float(p["lat"]), float(p["lon"])
+        used = float(p.get("used_at") or 0)
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    name = str(p.get("name") or "").strip()[:200]
+    pid = str(p.get("id") or f"{p['kind']}:{lat:.5f},{lon:.5f}")[:80]
+    return {"id": pid, "kind": p["kind"], "name": name, "lat": round(lat, 6), "lon": round(lon, 6),
+            "used_at": used}
+
+
+def merge_places(stored: list, incoming: list) -> list:
+    """Union by id, the newer used_at wins; one Home and one Work (the
+    newest); saved and recents capped, newest first. A client that pushes
+    its whole list after pulling gets exactly this back, so two phones and
+    the web converge without a deletion log: removing a place is pushing a
+    list without it, and a stale device only wins if its copy is newer."""
+    by_id: dict[str, dict] = {}
+    for p in list(stored) + list(incoming):
+        c = _clean_place(p)
+        if c and (c["id"] not in by_id or c["used_at"] >= by_id[c["id"]]["used_at"]):
+            by_id[c["id"]] = c
+    out: list[dict] = []
+    for kind in ("home", "work"):
+        ones = sorted((p for p in by_id.values() if p["kind"] == kind), key=lambda p: -p["used_at"])
+        out.extend(ones[:1])
+    for kind, cap in (("saved", MAX_SAVED), ("recent", MAX_RECENTS)):
+        ones = sorted((p for p in by_id.values() if p["kind"] == kind), key=lambda p: -p["used_at"])
+        out.extend(ones[:cap])
+    return out
+
+
+async def api_me_places(request: Request) -> JSONResponse:
+    """GET: the account's Home, Work, favorites and recent destinations.
+    PUT {places: [...], replace?: bool}: merge (default) or replace, and
+    return the merged list, so every device converges on one set."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    user = await _load_user(claims)
+    stored = user.get("places") or []
+    if request.method == "GET":
+        return JSONResponse({"places": merge_places(stored, [])})
+    body = await _read_json(request)
+    if body is None or not isinstance(body.get("places"), list):
+        return _err("places must be a list")
+    if len(body["places"]) > 200:
+        return _err("too many places")
+    merged = merge_places([] if body.get("replace") else stored, body["places"])
+    await get_store().upsert_user(claims["sub"], {"places": merged})
+    return JSONResponse({"places": merged})
+
+
 # ------------------------------------------------------- plugin subscriptions
 
 MAX_PLUGIN_IDS = 200
