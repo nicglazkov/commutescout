@@ -1,15 +1,22 @@
 """The cell poller and the Flare records it serves.
 
-One degree cells, and only the cells someone asked about in the last ten
-minutes are ever fetched: an idle cell costs Waze nothing.
+Coverage is demand-driven, not a fixed box. The plugin answers for anywhere
+in its coverage, but it only fetches one-degree cells somebody actually asked
+about in the last ten minutes: an unasked cell costs Waze nothing, however
+wide the coverage box is. There is no background sweep of the box.
+
+Demand is also what decides where the one upstream session spends its time.
+That session runs one query at a time, so the busiest cells win: cells are
+ranked by how often they were asked about in that ten-minute window, and only
+the top few stay hot. The ranking is recomputed on a timer rather than on
+every ask, so a sweep in progress is not thrown away when the order shifts.
 
 A one-degree cell is about 110 km across, and the upstream thins a wide
-viewport down hard, so a cell is not fetched from its center. It is swept:
-each cell holds a lattice of sub-cell points, the points take turns stalest
-first, and each turn runs the shrinking-box series around its own point. That
-way the far corner of a cell gets the same attention as the middle, and the
-request rate stays at a few queries every few seconds however wide the
-coverage box is.
+viewport down hard, so a hot cell is not fetched from its center. It is
+swept: each cell holds a lattice of sub-cell points, the points take turns
+stalest first, and each turn runs the shrinking-box series around its own
+point. That way the far corner of a cell gets the same attention as the
+middle.
 
 Alerts themselves are kept in one cache for the whole service rather than one
 per cell, because the RT protocol sends each alert once per session and not
@@ -37,6 +44,8 @@ log = logging.getLogger("waze_relay.store")
 CELL_DEG = 1.0
 CELL_RADIUS_M = 80_000        # what a mediated caller asks for at a cell center
 SUB_CELLS = 2                 # the lattice inside one cell, per side
+HOT_CELLS = 8                 # how many cells one session keeps fresh at once
+HOT_RECHECK_S = 30.0          # how often the hot set is allowed to change
 WANTED_TTL_S = 600.0          # a cell is fetched only if it was asked about this recently
 STALE_GRACE_S = 300.0         # serve on after a failure for this long, then serve nothing
 GONE_VOTES_TO_HIDE = 3
@@ -119,40 +128,70 @@ class Store:
     """What the HTTP layer reads, and the loop that keeps it fresh."""
 
     def __init__(self, source: WazeSource, *, bbox: list[float], refresh_s: int = 60,
-                 sub_cells: int = SUB_CELLS,
+                 sub_cells: int = SUB_CELLS, hot_cells: int = HOT_CELLS,
                  now: Callable[[], float] | None = None,
                  wall_clock: Callable[[], float] | None = None) -> None:
         self.source = source
         self.bbox = bbox
         self.refresh_s = refresh_s
         self.sub_cells = max(1, sub_cells)
+        self.hot_limit = max(1, hot_cells)
         self._now = now or time.monotonic
         self._wall = wall_clock or time.time
         self.votes = Votes(now=self._wall)
         self.confirmations = ConfirmTracker(now=self._wall)
-        self._wanted: dict[tuple[int, int], float] = {}
+        self._asks: dict[tuple[int, int], list[float]] = {}
         self._point_ok: dict[tuple[int, int, int, int], float] = {}
+        self._hot: list[tuple[int, int]] = []
+        self._hot_at = -HOT_RECHECK_S
         self._lock = asyncio.Lock()
 
     # -------------------------------------------------------------- asks
 
     def want(self, lat: float, lon: float) -> None:
-        """Remember that someone asked about this point, so its cell joins
-        the rotation."""
-        self._wanted[cell_of(lat, lon)] = self._now()
+        """Remember that someone asked about this point. The cell joins the
+        rotation, and asking again is what moves it up the queue."""
+        self._asks.setdefault(cell_of(lat, lon), []).append(self._now())
 
     def wanted_cells(self) -> list[tuple[int, int]]:
+        """Every cell asked about inside the window, busiest first."""
         now = self._now()
-        for cell in [c for c, t in self._wanted.items() if now - t > WANTED_TTL_S]:
-            self._wanted.pop(cell, None)
+        for cell, times in list(self._asks.items()):
+            recent = [t for t in times if now - t <= WANTED_TTL_S]
+            if recent:
+                self._asks[cell] = recent
+                continue
+            self._asks.pop(cell, None)
             for point in [p for p in self._point_ok if p[:2] == cell]:
                 self._point_ok.pop(point, None)
-        return list(self._wanted)
+        return sorted(self._asks, key=lambda c: (-len(self._asks[c]), -self._asks[c][-1]))
+
+    def hot_cells(self) -> list[tuple[int, int]]:
+        """The cells the session actually spends its queries on.
+
+        One session runs one query at a time, so wanting a hundred cells and
+        fetching a hundred cells are different things: the busiest few are
+        kept fresh and the rest wait their turn to become busy. The set only
+        changes every HOT_RECHECK_S, so a sweep is not abandoned half done
+        because the order moved underneath it.
+        """
+        now = self._now()
+        wanted = self.wanted_cells()
+        if now - self._hot_at >= HOT_RECHECK_S or not self._hot:
+            self._hot = wanted[:self.hot_limit]
+            self._hot_at = now
+        else:
+            # Keep the current set, minus anything that aged out of the window.
+            live = set(wanted)
+            self._hot = [c for c in self._hot if c in live]
+            if not self._hot:
+                self._hot = wanted[:self.hot_limit]
+        return self._hot
 
     def wanted_points(self) -> list[tuple[int, int, int, int]]:
-        """Every lattice square of every cell still in the rotation."""
+        """Every lattice square of every hot cell."""
         return [(*cell, row, col)
-                for cell in self.wanted_cells()
+                for cell in self.hot_cells()
                 for row in range(self.sub_cells)
                 for col in range(self.sub_cells)]
 
@@ -259,10 +298,10 @@ class Store:
         points = self.wanted_points()
         if not points or self.source.backoff_remaining_s() > 0:
             return False
-        # The stalest square goes first, and no square is fetched more often
-        # than once per refresh window. When the coverage box is wide enough
-        # that a full sweep takes longer than that, the stalest square is
-        # always overdue and the loop simply keeps sweeping.
+        # The stalest square of the hot cells goes first, and no square is
+        # fetched more often than once per refresh window. When there are
+        # more hot squares than the window fits, the stalest one is always
+        # overdue and the loop simply keeps sweeping.
         point = min(points, key=lambda p: self._point_ok.get(p, 0.0))
         if self._now() - self._point_ok.get(point, 0.0) < self.refresh_s:
             return False
@@ -295,10 +334,13 @@ class Store:
     def status(self) -> dict:
         """Counts and freshness, for a health check. Nothing identifying."""
         points = self.wanted_points()
+        hot = self.hot_cells()
         return {
             "alerts": len(self.source.cache),
             "served": len(self.records()),
-            "cells_wanted": len(self._wanted),
+            "cells_wanted": len(self.wanted_cells()),
+            "cells_hot": len(hot),
+            "hot": [f"{lat},{lon}" for lat, lon in hot],
             "points_wanted": len(points),
             "points_swept": sum(1 for p in points if p in self._point_ok),
             "fresh": self.fresh,
