@@ -6,7 +6,7 @@
     "url": "https://github.com/nicglazkov/commutescout",
     "source": "github"
   },
-  "version": "2.94.0",
+  "version": "2.95.0",
   "remotes": [
     {
       "type": "streamable-http",
