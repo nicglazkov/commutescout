@@ -78,3 +78,30 @@ def test_prefs_persist_on_the_account(store):  # noqa: F811 - fixture
     assert c.get("/api/watch/me", headers=auth()).json()["prefs"] == {"units": "km"}
     # Pending users keep their preferences too; status is untouched.
     assert c.get("/api/watch/me", headers=auth()).json()["status"] == "pending"
+
+
+def _plugins_app():
+    return Starlette(routes=[
+        Route("/api/watch/me", watch.api_watch_me),
+        Route("/api/me/plugins", watch.api_me_plugins, methods=["GET", "PUT"]),
+    ])
+
+
+def test_plugin_choices_follow_the_account(store):  # noqa: F811 - fixture
+    c = TestClient(_plugins_app())
+    assert c.get("/api/me/plugins").status_code == 401
+    assert c.get("/api/me/plugins", headers=auth()).json()["plugins"] == {"off": [], "private": []}
+    # Switch a catalog plugin off; add a private one by URL.
+    r = c.put("/api/me/plugins", json={"off": ["wz-flare", "wz-flare"]}, headers=auth())
+    assert r.status_code == 200 and r.json()["plugins"]["off"] == ["wz-flare"]
+    r = c.put("/api/me/plugins", json={"private": [{"id": "mine", "name": "Mine",
+                                                    "base": "https://p.example.com", "token": "t"}]},
+              headers=auth())
+    assert r.status_code == 200
+    assert r.json()["plugins"]["private"][0]["base"] == "https://p.example.com"
+    assert r.json()["plugins"]["off"] == ["wz-flare"], "an omitted key keeps what is stored"
+    assert c.put("/api/me/plugins", json={"private": [{"id": "x", "base": "http://p"}]},
+                 headers=auth()).status_code == 400
+    assert c.put("/api/me/plugins", json={"off": "wz-flare"}, headers=auth()).status_code == 400
+    # The account summary carries the same choices for the apps' first load.
+    assert c.get("/api/watch/me", headers=auth()).json()["plugins"]["off"] == ["wz-flare"]
