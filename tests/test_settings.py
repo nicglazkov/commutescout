@@ -5,6 +5,7 @@ the Watch pane."""
 import re
 from pathlib import Path
 
+import pytest
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.testclient import TestClient
@@ -143,3 +144,46 @@ def test_merge_caps_recents_and_keeps_newest():
                for i in range(30)]
     out = watch.merge_places([], recents)
     assert len(out) == watch.MAX_RECENTS and out[0]["used_at"] == 29
+
+
+def _devices_app():
+    return Starlette(routes=[
+        Route("/api/me/devices", watch.api_me_devices, methods=["POST", "DELETE"]),
+    ])
+
+
+@pytest.mark.asyncio
+async def test_phone_tokens_register_and_receive_pushes(store, monkeypatch):  # noqa: F811
+    c = TestClient(_devices_app())
+    assert c.post("/api/me/devices", json={"token": "t" * 40, "platform": "ios"}).status_code == 401
+    assert c.post("/api/me/devices", json={"token": "short", "platform": "ios"},
+                  headers=auth()).status_code == 400
+    assert c.post("/api/me/devices", json={"token": "t" * 40, "platform": "watch"},
+                  headers=auth()).status_code == 400
+    r = c.post("/api/me/devices", json={"token": "t" * 40, "platform": "android",
+                                        "app_version": "0.2.5"}, headers=auth())
+    assert r.status_code == 200 and r.json()["devices"] == 1
+    subs = await watch.get_store().list_push_subs("sam")
+    assert len(subs) == 1 and subs[0]["fcm"]["platform"] == "android"
+    # A push to this account goes through FCM; a dead token is forgotten.
+    sent_to = []
+
+    def fake_send(token, platform, payload):
+        sent_to.append((token, payload["title"]))
+        if token.startswith("dead"):
+            raise watch._GonePush
+        return True
+
+    monkeypatch.setattr(watch, "_fcm_send", fake_send)
+    monkeypatch.setattr(watch, "vapid_keys", lambda: (None, None))
+    assert await watch._push_to_subs(subs, {"title": "Hi", "body": "there"}) == 1
+    assert sent_to == [("t" * 40, "Hi")]
+    c.post("/api/me/devices", json={"token": "dead" + "x" * 40, "platform": "ios"}, headers=auth())
+    subs = await watch.get_store().list_push_subs("sam")
+    assert len(subs) == 2
+    await watch._push_to_subs(subs, {"title": "Hi", "body": "there"})
+    assert len(await watch.get_store().list_push_subs("sam")) == 1, "dead token removed"
+    r = c.request("DELETE", "/api/me/devices", json={"token": "t" * 40, "platform": "android"},
+                  headers=auth())
+    assert r.status_code == 200
+    assert await watch.get_store().list_push_subs("sam") == []
