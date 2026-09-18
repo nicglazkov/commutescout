@@ -33,6 +33,12 @@ COLLECTION = "flare_sources"
 CELL_DEG = 1.0
 CELL_RADIUS_M = 80_000       # covers a one-degree cell's half diagonal
 MAX_CELLS = 200
+# Demand-driven polling: cells people looked at in the last VIEW_TTL_S are
+# asked for every cycle; the rest of a plugin's coverage is swept a few
+# cells at a time, and a cell's alerts are kept for CELL_KEEP_S.
+VIEW_TTL_S = 600
+SWEEP_PER_POLL = 12
+CELL_KEEP_S = 900
 POLL_FLOOR_S = 60
 HANDSHAKE_TTL_S = 3600
 STATUS_WRITE_EVERY_S = 600
@@ -104,13 +110,28 @@ def set_source_store(store) -> None:
     _store = store
 
 
+def lattice(bbox: list) -> list[tuple[float, float]]:
+    """Centers of every one-degree cell, on the whole-degree grid, that
+    touches ``[s, w, n, e]``: the same cells whatever box asks for them."""
+    s, w, n, e = bbox
+    la0, la1 = math.floor(s / CELL_DEG), math.ceil(n / CELL_DEG)
+    lo0, lo1 = math.floor(w / CELL_DEG), math.ceil(e / CELL_DEG)
+    lats = [(la0 + i) * CELL_DEG + CELL_DEG / 2 for i in range(max(1, la1 - la0))]
+    lons = [(lo0 + j) * CELL_DEG + CELL_DEG / 2 for j in range(max(1, lo1 - lo0))]
+    return [(round(la, 3), round(lo, 3)) for la in lats for lo in lons]
+
+
+def cell_of(lat: float, lon: float) -> tuple[float, float]:
+    """The one-degree cell center that contains a point."""
+    return (round(math.floor(lat / CELL_DEG) * CELL_DEG + CELL_DEG / 2, 3),
+            round(math.floor(lon / CELL_DEG) * CELL_DEG + CELL_DEG / 2, 3))
+
+
 def cells_for(bbox: list) -> list[tuple[float, float]]:
     """Centers of the one-degree cells that tile ``[s, w, n, e]``,
     capped at MAX_CELLS (a nationwide plugin gets its middle first)."""
     s, w, n, e = bbox
-    lats = [s + CELL_DEG / 2 + i * CELL_DEG for i in range(int(math.ceil((n - s) / CELL_DEG)))]
-    lons = [w + CELL_DEG / 2 + j * CELL_DEG for j in range(int(math.ceil((e - w) / CELL_DEG)))]
-    cells = [(round(la, 3), round(lo, 3)) for la in lats for lo in lons]
+    cells = lattice(bbox)
     if len(cells) > MAX_CELLS:
         cy, cx = (s + n) / 2, (w + e) / 2
         cells.sort(key=lambda c: (c[0] - cy) ** 2 + (c[1] - cx) ** 2)
@@ -164,6 +185,9 @@ class Poller:
         self.handshakes: dict[str, tuple[float, dict]] = {}
         self.status: dict[str, dict] = {}
         self._last_poll: dict[str, float] = {}
+        self.viewed: dict[tuple[float, float], float] = {}
+        self.cells: dict[str, dict[tuple[float, float], tuple[float, list]]] = {}
+        self._sweep_pos: dict[str, int] = {}
         self._last_status_write: dict[str, float] = {}
         self._sources_loaded = 0.0
 
@@ -204,16 +228,44 @@ class Poller:
         self.handshakes[sid] = (time.monotonic(), hs)
         return hs
 
+    def note_view(self, box) -> None:
+        """A map request looked at ``box``: its cells are hot for a while, so
+        every plugin covering them is asked for them on the next cycle."""
+        lat_min, lon_min, lat_max, lon_max = box
+        cells = lattice([lat_min, lon_min, lat_max, lon_max])
+        if len(cells) > 64:   # a continent-sized view is not a place anyone is driving
+            return
+        t = time.monotonic()
+        for c in cells:
+            self.viewed[c] = t
+
+    def cells_to_poll(self, sid: str, coverage: list) -> list[tuple[float, float]]:
+        """Hot cells inside the coverage, plus a rotating slice of the rest."""
+        s, w, n, e = coverage
+        cutoff = time.monotonic() - VIEW_TTL_S
+        def inside(c):
+            return s - CELL_DEG <= c[0] <= n + CELL_DEG and w - CELL_DEG <= c[1] <= e + CELL_DEG
+        hot = [c for c, t in self.viewed.items() if t >= cutoff and inside(c)]
+        grid = lattice(coverage)
+        pos = self._sweep_pos.get(sid, 0) % max(1, len(grid))
+        sweep = [grid[(pos + i) % len(grid)] for i in range(min(SWEEP_PER_POLL, len(grid)))]
+        self._sweep_pos[sid] = pos + SWEEP_PER_POLL
+        out: list[tuple[float, float]] = []
+        for c in hot + sweep:
+            if c not in out:
+                out.append(c)
+        return out[:MAX_CELLS]
+
     async def poll_source(self, src: dict, client) -> int:
-        """Fetch every cell of one source; returns the accepted count."""
+        """Fetch the cells that matter for one source; returns the count served."""
         sid = src["id"]
         now = self._now()
         try:
             hs = await self.handshake(src, client)
             base = src["base"].rstrip("/")
             sem = asyncio.Semaphore(CONCURRENCY)
-            seen: dict[str, dict] = {}
             problems: list[str] = []
+            kept_by_cell: dict[tuple[float, float], list[dict]] = {}
 
             async def one(cell):
                 async with sem:
@@ -226,12 +278,23 @@ class Poller:
                         return
                     kept, probs = flare.accept_alerts(r.json(), now=now)
                     problems.extend(probs[:3])
-                    for a in kept[: flare.MAX_PER_CELL]:
-                        seen.setdefault(a["id"], a)
+                    kept_by_cell[cell] = kept[: flare.MAX_PER_CELL]
 
-            await asyncio.gather(*(one(c) for c in cells_for(hs["coverage"]["bbox"])))
+            await asyncio.gather(*(one(c) for c in self.cells_to_poll(sid, hs["coverage"]["bbox"])))
+            # Cells not polled this cycle keep what they had, for a while.
+            t = time.monotonic()
+            cells = self.cells.setdefault(sid, {})
+            for c, kept in kept_by_cell.items():
+                cells[c] = (t, kept)
+            for c in [c for c, (ts, _) in cells.items() if t - ts > CELL_KEEP_S]:
+                del cells[c]
             declared = set(hs.get("kinds") or [])
-            alerts = [a for a in seen.values() if a["kind"] in declared][: flare.MAX_ALERTS]
+            seen: dict[str, dict] = {}
+            for _, kept in cells.values():
+                for a in kept:
+                    if a["kind"] in declared:
+                        seen.setdefault(a["id"], a)
+            alerts = list(seen.values())[: flare.MAX_ALERTS]
             self.alerts[sid] = alerts
             self.status[sid] = {"ok": True, "count": len(alerts), "last_ok": now.isoformat(),
                                 "problems": problems[:5], "name": hs.get("name")}
@@ -303,11 +366,18 @@ class Poller:
             if src.get("visibility") != "public":
                 continue
             st = self.status.get(sid, {})
+            hs = (self.handshakes.get(sid) or (0, {}))[1]
             out.append({"id": sid, "name": src.get("name") or sid,
                         "attribution": src.get("attribution"), "trust": src.get("trust"),
                         "tier": flare.tier_of(src),
                         "count": st.get("count", 0), "ok": st.get("ok"),
-                        "last_ok": st.get("last_ok")})
+                        "last_ok": st.get("last_ok"),
+                        # For the marketplace cards.
+                        "description": hs.get("description"),
+                        "coverage": (hs.get("coverage") or {}).get("bbox"),
+                        "kinds": hs.get("kinds") or [],
+                        "capabilities": hs.get("capabilities") or {},
+                        "base": _https_only(src.get("base"))})
         return out
 
 

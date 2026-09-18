@@ -153,3 +153,37 @@ def test_admin_adds_a_plugin_by_its_url(admin_app):
     assert src["id"] in mem.docs and src["base"] == "https://plugins.example.com"
     assert src["visibility"] == "public" and src["trust"] == "community"
     assert mem.docs[src["id"]]["enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_polling_follows_viewed_cells_and_sweeps_the_rest(monkeypatch):
+    # A plugin covering ten by ten degrees: the cell someone just looked at
+    # is asked for every cycle; the rest is swept a slice at a time, and a
+    # cell's alerts survive the cycles it is not polled in.
+    plugin = FakePlugin(handshake={"coverage": {"bbox": [30.0, -125.0, 40.0, -115.0]}})
+    asked: list[tuple[float, float]] = []
+    orig = plugin.handler
+
+    def counting(req):
+        if req.url.path.endswith("/alerts"):
+            asked.append((float(req.url.params["lat"]), float(req.url.params["lon"])))
+        return orig(req)
+
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    hot = flare_sources.cell_of(GOOD["lat"], GOOD["lon"])
+    p.note_view((GOOD["lat"] - 0.05, GOOD["lon"] - 0.05, GOOD["lat"] + 0.05, GOOD["lon"] + 0.05))
+    async with httpx.AsyncClient(transport=httpx.MockTransport(counting)) as c:
+        await p.run_once(c)
+        first = list(asked)
+        assert hot in first
+        assert len(first) <= flare_sources.SWEEP_PER_POLL + 1
+        assert p.status["sabreplus"]["count"] == 1
+        # Next cycle: a different sweep slice, the hot cell again.
+        asked.clear()
+        p._last_poll.clear()
+        await p.run_once(c)
+        assert hot in asked
+        assert set(asked) != set(first)
+        assert p.status["sabreplus"]["count"] == 1

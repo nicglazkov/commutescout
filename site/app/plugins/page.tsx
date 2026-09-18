@@ -296,6 +296,13 @@ export default function PluginsPage() {
 
       <section className="py-14 md:py-16" aria-labelledby="catalog">
         <div className="mx-auto max-w-3xl px-6">
+          <p className="text-cs-ink/70 mb-4 text-sm">
+            Browsing, not building? The{" "}
+            <Link href="/marketplace" prefetch={false} className="text-cs-sky hover:underline">
+              marketplace
+            </Link>{" "}
+            shows every listed plugin as a tile with an Install button.
+          </p>
           <H2 id="catalog">Public catalog</H2>
           <p className="text-cs-ink/70 mt-4 text-balance">
             The public plugins the map and the apps read right now. CommuteScout&apos;s own
