@@ -148,3 +148,24 @@ async def test_presets_map_to_valhalla_options():
     # Three points: no alternates (Valhalla only offers them for two).
     await routing.plan(fetch, [], locs + [{"lat": 37.6, "lon": -121.8}])
     assert bodies[-1]["alternates"] == 0
+
+
+def test_unconfirmed_community_closures_never_steer_the_router():
+    def closure(**extra):
+        return {"kind": "plugin", "flare_kind": "ROAD_CLOSED", "lat": 37.5, "lon": -122.0, **extra}
+
+    def excluded(**extra):
+        return len(routing.exclusions([closure(**extra)]))
+
+    # One signed-in report, nobody has confirmed it: drawn on the map, ignored here.
+    assert excluded(source_id="commutescout", tier="approved", confirmations=0) == 0
+    assert excluded(source_id="commutescout", tier="approved", confirmations=1) == 0
+    # Two other people confirmed it.
+    assert excluded(source_id="commutescout", tier="approved", confirmations=2) == 1
+    # A plugin nobody reviewed gets no veto on its own; confirmations still count.
+    assert excluded(source_id="sabreplus", tier="unreviewed", confirmations=0) == 0
+    assert excluded(source_id="sabreplus", tier="unreviewed", confirmations=3) == 1
+    # A reviewed plugin's closure counts on its own.
+    assert excluded(source_id="official", tier="approved", confirmations=0) == 1
+    # Missing fields mean untrusted.
+    assert excluded() == 0

@@ -129,6 +129,26 @@ def _along(path: list, spacing_m: float) -> list[tuple[float, float]]:
     return out
 
 
+# A community closure steers the router only once other people have
+# confirmed it; a third-party plugin's closure only when CommuteScout has
+# reviewed that plugin. Anything else is drawn on the map, labelled, and
+# ignored here: one signed-in account must never be able to close a road
+# for every driver.
+CLOSURE_CONFIRMATIONS = 2
+COMMUNITY_SOURCE_ID = "commutescout"
+
+
+def trusted_closure(m: dict) -> bool:
+    """Whether a plugin ROAD_CLOSED marker may steer the router."""
+    try:
+        confirmations = int(m.get("confirmations") or 0)
+    except (TypeError, ValueError):
+        confirmations = 0
+    if confirmations >= CLOSURE_CONFIRMATIONS:
+        return True
+    return m.get("source_id") != COMMUNITY_SOURCE_ID and m.get("tier") == "approved"
+
+
 def exclusions(markers: list[dict], *, avoid_chains: bool = False) -> list[dict]:
     """Points the router must not route through: every full closure
     (sampled along its road-following path when the snapper has one),
@@ -160,6 +180,8 @@ def exclusions(markers: list[dict], *, avoid_chains: bool = False) -> list[dict]
             if chain_level(m.get("status")) in ("R-2", "R-3"):
                 add(m["lat"], m["lon"])
         elif kind == "plugin" and m.get("flare_kind") == "ROAD_CLOSED":
+            if not trusted_closure(m):
+                continue
             path = m.get("path")
             if isinstance(path, list) and len(path) >= 2:
                 for lat, lon in _along(path, EXCLUDE_SPACING_M):
