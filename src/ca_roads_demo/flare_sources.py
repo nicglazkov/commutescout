@@ -156,6 +156,7 @@ def alert_marker(src: dict, a: dict) -> dict:
     m = {
         "kind": "plugin",
         "id": f"{src['id']}:{a['id']}",
+        "unlisted": src.get("visibility") == "unlisted",
         "lat": a["lat"], "lon": a["lon"],
         "flare_kind": a["kind"],
         "label": a.get("description") or None,
@@ -392,26 +393,32 @@ class Poller:
         stale = st.get("ok") is False or age is None or age > STALE_AFTER_S
         return count, stale
 
+    def card(self, sid: str) -> dict | None:
+        """One catalog entry: what the marketplace tile and the app's
+        plugin screen show. None for a private source (never shown
+        outside its owner's own devices) or an unknown id."""
+        src = self.sources.get(sid)
+        if not src or src.get("visibility") not in ("public", "unlisted"):
+            return None
+        st = self.status.get(sid, {})
+        hs = (self.handshakes.get(sid) or (0, {}))[1]
+        count, stale = self.catalog_count(sid)
+        return {"id": sid, "name": src.get("name") or sid,
+                "attribution": src.get("attribution"), "trust": src.get("trust"),
+                "tier": flare.tier_of(src), "visibility": src.get("visibility"),
+                "count": count, "stale": stale, "ok": st.get("ok"),
+                "last_ok": st.get("last_ok"),
+                # For the marketplace cards.
+                "description": hs.get("description"),
+                "coverage": (hs.get("coverage") or {}).get("bbox"),
+                "kinds": hs.get("kinds") or [],
+                "capabilities": hs.get("capabilities") or {},
+                "base": _https_only(src.get("base"))}
+
     def public_sources(self) -> list[dict]:
-        out = []
-        for sid, src in self.sources.items():
-            if src.get("visibility") != "public":
-                continue
-            st = self.status.get(sid, {})
-            hs = (self.handshakes.get(sid) or (0, {}))[1]
-            count, stale = self.catalog_count(sid)
-            out.append({"id": sid, "name": src.get("name") or sid,
-                        "attribution": src.get("attribution"), "trust": src.get("trust"),
-                        "tier": flare.tier_of(src),
-                        "count": count, "stale": stale, "ok": st.get("ok"),
-                        "last_ok": st.get("last_ok"),
-                        # For the marketplace cards.
-                        "description": hs.get("description"),
-                        "coverage": (hs.get("coverage") or {}).get("bbox"),
-                        "kinds": hs.get("kinds") or [],
-                        "capabilities": hs.get("capabilities") or {},
-                        "base": _https_only(src.get("base"))})
-        return out
+        cards = (self.card(sid) for sid, src in self.sources.items()
+                 if src.get("visibility") == "public")
+        return [c for c in cards if c]
 
 
 poller = Poller()
@@ -660,11 +667,19 @@ async def api_flare_confirm(request: Request) -> JSONResponse:
 
 # ---------------------------------------------------------------- HTTP
 
-async def api_flare_sources(_: Request) -> JSONResponse:
+async def api_flare_sources(request: Request) -> JSONResponse:
     """Public: the enabled public sources, for attribution in the
-    Layers pane and the app's Sources screen."""
-    return JSONResponse({"sources": poller.public_sources(),
-                         "spec": "https://github.com/nicglazkov/commutescout/blob/main/docs/flare.md"})
+    Layers pane and the app's Sources screen. `?id=` fetches one
+    plugin by id, which is how an unlisted plugin is shared: by link,
+    never on the catalog."""
+    spec = "https://github.com/nicglazkov/commutescout/blob/main/docs/flare.md"
+    sid = (request.query_params.get("id") or "").strip()[:80]
+    if sid:
+        card = poller.card(sid)
+        if not card:
+            return JSONResponse({"error": "no such plugin"}, status_code=404)
+        return JSONResponse({"sources": [card], "spec": spec})
+    return JSONResponse({"sources": poller.public_sources(), "spec": spec})
 
 
 async def api_admin_flare(request: Request) -> JSONResponse:

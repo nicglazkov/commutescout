@@ -5,10 +5,13 @@ import { useEffect, useState } from "react";
 // The plugin marketplace: one tile per listed plugin, read live from
 // /api/flare/sources. "Install" on the web turns the plugin's layer on
 // for this browser (the map reads the same key); the apps keep their own
-// switch per phone. Per-account subscriptions come later.
+// switch per phone. An unlisted plugin is never in the catalog: it is
+// shared by link (/marketplace?plugin=<id>) and shows on the map only
+// once installed here, so a second key holds those.
 type Source = {
   id: string;
   name: string;
+  visibility?: "public" | "unlisted" | null;
   description?: string | null;
   attribution?: { name?: string; url?: string } | null;
   tier?: "approved" | "unreviewed" | "private" | null;
@@ -21,12 +24,25 @@ type Source = {
 };
 
 const KEY = "cs.plugins.off"; // ids switched off in this browser, comma separated
+const ON_KEY = "cs.plugins.on"; // unlisted ids installed in this browser
 
-function offSet(): Set<string> {
+function idSet(key: string): Set<string> {
   try {
-    return new Set((localStorage.getItem(KEY) || "").split(",").filter(Boolean));
+    return new Set((localStorage.getItem(key) || "").split(",").filter(Boolean));
   } catch {
     return new Set();
+  }
+}
+
+function offSet(): Set<string> {
+  return idSet(KEY);
+}
+
+function saveSet(key: string, ids: Set<string>) {
+  try {
+    localStorage.setItem(key, Array.from(ids).join(","));
+  } catch {
+    /* private mode */
   }
 }
 
@@ -75,29 +91,53 @@ export function Marketplace() {
   const [sources, setSources] = useState<Source[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [off, setOff] = useState<Set<string>>(new Set());
+  const [on, setOn] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // The browser's own switches are read once the catalog arrives, so no
-    // state is set synchronously inside the effect.
-    fetch("/api/flare/sources", { headers: { Accept: "application/json" } })
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((d) => {
+    // state is set synchronously inside the effect. A ?plugin=<id> link
+    // brings an unlisted plugin along, fetched by id and shown first.
+    const wanted = new URLSearchParams(window.location.search).get("plugin") || "";
+    const headers = { Accept: "application/json" };
+    const catalog = fetch("/api/flare/sources", { headers }).then((r) =>
+      r.ok ? r.json() : Promise.reject(r.status),
+    );
+    const extra = wanted
+      ? fetch("/api/flare/sources?id=" + encodeURIComponent(wanted), { headers })
+          .then((r) => (r.ok ? r.json() : { sources: [] }))
+          .catch(() => ({ sources: [] }))
+      : Promise.resolve({ sources: [] });
+    Promise.all([catalog, extra])
+      .then(([d, e]) => {
+        const listed: Source[] = Array.isArray(d.sources) ? d.sources : [];
+        const linked: Source[] = (Array.isArray(e.sources) ? e.sources : []).filter(
+          (s: Source) => !listed.some((l) => l.id === s.id),
+        );
         setOff(offSet());
-        setSources(Array.isArray(d.sources) ? d.sources : []);
+        setOn(idSet(ON_KEY));
+        setSources([...linked, ...listed]);
       })
       .catch(() => setFailed(true));
   }, []);
 
-  function toggle(id: string) {
-    const next = new Set(off);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setOff(next);
-    try {
-      localStorage.setItem(KEY, Array.from(next).join(","));
-    } catch {
-      /* private mode */
+  function isInstalled(s: Source) {
+    return s.visibility === "unlisted" ? on.has(s.id) : !off.has(s.id);
+  }
+
+  function toggle(s: Source) {
+    if (s.visibility === "unlisted") {
+      const next = new Set(on);
+      if (next.has(s.id)) next.delete(s.id);
+      else next.add(s.id);
+      setOn(next);
+      saveSet(ON_KEY, next);
+      return;
     }
+    const next = new Set(off);
+    if (next.has(s.id)) next.delete(s.id);
+    else next.add(s.id);
+    setOff(next);
+    saveSet(KEY, next);
   }
 
   if (failed) {
@@ -112,7 +152,7 @@ export function Marketplace() {
   return (
     <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {sources.map((s) => {
-        const installed = !off.has(s.id);
+        const installed = isInstalled(s);
         return (
           <article
             key={s.id}
@@ -123,6 +163,9 @@ export function Marketplace() {
               <h2 className="text-lg font-semibold leading-tight text-cs-ink">{s.name}</h2>
               <Tier tier={s.tier} />
             </div>
+            {s.visibility === "unlisted" && (
+              <p className="text-cs-ink/60 mt-1 text-xs">Unlisted: shared with you by link, not on the catalog.</p>
+            )}
             <p className="text-cs-ink/70 mt-2 text-sm">
               {s.description || (kindsLabel(s.kinds) ? `Shows ${kindsLabel(s.kinds)}.` : "Community alerts for the map.")}
             </p>
@@ -153,7 +196,7 @@ export function Marketplace() {
             <div className="mt-5 flex items-center justify-between gap-3">
               <button
                 type="button"
-                onClick={() => toggle(s.id)}
+                onClick={() => toggle(s)}
                 className={
                   "rounded-full px-4 py-2 text-sm font-medium transition-colors " +
                   (installed

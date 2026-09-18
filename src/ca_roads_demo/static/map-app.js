@@ -1481,6 +1481,7 @@ function renderBatch(markers, groups) {
     // Tolls are lines-only: no dot in the point registries, so they
     // can never be confused with incident or closure dots.
     if (g === 'toll') continue;
+    if (g === 'plugin' && pluginHidden(m)) continue;
     items[g].push({ m, g, layer: null, on: false });
   }
   stripsBuilt = false;
@@ -2552,6 +2553,29 @@ function groupOn(g) {
   const box = document.querySelector('#filters input[data-group="' + g + '"]');
   return !box || box.checked;
 }
+// The marketplace's per-browser switches: cs.plugins.off hides a listed
+// plugin; an unlisted plugin (shared by link) shows only once it is in
+// cs.plugins.on. A /map?plugin=<id> link installs that plugin first.
+function pluginSwitches() {
+  let off = '', on = '';
+  try { off = localStorage.getItem('cs.plugins.off') || ''; on = localStorage.getItem('cs.plugins.on') || ''; } catch (e) { /* private mode */ }
+  return { off: off.split(',').filter(Boolean), on: on.split(',').filter(Boolean) };
+}
+function pluginHidden(m) {
+  const sid = m.source_id || String(m.id || '').split(':')[0];
+  const sw = pluginSwitches();
+  if (sw.off.includes(sid)) return true;
+  return !!m.unlisted && !sw.on.includes(sid);
+}
+(function installLinkedPlugin() {
+  const sid = new URLSearchParams(location.search).get('plugin');
+  if (!sid) return;
+  const sw = pluginSwitches();
+  try {
+    localStorage.setItem('cs.plugins.off', sw.off.filter((x) => x !== sid).join(','));
+    if (!sw.on.includes(sid)) localStorage.setItem('cs.plugins.on', sw.on.concat([sid]).join(','));
+  } catch (e) { /* private mode */ }
+})();
 // One row reads like the popup head: what it is, then where.
 function alertRow(m, g) {
   const src = m.src || SOURCE_DEFAULT[g] || '';
