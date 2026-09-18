@@ -187,9 +187,11 @@ async def my_alerts(request: Request) -> JSONResponse:
     if not store.in_coverage(lat, lon):
         return error(422, "outside_coverage",
                      "That point is outside this plugin's coverage.")
-    session = await users.get(key)
+    session = await users.get(key) if users is not None else None
     if session is None:
-        # Every session is taken. The shared feed is the honest fallback.
+        # Every session is taken, or the registry never came up. Either way
+        # the shared feed is the honest fallback; nobody gets an error page
+        # because the relay is busy.
         store.want(lat, lon)
         return JSONResponse({"alerts": store.near(lat, lon, radius), "ttl_s": REFRESH_S,
                              "as_of": store.as_of, "session": "shared"})

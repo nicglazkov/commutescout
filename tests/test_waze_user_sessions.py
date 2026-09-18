@@ -356,6 +356,19 @@ async def test_a_full_relay_serves_the_shared_feed_and_says_so(monkeypatch):
     await users.close_all()
 
 
+async def test_the_flag_on_without_a_registry_falls_back_rather_than_erroring(monkeypatch):
+    monkeypatch.setattr(auth, "verify", _verify_key)
+    store = _store()
+    store.source.cache.submit(AlertQueryResult([_alert()], []))
+    store.source.last_ok = store._now()
+    async with _app_client(store, None) as client:     # registry never came up
+        response = await client.get(
+            "/flare/v1/me/alerts", headers={"Authorization": "Bearer token"},
+            params={"lat": LA[0], "lon": LA[1], "r": 25_000})
+    assert response.status_code == 200
+    assert response.json()["session"] == "shared"
+
+
 async def test_a_signed_in_caller_outside_coverage_is_refused(monkeypatch):
     monkeypatch.setattr(auth, "verify", _verify_key)
     clock = [1000.0]
