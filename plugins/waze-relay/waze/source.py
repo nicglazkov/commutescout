@@ -43,12 +43,39 @@ SHRINK_STEPS = 5
 PRIMARY_VIEWPORT = 0.75
 
 
+class RegistrationBudget:
+    """How many anonymous accounts may be minted in a rolling day.
+
+    The upstream caps anonymous accounts per day, and that cap is on whoever
+    is doing the minting, not on each object that does it. So one of these is
+    shared by every session in a process: a relay holding several user
+    sessions must not hand each of them its own allowance.
+    """
+
+    def __init__(self, limit: int = MAX_ACCOUNTS_PER_DAY) -> None:
+        self.limit = limit
+        self.minted = 0
+        self.window_start = 0.0
+
+    def allowed(self, now: float) -> bool:
+        return now - self.window_start > DAY_S or self.minted < self.limit
+
+    def record(self, now: float) -> None:
+        if now - self.window_start > DAY_S:
+            self.window_start = now
+            self.minted = 0
+        self.minted += 1
+
+
 class WazeSource:
     """One account, one session, one merged cache."""
 
     def __init__(self, client: httpx.AsyncClient, *, region: str = "na",
                  shrink_steps: int = SHRINK_STEPS, query_budget_s: float = QUERY_BUDGET_S,
                  state_path: str | None = None,
+                 credentials: Credentials | None = None,
+                 device: DeviceIdentity | None = None,
+                 budget: RegistrationBudget | None = None,
                  now: Callable[[], float] | None = None,
                  wall_clock: Callable[[], float] | None = None) -> None:
         self._client = client
@@ -60,12 +87,14 @@ class WazeSource:
         self._wall = wall_clock or time.time
         self.cache = AlertCache(now=self._wall)
         self._session: WazeSession | None = None
-        self._credentials: Credentials | None = None
-        self._device: DeviceIdentity | None = None
+        # An account handed in by the pool. Two sessions cannot share one,
+        # because the upstream logs the other out, so the pool only ever
+        # lends an account that nothing else is holding.
+        self._credentials: Credentials | None = credentials
+        self._device: DeviceIdentity | None = device
         self._consecutive_rejections = 0
         self._backoff_until = 0.0
-        self._registrations = 0
-        self._registration_window_start = 0.0
+        self.budget = budget or RegistrationBudget()
         self.last_ok: float | None = None
         self.last_error: str | None = None
         self._load_state()
@@ -79,17 +108,24 @@ class WazeSource:
     def backoff_remaining_s(self) -> float:
         return max(0.0, self._backoff_until - self._now())
 
+    def account(self) -> tuple[Credentials | None, DeviceIdentity | None]:
+        """The account and device this source holds, for the pool to lend on
+        to the next session once this one retires."""
+        return self._credentials, self._device
+
     def _load_state(self) -> None:
         if self._state_path is None or not self._state_path.exists():
             return
+        if self._credentials is not None:
+            return                      # an account was handed in; keep it
         with contextlib.suppress(Exception):
             state = json.loads(self._state_path.read_text("utf-8"))
             if state.get("community") and state.get("secret"):
                 self._credentials = Credentials(state["community"], state["secret"])
             if state.get("device"):
                 self._device = DeviceIdentity.from_dict(state["device"])
-            self._registrations = int(state.get("registrations", 0))
-            self._registration_window_start = float(state.get("registration_window_start", 0.0))
+            self.budget.minted = int(state.get("registrations", 0))
+            self.budget.window_start = float(state.get("registration_window_start", 0.0))
 
     def _save_state(self) -> None:
         if self._state_path is None:
@@ -100,8 +136,8 @@ class WazeSource:
                 "community": self._credentials.community if self._credentials else None,
                 "secret": self._credentials.secret if self._credentials else None,
                 "device": self._device.as_dict() if self._device else None,
-                "registrations": self._registrations,
-                "registration_window_start": self._registration_window_start,
+                "registrations": self.budget.minted,
+                "registration_window_start": self.budget.window_start,
             }), "utf-8")
 
     # ------------------------------------------------------------ refresh
@@ -226,17 +262,13 @@ class WazeSource:
         log.warning("holding off for %ss", int(delay))
 
     def _registration_window_rolled_over(self) -> bool:
-        return self._wall() - self._registration_window_start > DAY_S
+        return self._wall() - self.budget.window_start > DAY_S
 
     def _can_register_today(self) -> bool:
-        return (self._registration_window_rolled_over()
-                or self._registrations < MAX_ACCOUNTS_PER_DAY)
+        return self.budget.allowed(self._wall())
 
     def _record_registration(self) -> None:
-        if self._registration_window_rolled_over():
-            self._registration_window_start = self._wall()
-            self._registrations = 0
-        self._registrations += 1
+        self.budget.record(self._wall())
         self._save_state()
 
     # ------------------------------------------------------------ reading

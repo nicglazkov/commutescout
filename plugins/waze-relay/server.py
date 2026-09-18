@@ -22,8 +22,10 @@ import os
 import time
 from collections.abc import AsyncIterator
 
+import auth
 import httpx
 import mapping
+import sessions as sessions_module
 import store as store_module
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -70,6 +72,13 @@ STATE_FILE = os.environ.get("WAZE_STATE_FILE") or None
 # writing on behalf of anyone at all is the fastest way to lose the read path
 # as well. A private deployment can set WAZE_REPORTS=1.
 REPORTS = (os.environ.get("WAZE_REPORTS") or "").lower() in ("1", "true", "yes")
+# A signed-in phone can hold an upstream session of its own, so its alerts
+# are shaped by where it is rather than mixed in with everybody's. Off until
+# the apps are ready for it, and bounded when on: see sessions.py for why one
+# account per person from one address is not on the table.
+USER_SESSIONS = (os.environ.get("WAZE_USER_SESSIONS") or "").lower() in ("1", "true", "yes")
+USER_MAX = int(os.environ.get("WAZE_USER_SESSIONS_MAX") or sessions_module.MAX_CONCURRENT)
+USER_IDLE_S = float(os.environ.get("WAZE_USER_IDLE_S") or sessions_module.IDLE_S)
 
 PLUGIN = {
     "protocol": "flare/1",
@@ -89,8 +98,17 @@ PLUGIN = {
     "contact": os.environ.get("FLARE_CONTACT") or "https://commutescout.com/contact",
     "auth": "bearer" if TOKEN else "none",
 }
+if USER_SESSIONS:
+    # A plugin extension, not part of flare/1: an app feature-detects it
+    # here rather than hardcoding the path, and its absence means off.
+    PLUGIN["extensions"] = {"user_sessions": {
+        "path": "/flare/v1/me/alerts", "auth": "firebase",
+        "idle_s": int(USER_IDLE_S), "max_concurrent": USER_MAX,
+    }}
 
 store: Store | None = None
+users: sessions_module.UserSessions | None = None
+auth_client: httpx.AsyncClient | None = None
 _buckets: dict[str, list[float]] = {}
 
 
@@ -140,6 +158,46 @@ async def alerts(request: Request) -> JSONResponse:
     store.want(lat, lon)
     return JSONResponse({"alerts": store.near(lat, lon, radius),
                          "ttl_s": REFRESH_S, "as_of": store.as_of})
+
+
+async def my_alerts(request: Request) -> JSONResponse:
+    """Alerts for one signed-in person, from a session of their own.
+
+    Answers from that person's cache at once and never waits on the
+    upstream; a refresh runs behind the answer when the cache is stale or
+    they have moved. When every session is taken, this falls back to the
+    shared feed and says so, rather than refusing.
+    """
+    if not USER_SESSIONS:
+        return error(404, "bad_request", "This plugin does not run per-user sessions.")
+    if _limited(request):
+        return error(429, "rate_limited", "Slow down.",
+                     f"{RATE_PER_MIN} requests a minute.")
+    key = await auth.verify(auth.bearer(request.headers.get("authorization")),
+                            auth_client)
+    if key is None:
+        return error(401, "unauthorized", "A signed-in token is required here.",
+                     "Use /flare/v1/alerts for the shared feed.")
+    try:
+        lat = sessions_module.snap(float(request.query_params["lat"]))
+        lon = sessions_module.snap(float(request.query_params["lon"]))
+        radius = min(float(request.query_params.get("r", CELL_RADIUS_M)), MAX_RADIUS_M)
+    except (KeyError, ValueError):
+        return error(400, "bad_request", "lat, lon and r (meters) are required.")
+    if not store.in_coverage(lat, lon):
+        return error(422, "outside_coverage",
+                     "That point is outside this plugin's coverage.")
+    session = await users.get(key) if users is not None else None
+    if session is None:
+        # Every session is taken, or the registry never came up. Either way
+        # the shared feed is the honest fallback; nobody gets an error page
+        # because the relay is busy.
+        store.want(lat, lon)
+        return JSONResponse({"alerts": store.near(lat, lon, radius), "ttl_s": REFRESH_S,
+                             "as_of": store.as_of, "session": "shared"})
+    session.trigger_refresh_if_stale(lat, lon, radius)
+    return JSONResponse({"alerts": session.alerts(lat, lon, radius, store.to_record),
+                         "ttl_s": REFRESH_S, "as_of": session.as_of, "session": "user"})
 
 
 async def confirm(request: Request) -> JSONResponse:
@@ -199,7 +257,10 @@ async def report(request: Request) -> JSONResponse:
 
 
 async def status(_: Request) -> JSONResponse:
-    return JSONResponse({"id": PLUGIN["id"], "version": VERSION, **store.status()})
+    body = {"id": PLUGIN["id"], "version": VERSION, **store.status()}
+    if users is not None:
+        body["user_sessions"] = users.status()
+    return JSONResponse(body)
 
 
 async def healthz(_: Request) -> JSONResponse:
@@ -208,13 +269,22 @@ async def healthz(_: Request) -> JSONResponse:
 
 @contextlib.asynccontextmanager
 async def lifespan(_: Starlette) -> AsyncIterator[None]:
-    global store
+    global store, users, auth_client
 
     client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_S, follow_redirects=False)
     source = WazeSource(client, shrink_steps=SHRINK_STEPS,
                         query_budget_s=QUERY_BUDGET_S, state_path=STATE_FILE)
     store = Store(source, bbox=BBOX, refresh_s=REFRESH_S, sub_cells=SUB_CELLS,
                   hot_cells=HOT_CELLS)
+    if USER_SESSIONS:
+        auth_client = httpx.AsyncClient(timeout=15.0)
+        # The day's account budget is shared with the relay, so several user
+        # sessions cannot each mint their own allowance.
+        users = sessions_module.UserSessions(
+            max_concurrent=USER_MAX, idle_s=USER_IDLE_S, budget=source.budget,
+            shrink_steps=SHRINK_STEPS, query_budget_s=QUERY_BUDGET_S,
+            client_factory=lambda: httpx.AsyncClient(timeout=HTTP_TIMEOUT_S,
+                                                     follow_redirects=False))
     task = asyncio.create_task(store.run())
     try:
         yield
@@ -222,12 +292,17 @@ async def lifespan(_: Starlette) -> AsyncIterator[None]:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+        if users is not None:
+            await users.close_all()
+        if auth_client is not None:
+            await auth_client.aclose()
         await client.aclose()
 
 
 app = Starlette(lifespan=lifespan, routes=[
     Route("/flare/v1/handshake", handshake),
     Route("/flare/v1/alerts", alerts),
+    Route("/flare/v1/me/alerts", my_alerts),
     Route("/flare/v1/confirm", confirm, methods=["POST"]),
     Route("/flare/v1/report", report, methods=["POST"]),
     Route("/status", status),
