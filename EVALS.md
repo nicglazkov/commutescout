@@ -4,7 +4,7 @@
 > have not been regenerated for later releases. Four of the ten tools
 > have no golden questions yet and are not scored: `rank_routes`,
 > `get_cameras`, `get_road_signs`, and `get_nearby_events`. The
-> pass-rate table covers the six tools that are.
+> pass-rate table below lists only the scored ones.
 
 Generated 2026-07-19T08:48:04+00:00 by `evals/run_evals.py` from `v2.28.0`. Models answer the golden questions using the MCP tool surface served from recorded fixtures; grading is exact-fact matching plus an LLM judge scored against ground truth. Judge: `claude-sonnet-4-6` (not an evaluated model).
 
