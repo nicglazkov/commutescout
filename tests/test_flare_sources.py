@@ -224,3 +224,22 @@ async def test_catalog_holds_the_last_good_count_and_flags_staleness():
     src = p.public_sources()[0]
     assert src["count"] == 0 and src["stale"] is True
 
+
+def test_an_unlisted_plugin_is_found_by_id_only(admin_app):
+    c, mem = admin_app
+    r = c.post("/api/admin/flare", json={"manifest": dict(MANIFEST, visibility="unlisted")},
+               headers=auth("tok-admin"))
+    assert r.status_code == 200, r.text
+    r = c.post("/api/admin/flare", json={"manifest": dict(MANIFEST, id="secret", name="Secret",
+                                                          visibility="private", trust="private")},
+               headers=auth("tok-admin"))
+    assert r.status_code == 200, r.text
+    flare_sources.poller._sources_loaded = 0.0
+    import asyncio
+    asyncio.run(flare_sources.poller.refresh_sources())
+    assert c.get("/api/flare/sources").json()["sources"] == []
+    card = c.get("/api/flare/sources?id=sabreplus").json()["sources"][0]
+    assert card["id"] == "sabreplus" and card["visibility"] == "unlisted"
+    assert c.get("/api/flare/sources?id=secret").status_code == 404
+    assert c.get("/api/flare/sources?id=nope").status_code == 404
+
