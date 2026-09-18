@@ -1,11 +1,18 @@
-# Registry submissions (manual steps)
+# Registry submissions
 
-Everything here is prepared; submitting is a manual step after the Cloud Run
-deploy, once the service URL exists.
+The server has been listed in the MCP Registry since July 2026 as
+`io.github.nicglazkov/commutescout`, from [server.json](../server.json).
+The entry is republished at release time so the registry carries the
+released version; a workflow that does this on each release is being
+added separately. The Claude connectors directory entry below was
+submitted by hand.
 
 ## MCP Registry
 
-1. Put the real service URL in `server.json` (`remotes[0].url`).
+To republish by hand after a release:
+
+1. Confirm `server.json` carries the released version and the service
+   URL (`remotes[0].url`).
 2. Install the publisher CLI and run it from the repo root:
 
    ```sh

@@ -39,9 +39,10 @@ Rules learned the hard way, keep them:
   `evals/build_fixtures.py`, and add golden questions for it.
 - Unit tests against recorded fixture files, like `tests/test_chp.py`.
 
-## Candidate sources for v2
+## Sources added after v1
 
-Roughly in order of value per effort:
+All of these have shipped. The table stays as a record of what each one
+added and how it is accessed:
 
 | Source | What it adds | Access |
 |--------|--------------|--------|
@@ -53,7 +54,7 @@ Roughly in order of value per effort:
 | Nevada DOT (`nvroads.com`) | Continuations to Reno and Las Vegas past the state line | Free feed, registration |
 | Caltrans RWIS (`cwwp2.dot.ca.gov/data/d<N>/rwis/`) | Road weather stations: pavement temp, wind, visibility on passes | Free, same portal |
 | USGS earthquakes (`earthquake.usgs.gov/fdsnws/`) | Significant quakes near corridors | Free JSON |
-| PeMS or a commercial speeds API | Actual travel speeds and delay | Key and/or paid |
+| TomTom Traffic (`api.tomtom.com`) | Actual travel speeds against free-flow in `check_route` | Key (`TOMTOM_API_KEY`), free tier |
 
 The corridor table (`ca_roads_mcp/corridors.py`) is the other growth axis:
 adding a corridor is a dozen waypoints and a few aliases, no code.
@@ -64,12 +65,12 @@ Wiring the feed is only half of it. A state is live when all of these
 agree, and they are in different files, so they drift:
 
 1. `ca_roads_demo/states.py` registry (the adapter itself).
-2. The `COVERED` set in `static/index.html`, or `PARTIAL` if only some
+2. The `COVERED` set in `static/map-app.js`, or `PARTIAL` if only some
    layers work. A state missing here renders under the grey
    "not supported yet" wash even though its data is on the map.
 3. A row in [state-coverage.md](state-coverage.md).
 4. The **state count**, which appears in more places than you would
-   expect: `index.html` metadata (title, description, og, ld+json),
+   expect: `map.html` metadata (title, description, og, ld+json),
    `prompt.py`, the `get_nearby_events` docstring in
    `ca_roads_mcp/server.py`, and [registry.md](registry.md).
 5. The **feed count**. A new state usually adds new feed sources too.

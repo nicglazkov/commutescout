@@ -95,8 +95,10 @@ Parameter notes: `center` is `"lat,lon"`; `radius_km` caps at 160 on
 per call; `get_lane_closures` returns at most 200 closures and says
 when it truncates; pass `from_coords` and `to_coords` to `check_route`
 whenever you have them (they skip geocoding). The hosted server allows
-20 requests in a burst, 30 per minute sustained, and 2,000 per day per
-client address.
+20 requests in a burst, 30 per minute sustained, and 10,000 per day per
+client address. A free API key has its own limit of 2,000 per day and a
+Pro key 10,000; see the tier table on the
+[developers page](https://commutescout.com/developers#keys).
 
 Route and region reports also carry context that changes the advice:
 weather alerts sampled along the trip, road-weather stations reporting

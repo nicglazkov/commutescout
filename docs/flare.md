@@ -215,9 +215,14 @@ What a plugin looks like in the catalog and in the app's sources list.
   "visibility": "public",
   "trust": "community",
   "attribution": {"name": "SABRE Plus", "url": "https://example.com"},
-  "signature": "<JWS by CommuteScout, verified entries only>"
+  "signature": "<reserved; not issued or verified yet>"
 }
 ```
+
+`signature` is reserved for a JWS that CommuteScout will issue for
+verified entries. Nothing issues or checks one today: the map, the
+apps, and the backend do not read the field, and its presence proves
+nothing.
 
 `visibility` is `public` (listed, always mediated), `unlisted` (mediated,
 reachable by id), or `private` (direct; the user typed the URL). `trust`

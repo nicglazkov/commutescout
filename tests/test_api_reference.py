@@ -41,5 +41,5 @@ def test_page_renders_the_reference_and_covers_the_contract():
         assert code in rest and f'"{code}"' in PAGE, code
     for code in ("invalid_key", "rate_limited", "daily_limit", "keys_unavailable"):
         assert code in limiter and f'"{code}"' in PAGE, code
-    assert '"2,000"' in PAGE and '"10,000"' in PAGE  # Nic's tiers
+    assert '"2,000"' in PAGE and '"10,000"' in PAGE  # the published tiers
     assert "Do not put a key in a web page" in PAGE

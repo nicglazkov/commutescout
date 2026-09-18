@@ -47,9 +47,11 @@ python evals/build_fixtures.py
 python evals/run_evals.py       # needs your own ANTHROPIC_API_KEY; costs a few dollars
 ```
 
-Evals run only on manual dispatch (the Actions tab or the weekly cron),
-not on releases. The release trigger was removed after it repeatedly ran
-up the monthly API budget.
+Evals run only on manual dispatch from the Actions tab, not on releases
+and not on a schedule. The release trigger was removed after it
+repeatedly ran up the monthly API budget. (The Monday cron in
+`model-watch.yml` checks the Models API for new models; it does not run
+the suite.)
 
 ## Releases
 

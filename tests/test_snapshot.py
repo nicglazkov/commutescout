@@ -1,6 +1,12 @@
-"""Snapshot publisher: what gets published, and what must not be."""
+"""Snapshot publisher: what gets published, and what must not be.
+
+Also home to the published-claim drift guards (state count, feed count,
+tool count), which live here because they read the same registry the
+publisher does.
+"""
 import gzip
 import json
+import re
 
 from ca_roads_demo import snapshot
 from mapsrc import map_source
@@ -249,6 +255,11 @@ def test_state_counts_are_current():
         ("site/components/blocks/hero-section-1.tsx", r"across (\d+) states"),
         ("docs/architecture.md", r"(\d+) states"),
         ("docs/mcp.md", r"(\d+) states, not just California"),
+        # /mcp states the count inside the get_nearby_events blurb. It
+        # used to be split across a string concatenation, which hid it
+        # from every per-file pattern; the blurb now keeps "37 states"
+        # on one line so this sees it.
+        ("site/app/mcp/page.tsx", r"(\d+) states"),
     ):
         text = pathlib.Path(path).read_text(encoding="utf-8")
         found = [int(g) for m in re.finditer(pattern, text)
@@ -363,3 +374,101 @@ def test_feed_counts_are_current():
             assert n == actual, f"{path} says {n} feeds, PUBLIC_SOURCE_COUNT says {actual}"
         checked += len(found)
     assert checked >= 5
+
+
+# The developer-facing and plugin pages carry no count today, but they
+# describe the same coverage as the marketing pages and are where a
+# "across N states" or "N official agency feeds" line tends to get
+# added later. The two tests above demand at least one match per file,
+# which would make adding such a page a failing test rather than a
+# guarded one; this one checks whatever counts a page happens to state
+# and passes when it states none.
+OPTIONAL_COUNT_PAGES = (
+    "site/app/developers/page.tsx",
+    "site/app/mcp/page.tsx",
+    "site/app/plugins/page.tsx",
+    "site/app/marketplace/page.tsx",
+    "site/app/pricing/page.tsx",
+    # /pricing renders this block, which interpolates lib/stats.ts.
+    "site/components/blocks/pricing-1.tsx",
+)
+
+
+def test_site_pages_state_and_feed_counts_agree_when_stated():
+    """Any count these pages do state must be the current one."""
+    import pathlib
+    import re
+
+    from ca_roads_demo import states
+
+    state_count = states.coverage_summary()["states"]
+    feed_count = states.PUBLIC_SOURCE_COUNT
+
+    bad = []
+    for rel in OPTIONAL_COUNT_PAGES:
+        text = pathlib.Path(rel).read_text(encoding="utf-8")
+        for n in re.findall(r"(\d+)\s+states\b", text):
+            if int(n) != state_count:
+                bad.append(f"{rel} says {n} states, registry says {state_count}")
+        for n in re.findall(r"(\d+)\s+(?:official agency )?feeds\b", text):
+            if int(n) != feed_count:
+                bad.append(
+                    f"{rel} says {n} feeds, PUBLIC_SOURCE_COUNT says {feed_count}")
+    assert not bad, sorted(bad)
+
+
+# "ten tools" is written in words as often as in digits, so the guard
+# reads both. Anything else a page might say ("the tools", "new tools")
+# carries no count and is left alone.
+NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+    "twelve": 12,
+}
+TOOL_COUNT_RE = re.compile(
+    r"\b(\d+|" + "|".join(NUMBER_WORDS) + r")\s+(?:read-only\s+|MCP\s+)?tools\b",
+    re.IGNORECASE,
+)
+
+
+def test_tool_counts_are_current():
+    """Every prose "ten tools" claim must match the tool registry.
+
+    Sibling to the state and feed guards. The count is claimed in the
+    README feature list, the architecture diagram, and three places on
+    /mcp plus two on /developers, which is exactly the spread that let
+    docs/mcp.md sit at nine tools while README said ten. The source of
+    truth is the same one tests/test_api_reference.py uses: the tool
+    list that scripts/gen_api_reference.py builds from the tools' own
+    schemas.
+    """
+    import pathlib
+    import runpy
+
+    repo = pathlib.Path(__file__).resolve().parent.parent
+    build = runpy.run_path(
+        str(repo / "scripts" / "gen_api_reference.py"), run_name="not_main"
+    )["build"]
+    actual = len(build()["tools"])
+    assert actual > 0
+
+    paths = [repo / "README.md", repo / "EVALS.md"]
+    paths += sorted((repo / "docs").glob("*.md"))
+    paths += sorted((repo / "site" / "app").glob("**/page.tsx"))
+
+    bad = []
+    checked = 0
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        for m in TOOL_COUNT_RE.finditer(text):
+            token = m.group(1).lower()
+            n = NUMBER_WORDS.get(token) or int(token)
+            checked += 1
+            if n != actual:
+                bad.append(
+                    f"{path.relative_to(repo).as_posix()} says "
+                    f"{m.group(0)!r}, the registry has {actual}")
+    assert not bad, sorted(bad)
+    # The claim is made on several surfaces; if it vanishes everywhere
+    # the guard has stopped guarding anything.
+    assert checked >= 5, f"only {checked} tool-count claims found"

@@ -47,7 +47,7 @@ it as a tool instead of guessing about traffic.
 
 - **A live national map:** incidents by type, closures by class, chain
   controls, wildfires with real burn footprints, roadside weather
-  stations, roughly 18,000 traffic cameras, and every message sign
+  stations, more than 18,000 traffic cameras, and every message sign
   currently displaying something.
 - **Toll and express-lane pricing:** current rates on tolled corridors
   and bridges, drawn along the actual carriageway with hand-verified
@@ -69,7 +69,9 @@ it as a tool instead of guessing about traffic.
   keeps a closed on-ramp from reading as a closed highway.
 - **Public evals:** 91 golden questions on recorded fixtures, scored by
   an LLM judge that is never one of the evaluated models. The
-  [scorecard](EVALS.md) and its full history are committed to this repo.
+  [scorecard](EVALS.md) is a dated snapshot that names the version it
+  reflects, not a release gate; it and its full history are committed
+  to this repo.
 
 <table>
   <tr>
@@ -109,7 +111,7 @@ on the latest release, feeds already warm.
 | Setup | None, just open it | `pip install` or Cloud Run deploy |
 | Updates & feeds | Always current, managed | You redeploy and manage keys |
 | AI assistant | Included | Bring your own Anthropic API key |
-| Watch-area alerts | Included (invite-only trial) | Extra setup: Firestore, push keys, a scheduler |
+| Watch-area alerts | Included, free; accounts currently need approval | Extra setup: Firestore, push keys, a scheduler |
 | Upcoming premium features | Land here first | Not planned |
 | Support | Actively maintained | Best effort via issues |
 
