@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
+import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -592,6 +593,76 @@ async def api_watch_me(request: Request) -> JSONResponse:
         "plugins": _plugins_of(user),
         "watches": watches,
     })
+
+
+# ---------------------------------------------------------------- phones
+
+FCM_URL = "https://fcm.googleapis.com/v1/projects/{project}/messages:send"
+FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
+
+
+async def api_me_devices(request: Request) -> JSONResponse:
+    """A phone registers its Firebase Cloud Messaging token (POST) or
+    forgets it (DELETE). The token is stored like a web push subscription,
+    so watch alerts and test pushes reach phones and browsers alike."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    body = await _read_json(request) or {}
+    token = str(body.get("token") or "").strip()
+    platform = str(body.get("platform") or "").strip().lower()
+    if not (20 <= len(token) <= 4096) or platform not in ("ios", "android"):
+        return _err("token and platform (ios or android) are required")
+    store = get_store()
+    sub_id = "fcm-" + hashlib.sha256(token.encode()).hexdigest()[:20]
+    if request.method == "DELETE":
+        with contextlib.suppress(Exception):
+            await store.delete_push_sub(sub_id)
+        return JSONResponse({"ok": True})
+    subs = await store.list_push_subs(claims["sub"])
+    if len(subs) >= MAX_PUSH_SUBS and all(s["id"] != sub_id for s in subs):
+        return _err("too many devices registered", 403)
+    await store.upsert_push_sub(sub_id, {
+        "uid": claims["sub"],
+        "fcm": {"token": token, "platform": platform,
+                "app_version": str(body.get("app_version") or "")[:40]},
+        "created_at": datetime.now(UTC).isoformat(),
+    })
+    known = any(s["id"] == sub_id for s in subs)
+    return JSONResponse({"ok": True, "devices": len(subs) + (0 if known else 1)})
+
+
+def _fcm_access_token() -> str | None:
+    """A bearer token for FCM from the service account Cloud Run runs as."""
+    try:
+        import google.auth
+        from google.auth.transport.requests import Request as GRequest
+
+        creds, _ = google.auth.default(scopes=[FCM_SCOPE])
+        creds.refresh(GRequest())
+        return creds.token
+    except Exception:  # noqa: BLE001 - no credentials locally; pushes to phones are skipped
+        return None
+
+
+def _fcm_send(token: str, platform: str, payload: dict) -> bool:
+    """One message to one phone; raises _GonePush when the token is dead."""
+    bearer = _fcm_access_token()
+    if not bearer:
+        return False
+    msg = {
+        "token": token,
+        "notification": {"title": payload.get("title") or "CommuteScout",
+                         "body": payload.get("body") or ""},
+        "data": {"url": str(payload.get("url") or "")},
+        "android": {"priority": "high", "notification": {"channel_id": "alerts"}},
+        "apns": {"payload": {"aps": {"sound": "default"}}},
+    }
+    r = httpx.post(FCM_URL.format(project=PROJECT), json={"message": msg},
+                   headers={"Authorization": f"Bearer {bearer}"}, timeout=15)
+    if r.status_code == 404 or (r.status_code == 400 and "UNREGISTERED" in r.text):
+        raise _GonePush
+    return r.status_code == 200
 
 
 # ---------------------------------------------------------------- places
@@ -1355,7 +1426,7 @@ async def _collect_expansion_events(client) -> list[dict]:
 
 async def _push_to_subs(subs: list[dict], payload: dict) -> int:
     raw, _ = vapid_keys()
-    if raw is None:
+    if raw is None and not any((s.get("fcm") or {}).get("token") for s in subs):
         return 0
     data = json.dumps(payload)
     sent = 0
@@ -1375,6 +1446,19 @@ async def _push_to_subs(subs: list[dict], payload: dict) -> int:
             return False
 
     for sub in subs:
+        fcm = sub.get("fcm") or {}
+        if fcm.get("token"):
+            try:
+                ok = await asyncio.to_thread(_fcm_send, fcm["token"], fcm.get("platform", ""),
+                                             payload)
+            except _GonePush:
+                with contextlib.suppress(Exception):
+                    await get_store().delete_push_sub(sub["id"])
+                continue
+            except Exception:  # noqa: BLE001 - one phone never stops the rest
+                ok = False
+            sent += 1 if ok else 0
+            continue
         info = sub.get("subscription") or {}
         if not valid_push_endpoint(info.get("endpoint") or ""):
             with contextlib.suppress(Exception):

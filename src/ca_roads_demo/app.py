@@ -2302,6 +2302,7 @@ app = Starlette(
         Route("/api/watch/prefs", watch.api_watch_prefs, methods=["POST"]),
         Route("/api/me/plugins", watch.api_me_plugins, methods=["GET", "PUT"]),
         Route("/api/me/places", watch.api_me_places, methods=["GET", "PUT"]),
+        Route("/api/me/devices", watch.api_me_devices, methods=["POST", "DELETE"]),
         Route("/api/keys", watch.api_keys_list, methods=["GET"]),
         Route("/api/keys", watch.api_keys_create, methods=["POST"]),
         Route("/api/keys/{key_id}", watch.api_keys_revoke, methods=["DELETE"]),
