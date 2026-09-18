@@ -589,8 +589,63 @@ async def api_watch_me(request: Request) -> JSONResponse:
         "status": user.get("status"),
         "admin": is_admin(claims),
         "prefs": user.get("prefs") or {},
+        "plugins": _plugins_of(user),
         "watches": watches,
     })
+
+
+# ------------------------------------------------------- plugin subscriptions
+
+MAX_PLUGIN_IDS = 200
+MAX_PRIVATE_PLUGINS = 20
+
+
+def _plugins_of(user: dict) -> dict:
+    """The account's plugin choices: catalog plugins switched off (every
+    listed plugin is on until switched off) and private plugins added by
+    URL, so an Install on one device follows the account to the next."""
+    p = user.get("plugins") or {}
+    off = [x for x in (p.get("off") or []) if isinstance(x, str)]
+    private = [x for x in (p.get("private") or []) if isinstance(x, dict)]
+    return {"off": off[:MAX_PLUGIN_IDS], "private": private[:MAX_PRIVATE_PLUGINS]}
+
+
+async def api_me_plugins(request: Request) -> JSONResponse:
+    """GET: the account's plugin choices. PUT: replace them ({off: [ids],
+    private: [{id, name, base, token?}]}); either key may be omitted to
+    keep what is stored."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    user = await _load_user(claims)
+    current = _plugins_of(user)
+    if request.method == "GET":
+        return JSONResponse({"plugins": current})
+    body = await _read_json(request)
+    if body is None:
+        return _err("JSON body required")
+    if "off" in body:
+        off = body.get("off")
+        ok_ids = isinstance(off, list) and all(isinstance(x, str) and 0 < len(x) <= 64 for x in off)
+        if not ok_ids:
+            return _err("off must be a list of plugin ids")
+        current["off"] = sorted(set(off))[:MAX_PLUGIN_IDS]
+    if "private" in body:
+        priv = body.get("private")
+        if not isinstance(priv, list) or len(priv) > MAX_PRIVATE_PLUGINS:
+            return _err(f"private must be a list of at most {MAX_PRIVATE_PLUGINS} plugins")
+        clean = []
+        for p in priv:
+            bad = not isinstance(p, dict) or not isinstance(p.get("id"), str)
+            if bad or not isinstance(p.get("base"), str):
+                return _err("each private plugin needs id and base")
+            if not p["base"].startswith("https://"):
+                return _err("private plugin base must be an https URL")
+            clean.append({k: p[k] for k in ("id", "name", "base", "token", "refresh_s")
+                          if k in p and isinstance(p[k], (str, int))})
+        current["private"] = clean
+    await get_store().upsert_user(claims["sub"], {"plugins": current})
+    return JSONResponse({"plugins": current})
 
 
 UNITS = ("mi", "km")
