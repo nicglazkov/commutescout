@@ -216,33 +216,27 @@ class RateLimitMiddleware:
             await self.app(scope, receive, send)
             return
         key = limiter_key(self._client_key(scope))
+        # The keyless path answers with the same envelope as a keyed one:
+        # {"error": {"code", "message", "hint"}}, with CORS, so a client
+        # written against the documented shape survives its first 429.
         if not self.limiter.allow(key):
-            await send(
-                {
-                    "type": "http.response.start",
-                    "status": 429,
-                    "headers": [
-                        (b"content-type", b"application/json"),
-                        (b"retry-after", b"10"),
-                    ],
-                }
-            )
-            await send(
-                {
-                    "type": "http.response.body",
-                    "body": b'{"error": "rate limited, slow down"}',
-                }
-            )
+            status, headers, body = _json_error(
+                429, "rate_limited", "Too many requests at once from your address.",
+                "Slow down, or use an API key for a higher rate.",
+                ((b"retry-after", b"2"),))
+            await send({"type": "http.response.start", "status": status, "headers": headers})
+            await send({"type": "http.response.body", "body": body})
             return
         # Counted after the bucket: a client the bucket already turned
         # away has not spent anything, so it must not burn its day.
         if self.daily_limit and not self.daily.allow(key, self.daily_limit):
-            await send({"type": "http.response.start", "status": 429,
-                        "headers": [(b"content-type", b"application/json"),
-                                    (b"retry-after", b"3600")]})
-            await send({"type": "http.response.body",
-                        "body": b'{"error": "daily request limit reached '
-                                b'for your address; try tomorrow"}'})
+            status, headers, body = _json_error(
+                429, "daily_limit",
+                f"Your address has used its {self.daily_limit} requests for today (UTC).",
+                "An API key has its own daily allowance.",
+                ((b"retry-after", b"3600"),))
+            await send({"type": "http.response.start", "status": status, "headers": headers})
+            await send({"type": "http.response.body", "body": body})
             return
         await self.app(scope, receive, send)
 

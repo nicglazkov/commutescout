@@ -224,4 +224,11 @@ def register(mcp) -> None:
             return error(502, "upstream_error",
                          "The tool could not complete; a source feed may be down.",
                          "Retry in a minute.")
+        # A tool that answers {"error": "..."} is refusing the request as
+        # given (a malformed center, an unknown region): that is the
+        # caller's mistake, so it is a 400 in the one envelope, never a
+        # 200 that a navigation client would read as "nothing nearby".
+        if isinstance(result, dict) and isinstance(result.get("error"), str):
+            return error(400, "invalid_parameter", result["error"],
+                         f"See {PUBLIC_BASE}{PREFIX}/docs#operation/{name}.")
         return JSONResponse(result, headers={**CORS, "Cache-Control": "no-store"})

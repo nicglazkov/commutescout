@@ -124,11 +124,17 @@ class DailyGuards:
         if today != self.day:
             self.day = today
             self.dollars = 0.0
+            self.exhausted_logged = False
 
     def try_start_question(self, ip: str) -> str | None:
         """Returns an error message when a cap blocks the question."""
         self._roll()
         if self.dollars >= GLOBAL_DAILY_DOLLARS:
+            if not getattr(self, "exhausted_logged", False):
+                # One line a day, matched by a Cloud Monitoring log alert.
+                log.warning("demo daily budget exhausted: %.2f of %.2f USD",
+                            self.dollars, GLOBAL_DAILY_DOLLARS)
+                self.exhausted_logged = True
             return "The demo hit its daily budget. Try again tomorrow."
         if not self.questions.allow(ip, PER_IP_DAILY_QUESTIONS):
             return "Daily question limit reached for your address. Try again tomorrow."
