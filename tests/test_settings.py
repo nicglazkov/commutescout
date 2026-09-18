@@ -94,9 +94,8 @@ def test_plugin_choices_follow_the_account(store):  # noqa: F811 - fixture
     # Switch a catalog plugin off; add a private one by URL.
     r = c.put("/api/me/plugins", json={"off": ["wz-flare", "wz-flare"]}, headers=auth())
     assert r.status_code == 200 and r.json()["plugins"]["off"] == ["wz-flare"]
-    r = c.put("/api/me/plugins", json={"private": [{"id": "mine", "name": "Mine",
-                                                    "base": "https://p.example.com", "token": "t"}]},
-              headers=auth())
+    mine = {"id": "mine", "name": "Mine", "base": "https://p.example.com", "token": "t"}
+    r = c.put("/api/me/plugins", json={"private": [mine]}, headers=auth())
     assert r.status_code == 200
     assert r.json()["plugins"]["private"][0]["base"] == "https://p.example.com"
     assert r.json()["plugins"]["off"] == ["wz-flare"], "an omitted key keeps what is stored"

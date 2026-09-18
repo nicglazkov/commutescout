@@ -636,7 +636,8 @@ async def api_me_plugins(request: Request) -> JSONResponse:
             return _err(f"private must be a list of at most {MAX_PRIVATE_PLUGINS} plugins")
         clean = []
         for p in priv:
-            if not isinstance(p, dict) or not isinstance(p.get("id"), str)                     or not isinstance(p.get("base"), str):
+            bad = not isinstance(p, dict) or not isinstance(p.get("id"), str)
+            if bad or not isinstance(p.get("base"), str):
                 return _err("each private plugin needs id and base")
             if not p["base"].startswith("https://"):
                 return _err("private plugin base must be an https URL")
