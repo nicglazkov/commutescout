@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import math
 import os
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -42,6 +44,11 @@ CELL_KEEP_S = 900
 POLL_FLOOR_S = 60
 HANDSHAKE_TTL_S = 3600
 STATUS_WRITE_EVERY_S = 600
+# A source that keeps failing is backed off instead of being asked every
+# cycle forever, and one slow source cannot hold up the whole sweep.
+FAILS_BEFORE_BACKOFF = 3
+MAX_BACKOFF_S = 3600
+CYCLE_DEADLINE_S = 120
 # The catalog shows a plugin's last good count for this long after its
 # cells expire or a poll fails, so a quiet map or one bad poll does not
 # flash "0 alerts" on the marketplace.
@@ -195,6 +202,7 @@ class Poller:
         self.cells: dict[str, dict[tuple[float, float], tuple[float, list]]] = {}
         self._sweep_pos: dict[str, int] = {}
         self._last_status_write: dict[str, float] = {}
+        self._fails: dict[str, int] = {}
         self._sources_loaded = 0.0
 
     @property
@@ -205,7 +213,11 @@ class Poller:
 
     async def refresh_sources(self) -> None:
         docs = await self.store.list()
+        # A private source belongs to one person's own device and is
+        # polled there; the mediated poller never fetches it and it never
+        # reaches the shared map.
         self.sources = {d["id"]: d for d in docs if d.get("enabled", True)
+                        and d.get("visibility") != "private"
                         and not flare.validate_manifest(d)}
         for sid in list(self.alerts):
             if sid not in self.sources:
@@ -219,15 +231,41 @@ class Poller:
             h["Authorization"] = f"Bearer {src['token']}"
         return h
 
+    async def fetch_json(self, client, url: str, *, src: dict, params: dict | None = None,
+                         timeout: float = 15.0) -> tuple[int, Any]:
+        """One capped GET to a plugin.
+
+        Redirects are refused: a base that passed the address guard at
+        registration could otherwise send the poller anywhere on a later
+        poll. The body is read in chunks and abandoned past MAX_BYTES, so
+        a hostile source cannot exhaust the instance's memory.
+        """
+        if not flare.fetchable_base(url):
+            raise ValueError("base is not fetchable")
+        async with client.stream("GET", url, params=params, headers=self._headers(src),
+                                 timeout=timeout, follow_redirects=False) as r:
+            if r.status_code >= 300:
+                await r.aclose()
+                return r.status_code, None
+            body = bytearray()
+            async for chunk in r.aiter_bytes():
+                body.extend(chunk)
+                if len(body) > flare.MAX_BYTES:
+                    raise ValueError(f"body over {flare.MAX_BYTES} bytes")
+        try:
+            return r.status_code, json.loads(bytes(body))
+        except ValueError as exc:
+            raise ValueError(f"body is not JSON: {exc}") from exc
+
     async def handshake(self, src: dict, client) -> dict:
         sid = src["id"]
         hit = self.handshakes.get(sid)
         if hit and time.monotonic() - hit[0] < HANDSHAKE_TTL_S:
             return hit[1]
-        r = await client.get(f"{src['base'].rstrip('/')}/flare/v1/handshake",
-                             headers=self._headers(src), timeout=15.0)
-        r.raise_for_status()
-        hs = r.json()
+        status, hs = await self.fetch_json(
+            client, f"{src['base'].rstrip('/')}/flare/v1/handshake", src=src)
+        if status != 200:
+            raise ValueError(f"handshake: HTTP {status}")
         errs = flare.validate_handshake(hs)
         if errs:
             raise ValueError("handshake: " + "; ".join(errs))
@@ -275,14 +313,18 @@ class Poller:
 
             async def one(cell):
                 async with sem:
-                    r = await client.get(f"{base}/flare/v1/alerts",
-                                         params={"lat": cell[0], "lon": cell[1],
-                                                 "r": CELL_RADIUS_M},
-                                         headers=self._headers(src), timeout=20.0)
-                    if r.status_code != 200 or len(r.content) > flare.MAX_BYTES:
-                        problems.append(f"cell {cell}: HTTP {r.status_code}")
+                    try:
+                        status, payload = await self.fetch_json(
+                            client, f"{base}/flare/v1/alerts", src=src,
+                            params={"lat": cell[0], "lon": cell[1], "r": CELL_RADIUS_M},
+                            timeout=20.0)
+                    except ValueError as exc:
+                        problems.append(f"cell {cell}: {exc}")
                         return
-                    kept, probs = flare.accept_alerts(r.json(), now=now)
+                    if status != 200:
+                        problems.append(f"cell {cell}: HTTP {status}")
+                        return
+                    kept, probs = flare.accept_alerts(payload, now=now)
                     problems.extend(probs[:3])
                     kept_by_cell[cell] = kept[: flare.MAX_PER_CELL]
 
@@ -312,12 +354,15 @@ class Poller:
             self.status[sid] = {"ok": True, "count": len(alerts), "last_ok": now.isoformat(),
                                 "held_count": held_count, "held_at": held_at,
                                 "problems": problems[:5], "name": hs.get("name")}
+            self._fails.pop(sid, None)
         except Exception as exc:  # noqa: BLE001 - one bad source never stops the rest
             self.status[sid] = {**self.status.get(sid, {}), "ok": False,
                                 "last_error": f"{type(exc).__name__}: {str(exc)[:160]}",
                                 "last_error_at": now.isoformat()}
             if not (self.status[sid].get("held_at") or 0):  # never polled well
                 self.status[sid].setdefault("held_count", 0)
+            self._fails[sid] = self._fails.get(sid, 0) + 1
+            self.status[sid]["fails"] = self._fails[sid]
             log.warning("flare source %s failed: %s", sid, self.status[sid]["last_error"])
         self._last_poll[sid] = time.monotonic()
         await self._write_status(sid)
@@ -341,13 +386,23 @@ class Poller:
             return True
         hs = self.handshakes.get(src["id"])
         period = max(POLL_FLOOR_S, int((hs[1].get("refresh_s") if hs else 0) or 0))
+        # A source that keeps failing waits longer each time, up to an
+        # hour, so a dead plugin costs one request an hour rather than
+        # one a minute for weeks.
+        fails = self._fails.get(src["id"], 0)
+        if fails >= FAILS_BEFORE_BACKOFF:
+            period = min(MAX_BACKOFF_S, period * 2 ** (fails - FAILS_BEFORE_BACKOFF + 1))
         return time.monotonic() - last >= period
 
     async def run_once(self, client) -> None:
         if time.monotonic() - self._sources_loaded > 60 or not self._sources_loaded:
             with contextlib.suppress(Exception):
                 await self.refresh_sources()
+        deadline = time.monotonic() + CYCLE_DEADLINE_S
         for src in list(self.sources.values()):
+            if time.monotonic() > deadline:
+                log.warning("flare poll cycle out of time; the rest wait for the next one")
+                break
             if self.due(src):
                 await self.poll_source(src, client)
 
@@ -577,8 +632,11 @@ async def _forward_report(src: dict, pub: dict, uid: str, client) -> str | None:
                 "client": "commutescout-web/1"}
         if "heading_deg" in pub:
             body["heading_deg"] = pub["heading_deg"]
+        if not flare.fetchable_base(src.get("base")):
+            return None
         r = await client.post(f"{src['base'].rstrip('/')}/flare/v1/report", json=body,
-                              headers=poller._headers(src), timeout=FORWARD_TIMEOUT_S)
+                              headers=poller._headers(src), timeout=FORWARD_TIMEOUT_S,
+                              follow_redirects=False)
         return src["id"] if r.status_code in (201, 202) else None
     except Exception:  # noqa: BLE001 - a slow plugin never blocks the reporter
         return None
@@ -652,10 +710,13 @@ async def api_flare_confirm(request: Request) -> JSONResponse:
         from ca_roads_mcp import server as tools
 
         client = tools.get_road().client
+        if not flare.fetchable_base(src.get("base")):
+            return JSONResponse({"error": "no such source"}, status_code=404)
         r = await client.post(f"{src['base'].rstrip('/')}/flare/v1/confirm", json={
             "alert_id": local_id, "vote": vote, "ts": datetime.now(UTC).isoformat(),
             "reporter": flare.reporter_pseudonym(sid, uid, _salt())},
-            headers=poller._headers(src), timeout=FORWARD_TIMEOUT_S)
+            headers=poller._headers(src), timeout=FORWARD_TIMEOUT_S,
+            follow_redirects=False)
     except Exception:  # noqa: BLE001
         return JSONResponse({"error": "the source did not answer"}, status_code=502)
     if r.status_code == 404:

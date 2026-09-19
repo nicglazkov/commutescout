@@ -2,6 +2,7 @@
 what the spec accepts, serves markers for a bbox, and the admin
 endpoints manage the registry."""
 
+import time
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -12,6 +13,7 @@ from starlette.testclient import TestClient
 from tests.test_flare import GOOD, FakePlugin
 from tests.test_watch import auth, store  # noqa: F401 - fixture
 
+from ca_roads import flare
 from ca_roads_demo import flare_sources, routing
 
 NOW = datetime(2026, 9, 17, 1, 0, tzinfo=UTC)
@@ -68,7 +70,7 @@ async def test_a_failing_source_is_recorded_not_fatal():
     async with httpx.AsyncClient(transport=httpx.MockTransport(broken)) as c:
         await p.run_once(c)
     st = p.status["sabreplus"]
-    assert st["ok"] is False and "HTTPStatusError" in st["last_error"]
+    assert st["ok"] is False and "HTTP 500" in st["last_error"]
     assert "off" not in p.sources and p.markers_for_bbox((-90, -180, 90, 180)) == []
 
 
@@ -247,4 +249,74 @@ def test_an_unlisted_plugin_is_found_by_id_only(admin_app):
     assert card["id"] == "sabreplus" and card["visibility"] == "unlisted"
     assert c.get("/api/flare/sources?id=secret").status_code == 404
     assert c.get("/api/flare/sources?id=nope").status_code == 404
+
+
+def test_a_plugin_base_must_be_a_public_https_address():
+    assert flare.fetchable_base("https://plugins.example.com")
+    assert flare.fetchable_base("https://8.8.8.8/flare")
+    for bad in ("http://plugins.example.com", "https://127.0.0.1", "https://169.254.169.254",
+                "https://10.0.0.5", "https://192.168.1.1", "https://[::1]", "https://0.0.0.0",
+                "", None, 42):
+        assert not flare.fetchable_base(bad), bad
+    assert flare.validate_manifest(dict(MANIFEST, base="https://169.254.169.254"))
+
+
+@pytest.mark.asyncio
+async def test_the_poller_refuses_redirects_and_oversized_bodies():
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+
+    def redirecting(request):
+        return httpx.Response(302, headers={"location": "https://169.254.169.254/"})
+
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(redirecting),
+                                 follow_redirects=True) as c:
+        await p.run_once(c)
+    assert p.status["sabreplus"]["ok"] is False
+    assert "302" in p.status["sabreplus"]["last_error"]
+
+    def huge(request):
+        return httpx.Response(200, content=b"x" * (flare.MAX_BYTES + 1))
+
+    p2 = flare_sources.Poller(mem, now=lambda: NOW)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(huge)) as c:
+        await p2.run_once(c)
+    assert p2.status["sabreplus"]["ok"] is False
+    assert "bytes" in p2.status["sabreplus"]["last_error"]
+
+
+@pytest.mark.asyncio
+async def test_a_failing_source_is_backed_off_not_asked_every_minute():
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    src = dict(MANIFEST, enabled=True)
+    for expected in range(1, 5):
+        p._last_poll.pop("sabreplus", None)
+        async with httpx.AsyncClient(
+                transport=httpx.MockTransport(lambda r: httpx.Response(503))) as c:
+            await p.run_once(c)
+        assert p._fails["sabreplus"] == expected
+    # Three strikes in, the next poll is not due at the usual interval.
+    p._last_poll["sabreplus"] = time.monotonic()
+    assert not p.due(src)
+    # A good answer clears it.
+    plugin = FakePlugin()
+    p._last_poll.pop("sabreplus", None)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(plugin.handler)) as c:
+        await p.run_once(c)
+    assert "sabreplus" not in p._fails
+
+
+@pytest.mark.asyncio
+async def test_a_private_source_is_never_polled_for_the_shared_map():
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("mine", dict(MANIFEST, id="mine", visibility="private",
+                               trust="private", enabled=True))
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    plugin = FakePlugin()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(plugin.handler)) as c:
+        await p.run_once(c)
+    assert p.sources == {} and p.markers_for_bbox((-90, -180, 90, 180)) == []
 
