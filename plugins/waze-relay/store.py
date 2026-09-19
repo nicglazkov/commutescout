@@ -109,6 +109,14 @@ class Votes:
 
     The two namespaces never collide, so an unauthenticated caller cannot
     dress its votes up as trusted ones.
+
+    The trust split is not only about hiding. An "up" vote raises the
+    published ``n_confirmations``, and a caller downstream may read a well
+    confirmed closure as a reason to send every driver somewhere else, so a
+    forgeable count is a way to close a road rather than a cosmetic one.
+    Untrusted votes therefore count towards hiding and nothing else: they
+    can weaken what this plugin says, never strengthen it, and never extend
+    an alert's life.
     """
 
     def __init__(self, now: Callable[[], float] | None = None) -> None:
@@ -131,13 +139,29 @@ class Votes:
         if voter in bucket.setdefault(alert_id, set()):
             return
         bucket[alert_id].add(voter)
-        if vote == "up":
+        if vote == "up" and voter.startswith("t:"):
             self._confirmed_at[alert_id] = now
 
     def ups(self, alert_id: str) -> int:
-        return len(self._up.get(alert_id, ()))
+        """Confirmations this plugin will put its name to.
+
+        Only trusted voters count. An "up" vote does not merely decorate a
+        record: the count is published as ``n_confirmations``, and a caller
+        downstream may treat a well confirmed alert as a reason to act, so an
+        anonymous caller able to run that number up can manufacture an alert
+        that everybody believes. Anonymous input may weaken this plugin's
+        confidence, and at enough distinct addresses hide an alert, but it
+        may never strengthen one.
+        """
+        return sum(1 for voter in self._up.get(alert_id, ()) if voter.startswith("t:"))
 
     def confirmed_at(self, alert_id: str) -> float | None:
+        """When a trusted voter last confirmed it.
+
+        Trusted for the same reason, and one more: an alert's life is
+        anchored on this, so an untrusted caller that could move it would
+        keep a cleared report on the map for as long as it kept voting.
+        """
         return self._confirmed_at.get(alert_id)
 
     def hidden(self, alert_id: str) -> bool:

@@ -404,7 +404,10 @@ async def test_confirm_takes_a_vote_and_404s_an_unknown_alert():
     assert unknown.json()["error"]["code"] == "unknown_alert"
     assert bad.status_code == 400
     assert good.status_code == 200
-    assert good.json()["n_confirmations"] == 1
+    # The vote is taken, but an anonymous caller cannot raise the published
+    # confirmation count: that number is a reason for a router downstream to
+    # act, so only a trusted voter moves it.
+    assert good.json()["n_confirmations"] == 0
 
 
 async def test_reports_are_refused_while_the_capability_is_off():
