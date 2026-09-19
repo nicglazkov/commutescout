@@ -162,9 +162,12 @@ def test_unconfirmed_community_closures_never_steer_the_router():
     assert excluded(source_id="commutescout", tier="approved", confirmations=1) == 0
     # Two other people confirmed it.
     assert excluded(source_id="commutescout", tier="approved", confirmations=2) == 1
-    # A plugin nobody reviewed gets no veto on its own; confirmations still count.
+    # A plugin nobody reviewed gets no veto, whatever it says about how
+    # many people confirmed it: that count is its own claim about itself,
+    # and a plugin that counts votes loosely could otherwise close roads.
     assert excluded(source_id="sabreplus", tier="unreviewed", confirmations=0) == 0
-    assert excluded(source_id="sabreplus", tier="unreviewed", confirmations=3) == 1
+    assert excluded(source_id="sabreplus", tier="unreviewed", confirmations=3) == 0
+    assert excluded(source_id="sabreplus", tier="unreviewed", confirmations=99) == 0
     # A reviewed plugin's closure counts on its own.
     assert excluded(source_id="official", tier="approved", confirmations=0) == 1
     # Missing fields mean untrusted.

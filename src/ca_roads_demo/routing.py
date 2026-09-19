@@ -129,24 +129,32 @@ def _along(path: list, spacing_m: float) -> list[tuple[float, float]]:
     return out
 
 
-# A community closure steers the router only once other people have
-# confirmed it; a third-party plugin's closure only when CommuteScout has
-# reviewed that plugin. Anything else is drawn on the map, labelled, and
-# ignored here: one signed-in account must never be able to close a road
-# for every driver.
+# A closure steers the router only from a source whose confirmations
+# CommuteScout counts itself, or from a plugin it has reviewed. Anything
+# else is drawn on the map, labelled, and ignored here: neither one
+# signed-in account nor one plugin may close a road for every driver.
+#
+# A confirmation count reported by a third party is a claim about itself,
+# not evidence. A plugin that counts votes loosely (or is asked to by
+# anyone who can reach its confirm endpoint) would otherwise be able to
+# push any closure it serves over this threshold. Only the community
+# source's count is counted here, where a vote needs an account, cannot
+# be cast twice, and cannot be cast on one's own report.
 CLOSURE_CONFIRMATIONS = 2
 COMMUNITY_SOURCE_ID = "commutescout"
 
 
 def trusted_closure(m: dict) -> bool:
     """Whether a plugin ROAD_CLOSED marker may steer the router."""
+    if m.get("tier") == "approved" and m.get("source_id") != COMMUNITY_SOURCE_ID:
+        return True
+    if m.get("source_id") != COMMUNITY_SOURCE_ID:
+        return False
     try:
         confirmations = int(m.get("confirmations") or 0)
     except (TypeError, ValueError):
         confirmations = 0
-    if confirmations >= CLOSURE_CONFIRMATIONS:
-        return True
-    return m.get("source_id") != COMMUNITY_SOURCE_ID and m.get("tier") == "approved"
+    return confirmations >= CLOSURE_CONFIRMATIONS
 
 
 def exclusions(markers: list[dict], *, avoid_chains: bool = False) -> list[dict]:
