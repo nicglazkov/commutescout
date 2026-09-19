@@ -136,8 +136,9 @@ def test_style_points_at_the_proxy_and_tiles_are_cached(wired):
 
 
 def test_budgets_and_limiters_cover_the_new_routes():
-    assert demo_app.PAID_PER_CLIENT_DAILY["nav"] == 400
-    assert demo_app.PAID_PER_CLIENT_DAILY["tiles"] == 8000
+    # One caller stays under the service-wide cap for the same upstream.
+    assert demo_app.PAID_PER_CLIENT_DAILY["nav"] <= nav.STADIA_NAV_DAILY
+    assert demo_app.PAID_PER_CLIENT_DAILY["tiles"] <= nav.STADIA_APP_TILES_DAILY
     assert "/api/nav" in demo_app.SoftLimit.PREFIXES
 
 
