@@ -5,7 +5,11 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py store.py mapping.py sessions.py auth.py ./
+# Every module, not a list of them. The list was wrong once already:
+# clientip.py was added and not listed, every test passed because tests run
+# against the repository rather than the image, and the container died on
+# import at deploy time. A glob cannot forget.
+COPY *.py ./
 COPY waze ./waze
 
 # Nothing in the image needs write access.

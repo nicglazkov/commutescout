@@ -276,6 +276,26 @@ def test_the_comparison_is_the_constant_time_one():
     assert compares == [], f"the secret must not be compared with {compares}"
 
 
+def test_the_image_carries_every_module_the_service_imports():
+    """The tests import from the repository, so a module missing from the
+    image passes everything and then kills the container on startup. That
+    happened: clientip.py was added and not listed, and the deploy died on
+    ModuleNotFoundError. Keep the glob, and this stays impossible."""
+    from pathlib import Path
+
+    relay_dir = Path(__file__).resolve().parents[1] / "plugins" / "waze-relay"
+    dockerfile = (relay_dir / "Dockerfile").read_text(encoding="utf-8")
+    copies = [line for line in dockerfile.splitlines()
+              if line.startswith("COPY") and ".py" in line]
+    assert copies == ["COPY *.py ./"], (
+        "copy the modules with a glob rather than a list: a list has to be "
+        f"kept in step with the directory by hand, and was not. Found {copies}")
+    # And the package beside them.
+    assert "COPY waze ./waze" in dockerfile
+    modules = sorted(p.name for p in relay_dir.glob("*.py"))
+    assert "clientip.py" in modules and "server.py" in modules
+
+
 @pytest.fixture(autouse=True)
 def _restore_module_state():
     before = (relay.store, relay.TOKEN, relay.CONFIRM_TOKEN,
