@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hmac
 import logging
 import os
 import time
 from collections.abc import AsyncIterator
 
 import auth
+import clientip
 import httpx
 import mapping
 import sessions as sessions_module
@@ -48,6 +50,11 @@ MAX_RADIUS_M = 100_000
 # lookup, and what actually protects the upstream is the hot-cell limit, not
 # this. Abuse still hits a ceiling.
 RATE_PER_MIN = int(os.environ.get("WAZE_RATE_PER_MIN") or 600)
+# A vote is cheap to answer but it moderates what the map shows, so it gets
+# its own, much tighter allowance. A mediated backend forwarding real people
+# will not come close.
+CONFIRM_PER_MIN = int(os.environ.get("WAZE_CONFIRM_PER_MIN") or 60)
+MAX_BUCKETS = 50_000
 HTTP_TIMEOUT_S = 30.0
 
 log = logging.getLogger("waze_relay")
@@ -60,6 +67,12 @@ def _bbox(raw: str) -> list[float]:
 
 
 TOKEN = os.environ.get("FLARE_TOKEN") or None
+# A token a mediated backend is given so its forwarded votes count per person
+# rather than per address, without making the whole listing need a token.
+# Put the same value in the catalog manifest's "token" field; the backend
+# already sends that as a bearer header. Unset means nobody is trusted and
+# every vote counts once per address.
+CONFIRM_TOKEN = os.environ.get("FLARE_CONFIRM_TOKEN") or None
 BBOX = _bbox(os.environ.get("WAZE_BBOX") or DEFAULT_BBOX)
 REFRESH_S = int(os.environ.get("WAZE_REFRESH_S") or 60)
 SHRINK_STEPS = int(os.environ.get("WAZE_SHRINK_STEPS") or 2)
@@ -116,6 +129,7 @@ store: Store | None = None
 users: sessions_module.UserSessions | None = None
 auth_client: httpx.AsyncClient | None = None
 _buckets: dict[str, list[float]] = {}
+_pruned_at = 0.0
 
 
 def error(status: int, code: str, message: str, hint: str | None = None) -> JSONResponse:
@@ -125,15 +139,53 @@ def error(status: int, code: str, message: str, hint: str | None = None) -> JSON
     return JSONResponse({"error": body}, status_code=status)
 
 
+def _matches(header: str | None, secret: str | None) -> bool:
+    """A bearer header against a secret, in constant time. A plain ``==``
+    returns as soon as two bytes differ, which tells a caller how much of a
+    guess was right."""
+    if not secret:
+        return False
+    return hmac.compare_digest((header or "").encode("utf-8"),
+                               f"Bearer {secret}".encode())
+
+
 def _authorized(request: Request) -> bool:
-    return not TOKEN or request.headers.get("authorization") == f"Bearer {TOKEN}"
+    return not TOKEN or _matches(request.headers.get("authorization"), TOKEN)
 
 
-def _limited(request: Request) -> bool:
-    who = request.client.host if request.client else "?"
+def _trusted(request: Request) -> bool:
+    """Whether this caller's own idea of who is voting can be believed.
+
+    True for a caller holding the plugin's token, or the separate confirm
+    token a mediated backend is given. Without one of those the caller is
+    just an address.
+    """
+    header = request.headers.get("authorization")
+    return _matches(header, TOKEN) or _matches(header, CONFIRM_TOKEN)
+
+
+def _prune_buckets(now: float) -> None:
+    """Drop addresses that have gone quiet. Without this the map grows by one
+    entry per address forever, which is a slow leak an attacker can drive."""
+    global _pruned_at
+
+    if now - _pruned_at < 60 and len(_buckets) < MAX_BUCKETS:
+        return
+    _pruned_at = now
+    for key, hits in list(_buckets.items()):
+        fresh = [t for t in hits if now - t < 60]
+        if fresh:
+            _buckets[key] = fresh
+        else:
+            _buckets.pop(key, None)
+
+
+def _limited(request: Request, per_minute: int = 0) -> bool:
     now = time.monotonic()
+    _prune_buckets(now)
+    who = clientip.key_for(request)
     hits = [t for t in _buckets.get(who, []) if now - t < 60]
-    if len(hits) >= RATE_PER_MIN:
+    if len(hits) >= (per_minute or RATE_PER_MIN):
         _buckets[who] = hits
         return True
     hits.append(now)
@@ -213,6 +265,9 @@ async def confirm(request: Request) -> JSONResponse:
         body = await request.json()
     except ValueError:
         return error(400, "bad_request", "JSON body required.")
+    if _limited(request, CONFIRM_PER_MIN):
+        return error(429, "rate_limited", "Slow down.",
+                     f"{CONFIRM_PER_MIN} votes a minute.")
     vote = body.get("vote")
     if vote not in ("up", "gone"):
         return error(400, "bad_request", "vote must be up or gone.")
@@ -221,7 +276,11 @@ async def confirm(request: Request) -> JSONResponse:
         return error(404, "unknown_alert", "No alert by that id.")
     # The vote stays here: it raises the count and the confidence this plugin
     # reports, and enough "not there" votes hide the alert. Waze is not told.
-    store.votes.add(alert_id, vote, str(body.get("reporter") or "anonymous")[:64])
+    # It counts once per voter, and an unauthenticated caller is an address
+    # rather than whatever it put in "reporter". See store.Votes.
+    voter = store.votes.voter(str(body.get("reporter") or "anonymous")[:64],
+                              clientip.key_for(request), trusted=_trusted(request))
+    store.votes.add(alert_id, vote, voter)
     record = store.record_by_id(alert_id)
     return JSONResponse(record if record is not None else {"id": alert_id, "hidden": True})
 

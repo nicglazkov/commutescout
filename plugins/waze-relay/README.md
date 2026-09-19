@@ -144,6 +144,8 @@ phone then reads it directly and nothing goes through CommuteScout.
 | Variable | Default | What it does |
 |---|---|---|
 | `FLARE_TOKEN` | none | Requires `Authorization: Bearer <token>` on every call but the handshake |
+| `FLARE_CONFIRM_TOKEN` | none | Lets the caller holding it be believed about who is voting, without making the listing need a token |
+| `WAZE_CONFIRM_PER_MIN` | `60` | Votes one address may cast a minute |
 | `FLARE_ID` | `wz-flare` | The plugin id in the handshake |
 | `FLARE_NAME` | Unofficial Waze relay (community) | The name shown in the sources list |
 | `FLARE_CONTACT` | the contact page | Where to reach the operator |
@@ -303,6 +305,25 @@ with no change to the path or the response.
 **Confirmations** stay here. An `up` or `gone` vote raises the confirmation
 count and the confidence this plugin reports, and three `gone` votes hide the
 alert. Nothing is sent upstream.
+
+Hiding is the one destructive thing a caller can ask for, and these alerts
+are drawn on a map people drive by, so a vote counts once per **voter** and a
+voter is not whatever arrived in the `reporter` field. On a listing that
+advertises no authentication that field is not an identity, so:
+
+- An unauthenticated caller counts once per address, folded to the /64 for
+  IPv6. Hiding an alert costs three distinct addresses, not three invented
+  strings.
+- A caller holding `FLARE_CONFIRM_TOKEN` is believed about who is voting, so
+  its `reporter` pseudonyms count separately. That is for a mediated backend,
+  which is one address forwarding many people's votes.
+
+Set `FLARE_CONFIRM_TOKEN` and put the same value in the catalog manifest's
+`token` field; the backend already sends that as a bearer header. Without it
+nobody is trusted and the mediated backend counts as one voter, which means
+alerts are effectively never hidden through the map. That is the safe
+default, and restoring the feature is a deliberate act rather than something
+that happens by accident.
 
 **Reports** are off by default, so `capabilities.report` is `false` and
 `/flare/v1/report` answers 404. The client underneath does support
