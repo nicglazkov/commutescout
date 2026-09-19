@@ -107,5 +107,6 @@ def test_router_failure_is_a_404_not_a_crash(wired):
 
 def test_route_is_budgeted_and_soft_limited():
     assert "/api/route" in demo_app.SoftLimit.PREFIXES
-    assert demo_app.PAID_PER_CLIENT_DAILY["route"] == 300
-    assert demo_app.STADIA_ROUTE_DAILY == 4000
+    # Per client at or under the service-wide cap: one caller must not
+    # be able to spend the whole day on its own.
+    assert demo_app.PAID_PER_CLIENT_DAILY["route"] <= demo_app.STADIA_ROUTE_DAILY

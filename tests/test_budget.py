@@ -156,3 +156,18 @@ def test_staticmap_endpoint_open_without_key():
     client = TestClient(demo_app.app)
     r = client.get("/api/staticmap?lat=37.3382&lon=-121.8863&z=11&k=incident")
     assert r.status_code == 200
+
+
+def test_the_stadia_caps_stay_inside_the_purchased_plan():
+    """The caps are a guard, not a quota, but they must not add up to
+    ten times what the plan allows. Routing and navigation cost about 20
+    credits a request and a tile about 1; the plan is 1,000,000 credits
+    a month, so the day has to stay near 26,000 for a month to fit with
+    room to spare. Raise the environment variables and this number
+    together, from real usage on the Stadia dashboard."""
+    from ca_roads_demo import app as demo_app
+    from ca_roads_demo import nav
+
+    per_day = (nav.STADIA_NAV_DAILY * 20 + demo_app.STADIA_ROUTE_DAILY * 20
+               + nav.STADIA_APP_TILES_DAILY + demo_app.STADIA_TILES_DAILY)
+    assert per_day <= 30_000, f"{per_day} credits a day is {per_day * 30:,} a month"

@@ -158,20 +158,22 @@ PAID_PER_CLIENT_DAILY = {
     "suggest": int(os.environ.get("SUGGEST_PER_CLIENT_DAILY", "400")),
     "geocode": int(os.environ.get("GEOCODE_PER_CLIENT_DAILY", "150")),
     "flow": int(os.environ.get("FLOW_PER_CLIENT_DAILY", "600")),
-    "route": int(os.environ.get("ROUTE_PER_CLIENT_DAILY", "300")),
+    "route": int(os.environ.get("ROUTE_PER_CLIENT_DAILY", "100")),
     # The app: a navigation session reroutes a few times an hour; a
     # map session loads a few hundred tiles (the edge serves repeats).
-    "nav": int(os.environ.get("NAV_PER_CLIENT_DAILY", "400")),
+    "nav": int(os.environ.get("NAV_PER_CLIENT_DAILY", "150")),
     # Report placement asks the road once per click.
     "snap": int(os.environ.get("SNAP_PER_CLIENT_DAILY", "300")),
-    "tiles": int(os.environ.get("APP_TILES_PER_CLIENT_DAILY", "8000")),
+    "tiles": int(os.environ.get("APP_TILES_PER_CLIENT_DAILY", "4000")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
 }
-STADIA_TILES_DAILY = int(os.environ.get("STADIA_TILES_DAILY", "20000"))
+# Static map tiles, about 1 credit each; see the note on the nav caps.
+STADIA_TILES_DAILY = int(os.environ.get("STADIA_TILES_DAILY", "4000"))
 # Server-side route plans (20 credits each on plain auto). The map
 # falls back to keyless browser routing when this budget is spent, so
 # the cap costs nothing but the closure-aware ranking.
-STADIA_ROUTE_DAILY = int(os.environ.get("STADIA_ROUTE_DAILY", "4000"))
+# About 20 credits a request; see the note on the nav caps.
+STADIA_ROUTE_DAILY = int(os.environ.get("STADIA_ROUTE_DAILY", "200"))
 TOMTOM_TILES_DAILY = int(os.environ.get("TOMTOM_TILES_DAILY", "20000"))
 paid_use = DailyCounter()
 

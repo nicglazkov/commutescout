@@ -10,7 +10,10 @@ the caps more generous, and the services run one instance each.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
+
+log = logging.getLogger(__name__)
 
 
 class DailyCounter:
@@ -19,6 +22,7 @@ class DailyCounter:
     def __init__(self, max_keys: int = 10_000) -> None:
         self.day = ""
         self.counts: dict[str, int] = {}
+        self.spent: dict[str, str] = {}
         self.max_keys = max_keys
 
     def _roll(self) -> None:
@@ -26,6 +30,7 @@ class DailyCounter:
         if today != self.day:
             self.day = today
             self.counts = {}
+            self.spent = {}
 
     def used(self, key: str) -> int:
         self._roll()
@@ -36,6 +41,11 @@ class DailyCounter:
         self._roll()
         n = self.counts.get(key, 0)
         if n >= limit:
+            if self.spent.get(key) != self.day:
+                # One line the first time a key is spent each day, so a
+                # log-based alert can say which cap stopped serving.
+                self.spent[key] = self.day
+                log.warning("daily cap reached: %s spent %d of %d", key, n, limit)
             return False
         if n == 0 and len(self.counts) >= self.max_keys:
             # Drop the least-used half; a flood of fresh keys must not

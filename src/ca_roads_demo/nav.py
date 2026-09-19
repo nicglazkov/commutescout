@@ -34,8 +34,15 @@ USER_AGENT = "commutescout.com drive app (https://commutescout.com/developers)"
 PUBLIC_BASE = os.environ.get("DEMO_URL", "https://commutescout.com").rstrip("/")
 
 NAV_COSTING = os.environ.get("NAV_COSTING", "auto")
-STADIA_NAV_DAILY = int(os.environ.get("STADIA_NAV_DAILY", "6000"))
-STADIA_APP_TILES_DAILY = int(os.environ.get("STADIA_APP_TILES_DAILY", "150000"))
+# Sized against the purchased Stadia plan, not against what the service
+# could physically serve. A nav or route request costs about 20 credits
+# and a tile about 1, so these defaults come to roughly 26,000 credits a
+# day, about 780,000 a month against a 1,000,000 allowance. Raise them
+# with the environment variables when real usage justifies it, and set
+# the hard cap in the Stadia dashboard too: these counters live in the
+# process and a deploy grants the whole day again.
+STADIA_NAV_DAILY = int(os.environ.get("STADIA_NAV_DAILY", "300"))
+STADIA_APP_TILES_DAILY = int(os.environ.get("STADIA_APP_TILES_DAILY", "16000"))
 TILE_STYLES = ("alidade_smooth", "alidade_smooth_dark", "outdoors")
 ATTRIBUTION = ("&copy; <a href=\"https://stadiamaps.com/\">Stadia Maps</a> "
                "&copy; <a href=\"https://openmaptiles.org/\">OpenMapTiles</a> "
