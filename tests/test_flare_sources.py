@@ -73,10 +73,15 @@ async def test_a_failing_source_is_recorded_not_fatal():
 
 
 def test_plugin_alerts_shape_the_route():
-    closed = {"kind": "plugin", "flare_kind": "ROAD_CLOSED", "lat": 37.5, "lon": -122.2}
+    # A closure steers the router only from a reviewed source; see
+    # test_unconfirmed_community_closures_never_steer_the_router.
+    closed = {"kind": "plugin", "flare_kind": "ROAD_CLOSED", "lat": 37.5, "lon": -122.2,
+              "source_id": "sabreplus", "tier": "approved"}
     crash = {"kind": "plugin", "flare_kind": "CRASH_MAJOR", "lat": 37.5, "lon": -122.3}
     police = {"kind": "plugin", "flare_kind": "POLICE_VISIBLE", "lat": 37.5, "lon": -122.25}
     assert routing.exclusions([closed, crash]) == [{"lat": 37.5, "lon": -122.2}]
+    unreviewed = dict(closed, tier="unreviewed")
+    assert routing.exclusions([unreviewed, crash]) == []
     line = [[37.5, -122.4 + i * 0.005] for i in range(100)]
     s = routing.score(line, [crash, police])
     assert s["penalty_min"] == routing.PENALTY_MIN["collision"] + routing.PENALTY_MIN["police"]
