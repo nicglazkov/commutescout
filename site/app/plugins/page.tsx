@@ -150,7 +150,7 @@ const MANIFEST = `{
   "visibility": "public",
   "trust": "community",
   "attribution": {"name": "SABRE Plus", "url": "https://example.com"},
-  "signature": "<JWS by CommuteScout, verified entries only>"
+  "signature": "<reserved; not issued or verified yet>"
 }`;
 
 const ERRORS = `{"error": {"code": "outside_coverage", "message": "...", "hint": "..."}}
@@ -453,7 +453,9 @@ export default function PluginsPage() {
             user typed the URL). {code("trust")} is {code("official")}, {code("verified")},{" "}
             {code("community")} or {code("private")}; it decides whether {code("notify")} alerts
             may speak: official and verified yes, community map-only until promoted, private
-            the user&apos;s choice.
+            the user&apos;s choice. {code("signature")} is reserved for a JWS that
+            CommuteScout will issue for verified entries; nothing issues or checks one
+            yet, so its presence proves nothing.
           </p>
           <Block text={MANIFEST} />
         </div>

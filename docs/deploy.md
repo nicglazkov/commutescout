@@ -309,9 +309,12 @@ released to `cloud.firestore`.
 
 ## Optional data-source keys (both services)
 
-Three sources activate only when their key is present; everything else
-works without them. Store keys in Secret Manager and mount them as env
-vars so they never touch code or shell history:
+Fifteen sources activate only when their credential is present;
+everything else works without one. The three below feed the MCP tools
+and the assistant; the twelve state credentials in the second table
+turn on the map's keyed state feeds (`KEYED_STATES` in
+`src/ca_roads_demo/states.py`). Store keys in Secret Manager and mount
+them as env vars so they never touch code or shell history:
 
 ```sh
 # one time per key: paste the key when prompted, then Ctrl-D
@@ -332,4 +335,23 @@ gcloud run services update ca-roads-demo --region us-west1   --set-secrets ANTHR
 | `TOMTOM_API_KEY` | TomTom Traffic | developer.tomtom.com (free, 2,500 req/day) | Live speeds vs free-flow in check_route |
 | `BAY511_API_KEY` | 511 SF Bay | 511.org/open-data/token (free) | Bay Area events in check_region |
 | `NVROADS_API_KEY` | Nevada DOT | nvroads.com developer signup (free) | I-80/US-50/I-15 continuations past the state line |
+
+Keyed state feeds (demo service). Each one replaces or extends that
+state's keyless feed when its credential is set, and stays off
+otherwise:
+
+| Variable | State (agency) |
+|---|---|
+| `WSDOT_API_KEY` | Washington (WSDOT) |
+| `TRIPCHECK_API_KEY` | Oregon (ODOT TripCheck) |
+| `OHGO_API_KEY` | Ohio (ODOT OHGO) |
+| `COTRIP_API_KEY` | Colorado (CDOT COtrip) |
+| `SMARTERROADS_USER` and `SMARTERROADS_PASS` | Virginia (VDOT SmarterRoads; a username and password, not a key) |
+| `UT511_API_KEY` | Utah (UDOT, Travel-IQ) |
+| `AZ511_API_KEY` | Arizona (ADOT, Travel-IQ) |
+| `AK511_API_KEY` | Alaska (DOT&PF, Travel-IQ) |
+| `CT511_API_KEY` | Connecticut (CTDOT, Travel-IQ) |
+| `ID511_API_KEY` | Idaho (ITD, Travel-IQ) |
+| `NV511_API_KEY` | Nevada (NDOT, Travel-IQ; from the same nvroads.com signup as `NVROADS_API_KEY`) |
+| `NC511_API_KEY` | North Carolina (NCDOT, Travel-IQ) |
 

@@ -22,7 +22,7 @@ export default function Pricing() {
     `Live road conditions across ${STATE_COUNT} states`,
     "Route planner with GPX, KML, and print export",
     "Ask about your drive, with a daily cap",
-    "3 watch areas: circles up to 25 miles, polygons up to 2,000 square miles, or routes up to 250 miles with a 2 mile buffer",
+    "3 watch areas (accounts need approval for now): circles up to 25 miles, polygons up to 2,000 square miles, or routes up to 250 miles with a 2 mile buffer",
     `${AGENCY_FEED_COUNT} official agency feeds, including CHP and Caltrans`,
   ];
   const proItems = [

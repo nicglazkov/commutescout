@@ -32,6 +32,9 @@ export const metadata: Metadata = {
 
 const BASE = reference.base;
 const API_ROOT = `${BASE}${reference.prefix}`;
+// Link text for the OpenAPI, docs, and index links: the same URL as the
+// href without the scheme, so a reader sees which host answers.
+const API_ROOT_TEXT = API_ROOT.replace(/^https?:\/\//, "");
 const MCP_URL = `${BASE}/mcp`;
 
 const SECTIONS = [
@@ -51,23 +54,34 @@ const SECTIONS = [
 const CURL_QUICK = `curl "${API_ROOT}/tools/get_incidents?center=37.48,-122.14&radius_km=20"`;
 
 const RESPONSE_SHAPE = `{
-  "count": 2,
-  "filters": { "center": "37.48,-122.14", "radius_km": 20 },
+  "count": 1,
+  "filters": { "highway": null, "area": null, "center": "37.48,-122.14" },
   "incidents": [
     {
       "id": "260916GG0001",
-      "log_type": "1182-Trfc Collision-No Inj",
+      "type": "1182-Trfc Collision-No Inj",
       "location": "Sr84 E / University Ave Onr",
+      "direction_hint": "eastbound",
       "area": "Redwood City",
       "lat": 37.482, "lon": -122.14,
       "reported_at": "2026-09-16T12:00:00+00:00"
     }
   ],
   "sources": [
-    { "source": "chp", "description": "CHP dispatch (live)",
+    { "source": "chp",
+      "description": "CHP live incidents (media.chp.ca.gov, refreshes ~1/min)",
       "ok": true, "data_as_of": "2026-09-16T12:00:41+00:00" }
   ],
-  "notes": []
+  "signs": [
+    { "route": "US-101", "direction": "N", "near": "Redwood City",
+      "county": "San Mateo", "lat": 37.49, "lon": -122.23,
+      "message": "CRASH AHEAD / EXPECT DELAYS" }
+  ],
+  "cameras": [
+    { "name": "SR-84 at University Ave", "route": "SR-84", "direction": "E",
+      "near": "Redwood City", "lat": 37.48, "lon": -122.15,
+      "image_url": "https://cwwp2.dot.ca.gov/.../image.jpg", "stream_url": null }
+  ]
 }`;
 
 const CURL_KEYED = `curl -H "X-API-Key: cs_live_..." \\
@@ -207,6 +221,10 @@ export default function DevelopersPage() {
             Every response carries the records you asked for, the filters the
             server understood, and a {code("sources")} list with each source&apos;s
             own {code("data_as_of")} time. Show that time to your users.
+            When {code("get_incidents")}, {code("get_lane_closures")}, or{" "}
+            {code("get_chain_controls")} is filtered by route or center, the
+            response also carries the {code("signs")} and verified{" "}
+            {code("cameras")} near the returned records, when there are any.
           </p>
           <pre className="bg-cs-navy2 mt-5 overflow-x-auto rounded-xl p-5 text-sm text-white/90">
             <code>{RESPONSE_SHAPE}</code>
@@ -214,15 +232,15 @@ export default function DevelopersPage() {
           <p className="text-cs-ink/70 mt-5 text-balance">
             The full machine-readable contract is the OpenAPI document at{" "}
             <a href={`${API_ROOT}/openapi.json`} className="text-cs-sky hover:underline">
-              {reference.prefix}/openapi.json
+              {API_ROOT_TEXT}/openapi.json
             </a>
             , with a browsable reference at{" "}
             <a href={`${API_ROOT}/docs`} className="text-cs-sky hover:underline">
-              {reference.prefix}/docs
+              {API_ROOT_TEXT}/docs
             </a>{" "}
             and an index at{" "}
             <a href={API_ROOT} className="text-cs-sky hover:underline">
-              {reference.prefix}
+              {API_ROOT_TEXT}
             </a>
             . It is generated from the tools&apos; own schemas, so it is never out of date.
           </p>

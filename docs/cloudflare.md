@@ -1,9 +1,12 @@
 # Putting Cloudflare in front of commutescout.com
 
 Cloudflare's free plan sits between visitors and Cloud Run: static
-assets and the 30-second map boot payload get served from Cloudflare's
-edge, which makes traffic spikes a Cloudflare problem instead of a
-single-instance problem, and adds HTTP/3, Brotli, and DDoS shielding.
+assets are served from Cloudflare's edge, and the map boots from
+pre-built snapshots that a background publisher writes to GCS and
+`data.commutescout.com` serves through the same edge (see
+[Map snapshots](deploy.md#map-snapshots-optional-demo-service)). That
+makes traffic spikes a Cloudflare problem instead of a single-instance
+problem, and adds HTTP/3, Brotli, and DDoS shielding.
 
 The application is already Cloudflare-aware: `trusted_client_ip`
 honors `CF-Connecting-IP` only when the platform-vouched peer address
@@ -50,10 +53,15 @@ the redirect rule below) and `_domainconnect` (a GoDaddy-only helper).
    stops working the moment nameservers move).
 6. Cache rule: hostname `commutescout.com` AND URI path starts with
    `/api/mapdata` -> Eligible for cache, Edge TTL: respect origin
-   Cache-Control. The origin already says `public, max-age=30` for
-   full responses and `no-store` while an instance is warming, so the
-   edge serves each 30-second snapshot and never caches partial data.
-   No other `/api/` path is cache-eligible (Cloudflare does not cache
+   Cache-Control. The map no longer boots from this path: it fetches
+   `live.json.gz`, `signs.json.gz`, and `cameras.json.gz` from
+   `data.commutescout.com`, which serves the GCS objects with their
+   own Cache-Control. `/api/mapdata` still serves the assistant,
+   routing, watch areas, lazy geometry, and the client's fallback when
+   no snapshot is available, so the rule stays. The origin says
+   `public, max-age=30` for full responses and `no-store` while an
+   instance is warming, so the edge never caches partial data. No
+   other `/api/` path is cache-eligible (Cloudflare does not cache
    non-static paths unless a rule says so).
 
 ## Cutover
@@ -70,8 +78,10 @@ the redirect rule below) and `_domainconnect` (a GoDaddy-only helper).
 
 - `https://commutescout.com/health` returns ok and the response has a
   `cf-ray` header (proxy active).
-- The map loads; `/api/mapdata` boot URL answers fast twice in a row
-  and the second response shows `cf-cache-status: HIT`.
+- The map loads; `https://data.commutescout.com/live.json.gz` answers
+  twice in a row and the second response shows `cf-cache-status: HIT`.
+  `/api/mapdata` still answers, and a second request within 30 seconds
+  is also a HIT.
 - Rate limiting still sees real client IPs: `/api/ask` from one
   machine still 429s after the per-IP burst (spot check).
 - `https://www.commutescout.com` 301s to the apex.

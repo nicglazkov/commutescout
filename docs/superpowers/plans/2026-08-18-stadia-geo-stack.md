@@ -1,5 +1,10 @@
 # Stadia Geo Stack Implementation Plan
 
+**Status: shipped.** Tasks 1 through 8 landed as PRs #290, #291, #293,
+and #294, and Task 9 shipped as release v2.67.0 (#295) with both
+services redeployed. The checkboxes below were not ticked as the work
+proceeded; the plan is kept as the record of what was built.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace CARTO tiles, the OSRM demo server, FOSSGIS Valhalla, and the Nominatim/Photon fallback with Stadia Maps so every geo dependency allows commercial use.
@@ -279,4 +284,4 @@ async def _search_stadia(
 - [ ] **Step 2: deploy demo** (all flags explicit): `gcloud run deploy ca-roads-demo --source . --project ca-roads-mcp --region us-west1 --service-account ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com --min-instances 1 --max-instances 1 --concurrency 20 --memory 1Gi --cpu 1 --update-secrets STADIA_API_KEY=stadiamaps-api:latest` (command per docs/deploy.md; NEVER --set-env-vars/--set-secrets).
 - [ ] **Step 3: deploy mcp** similarly (`--min-instances 0 --max-instances 1 --concurrency 40 --update-secrets STADIA_API_KEY=stadiamaps-api:latest`).
 - [ ] **Step 4: prod verification.** Site tiles 200 from a map page; plan a route on the live planner; create a trip and confirm its og image renders roads; one MCP geocode call for a non-gazetteer landmark; devtools console free of CSP violations; /api/stats and /api/mapdata latency probe unchanged; demo env listing shows all prior keys plus STADIA_API_KEY.
-- [ ] **Step 5:** two-day Stadia usage dashboard check; memory update; remind Nic of the Starter subscription deadline (~2026-09-01).
+- [ ] **Step 5:** two-day Stadia usage dashboard check; memory update; remind the maintainer of the Starter subscription deadline (~2026-09-01).

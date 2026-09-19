@@ -9,11 +9,12 @@ import { CopyField } from "@/components/copy-field";
 // claim on this page: docs/mcp.md; this page restyles that doc into a
 // visual developer page rather than rewording its content.
 //
-// Tool count note: docs/mcp.md's tool-reference table previously listed
-// only nine tools, missing get_nearby_events (src/ca_roads_mcp/server.py),
-// while README.md's feature list correctly said "ten tools." mcp.md was
-// the stale artifact; both it and this page's TOOLS array below now
-// include all ten (coordinator ruling, 2026-08-05).
+// Tool count note: docs/mcp.md's tool-reference table once omitted
+// get_nearby_events (src/ca_roads_mcp/server.py) while README.md's
+// feature list counted it. mcp.md was the stale artifact; both it and
+// this page's TOOLS array below now list every tool the server
+// registers, and tests/test_snapshot.py's tool-count guard checks the
+// prose count on this page against the generated tool list.
 export const metadata: Metadata = {
   title: "MCP server - CommuteScout",
   description:
@@ -120,8 +121,8 @@ const TOOLS: Tool[] = [
   {
     signature: "get_nearby_events(center, radius_km?, kinds?)",
     description:
-      "Live road events near a point across every covered state, 37 " +
-      "states, not just California; the fallback for locations outside " +
+      "Live road events near a point across every covered state, 37 states, " +
+      "not just California; the fallback for locations outside " +
       "California, near a state border, or when a California tool comes " +
       "back empty",
   },
@@ -241,23 +242,7 @@ export default function McpPage() {
                 <code className="text-cs-ink text-sm font-medium break-all">
                   {tool.signature}
                 </code>
-                <p className="text-cs-ink/60 text-sm">
-                  {tool.signature === "get_lane_closures(route?, district?, center?)" ? (
-                    <>
-                      Closures in place right now, classified per the{" "}
-                      <Link
-                        href="/data-sources#the-closure-taxonomy"
-                        prefetch={false}
-                        className="text-cs-sky hover:underline"
-                      >
-                        closure taxonomy
-                      </Link>
-                      .
-                    </>
-                  ) : (
-                    tool.description
-                  )}
-                </p>
+                <p className="text-cs-ink/60 text-sm">{tool.description}</p>
               </div>
             ))}
           </div>
@@ -313,7 +298,8 @@ export default function McpPage() {
               </h2>
               <p className="text-cs-ink/60 mt-3 text-sm text-balance">
                 An eval suite with recorded fixtures and 91 golden questions
-                runs on demand before releases; the scorecard is public.
+                runs on demand, not on a release schedule. Each published
+                scorecard names the version it reflects.
               </p>
               <a
                 href="https://github.com/nicglazkov/commutescout/blob/main/EVALS.md"
