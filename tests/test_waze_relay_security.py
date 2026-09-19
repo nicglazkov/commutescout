@@ -109,6 +109,53 @@ async def test_the_wrong_token_buys_nothing(monkeypatch):
     assert not store.votes.hidden("wz:abc-123")
 
 
+# ------------------------------------- manufacturing a confirmed alert
+
+
+async def test_invented_reporters_cannot_run_up_the_confirmation_count():
+    """n_confirmations is not decoration. A router downstream reads it and
+    may send every driver around a well confirmed closure, so an anonymous
+    caller that could inflate it could close a road."""
+    store = _store()
+    async with _client(store) as client:
+        for i in range(8):
+            await _vote(client, address="203.0.113.7", reporter=f"made-up-{i}", vote="up")
+    record = store.records()[0]
+    assert record["n_confirmations"] == 3, "the upstream count, and only that"
+    assert record["reliability"] == pytest.approx(0.8)
+
+
+async def test_many_addresses_cannot_run_up_the_confirmation_count_either():
+    store = _store()
+    async with _client(store) as client:
+        for i in range(8):
+            await _vote(client, address=f"203.0.113.{i}", reporter=f"r-{i}", vote="up")
+    assert store.records()[0]["n_confirmations"] == 3
+
+
+async def test_an_up_vote_from_nobody_cannot_keep_a_cleared_alert_alive():
+    """The alert's life is anchored on confirm_ts, so a caller that could
+    move it would hold a cleared report on the map indefinitely."""
+    store = _store()
+    async with _client(store) as client:
+        for i in range(5):
+            await _vote(client, address=f"203.0.113.{i}", reporter=f"r-{i}", vote="up")
+    assert "confirm_ts" not in store.records()[0]
+    assert store.votes.confirmed_at("wz:abc-123") is None
+
+
+async def test_a_trusted_voter_may_confirm_and_prolong(monkeypatch):
+    monkeypatch.setattr(relay, "CONFIRM_TOKEN", "confirm-secret")
+    store = _store()
+    async with _client(store) as client:
+        for i in range(2):
+            await _vote(client, address="203.0.113.7", reporter=f"r:person-{i}",
+                        vote="up", token="confirm-secret")
+    record = store.records()[0]
+    assert record["n_confirmations"] == 5, "three upstream plus two trusted"
+    assert "confirm_ts" in record
+
+
 def test_a_trusted_voter_and_an_untrusted_one_cannot_collide():
     trusted = Votes.voter("someone", "203.0.113.7", trusted=True)
     spoofed = Votes.voter("t:someone", "203.0.113.7", trusted=False)
@@ -123,6 +170,17 @@ def test_up_votes_still_count_per_reporter_for_a_trusted_caller():
         votes.add("wz:1", "up", Votes.voter(f"r:person-{i}", "203.0.113.7", trusted=True))
     assert votes.ups("wz:1") == 3
     assert votes.confirmed_at("wz:1") is not None
+
+
+def test_anonymous_votes_may_weaken_an_alert_but_never_strengthen_it():
+    """The asymmetry the trust split buys, stated as one rule."""
+    votes = Votes()
+    for i, address in enumerate(("203.0.113.7", "198.51.100.4", "192.0.2.9")):
+        votes.add("wz:1", "up", Votes.voter(f"r-{i}", address, trusted=False))
+        votes.add("wz:2", "gone", Votes.voter(f"r-{i}", address, trusted=False))
+    assert votes.ups("wz:1") == 0, "anonymous callers cannot manufacture confidence"
+    assert votes.confirmed_at("wz:1") is None
+    assert votes.hidden("wz:2"), "but they can still say something is not there"
 
 
 async def test_votes_are_rate_limited_harder_than_reads(monkeypatch):
