@@ -1,6 +1,6 @@
 # Pinned, like the main image's constraints.txt: a release upstream must not
 # be able to break a deploy with no change on our side.
-anyio==4.14.1
+anyio==4.14.2
 certifi==2026.6.17
 click==8.4.2
 # Only for checking a signed-in caller's token when WAZE_USER_SESSIONS is on.
