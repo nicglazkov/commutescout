@@ -64,12 +64,18 @@ def test_error_envelope_for_missing_unknown_and_invalid(client):
     assert r.status_code == 404 and r.json()["error"]["code"] == "unknown_tool"
 
 
-def test_semantic_errors_stay_in_the_tool_body(client):
-    # A malformed center is the tool's own error today; the bridge does
-    # not hide it and does not turn it into a transport failure.
+def test_semantic_errors_are_400_in_the_one_envelope(client):
+    # A malformed center or a bad radius is the caller's mistake: a 400
+    # in the documented envelope, never a 200 that reads as "nothing near".
     r = client.get(f"{PREFIX}/tools/get_incidents", params={"center": "nowhere"})
-    assert r.status_code == 200
-    assert "error" in r.json()
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "invalid_parameter"
+    assert "center" in r.json()["error"]["message"]
+    r = client.get(f"{PREFIX}/tools/get_incidents",
+                   params={"center": "37.3,-121.9", "radius_km": "-5"})
+    assert r.status_code == 400 and "radius_km" in r.json()["error"]["message"]
+    r = client.get(f"{PREFIX}/tools/get_incidents", params={"center": "200,999"})
+    assert r.status_code == 400
 
 
 def test_openapi_is_generated_from_the_tool_schemas(client):

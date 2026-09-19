@@ -253,6 +253,7 @@ def parse_center(center: str) -> tuple[float, float] | None:
     return lat, lon
 
 
+MAX_RADIUS_KM = 500
 CENTER_FORMAT_ERROR = ("center must be 'lat,lon' (lat -90..90, lon -180..180), "
                        "e.g. '38.58,-121.49'")
 # An unfiltered closures list is 600 KB and 670 records: more than any
@@ -841,6 +842,8 @@ async def get_incidents(
         point = parse_center(center)
         if point is None:
             return {"error": CENTER_FORMAT_ERROR}
+        if not 0 < radius_km <= MAX_RADIUS_KM:
+            return {"error": f"radius_km must be greater than 0 and at most {MAX_RADIUS_KM}."}
         records = [
             i
             for i in records
