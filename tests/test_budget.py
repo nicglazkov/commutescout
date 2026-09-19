@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(autouse=True)
 def _fresh_counters(monkeypatch):
-    monkeypatch.setattr(budget, "UPSTREAM", DailyCounter())
+    monkeypatch.setattr(budget, "UPSTREAM", DailyCounter(log_spent=True))
     monkeypatch.setattr(geo, "UPSTREAM", budget.UPSTREAM)
     monkeypatch.setattr(tomtom_feed, "UPSTREAM", budget.UPSTREAM)
     monkeypatch.setattr(demo_app, "UPSTREAM", budget.UPSTREAM)
@@ -171,3 +171,21 @@ def test_the_stadia_caps_stay_inside_the_purchased_plan():
     per_day = (nav.STADIA_NAV_DAILY * 20 + demo_app.STADIA_ROUTE_DAILY * 20
                + nav.STADIA_APP_TILES_DAILY + demo_app.STADIA_TILES_DAILY)
     assert per_day <= 30_000, f"{per_day} credits a day is {per_day * 30:,} a month"
+
+
+def test_only_upstream_caps_write_a_key_to_the_log(caplog):
+    """A per-client counter is keyed by an address or an account, so it
+    must never name its key in a log line; the upstream counter's keys
+    name a paid service and are what an alert matches on."""
+    import logging
+
+    from ca_roads.budget import UPSTREAM, DailyCounter
+
+    per_client = DailyCounter()
+    with caplog.at_level(logging.WARNING, logger="ca_roads.budget"):
+        assert per_client.allow("nav:198.51.100.7", 1) is True
+        assert per_client.allow("nav:198.51.100.7", 1) is False
+        assert "198.51.100.7" not in caplog.text and caplog.text == ""
+        assert UPSTREAM.log_spent is True
+        assert UPSTREAM.allow("stadia-nav", 0) is False
+        assert "stadia-nav" in caplog.text

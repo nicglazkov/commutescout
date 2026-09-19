@@ -19,11 +19,14 @@ log = logging.getLogger(__name__)
 class DailyCounter:
     """Counts per key for the current UTC day."""
 
-    def __init__(self, max_keys: int = 10_000) -> None:
+    def __init__(self, max_keys: int = 10_000, *, log_spent: bool = False) -> None:
         self.day = ""
         self.counts: dict[str, int] = {}
         self.spent: dict[str, str] = {}
         self.max_keys = max_keys
+        # Only a counter whose keys name an upstream, never one keyed by
+        # a client address or an account, may write a key to the log.
+        self.log_spent = log_spent
 
     def _roll(self) -> None:
         today = datetime.now(UTC).date().isoformat()
@@ -41,9 +44,9 @@ class DailyCounter:
         self._roll()
         n = self.counts.get(key, 0)
         if n >= limit:
-            if self.spent.get(key) != self.day:
-                # One line the first time a key is spent each day, so a
-                # log-based alert can say which cap stopped serving.
+            if self.log_spent and self.spent.get(key) != self.day:
+                # One line the first time a cap is spent each day, so a
+                # log-based alert can say which one stopped serving.
                 self.spent[key] = self.day
                 log.warning("daily cap reached: %s spent %d of %d", key, n, limit)
             return False
@@ -59,4 +62,5 @@ class DailyCounter:
 
 # Global budgets for paid upstreams, keyed by upstream name. Shared by
 # both services through the modules that make the calls.
-UPSTREAM = DailyCounter()
+# Its keys name a paid upstream ("stadia-nav"), so this one logs.
+UPSTREAM = DailyCounter(log_spent=True)
