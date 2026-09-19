@@ -16,11 +16,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import ipaddress
 import json
 import re
 import sys
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 PROTOCOL = "flare/1"
 KINDS = frozenset({
@@ -62,6 +64,7 @@ MAX_BYTES = 1_000_000
 MAX_TTL_S = 86_400
 MAX_RADIUS_M = 100_000
 MAX_DESCRIPTION = 200
+MAX_HANDSHAKE_DESCRIPTION = 500
 MAX_GEOMETRY_POINTS = 500
 MAX_EXTRA_BYTES = 2_048
 MIN_REFRESH_S = 15
@@ -173,6 +176,33 @@ def accept_alerts(data: Any, *, now: datetime | None = None) -> tuple[list[dict]
     return kept, problems
 
 
+def fetchable_base(url: Any) -> bool:
+    """Whether the poller may fetch this plugin base.
+
+    A plugin base is operator-supplied and fetched server-side, so it
+    must be https and must not be a literal private, loopback,
+    link-local, reserved or multicast address: otherwise a registered
+    source could point the poller at the cloud metadata service or at
+    something else inside the network. A hostname that resolves to a
+    private address is not caught here; redirects are refused at the
+    call site, which is the other half of this guard.
+    """
+    if not isinstance(url, str):
+        return False
+    try:
+        u = urlparse(url)
+    except ValueError:
+        return False
+    if u.scheme != "https" or not u.hostname:
+        return False
+    try:
+        ip = ipaddress.ip_address(u.hostname)
+    except ValueError:
+        return True  # a hostname, not a literal address
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
+
+
 def validate_handshake(h: Any) -> list[str]:
     if not isinstance(h, dict):
         return ["not an object"]
@@ -204,6 +234,10 @@ def validate_handshake(h: Any) -> list[str]:
         p.append("attribution: {name, url?}")
     if h.get("auth") not in ("none", "bearer"):
         p.append("auth: 'none' or 'bearer'")
+    # Republished to every visitor on the marketplace, so it is bounded here.
+    if "description" in h and not (isinstance(h["description"], str)
+                                   and len(h["description"]) <= MAX_HANDSHAKE_DESCRIPTION):
+        p.append(f"description: text of at most {MAX_HANDSHAKE_DESCRIPTION} characters")
     return p
 
 
@@ -213,8 +247,8 @@ def validate_manifest(m: Any) -> list[str]:
     p: list[str] = []
     if not isinstance(m.get("id"), str) or not re.match(r"^[a-z0-9][a-z0-9-]{1,62}$", m["id"]):
         p.append("id: 2 to 63 lowercase letters, digits and hyphens")
-    if not isinstance(m.get("base"), str) or not m["base"].startswith("https://"):
-        p.append("base: https URL")
+    if not fetchable_base(m.get("base")):
+        p.append("base: https URL, not a private or loopback address")
     if m.get("protocol") != PROTOCOL:
         p.append(f"protocol: must be {PROTOCOL!r}")
     if m.get("visibility") not in VISIBILITY:
