@@ -1,0 +1,24 @@
+# Dependabot cannot parse constraints.txt as a manifest, so the Python
+# pins there are bumped by hand when pip-audit turns CI red. What it can
+# do is keep the GitHub Actions and the site's npm tree current, and open
+# the security PRs for those on its own.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      dev-dependencies:
+        dependency-type: development
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

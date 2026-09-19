@@ -13,61 +13,35 @@ on:
 
 jobs:
   evals:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
-          # Score the released code, not whatever main moved to since.
-          ref: ${{ github.event.release.tag_name || 'main' }}
           fetch-depth: 0
-      - name: Skip docs/UI-only releases
-        id: gate
-        if: github.event_name == 'release'
-        env:
-          TAG: ${{ github.event.release.tag_name }}
-        run: |
-          prev=$(git tag --sort=-creatordate | grep -vx "$TAG" | head -1)
-          if [ -z "$prev" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed=$(git diff --name-only "$prev" "$TAG")
-          printf 'Changed since %s:\n%s\n' "$prev" "$changed"
-          if printf '%s\n' "$changed" | grep -qE '^(src/ca_roads/|src/ca_roads_mcp/|evals/|src/ca_roads_demo/prompt\.py)'; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "No model-visible changes since $prev; skipping."
-          fi
-      - uses: actions/setup-python@v5
-        if: github.event_name != 'release' || steps.gate.outputs.run == 'true'
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
       - name: Install
-        if: github.event_name != 'release' || steps.gate.outputs.run == 'true'
         run: pip install -e ".[dev,evals]" -c constraints.txt
       - name: Run evals
-        if: github.event_name != 'release' || steps.gate.outputs.run == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_CA_ROADS_DEMO_PROD }}
           PYTHONPATH: .
-          EVAL_SOURCE_REF: ${{ github.event.release.tag_name || github.sha }}
+          EVAL_SOURCE_REF: ${{ github.sha }}
         run: python evals/run_evals.py --report EVALS.md
       - name: Upload raw results
-        if: github.event_name != 'release' || steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: eval-results
           path: evals/results/
       - name: Commit scorecard to main
-        if: github.event_name != 'release' || steps.gate.outputs.run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # The run happened on the release tag; carry the generated files
+          # Carry the generated files
           # onto main so the scorecard lands where readers look.
           mkdir -p /tmp/evalout
           cp EVALS.md evals/results/badge.json evals/results/badge.svg /tmp/evalout/

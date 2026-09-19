@@ -7,10 +7,10 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -18,7 +18,7 @@ jobs:
         run: pip install -e ".[dev,demo]" -c constraints.txt
       - name: Lint
         run: ruff check .
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -46,6 +46,12 @@ jobs:
           # which pip-audit's requirements mode fails to install on the
           # Linux runner. Not using --strict: the only un-auditable
           # entry is this repo's own editable package, which is fine.
+          #
+          # When a new advisory lands, bump the pin in constraints.txt.
+          # Dependabot cannot open that PR because it does not read a
+          # constraints file as a manifest. If a fix is not published
+          # yet, add "--ignore-vuln <ID>" here with a comment saying why
+          # and when to remove it, rather than leaving main red.
           pip-audit
           # plugins/waze-relay ships as its own Cloud Run service from its
           # own pinned requirements.txt, which the step above never sees:
@@ -56,10 +62,10 @@ jobs:
           pip-audit -r plugins/waze-relay/requirements.txt
 
   site:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
