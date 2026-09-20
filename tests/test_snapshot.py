@@ -7,6 +7,7 @@ publisher does.
 import gzip
 import json
 import re
+import time
 
 import pytest
 
@@ -511,3 +512,23 @@ async def test_a_chain_control_becomes_a_marker_and_does_not_break_the_bundle(mo
     assert chains[0]["status"] == "R-2" and chains[0]["route"] == "I-80"
     # The publisher encodes what it built; this is the step that raised.
     assert demo_app.shape_markers(markers, slim=True)
+
+
+def test_a_stuck_bundle_is_visible_without_reading_the_log(monkeypatch):
+    """`published` is null after every deploy, so a monitor cannot tell a
+    fresh process from a stuck one. `stale` can: it stays false while a
+    young process is still getting started and turns true once a bundle
+    has missed enough cycles."""
+    monkeypatch.setattr(snapshot, "BUCKET", "example-bucket")
+    monkeypatch.setattr(snapshot, "_last_upload", {})
+    monkeypatch.setattr(snapshot, "_last_published", {})
+    # A process that started seconds ago has published nothing yet.
+    monkeypatch.setattr(snapshot, "_started", time.monotonic())
+    assert snapshot.status()["stale"] is False
+    # One that has been up for an hour with nothing published is stuck.
+    monkeypatch.setattr(snapshot, "_started", time.monotonic() - 3600)
+    st = snapshot.status()
+    assert st["stale"] is True and st["objects"]["live.json.gz"]["stale"] is True
+    # A bundle that published recently is not stale.
+    monkeypatch.setattr(snapshot, "_last_upload", {n: time.time() for n, *_ in snapshot.BUNDLES})
+    assert snapshot.status()["stale"] is False

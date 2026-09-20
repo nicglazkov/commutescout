@@ -28,7 +28,6 @@ areas and `fields=geo` lazy geometry. Only the map boot moved.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import gzip
 import hashlib
 import json
@@ -77,6 +76,9 @@ BUNDLES: tuple[tuple[str, set[str], int, str, int], ...] = (
 # rotate the GCS ETag, and turn every client's cheap 304 poll into a
 # full download of the object. Skipping an unchanged upload is what
 # keeps an idle open map costing a few bytes per poll.
+# How many missed cycles make a bundle stuck rather than merely quiet.
+STALE_CYCLES = 20
+_started = time.monotonic()
 _last_hash: dict[str, str] = {}
 _last_upload: dict[str, float] = {}
 _last_published: dict[str, str] = {}
@@ -175,9 +177,20 @@ async def publish_once(name: str, kinds: set[str], cache_control: str,
 
 async def _bundle_loop(name: str, kinds: set[str], interval: int,
                        cache_control: str, max_stale: int) -> None:
+    """One bundle, forever. A failure never stops the loop, but it is
+    always logged: this loop once swallowed an AttributeError every
+    cycle for two days while the map served the last good object."""
+    failures = 0
     while True:
-        with contextlib.suppress(Exception):
+        try:
             await publish_once(name, kinds, cache_control, max_stale)
+            failures = 0
+        except Exception:  # noqa: BLE001 - one bad cycle never stops the loop
+            failures += 1
+            # Every failure for the first few, then once a minute of
+            # them: enough to alert on, not enough to flood the log.
+            if failures <= 3 or failures % max(1, 60 // max(1, interval)) == 0:
+                log.exception("snapshot %s: publish failed (%d in a row)", name, failures)
         await asyncio.sleep(interval)
 
 
@@ -200,13 +213,38 @@ async def run() -> None:
     ))
 
 
+def _stale(name: str, interval: int) -> bool:
+    """Whether this bundle has missed enough cycles to call it stuck.
+
+    A bundle that has never published in this process is not stale yet:
+    the process may have just started. One that published and then
+    stopped, or that has been up for many cycles without ever managing
+    one, is.
+    """
+    if not BUCKET:
+        return False
+    last = _last_upload.get(name)
+    if last is None:
+        return time.monotonic() - _started > max(STALE_CYCLES * interval, 300)
+    return time.time() - last > STALE_CYCLES * interval
+
+
 def status() -> dict:
-    """Publisher health, surfaced on /api/warmup for ops."""
+    """Publisher health, surfaced on /api/warmup for ops.
+
+    `stale` is the field to alert on. `published` alone is not enough:
+    it is null after every deploy until the first successful cycle, so
+    a monitor watching it either ignores a genuine stall or cries after
+    every release.
+    """
     return {
         "bucket": BUCKET or None,
         "schema": SCHEMA,
         "objects": {name: {"published": _last_published.get(name),
-                           "hash": _last_hash.get(name, "")[:8] or None}
-                    for name, *_rest in BUNDLES},
+                           "hash": _last_hash.get(name, "")[:8] or None,
+                           "stale": _stale(name, interval)}
+                    for name, _kinds, interval, *_rest in BUNDLES},
+        "stale": any(_stale(name, interval)
+                     for name, _kinds, interval, *_rest in BUNDLES),
         "checked_at": time.time(),
     }
