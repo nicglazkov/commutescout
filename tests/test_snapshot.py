@@ -8,6 +8,8 @@ import gzip
 import json
 import re
 
+import pytest
+
 from ca_roads_demo import snapshot
 from mapsrc import map_source
 
@@ -472,3 +474,40 @@ def test_tool_counts_are_current():
     # The claim is made on several surfaces; if it vanishes everywhere
     # the guard has stopped guarding anything.
     assert checked >= 5, f"only {checked} tool-count claims found"
+
+
+@pytest.mark.asyncio
+async def test_a_chain_control_becomes_a_marker_and_does_not_break_the_bundle(monkeypatch):
+    """The live bundle carries chain controls, and a marker built from one
+    read a field the model does not have. Nothing caught it because the
+    feed is empty outside chain season: the first control of the winter
+    made every live publish raise, silently, and the map served the last
+    good object for as long as that lasted. The test builds one rather
+    than trusting the feed to be non-empty."""
+    from ca_roads.models import ChainControl
+    from ca_roads_demo import app as demo_app
+
+    control = ChainControl(
+        index="x", district=3, route="I-80", county="Placer", direction="EB",
+        location_name="Kingvale", nearby_place="Soda Springs", lat=39.31, lon=-120.36,
+        in_service=True, status="R-2", status_description="Chains required",
+        status_updated_at=None,
+    )
+
+    class _Result:
+        records = [control]
+        degraded = False
+
+    async def fake_chain_controls():
+        return _Result()
+
+    road = demo_app.tools.get_road()
+    monkeypatch.setattr(road, "chain_controls", fake_chain_controls)
+    markers, _ready, _total, _degraded = await demo_app.build_markers(
+        (-85.0, -180.0, 85.0, 180.0), {"chain"})
+    chains = [m for m in markers if m["kind"] == "chain_control"]
+    assert len(chains) == 1, chains
+    assert chains[0]["label"] == "Chains required"
+    assert chains[0]["status"] == "R-2" and chains[0]["route"] == "I-80"
+    # The publisher encodes what it built; this is the step that raised.
+    assert demo_app.shape_markers(markers, slim=True)

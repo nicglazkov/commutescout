@@ -1071,7 +1071,7 @@ async def build_markers(box, want, *, geo_only: bool = False):
                 markers.append({
                     "kind": "chain_control", "lat": c.lat, "lon": c.lon,
                     "status": c.status, "route": c.route,
-                    "label": c.description,
+                    "label": c.status_description or c.location_name,
                     "updated": (c.status_updated_at.isoformat()
                                 if c.status_updated_at else None),
                 })
