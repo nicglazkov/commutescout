@@ -7,6 +7,9 @@ publisher does.
 import gzip
 import json
 import re
+import time
+
+import pytest
 
 from ca_roads_demo import snapshot
 from mapsrc import map_source
@@ -472,3 +475,60 @@ def test_tool_counts_are_current():
     # The claim is made on several surfaces; if it vanishes everywhere
     # the guard has stopped guarding anything.
     assert checked >= 5, f"only {checked} tool-count claims found"
+
+
+@pytest.mark.asyncio
+async def test_a_chain_control_becomes_a_marker_and_does_not_break_the_bundle(monkeypatch):
+    """The live bundle carries chain controls, and a marker built from one
+    read a field the model does not have. Nothing caught it because the
+    feed is empty outside chain season: the first control of the winter
+    made every live publish raise, silently, and the map served the last
+    good object for as long as that lasted. The test builds one rather
+    than trusting the feed to be non-empty."""
+    from ca_roads.models import ChainControl
+    from ca_roads_demo import app as demo_app
+
+    control = ChainControl(
+        index="x", district=3, route="I-80", county="Placer", direction="EB",
+        location_name="Kingvale", nearby_place="Soda Springs", lat=39.31, lon=-120.36,
+        in_service=True, status="R-2", status_description="Chains required",
+        status_updated_at=None,
+    )
+
+    class _Result:
+        records = [control]
+        degraded = False
+
+    async def fake_chain_controls():
+        return _Result()
+
+    road = demo_app.tools.get_road()
+    monkeypatch.setattr(road, "chain_controls", fake_chain_controls)
+    markers, _ready, _total, _degraded = await demo_app.build_markers(
+        (-85.0, -180.0, 85.0, 180.0), {"chain"})
+    chains = [m for m in markers if m["kind"] == "chain_control"]
+    assert len(chains) == 1, chains
+    assert chains[0]["label"] == "Chains required"
+    assert chains[0]["status"] == "R-2" and chains[0]["route"] == "I-80"
+    # The publisher encodes what it built; this is the step that raised.
+    assert demo_app.shape_markers(markers, slim=True)
+
+
+def test_a_stuck_bundle_is_visible_without_reading_the_log(monkeypatch):
+    """`published` is null after every deploy, so a monitor cannot tell a
+    fresh process from a stuck one. `stale` can: it stays false while a
+    young process is still getting started and turns true once a bundle
+    has missed enough cycles."""
+    monkeypatch.setattr(snapshot, "BUCKET", "example-bucket")
+    monkeypatch.setattr(snapshot, "_last_upload", {})
+    monkeypatch.setattr(snapshot, "_last_published", {})
+    # A process that started seconds ago has published nothing yet.
+    monkeypatch.setattr(snapshot, "_started", time.monotonic())
+    assert snapshot.status()["stale"] is False
+    # One that has been up for an hour with nothing published is stuck.
+    monkeypatch.setattr(snapshot, "_started", time.monotonic() - 3600)
+    st = snapshot.status()
+    assert st["stale"] is True and st["objects"]["live.json.gz"]["stale"] is True
+    # A bundle that published recently is not stale.
+    monkeypatch.setattr(snapshot, "_last_upload", {n: time.time() for n, *_ in snapshot.BUNDLES})
+    assert snapshot.status()["stale"] is False
