@@ -250,6 +250,57 @@ def test_the_busiest_cells_are_the_ones_kept_fresh():
     assert len(store.wanted_points()) == 2 * 4    # only the hot cells are swept
 
 
+def test_an_empty_cell_gives_way_to_one_that_has_something_in_it():
+    """The bug this closes: a caller sweeping the coverage box asks about
+    every cell in the rectangle, and the rectangle is mostly ocean. Demand
+    alone put eleven Gulf of Mexico cells in a hot set of eight and pushed
+    Los Angeles out of its own budget."""
+    clock = [1000.0]
+    store = _store(_alert(), clock=lambda: clock[0])
+    store.hot_limit = 3
+    ocean = [(24, -85), (24, -86), (24, -87), (24, -88)]
+    # The sweep asks about the ocean far more often than anyone asks about LA.
+    for _ in range(9):
+        for lat, lon in ocean:
+            store.want(lat + 0.5, lon + 0.5)
+    store.want(*LA)
+    assert store.wanted_cells()[0] != (34, -119), "before any sweep, demand decides"
+
+    # Each cell gets swept; the ocean turns out to hold nothing.
+    for cell in ocean:
+        store.note_yield(cell, 0)
+    store.note_yield((34, -119), store.cell_yield((34, -119)))
+
+    assert store.cell_yield((34, -119)) == 1
+    assert store.wanted_cells()[0] == (34, -119), "what produced alerts goes first"
+    assert (34, -119) in store.hot_cells()
+    assert [store.rank(c) for c in store.wanted_cells()] == [0, 2, 2, 2, 2]
+
+
+def test_a_cell_written_off_as_empty_gets_another_turn_later():
+    clock = [1000.0]
+    store = _store(clock=lambda: clock[0])
+    store.want(*LA)
+    store.note_yield((34, -119), 0)
+    assert store.rank((34, -119)) == 2, "swept and empty"
+    clock[0] += 1801
+    assert store.rank((34, -119)) == 1, "long enough ago to be worth another look"
+
+
+def test_a_cell_nobody_has_tried_beats_one_known_to_be_empty():
+    clock = [1000.0]
+    store = _store(clock=lambda: clock[0])
+    untried, empty = (24, -85), (24, -86)
+    assert store_module.cell_of(24.5, -84.5) == untried     # floor, not round
+    assert store_module.cell_of(24.5, -85.5) == empty
+    store.want(24.5, -84.5)
+    store.want(24.5, -85.5)
+    store.note_yield(empty, 0)
+    assert store.rank(untried) == 1
+    assert store.rank(empty) == 2
+    assert store.wanted_cells() == [untried, empty]
+
+
 def test_the_hot_set_holds_still_while_a_sweep_runs():
     clock = [1000.0]
     store = _store(clock=lambda: clock[0])
