@@ -47,6 +47,12 @@ jobs:
           git checkout -b "$branch"
           git add docs/shots
           git commit -m "docs: refresh the screenshots from the live site"
-          git push -u origin "$branch"
+          # The branch is rebuilt from scratch on every run, so replacing
+          # it is the point rather than an accident.
+          git push -f -u origin "$branch"
+          # A repository can forbid Actions from opening pull requests.
+          # The branch is pushed either way, so a refusal costs a click
+          # rather than the capture.
           gh pr create --title "docs: refresh the screenshots from the live site" \
-            --body "Retaken from the live site by the Screenshots workflow. Check that no shot caught a transient: an empty map, a plugin card reading \"not answering\", or a route that failed to plan."
+            --body "Retaken from the live site by the Screenshots workflow. Check that no shot caught a transient: an empty map, a plugin card reading \"not answering\", or a route that failed to plan." \
+            || echo "could not open a pull request; the branch $branch is pushed and ready"
