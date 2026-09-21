@@ -263,6 +263,9 @@ def test_state_counts_are_current():
         # from every per-file pattern; the blurb now keeps "37 states"
         # on one line so this sees it.
         ("site/app/mcp/page.tsx", r"(\d+) states"),
+        # The registry listing is the one nobody sees drift: it is served
+        # by modelcontextprotocol.io, not by us.
+        ("server.json", r"(\d+) US states"),
     ):
         text = pathlib.Path(path).read_text(encoding="utf-8")
         found = [int(g) for m in re.finditer(pattern, text)
@@ -532,3 +535,25 @@ def test_a_stuck_bundle_is_visible_without_reading_the_log(monkeypatch):
     # A bundle that published recently is not stale.
     monkeypatch.setattr(snapshot, "_last_upload", {n: time.time() for n, *_ in snapshot.BUNDLES})
     assert snapshot.status()["stale"] is False
+
+
+def test_the_registry_manifest_fits_what_the_registry_accepts():
+    """server.json is published to the MCP Registry, which rejects a
+    description over 100 characters. Ours was 152 for months: every
+    publish failed validation, so the listing sat at an old version
+    describing the service as California-only. The limit is checked here
+    rather than discovered at publish time."""
+    import json
+    import pathlib
+
+    manifest = json.loads(pathlib.Path("server.json").read_text(encoding="utf-8"))
+    assert len(manifest["description"]) <= 100, len(manifest["description"])
+    assert manifest["name"] == "io.github.nicglazkov/commutescout"
+    # The schema the publisher validates against moves; a deprecated one
+    # is a warning today and a rejection later.
+    assert manifest["$schema"].endswith("/2025-12-11/server.schema.json")
+    # The published version is what the release chain bumped.
+    import tomllib
+
+    pyproject = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+    assert manifest["version"] == pyproject["project"]["version"]
