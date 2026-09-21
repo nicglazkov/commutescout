@@ -171,6 +171,23 @@ def shot_developers(page, out: Path) -> None:
     page.screenshot(path=out / "developers.png")
 
 
+def shot_hero(page, out: Path) -> None:
+    """The marketing site's hero: a wide, multi-state view, so covering
+    37 states is visible rather than asserted."""
+    page.set_viewport_size({"width": 1600, "height": 900})
+    page.goto(f"{BASE}/map", wait_until="domcontentloaded")
+    settle(page, 5000)
+    dismiss_overlays(page)
+    # Far enough out that several states are on screen at once. A
+    # search lands at street level, and the hero is meant to show the
+    # spread of the coverage, not one intersection in Reno.
+    search_to(page, "Reno, NV", zoom_out=9)
+    settle(page, 9000)
+    close_popups(page)
+    page.screenshot(path=out / "hero-map.png")
+    page.set_viewport_size(VIEWPORT)
+
+
 def shot_og(page, out: Path) -> None:
     """The Open Graph card, at the size link unfurlers expect."""
     page.set_viewport_size({"width": 1200, "height": 630})
@@ -199,6 +216,15 @@ SHOTS = {
     "marketplace": shot_marketplace,
     "developers": shot_developers,
     "og": shot_og,
+    "hero": shot_hero,
+}
+
+# Two of these are not README images and do not live in docs/shots: the
+# link-preview card the site serves, and the marketing hero. They went
+# stale for months because the capture only knew about one folder.
+ELSEWHERE = {
+    "og.png": "src/ca_roads_demo/static/shots/og.png",
+    "hero-map.png": "site/public/shots/hero-map.png",
 }
 
 
@@ -226,13 +252,26 @@ def main() -> int:
         for name in wanted:
             try:
                 SHOTS[name](page, out)
-                size = (out / f"{name}.png").stat().st_size
-                print(f"  {name}.png  {size // 1024} KB")
+                # Most shots write <name>.png; the hero writes the file
+                # name the site expects instead.
+                written = out / ("hero-map.png" if name == "hero" else f"{name}.png")
+                size = written.stat().st_size
+                print(f"  {written.name}  {size // 1024} KB")
                 if size < 20_000:
                     failures.append(f"{name}: only {size} bytes, probably blank")
             except Exception as exc:  # noqa: BLE001 - one shot never stops the rest
                 failures.append(f"{name}: {type(exc).__name__}: {exc}")
         browser.close()
+    # Copy the two that belong elsewhere, so one run refreshes every
+    # image in the repository rather than most of them.
+    repo = Path(__file__).resolve().parent.parent
+    for name, dest in ELSEWHERE.items():
+        src = out / name
+        if src.exists():
+            target = repo / dest
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(src.read_bytes())
+            print(f"  {dest}")
     for f in failures:
         print("FAILED", f, file=sys.stderr)
     return 1 if failures else 0
