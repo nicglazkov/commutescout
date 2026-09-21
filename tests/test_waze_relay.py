@@ -273,8 +273,43 @@ def test_an_empty_cell_gives_way_to_one_that_has_something_in_it():
 
     assert store.cell_yield((34, -119)) == 1
     assert store.wanted_cells()[0] == (34, -119), "what produced alerts goes first"
-    assert (34, -119) in store.hot_cells()
     assert [store.rank(c) for c in store.wanted_cells()] == [0, 2, 2, 2, 2]
+    # Ranking alone was not enough: the hot set fills to its limit whatever
+    # is in it, so the empty cells still took most of the session. They are
+    # out of the set, not merely last in it.
+    assert store.hot_cells() == [(34, -119)]
+    assert len(store.wanted_points()) == 4, "the whole budget, not an eighth"
+
+
+def test_an_empty_cell_comes_back_for_another_look_when_its_measurement_expires():
+    clock = [1000.0]
+    store = _store(clock=lambda: clock[0])
+    store.want(24.5, -84.5)
+    store.note_yield((24, -85), 0)
+    assert store.hot_cells() == [], "nothing worth sweeping right now"
+    clock[0] += 1801
+    store.want(24.5, -84.5)          # a caller is still asking, as a poller does
+    assert store.hot_cells() == [(24, -85)], "one look, every half hour"
+
+
+async def test_when_everything_known_is_empty_it_fetches_nothing_and_recovers():
+    """Sweeping cells we have just established are empty is the waste this
+    closes, so the honest answer is to fetch nothing for a while. It cannot
+    wedge, because every measurement expires."""
+    clock = [1000.0]
+    store = _store(clock=lambda: clock[0])
+    for lon in (-84.5, -85.5, -86.5):
+        store.want(24.5, lon)
+    for cell in ((24, -85), (24, -86), (24, -87)):
+        store.note_yield(cell, 0)
+    assert store.hot_cells() == []
+    assert store.wanted_points() == []
+    assert await store.poll_once() is False, "nothing due, and nothing invented"
+
+    clock[0] += 1801
+    for lon in (-84.5, -85.5, -86.5):
+        store.want(24.5, lon)        # the caller has not gone away
+    assert len(store.hot_cells()) == 3, "every measurement expires, so it recovers"
 
 
 def test_a_cell_written_off_as_empty_gets_another_turn_later():
@@ -353,7 +388,9 @@ async def test_the_poller_takes_the_stalest_point_and_waits_its_turn():
         polled.append((round(lat, 2), round(lon, 2)))
         return 0
 
-    store = _store(clock=lambda: clock[0])
+    # An alert in the cell, so it stays worth sweeping and this test is
+    # about the round robin rather than about the ranking.
+    store = _store(_alert(), clock=lambda: clock[0])
     store.source.refresh = fake_refresh
     assert await store.poll_once() is False           # nothing asked for yet
 
