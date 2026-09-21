@@ -557,3 +557,38 @@ def test_the_registry_manifest_fits_what_the_registry_accepts():
 
     pyproject = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
     assert manifest["version"] == pyproject["project"]["version"]
+
+
+@pytest.mark.asyncio
+async def test_a_bundle_missing_a_feed_is_not_published(monkeypatch):
+    """A feed that drops out takes its markers with it, and the bundle
+    would publish anyway. cameras.json.gz once shipped 14,791 cameras
+    with not one of them in California, because that one feed was
+    missing while every other state was fine. Thousands of markers and a
+    fresh timestamp read as healthy, so the guard is the drop itself."""
+    uploaded = []
+    monkeypatch.setattr(snapshot, "BUCKET", "example-bucket")
+    monkeypatch.setattr(snapshot, "_upload", lambda n, b, c: uploaded.append((n, len(b))))
+    monkeypatch.setattr(snapshot, "_last_hash", {})
+    monkeypatch.setattr(snapshot, "_last_count", {})
+    monkeypatch.setattr(snapshot, "_last_upload", {})
+    monkeypatch.setattr(snapshot, "_last_published", {})
+
+    full = [{"kind": "camera", "lat": 37.0 + i / 1000, "lon": -122.0} for i in range(1000)]
+    holed = full[:300]          # one state's feed missing
+    state = {"markers": full}
+
+    async def fake_build(name, kinds):
+        return state["markers"]
+
+    monkeypatch.setattr(snapshot, "build_bundle", fake_build)
+    assert await snapshot.publish_once("cameras.json.gz", {"camera"}, "cc", 60) is True
+    assert len(uploaded) == 1
+    # The feed drops out: the object that is already up stays up.
+    state["markers"] = holed
+    assert await snapshot.publish_once("cameras.json.gz", {"camera"}, "cc", 60) is False
+    assert len(uploaded) == 1, "a bundle missing a feed must not be published"
+    # It recovers, and so does publishing.
+    state["markers"] = full[:900]
+    assert await snapshot.publish_once("cameras.json.gz", {"camera"}, "cc", 60) is True
+    assert len(uploaded) == 2
