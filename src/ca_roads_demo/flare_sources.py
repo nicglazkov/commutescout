@@ -338,15 +338,38 @@ class Poller:
             problems: list[str] = []
             kept_by_cell: dict[tuple[float, float], list[dict]] = {}
 
+            # The handshake is cached for an hour, so most cycles never
+            # make it and the first thing to touch a cold container is a
+            # cell. Exactly one cell per cycle is allowed to wait out a
+            # cold start; once it answers the instance is up and the
+            # rest run at the normal timeout, so a dead plugin still
+            # costs one wait rather than one per cell.
+            warmed = {"done": False}
+
+            async def fetch_cell(cell, timeout):
+                return await self.fetch_json(
+                    client, f"{base}/flare/v1/alerts", src=src,
+                    params={"lat": cell[0], "lon": cell[1], "r": CELL_RADIUS_M},
+                    timeout=timeout)
+
             async def one(cell):
                 async with sem:
                     try:
-                        status, payload = await self.fetch_json(
-                            client, f"{base}/flare/v1/alerts", src=src,
-                            params={"lat": cell[0], "lon": cell[1], "r": CELL_RADIUS_M},
-                            timeout=20.0)
+                        try:
+                            status, payload = await fetch_cell(cell, 20.0)
+                        except (httpx.ConnectError, httpx.ConnectTimeout,
+                                httpx.ReadTimeout, httpx.ReadError) as exc:
+                            if warmed["done"]:
+                                raise
+                            warmed["done"] = True
+                            log.info("flare source %s: waiting out a cold start (%s)",
+                                     sid, type(exc).__name__)
+                            status, payload = await fetch_cell(cell, COLD_START_TIMEOUT_S)
                     except ValueError as exc:
                         problems.append(f"cell {cell}: {exc}")
+                        return
+                    except httpx.HTTPError as exc:
+                        problems.append(f"cell {cell}: {type(exc).__name__}")
                         return
                     if status != 200:
                         problems.append(f"cell {cell}: HTTP {status}")

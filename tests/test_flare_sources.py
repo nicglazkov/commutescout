@@ -370,3 +370,32 @@ async def test_cells_that_produced_alerts_are_asked_before_the_blind_sweep():
     assert set(front) <= set(good), front
     # A cell nobody has ever got anything from is not promoted.
     assert (0.5, 0.5) not in asked
+
+
+@pytest.mark.asyncio
+async def test_one_cell_a_cycle_waits_out_a_cold_start():
+    """The handshake is cached for an hour, so most cycles never make one
+    and the first thing to touch a cold container is a cell. One cell is
+    allowed to wait; the rest keep the normal timeout, so a plugin that
+    is genuinely down costs one wait per cycle rather than one per cell."""
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+    plugin = FakePlugin()
+    waits = []
+
+    def cold_cells(request):
+        if "alerts" in str(request.url):
+            waits.append(request.extensions.get("timeout", {}).get("connect"))
+            if len(waits) == 1:
+                raise httpx.ConnectTimeout("cold", request=request)
+        return plugin.handler(request)
+
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(cold_cells)) as c:
+        await p.run_once(c)
+    # The first cell was retried, and the retry used the long timeout.
+    assert len(waits) >= 2
+    assert waits[1] == flare_sources.COLD_START_TIMEOUT_S
+    # Later cells did not each pay for a wait.
+    assert all(w == 20.0 for w in waits[2:]), waits
+    assert p.status["sabreplus"]["ok"] is True
