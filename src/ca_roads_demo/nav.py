@@ -23,7 +23,7 @@ from starlette.responses import JSONResponse, Response
 
 from ca_roads.budget import UPSTREAM
 from ca_roads.stadia import auth_headers
-from ca_roads_demo import routing
+from ca_roads_demo import flare_sources, routing
 
 ROUTE_URL = "https://api.stadiamaps.com/route/v1"
 # A report placed within this distance of a road snaps onto it; further
@@ -119,7 +119,8 @@ async def api_nav_route(request: Request):
            min(90.0, max(lats) + 0.25), min(180.0, max(lons) + 0.25))
     exclusions: list[dict] = []
     try:
-        markers, *_ = await demo.build_markers(box, {"closure", "plugin"})
+        near = flare_sources.snap_point(locations[0]["lat"], locations[0]["lon"])
+        markers, *_ = await demo.build_markers(box, {"closure", "plugin"}, near=near)
         exclusions = routing.exclusions(markers)
     except Exception:  # noqa: BLE001 - a route without exclusions beats no route
         pass

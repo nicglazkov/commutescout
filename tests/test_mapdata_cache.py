@@ -23,7 +23,7 @@ def test_bbox_snaps_outward_to_the_grid():
 def test_near_identical_bboxes_share_one_build(monkeypatch):
     calls = []
 
-    async def fake_build(box, want, *, geo_only=False):
+    async def fake_build(box, want, *, geo_only=False, near=None):
         calls.append(box)
         return [], 1, 1, False
 

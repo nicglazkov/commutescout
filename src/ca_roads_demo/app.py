@@ -694,7 +694,13 @@ async def api_route(request: Request):
     lons = [p["lon"] for p in locations]
     box = (max(-90.0, min(lats) - 0.25), max(-180.0, min(lons) - 0.25),
            min(90.0, max(lats) + 0.25), min(180.0, max(lons) + 0.25))
-    markers, *_ = await build_markers(box, {"incident", "closure", "chain", "plugin"})
+    # The start of the trip is where the person asking is, so it is the
+    # point their plugin alerts are measured from. A community closure
+    # further along the route does not steer them, which is the same
+    # bargain the map makes: a plugin answers for where you are.
+    near = flare_sources.snap_point(locations[0]["lat"], locations[0]["lon"])
+    markers, *_ = await build_markers(box, {"incident", "closure", "chain", "plugin"},
+                                      near=near)
     road = tools.get_road()
 
     async def fetch(req_body: dict):
@@ -915,6 +921,32 @@ async def api_geocode(request: Request):
 _BBOX_GRID = 0.05
 
 
+def _near_point(request: Request, box):
+    """Where the caller is, snapped to the plugin grid, or None.
+
+    Plugin alerts are served in a small circle around the person asking,
+    and this is how that circle gets its centre. A phone sends at=lat,lon
+    because it knows where it is. A browser does not, so a place-sized
+    viewport stands in for one: somebody looking at a town is asking
+    about that town. A view wider than that is a region, which has no
+    "here" to answer for, and gets no plugin alerts at all.
+    """
+    raw = (request.query_params.get("at") or "").strip()
+    if raw:
+        try:
+            lat, lon = (float(v) for v in raw.split(",", 1))
+        except ValueError:
+            return None
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            return None
+        return flare_sources.snap_point(lat, lon)
+    lat_min, lon_min, lat_max, lon_max = box
+    if (lat_max - lat_min > flare_sources.VIEW_MAX_DEG
+            or lon_max - lon_min > flare_sources.VIEW_MAX_DEG):
+        return None
+    return flare_sources.snap_point((lat_min + lat_max) / 2, (lon_min + lon_max) / 2)
+
+
 def _bbox_params(request: Request):
     try:
         parts = [float(x) for x in (request.query_params.get("bbox") or "").split(",")]
@@ -976,7 +1008,7 @@ def shape_markers(markers, *, slim: bool = False, geo_only: bool = False):
     return markers
 
 
-async def build_markers(box, want, *, geo_only: bool = False):
+async def build_markers(box, want, *, geo_only: bool = False, near=None):
     """Every marker inside `box`, for the requested kinds.
 
     Shared by the request path and the snapshot publisher, which is the
@@ -1197,9 +1229,13 @@ async def build_markers(box, want, *, geo_only: bool = False):
         with contextlib.suppress(Exception):
             roadsnap.apply(markers)
     # Flare plugin alerts, already validated and capped by the poller.
+    # They are served in a small circle around `near` and nowhere else,
+    # so a caller with no position of its own gets none. The snapshot
+    # publisher is exactly that caller: its bundles are one file shared
+    # by every visitor, and a per-person answer cannot go in one.
     if "plugin" in want:
         with contextlib.suppress(Exception):
-            markers.extend(flare_sources._all_markers_for_bbox(box))
+            markers.extend(flare_sources._all_markers_for_bbox(box, near=near))
 
     return markers, warm_ready, warm_total, degraded
 
@@ -1211,13 +1247,18 @@ async def api_mapdata(request: Request):
     geometry (57% of bytes, invisible below zoom 8); fields=geo returns
     ONLY that geometry for a viewport, fetched lazily when zoomed in."""
     box = _bbox_params(request)
-    if box:
-        flare_sources.poller.note_view(box)
     if box is None:
         return JSONResponse(
             {"error": "bbox=lat_min,lon_min,lat_max,lon_max required"},
             status_code=400,
         )
+    # Asking is what makes a plugin get polled here at all. Every caller
+    # keeps its own neighbourhood warm, which is how coverage follows the
+    # people using the service instead of a fixed rotation that reaches
+    # almost none of them.
+    near = _near_point(request, box)
+    if near is not None:
+        flare_sources.poller.note_at(*near)
     want = set((request.query_params.get("kinds") or
                 "incident,closure,chain,fire").split(","))
     slim = request.query_params.get("slim") == "1"
@@ -1230,8 +1271,12 @@ async def api_mapdata(request: Request):
     import gzip as _gzip
     import hashlib as _hashlib
 
+    # `near` belongs in the key. The plugin alerts in a response are
+    # chosen by it, so sharing an entry between two positions would hand
+    # one caller the other's circle, which is the one thing this must
+    # never do. It is snapped, so a town still shares a single entry.
     cache_key = (tuple(round(v, 4) for v in box),
-                 request.query_params.get("kinds") or "", slim, geo_only)
+                 request.query_params.get("kinds") or "", slim, geo_only, near)
     now_mono = time.monotonic()
     hit = _MAPDATA_CACHE.get(cache_key)
     if hit and now_mono - hit[0] < _MAPDATA_CACHE_TTL:
@@ -1240,7 +1285,7 @@ async def api_mapdata(request: Request):
         warming = False
     else:
         markers, warm_ready, warm_total, _degraded = await build_markers(
-            box, want, geo_only=geo_only)
+            box, want, geo_only=geo_only, near=near)
         warming = warm_ready < warm_total
         markers = shape_markers(markers, slim=slim, geo_only=geo_only)
         marker_count = len(markers)

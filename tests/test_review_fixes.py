@@ -150,7 +150,7 @@ def test_mapdata_warming_build_is_never_served_from_cache(monkeypatch):
 
     calls = []
 
-    async def build(box, want, *, geo_only=False):
+    async def build(box, want, *, geo_only=False, near=None):
         calls.append(1)
         warming = len(calls) == 1
         return [], (0 if warming else 1), 1, False
