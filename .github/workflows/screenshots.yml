@@ -29,15 +29,26 @@ jobs:
           python-version: "3.12"
       - name: Install Playwright
         run: |
-          pip install playwright
+          # Pinned deliberately. This job holds contents: write and
+          # pull-requests: write, so an unpinned install is the one place
+          # here where a compromised release could push to the
+          # repository. Bump it on purpose, not by surprise.
+          pip install "playwright==1.63.0" "pillow==12.3.0"
           playwright install --with-deps chromium
-      - name: Capture
+      - name: Capture the stills
         run: python scripts/capture_shots.py --out docs/shots
+      - name: Rebuild the demo
+        run: python scripts/capture_demo.py --out docs/demo.gif
       - name: Open a pull request if anything changed
         env:
           GH_TOKEN: ${{ github.token }}
+        # Every image in the repository, not just the README folder. Two
+        # of them live elsewhere, the link-preview card the site serves
+        # and the marketing hero, and they went stale for months because
+        # this step only ever looked at docs/shots.
         run: |
-          if git diff --quiet -- docs/shots; then
+          shots="docs/shots docs/demo.gif src/ca_roads_demo/static/shots site/public/shots"
+          if git diff --quiet -- $shots; then
             echo "screenshots unchanged"
             exit 0
           fi
@@ -45,7 +56,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add docs/shots
+          git add $shots
           git commit -m "docs: refresh the screenshots from the live site"
           # The branch is rebuilt from scratch on every run, so replacing
           # it is the point rather than an accident.

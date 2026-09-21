@@ -31,7 +31,7 @@
 
   <a href="https://commutescout.com">
     <img src="docs/demo.gif" width="880"
-         alt="Demo: autocompleting San Jose and San Francisco, planning a route with two traffic-colored options, switching between them, tapping a suggested question for a live AI answer, then flashing the statewide live traffic overlay">
+         alt="Demo: autocompleting San Jose and South Lake Tahoe, planning the drive and getting three route options that each say what is on them, switching between them, then tapping a suggested question and reading an answer built from the incidents, closures, cameras and signs along the way">
   </a>
 </div>
 
