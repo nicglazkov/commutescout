@@ -1,27 +1,34 @@
 # Registry submissions
 
-The server has been listed in the MCP Registry since July 2026 as
-`io.github.nicglazkov/commutescout`, from [server.json](../server.json).
-The entry is republished at release time so the registry carries the
-released version; a workflow that does this on each release is being
-added separately. The Claude connectors directory entry below was
-submitted by hand.
-
 ## MCP Registry
 
-To republish by hand after a release:
+CommuteScout has been listed since July 2026, and the listing republishes
+itself on every release: `.github/workflows/registry.yml` runs
+`mcp-publisher` against `server.json`, authenticating with GitHub Actions
+OIDC, so there is no token to rotate and no interactive login.
 
-1. Confirm `server.json` carries the released version and the service
-   URL (`remotes[0].url`).
-2. Install the publisher CLI and run it from the repo root:
+Two things the workflow protects against, both of which had already
+happened:
 
-   ```sh
-   mcp-publisher login github
-   mcp-publisher publish
-   ```
+- The listing sat at v2.24.0 for two months, describing the service as
+  California-only, because nothing ever ran a publish.
+- It could not have succeeded anyway. The registry rejects a description
+  over 100 characters and ours was 152, so every publish would have
+  failed validation. `test_the_registry_manifest_fits_what_the_registry_accepts`
+  now checks the length, the schema version and that the manifest version
+  matches `pyproject.toml`.
 
-   The `io.github.nicglazkov/*` namespace is verified through the GitHub
-   login.
+To repair the listing without cutting a release, run the workflow by hand
+from the Actions tab. To publish from a laptop instead, install the
+publisher CLI and run it from the repo root:
+
+```sh
+mcp-publisher login github
+mcp-publisher publish
+```
+
+The `io.github.nicglazkov/*` namespace is verified through the GitHub
+login, or through this repository's OIDC identity in Actions.
 
 ## Claude connectors directory
 
