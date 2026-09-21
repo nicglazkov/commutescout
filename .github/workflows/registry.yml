@@ -1,0 +1,36 @@
+# The MCP Registry listing is the one place nobody looks at, so it drifts
+# in silence: it sat at v2.24.0 for two months, describing the service as
+# California-only, because server.json's description was over the
+# registry's 100-character limit and every publish failed validation.
+#
+# This republishes on every release. Authentication is GitHub Actions
+# OIDC, so there is no token to rotate and no interactive login: the
+# registry accepts the io.github.nicglazkov/* namespace from this repo's
+# own workflow. Run it by hand from the Actions tab to repair a listing
+# without cutting a release.
+name: MCP Registry
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install the publisher
+        run: |
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz" \
+            | tar -xz mcp-publisher
+          chmod +x mcp-publisher
+      - name: Validate the manifest
+        run: ./mcp-publisher validate
+      - name: Publish
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
