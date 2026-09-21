@@ -262,15 +262,25 @@ class Store:
         """
         now = self._now()
         wanted = self.wanted_cells()
+        # A cell swept and found empty is not merely last in the queue, it is
+        # out of the queue: sweeping it again before its measurement expires
+        # is the definition of wasted budget. Ranking alone was not enough,
+        # because the hot set fills to its limit whatever is in it, so seven
+        # known-empty cells still took seven eighths of the session. They
+        # come back for one look every YIELD_TTL_S and drop out again.
+        # No fallback when everything known is empty: the honest answer then
+        # is to fetch nothing until a measurement expires, rather than sweep
+        # cells we have just established have nothing in them. It cannot
+        # wedge, because every measurement expires.
+        worthwhile = [c for c in wanted if self.rank(c) < 2]
         if now - self._hot_at >= HOT_RECHECK_S or not self._hot:
-            self._hot = wanted[:self.hot_limit]
+            self._hot = worthwhile[:self.hot_limit]
             self._hot_at = now
         else:
-            # Keep the current set, minus anything that aged out of the window.
-            live = set(wanted)
+            # Keep the current set, minus anything that aged out of the
+            # window or has since proved empty.
+            live = set(worthwhile)
             self._hot = [c for c in self._hot if c in live]
-            if not self._hot:
-                self._hot = wanted[:self.hot_limit]
         return self._hot
 
     def wanted_points(self) -> list[tuple[int, int, int, int]]:
