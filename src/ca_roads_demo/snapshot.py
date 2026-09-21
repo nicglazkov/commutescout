@@ -78,8 +78,18 @@ BUNDLES: tuple[tuple[str, set[str], int, str, int], ...] = (
 # keeps an idle open map costing a few bytes per poll.
 # How many missed cycles make a bundle stuck rather than merely quiet.
 STALE_CYCLES = 20
+# A bundle that skipped (feeds still warming) tries again shortly rather
+# than waiting out its whole interval. The camera bundle publishes
+# hourly, so one skip after a deploy used to leave the last object up
+# for another hour.
+RETRY_AFTER_SKIP_S = 45
+# A published object with a whole state missing looks healthy: it has
+# thousands of markers and a fresh timestamp. Guard on the drop instead,
+# and keep the previous object until the feed recovers.
+DROP_FRACTION = 0.6
 _started = time.monotonic()
 _last_hash: dict[str, str] = {}
+_last_count: dict[str, int] = {}
 _last_upload: dict[str, float] = {}
 _last_published: dict[str, str] = {}
 
@@ -161,6 +171,16 @@ async def publish_once(name: str, kinds: set[str], cache_control: str,
     markers = await build_bundle(name, kinds)
     if markers is None:
         return False
+    # A feed that drops out takes its markers with it, and the bundle
+    # would publish anyway: cameras.json.gz once shipped 14,791 cameras
+    # with not one of them in California, because that one feed was
+    # missing while every other state was fine. The count alone reads as
+    # healthy, so compare it with what was last published.
+    before = _last_count.get(name)
+    if before and len(markers) < before * DROP_FRACTION:
+        log.warning("snapshot %s: skipped, %d markers against %d last time; "
+                    "a feed is probably missing", name, len(markers), before)
+        return False
     digest = _digest(markers)
     aged = time.time() - _last_upload.get(name, 0.0)
     if _last_hash.get(name) == digest and aged < max_stale:
@@ -168,6 +188,7 @@ async def publish_once(name: str, kinds: set[str], cache_control: str,
     body = _encode(build_payload(markers))
     await asyncio.to_thread(_upload, name, body, cache_control)
     _last_hash[name] = digest
+    _last_count[name] = len(markers)
     _last_upload[name] = time.time()
     _last_published[name] = datetime.now(UTC).isoformat(timespec="seconds")
     log.info("snapshot %s: published %d markers, %d bytes gzipped",
@@ -182,8 +203,12 @@ async def _bundle_loop(name: str, kinds: set[str], interval: int,
     cycle for two days while the map served the last good object."""
     failures = 0
     while True:
+        skipped = False
         try:
-            await publish_once(name, kinds, cache_control, max_stale)
+            # build_bundle returning None, or the drop guard, both mean
+            # "not now": come back soon rather than after a whole cycle.
+            shipped = await publish_once(name, kinds, cache_control, max_stale)
+            skipped = not shipped and name not in _last_hash
             failures = 0
         except Exception:  # noqa: BLE001 - one bad cycle never stops the loop
             failures += 1
@@ -191,7 +216,7 @@ async def _bundle_loop(name: str, kinds: set[str], interval: int,
             # them: enough to alert on, not enough to flood the log.
             if failures <= 3 or failures % max(1, 60 // max(1, interval)) == 0:
                 log.exception("snapshot %s: publish failed (%d in a row)", name, failures)
-        await asyncio.sleep(interval)
+        await asyncio.sleep(min(RETRY_AFTER_SKIP_S, interval) if skipped else interval)
 
 
 async def run() -> None:
