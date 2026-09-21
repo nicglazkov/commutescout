@@ -1,0 +1,52 @@
+# The screenshots in the README went two months stale: they were taken
+# before nationwide coverage, the plugin marketplace and the phone apps
+# existed, and nothing would ever have said so. This retakes them from
+# the live site and opens a pull request with whatever changed.
+#
+# It runs in the morning on purpose. Several shots include the "data as
+# of" chip in the header, so the wall clock is visible in the image, and
+# a screenshot stamped 3am reads as a screenshot of a dead site.
+name: Screenshots
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 16:07 UTC is 09:07 in California through the summer, an hour
+    # earlier in winter. Monthly: often enough to stay honest, rarely
+    # enough that the pull requests are not noise.
+    - cron: "7 16 1 * *"
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Playwright
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+      - name: Capture
+        run: python scripts/capture_shots.py --out docs/shots
+      - name: Open a pull request if anything changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- docs/shots; then
+            echo "screenshots unchanged"
+            exit 0
+          fi
+          branch="screenshots/$(date -u +%Y-%m-%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add docs/shots
+          git commit -m "docs: refresh the screenshots from the live site"
+          git push -u origin "$branch"
+          gh pr create --title "docs: refresh the screenshots from the live site" \
+            --body "Retaken from the live site by the Screenshots workflow. Check that no shot caught a transient: an empty map, a plugin card reading \"not answering\", or a route that failed to plan."
