@@ -93,6 +93,11 @@ it as a tool instead of guessing about traffic.
     <td width="34%"><img src="docs/shots/answer.png" alt="An AI answer about a drive, with live speeds and conditions"><br><sub><b>Ask about it.</b> One tap on a suggested question; the answer reads the live feeds.</sub></td>
     <td width="32%"><img src="docs/shots/map.png" alt="The map with per-layer filters and live counts"><br><sub><b>Or just look.</b> Every layer toggleable, from full closures to blank signs.</sub></td>
   </tr>
+  <tr>
+    <td width="34%"><img src="docs/shots/marketplace.png" alt="The plugin marketplace, one card per plugin, with coverage, what it reports, and how far it has been vetted"><br><sub><b>Add a plugin.</b> Each card says what it covers, what it reports, and whether anyone has reviewed it.</sub></td>
+    <td width="34%"><img src="docs/shots/developers.png" alt="The developer page: the ten tools, the error envelope, and the rate limits"><br><sub><b>Or build on it.</b> Ten tools over plain HTTP, one error envelope, published rate limits.</sub></td>
+    <td width="32%"></td>
+  </tr>
 </table>
 
 ## Coverage
