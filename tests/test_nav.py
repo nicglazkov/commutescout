@@ -72,7 +72,7 @@ def wired(monkeypatch):
     road.client = client
     monkeypatch.setattr(tools, "get_road", lambda: road)
 
-    async def fake_build(box, want, *, geo_only=False):
+    async def fake_build(box, want, *, geo_only=False, near=None):
         assert want == {"closure", "plugin"}
         closure = {"kind": "lane_closure", "cls": "full-roadway", "lat": 37.36, "lon": -122.0}
         return [closure], 1, 1, False

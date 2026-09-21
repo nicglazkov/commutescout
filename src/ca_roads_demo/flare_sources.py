@@ -36,9 +36,28 @@ COLLECTION = "flare_sources"
 CELL_DEG = 1.0
 CELL_RADIUS_M = 80_000       # covers a one-degree cell's half diagonal
 MAX_CELLS = 200
-# Demand-driven polling: cells people looked at in the last VIEW_TTL_S are
-# asked for every cycle; the rest of a plugin's coverage is swept a few
-# cells at a time, and a cell's alerts are kept for CELL_KEEP_S.
+# Demand-driven polling. A plugin is asked about the places people are
+# actually in, and those places stay warm for VIEW_TTL_S after the last
+# person leaves. A cell's alerts are kept for CELL_KEEP_S.
+#
+# Points are snapped to NEAR_SNAP_DEG before they are stored or sent, so
+# a plugin learns the rough neighbourhood somebody is in and never their
+# position, and everyone in one town shares a single poll.
+#
+# The two radii differ on purpose. NEAR_FETCH_M is what the plugin is
+# asked for around the snapped point; NEAR_SERVE_M is how far from a
+# person's own position their alerts are shown. Serving has to stay
+# inside what was fetched, or the map would show an empty ring where
+# nothing was ever asked about: half a snap step is at most 6.2 km
+# anywhere in the coverage area, and 12 + 6.2 is under 20.
+NEAR_SNAP_DEG = 0.1
+NEAR_FETCH_M = 20_000
+NEAR_SERVE_M = 12_000
+# A view wider than this is a region, not a place. Nobody is driving
+# across it, and a plugin has nothing useful to say about all of it.
+VIEW_MAX_DEG = 1.5
+# Enough for a busy day in every metro at once; the oldest fall off.
+MAX_NEAR_POINTS = 250
 VIEW_TTL_S = 600
 SWEEP_PER_POLL = 12
 CELL_KEEP_S = 900
@@ -63,6 +82,15 @@ COLD_START_TIMEOUT_S = 75.0
 # rotating sweep spends most of its turns on water.
 PRODUCTIVE_PER_POLL = 6
 PRODUCTIVE_KEEP_S = 21_600
+# ...and a sweep only makes sense at all when the whole coverage can come
+# round again before its answers expire. At SWEEP_PER_POLL cells a cycle
+# that is this many cells. A state fits and is swept, so a state-sized
+# plugin works with nobody watching. A nationwide box is about 5,400
+# cells, which is seven hours a lap against a fifteen-minute memory: by
+# the time the sweep returned, everything it had found was already gone.
+# Sweeping one of those does not give thin coverage, it gives a single
+# wandering patch, so a box that big is polled from demand alone.
+SWEEP_MAX_CELLS = (CELL_KEEP_S // POLL_FLOOR_S) * SWEEP_PER_POLL
 # The catalog shows a plugin's last good count for this long after its
 # cells expire or a poll fails, so a quiet map or one bad poll does not
 # flash "0 alerts" on the marketplace.
@@ -153,6 +181,29 @@ def cell_of(lat: float, lon: float) -> tuple[float, float]:
             round(math.floor(lon / CELL_DEG) * CELL_DEG + CELL_DEG / 2, 3))
 
 
+def snap_point(lat: float, lon: float) -> tuple[float, float]:
+    """A position rounded to the NEAR_SNAP_DEG grid.
+
+    Every position the poller stores or sends goes through here. It is
+    what keeps a plugin from being handed somebody's doorstep, and what
+    lets two people in the same town cost one request instead of two.
+    """
+    step = NEAR_SNAP_DEG
+    return (round(round(lat / step) * step, 4), round(round(lon / step) * step, 4))
+
+
+def meters_between(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle metres, near enough.
+
+    The distances here are tens of kilometres, where treating a degree of
+    latitude as a fixed length is accurate to well under a percent.
+    """
+    mean = math.radians((lat1 + lat2) / 2)
+    dy = (lat2 - lat1) * 111_320.0
+    dx = (lon2 - lon1) * 111_320.0 * math.cos(mean)
+    return math.hypot(dx, dy)
+
+
 def cells_for(bbox: list) -> list[tuple[float, float]]:
     """Centers of the one-degree cells that tile ``[s, w, n, e]``,
     capped at MAX_CELLS (a nationwide plugin gets its middle first)."""
@@ -213,6 +264,8 @@ class Poller:
         self.status: dict[str, dict] = {}
         self._last_poll: dict[str, float] = {}
         self.viewed: dict[tuple[float, float], float] = {}
+        # Snapped point -> when somebody was last there.
+        self.near: dict[tuple[float, float], float] = {}
         self.cells: dict[str, dict[tuple[float, float], tuple[float, list]]] = {}
         self._sweep_pos: dict[str, int] = {}
         self._last_status_write: dict[str, float] = {}
@@ -294,38 +347,75 @@ class Poller:
         self.handshakes[sid] = (time.monotonic(), hs)
         return hs
 
-    def note_view(self, box) -> None:
-        """A map request looked at ``box``: its cells are hot for a while, so
-        every plugin covering them is asked for them on the next cycle."""
-        lat_min, lon_min, lat_max, lon_max = box
-        cells = lattice([lat_min, lon_min, lat_max, lon_max])
-        if len(cells) > 64:   # a continent-sized view is not a place anyone is driving
-            return
-        t = time.monotonic()
-        for c in cells:
-            self.viewed[c] = t
+    def note_at(self, lat: float, lon: float) -> None:
+        """Somebody is here. Keep the neighbourhood warm for a while.
 
-    def cells_to_poll(self, sid: str, coverage: list) -> list[tuple[float, float]]:
-        """Hot cells inside the coverage, plus a rotating slice of the rest."""
+        This is the only thing that makes a plugin get polled anywhere.
+        A phone calls it with where it is and a browser with the middle
+        of a place-sized map, so coverage follows the people using the
+        service instead of a fixed rotation that never reaches them.
+        """
+        self.near[snap_point(lat, lon)] = time.monotonic()
+        if len(self.near) > MAX_NEAR_POINTS:
+            oldest = sorted(self.near.items(), key=lambda kv: kv[1])
+            for point, _ in oldest[: len(self.near) - MAX_NEAR_POINTS]:
+                del self.near[point]
+
+    def note_view(self, box) -> None:
+        """A map request looked at ``box``.
+
+        Only a place-sized view counts. A map zoomed out to a region is
+        not somewhere anyone is driving, and treating it as demand is how
+        the poller ended up spending its whole budget on a rotation
+        through open water.
+        """
+        lat_min, lon_min, lat_max, lon_max = box
+        if lat_max - lat_min > VIEW_MAX_DEG or lon_max - lon_min > VIEW_MAX_DEG:
+            return
+        self.note_at((lat_min + lat_max) / 2, (lon_min + lon_max) / 2)
+
+    def cells_to_poll(self, sid: str, coverage: list
+                      ) -> list[tuple[tuple[float, float], float]]:
+        """Where to ask this source about, and how far around each point.
+
+        Places people are in come first and are asked about tightly. A
+        coverage box small enough to sweep inside its own memory is then
+        swept as well, so a plugin covering one city still works when
+        nobody happens to be looking at it. A box too big for that is
+        served by demand alone: see SWEEP_MAX_CELLS.
+        """
         s, w, n, e = coverage
-        cutoff = time.monotonic() - VIEW_TTL_S
+        now = time.monotonic()
+
         def inside(c):
             return s - CELL_DEG <= c[0] <= n + CELL_DEG and w - CELL_DEG <= c[1] <= e + CELL_DEG
-        hot = [c for c, t in self.viewed.items() if t >= cutoff and inside(c)]
-        # Somewhere this source has had something to say before.
-        seen = self.productive.get(sid, {})
-        live = time.monotonic() - PRODUCTIVE_KEEP_S
-        good = sorted((c for c, t in seen.items() if t >= live and inside(c)),
-                      key=lambda c: -seen[c])[:PRODUCTIVE_PER_POLL]
+
+        cutoff = now - VIEW_TTL_S
+        near = sorted(((p, t) for p, t in self.near.items() if t >= cutoff and inside(p)),
+                      key=lambda kv: -kv[1])
+        out: list[tuple[tuple[float, float], float]] = [
+            (p, float(NEAR_FETCH_M)) for p, _ in near]
+
         grid = lattice(coverage)
-        pos = self._sweep_pos.get(sid, 0) % max(1, len(grid))
-        sweep = [grid[(pos + i) % len(grid)] for i in range(min(SWEEP_PER_POLL, len(grid)))]
-        self._sweep_pos[sid] = pos + SWEEP_PER_POLL
-        out: list[tuple[float, float]] = []
-        for c in hot + good + sweep:
-            if c not in out:
-                out.append(c)
-        return out[:MAX_CELLS]
+        if len(grid) <= SWEEP_MAX_CELLS:
+            # Somewhere this source has had something to say before.
+            seen = self.productive.get(sid, {})
+            live = now - PRODUCTIVE_KEEP_S
+            good = sorted((c for c, t in seen.items() if t >= live and inside(c)),
+                          key=lambda c: -seen[c])[:PRODUCTIVE_PER_POLL]
+            pos = self._sweep_pos.get(sid, 0) % max(1, len(grid))
+            sweep = [grid[(pos + i) % len(grid)] for i in range(min(SWEEP_PER_POLL, len(grid)))]
+            self._sweep_pos[sid] = pos + SWEEP_PER_POLL
+            out += [(c, float(CELL_RADIUS_M)) for c in good + sweep]
+
+        picked: set[tuple[float, float]] = set()
+        uniq: list[tuple[tuple[float, float], float]] = []
+        for point, radius in out:
+            if point in picked:
+                continue
+            picked.add(point)
+            uniq.append((point, radius))
+        return uniq[:MAX_CELLS]
 
     async def poll_source(self, src: dict, client) -> int:
         """Fetch the cells that matter for one source; returns the count served."""
@@ -346,17 +436,17 @@ class Poller:
             # costs one wait rather than one per cell.
             warmed = {"done": False}
 
-            async def fetch_cell(cell, timeout):
+            async def fetch_cell(cell, radius, timeout):
                 return await self.fetch_json(
                     client, f"{base}/flare/v1/alerts", src=src,
-                    params={"lat": cell[0], "lon": cell[1], "r": CELL_RADIUS_M},
+                    params={"lat": cell[0], "lon": cell[1], "r": radius},
                     timeout=timeout)
 
-            async def one(cell):
+            async def one(cell, radius):
                 async with sem:
                     try:
                         try:
-                            status, payload = await fetch_cell(cell, 20.0)
+                            status, payload = await fetch_cell(cell, radius, 20.0)
                         except (httpx.ConnectError, httpx.ConnectTimeout,
                                 httpx.ReadTimeout, httpx.ReadError) as exc:
                             if warmed["done"]:
@@ -364,7 +454,8 @@ class Poller:
                             warmed["done"] = True
                             log.info("flare source %s: waiting out a cold start (%s)",
                                      sid, type(exc).__name__)
-                            status, payload = await fetch_cell(cell, COLD_START_TIMEOUT_S)
+                            status, payload = await fetch_cell(cell, radius,
+                                                               COLD_START_TIMEOUT_S)
                     except ValueError as exc:
                         problems.append(f"cell {cell}: {exc}")
                         return
@@ -378,7 +469,8 @@ class Poller:
                     problems.extend(probs[:3])
                     kept_by_cell[cell] = kept[: flare.MAX_PER_CELL]
 
-            await asyncio.gather(*(one(c) for c in self.cells_to_poll(sid, hs["coverage"]["bbox"])))
+            await asyncio.gather(*(one(c, r) for c, r
+                                   in self.cells_to_poll(sid, hs["coverage"]["bbox"])))
             if problems and not kept_by_cell:
                 raise RuntimeError(problems[0])  # every cell failed: the poll failed
             # Cells not polled this cycle keep what they had, for a while.
@@ -470,7 +562,23 @@ class Poller:
                 log.exception("flare poll cycle failed")
             await asyncio.sleep(15)
 
-    def markers_for_bbox(self, box) -> list[dict]:
+    def markers_for_bbox(self, box, near=None) -> list[dict]:
+        """Plugin alerts inside ``box`` and within NEAR_SERVE_M of ``near``.
+
+        ``near`` is the requester's own position, and without one this
+        serves nothing at all. That is the whole privacy property, so it
+        fails closed: a plugin alert exists because somebody was standing
+        somewhere, and handing one to a second person is telling them
+        where the first one is. Everybody gets a small circle around
+        themselves, and nobody gets anybody else's.
+
+        It is also why these never go into a published snapshot. A
+        snapshot is one file on a CDN serving every visitor at once,
+        which is the one place a per-person answer cannot be put.
+        """
+        if near is None:
+            return []
+        near_lat, near_lon = near
         lat_min, lon_min, lat_max, lon_max = box
         now = self._now()
         out = []
@@ -480,6 +588,8 @@ class Poller:
                 continue
             for a in alerts:
                 if not (lat_min <= a["lat"] <= lat_max and lon_min <= a["lon"] <= lon_max):
+                    continue
+                if meters_between(near_lat, near_lon, a["lat"], a["lon"]) > NEAR_SERVE_M:
                     continue
                 if flare.validate_alert(a, now=now):  # stale since the poll
                     continue
@@ -669,8 +779,16 @@ def _public(rec: dict) -> dict:
 reports = Reports()
 
 
-def _all_markers_for_bbox(box) -> list[dict]:
-    return poller.markers_for_bbox(box) + reports.markers_for_bbox(box)
+def _all_markers_for_bbox(box, near=None) -> list[dict]:
+    """Plugin alerts near ``near``, plus this service's own community
+    reports across the whole box.
+
+    The two are not alike. A report was written by somebody who meant
+    everyone to see it, so it travels as far as the box does. A plugin
+    alert is a by-product of where a person happens to be, so it goes to
+    that person and stops there.
+    """
+    return poller.markers_for_bbox(box, near=near) + reports.markers_for_bbox(box)
 
 
 async def _forward_report(src: dict, pub: dict, uid: str, client) -> str | None:

@@ -17,6 +17,9 @@ from ca_roads import flare
 from ca_roads_demo import flare_sources, routing
 
 NOW = datetime(2026, 9, 17, 1, 0, tzinfo=UTC)
+# Plugin alerts are only ever served around somebody's own position, so
+# every test that expects to see one has to say where it is standing.
+HERE = (GOOD["lat"], GOOD["lon"])
 MANIFEST = {"id": "sabreplus", "name": "SABRE Plus", "base": "https://plugins.example.com",
             "protocol": "flare/1", "visibility": "public", "trust": "community",
             "attribution": {"name": "SABRE Plus", "url": "https://example.com"}}
@@ -42,14 +45,14 @@ async def test_poller_accepts_valid_alerts_and_serves_markers():
     async with httpx.AsyncClient(transport=httpx.MockTransport(plugin.handler)) as c:
         await p.run_once(c)
     assert p.status["sabreplus"]["ok"] and p.status["sabreplus"]["count"] == 1
-    markers = p.markers_for_bbox((37.0, -122.5, 38.0, -121.0))
+    markers = p.markers_for_bbox((37.0, -122.5, 38.0, -121.0), near=HERE)
     assert len(markers) == 1
     m = markers[0]
     assert m["kind"] == "plugin" and m["id"] == "sabreplus:" + GOOD["id"]
     assert m["flare_kind"] == "POLICE_VISIBLE" and m["road"] == "I-280 N"
     assert m["source"] == "SABRE Plus" and m["trust"] == "community" and m["tier"] == "unreviewed"
     assert m["path"] == [[37.34, -121.89], [37.35, -121.87]]  # GeoJSON lon,lat -> lat,lon
-    assert p.markers_for_bbox((40.0, -122.5, 41.0, -121.0)) == []
+    assert p.markers_for_bbox((40.0, -122.5, 41.0, -121.0), near=HERE) == []
     assert p.public_sources()[0]["count"] == 1
     # A second cycle inside the refresh interval does not poll again.
     calls = len(plugin.alerts)
@@ -71,7 +74,8 @@ async def test_a_failing_source_is_recorded_not_fatal():
         await p.run_once(c)
     st = p.status["sabreplus"]
     assert st["ok"] is False and "HTTP 500" in st["last_error"]
-    assert "off" not in p.sources and p.markers_for_bbox((-90, -180, 90, 180)) == []
+    assert ("off" not in p.sources
+            and p.markers_for_bbox((-90, -180, 90, 180), near=HERE) == [])
 
 
 def test_plugin_alerts_shape_the_route():
@@ -163,11 +167,55 @@ def test_admin_adds_a_plugin_by_its_url(admin_app):
 
 
 @pytest.mark.asyncio
-async def test_polling_follows_viewed_cells_and_sweeps_the_rest(monkeypatch):
-    # A plugin covering ten by ten degrees: the cell someone just looked at
-    # is asked for every cycle; the rest is swept a slice at a time, and a
-    # cell's alerts survive the cycles it is not polled in.
+async def test_polling_follows_people_and_sweeps_a_box_it_can_finish():
+    # A plugin covering ten by ten degrees: where somebody actually is gets
+    # asked for every cycle, tightly; the rest of a box this size is swept
+    # a slice at a time, and a point's alerts survive the cycles it is not
+    # polled in.
     plugin = FakePlugin(handshake={"coverage": {"bbox": [30.0, -125.0, 40.0, -115.0]}})
+    asked: list[tuple[float, float, float]] = []
+    orig = plugin.handler
+
+    def counting(req):
+        if req.url.path.endswith("/alerts"):
+            asked.append((float(req.url.params["lat"]), float(req.url.params["lon"]),
+                          float(req.url.params["r"])))
+        return orig(req)
+
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    here = flare_sources.snap_point(GOOD["lat"], GOOD["lon"])
+    p.note_at(GOOD["lat"], GOOD["lon"])
+    async with httpx.AsyncClient(transport=httpx.MockTransport(counting)) as c:
+        await p.run_once(c)
+        first = list(asked)
+        points = [(a, o) for a, o, _ in first]
+        assert here in points
+        # Where somebody is gets the tight radius, not the cell-wide one.
+        assert [r for a, o, r in first if (a, o) == here] == [
+            float(flare_sources.NEAR_FETCH_M)]
+        assert len(first) <= flare_sources.SWEEP_PER_POLL + flare_sources.PRODUCTIVE_PER_POLL + 1
+        assert p.status["sabreplus"]["count"] == 1
+        # Next cycle: a different sweep slice, the same person still there.
+        asked.clear()
+        p._last_poll.clear()
+        await p.run_once(c)
+        assert here in [(a, o) for a, o, _ in asked]
+        assert set(asked) != set(first)
+        assert p.status["sabreplus"]["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_box_too_big_to_sweep_is_polled_from_demand_alone():
+    """The relay covers the whole country. A national box is about 5,400
+    one-degree cells, and a dozen a minute is seven hours a lap against a
+    fifteen-minute memory, so the sweep never built a picture: it dragged
+    one small patch around and everything behind it expired. A box that
+    big is asked only about the places people are in.
+    """
+    national = [18.0, -168.0, 71.5, -66.5]
+    plugin = FakePlugin(handshake={"coverage": {"bbox": national}})
     asked: list[tuple[float, float]] = []
     orig = plugin.handler
 
@@ -179,21 +227,65 @@ async def test_polling_follows_viewed_cells_and_sweeps_the_rest(monkeypatch):
     mem = flare_sources.MemorySourceStore()
     await mem.put("sabreplus", dict(MANIFEST, enabled=True))
     p = flare_sources.Poller(mem, now=lambda: NOW)
-    hot = flare_sources.cell_of(GOOD["lat"], GOOD["lon"])
-    p.note_view((GOOD["lat"] - 0.05, GOOD["lon"] - 0.05, GOOD["lat"] + 0.05, GOOD["lon"] + 0.05))
+    assert len(flare_sources.lattice(national)) > flare_sources.SWEEP_MAX_CELLS
+    # Nobody anywhere: nothing is asked for at all.
+    assert p.cells_to_poll("sabreplus", national) == []
+    p.note_at(GOOD["lat"], GOOD["lon"])
     async with httpx.AsyncClient(transport=httpx.MockTransport(counting)) as c:
         await p.run_once(c)
-        first = list(asked)
-        assert hot in first
-        assert len(first) <= flare_sources.SWEEP_PER_POLL + 1
-        assert p.status["sabreplus"]["count"] == 1
-        # Next cycle: a different sweep slice, the hot cell again.
-        asked.clear()
-        p._last_poll.clear()
+    assert asked == [flare_sources.snap_point(GOOD["lat"], GOOD["lon"])]
+
+
+def test_a_position_is_snapped_before_it_is_stored_or_sent():
+    """A plugin is told the neighbourhood somebody is in, never the
+    address. Snapping is also what makes a whole town cost one poll."""
+    p = flare_sources.Poller(flare_sources.MemorySourceStore())
+    p.note_at(37.33712, -121.88951)
+    p.note_at(37.34102, -121.89400)
+    assert list(p.near) == [(37.3, -121.9)], "one town, one point"
+    for lat, lon in p.near:
+        assert flare_sources.meters_between(lat, lon, 37.33712, -121.88951) < 6_200
+
+
+@pytest.mark.asyncio
+async def test_one_persons_plugin_alerts_never_reach_another():
+    """Two people, two states, one shared cache of alerts. Each is served
+    a small circle around themselves. Neither is told the other exists,
+    because an alert only exists because somebody was standing there.
+    """
+    national = [18.0, -168.0, 71.5, -66.5]
+    plugin = FakePlugin(handshake={"coverage": {"bbox": national}})
+    far = {k: v for k, v in GOOD.items() if k != "geometry"}
+    far.update(id="texas", lat=30.27, lon=-97.74)
+    plugin.alerts["texas"] = far
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    p.note_at(GOOD["lat"], GOOD["lon"])
+    p.note_at(far["lat"], far["lon"])
+    async with httpx.AsyncClient(transport=httpx.MockTransport(plugin.handler)) as c:
         await p.run_once(c)
-        assert hot in asked
-        assert set(asked) != set(first)
-        assert p.status["sabreplus"]["count"] == 1
+
+    world = (-90.0, -180.0, 90.0, 180.0)
+    # A map zoomed out to the whole world is still only answered for here.
+    mine = p.markers_for_bbox(world, near=(GOOD["lat"], GOOD["lon"]))
+    theirs = p.markers_for_bbox(world, near=(far["lat"], far["lon"]))
+    assert [m["id"] for m in mine] == ["sabreplus:" + GOOD["id"]]
+    assert [m["id"] for m in theirs] == ["sabreplus:texas"]
+    # And with nobody asking, nothing at all: this is the case the
+    # published snapshots hit, and they are one file for every visitor.
+    assert p.markers_for_bbox(world) == []
+
+
+def test_a_region_sized_view_is_not_a_place():
+    """A viewport stands in for a position only when it is small enough
+    to be somewhere. Zoomed out to a region there is no "here" to answer
+    for, and treating one as demand is what sent the poller to sea."""
+    p = flare_sources.Poller(flare_sources.MemorySourceStore())
+    p.note_view((36.0, -123.0, 50.0, -110.0))
+    assert p.near == {}
+    p.note_view((37.3, -122.0, 37.5, -121.8))
+    assert list(p.near) == [(37.4, -121.9)]
 
 
 @pytest.mark.asyncio
@@ -318,7 +410,7 @@ async def test_a_private_source_is_never_polled_for_the_shared_map():
     plugin = FakePlugin()
     async with httpx.AsyncClient(transport=httpx.MockTransport(plugin.handler)) as c:
         await p.run_once(c)
-    assert p.sources == {} and p.markers_for_bbox((-90, -180, 90, 180)) == []
+    assert p.sources == {} and p.markers_for_bbox((-90, -180, 90, 180), near=HERE) == []
 
 
 
@@ -365,7 +457,7 @@ async def test_cells_that_produced_alerts_are_asked_before_the_blind_sweep():
     bbox = p.handshakes["sabreplus"][1]["coverage"]["bbox"]
     # Nothing is hot, so the front of the queue is the productive cells
     # rather than wherever the rotating sweep happens to be pointing.
-    asked = p.cells_to_poll("sabreplus", bbox)
+    asked = [point for point, _radius in p.cells_to_poll("sabreplus", bbox)]
     front = asked[: flare_sources.PRODUCTIVE_PER_POLL]
     assert set(front) <= set(good), front
     # A cell nobody has ever got anything from is not promoted.
