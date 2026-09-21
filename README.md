@@ -13,7 +13,7 @@
     <a href="https://commutescout.com"><b>Open the app</b></a> ·
     <a href="#add-to-claude">Add to Claude</a> ·
     <a href="#coverage">Coverage</a> ·
-    <a href="#self-hosting-advanced">Self-hosting</a> ·
+    <a href="#running-it-yourself">Running it yourself</a> ·
     <a href="docs/data-sources.md">Data</a> ·
     <a href="docs/mcp.md">MCP tools</a> ·
     <a href="docs/architecture.md">Architecture</a>
@@ -67,6 +67,20 @@ it as a tool instead of guessing about traffic.
 - **An MCP server:** ten tools over curated corridors and regions, with
   a [closure taxonomy](docs/data-sources.md#the-closure-taxonomy) that
   keeps a closed on-ramp from reading as a closed highway.
+- **Turn-by-turn navigation on your phone:** native iOS and Android
+  apps that speak what is ahead on the route, not just the next turn.
+  Closures, crashes, chain controls and fires are announced by distance
+  and filtered to your direction of travel, so a northbound ramp closure
+  stays quiet when you are heading south. See
+  [commutescout-app](https://github.com/nicglazkov/commutescout-app).
+- **Plugins, and a protocol for them:** [Flare](docs/flare.md) is an
+  open spec any source can implement to put its own alerts on the map.
+  Plugins appear in a marketplace, are labelled by how far they have
+  been vetted, and an unreviewed one can never close a road for a
+  driver. A reference plugin and its conformance tests live in this repo.
+- **A public API:** the same ten tools over plain HTTP, with an OpenAPI
+  document, one error envelope, and keys with published rate limits.
+  Nothing to sign up for to try it.
 - **Public evals:** 91 golden questions on recorded fixtures, scored by
   an LLM judge that is never one of the evaluated models. The
   [scorecard](EVALS.md) is a dated snapshot that names the version it
@@ -102,18 +116,12 @@ integrated, with the reason for each:
 
 ## Get started
 
-The fastest way to use CommuteScout is the hosted app:
-**[commutescout.com](https://commutescout.com)**. Nothing to run, always
-on the latest release, feeds already warm.
+Open **[commutescout.com](https://commutescout.com)**. Nothing to run,
+nothing to sign up for, feeds already warm. The phone apps are in
+[commutescout-app](https://github.com/nicglazkov/commutescout-app).
 
-|  | [commutescout.com](https://commutescout.com) | Self-hosted |
-|---|---|---|
-| Setup | None, just open it | `pip install` or Cloud Run deploy |
-| Updates & feeds | Always current, managed | You redeploy and manage keys |
-| AI assistant | Included | Bring your own Anthropic API key |
-| Watch-area alerts | Included, free; accounts currently need approval | Extra setup: Firestore, push keys, a scheduler |
-| Upcoming premium features | Land here first | Not planned |
-| Support | Actively maintained | Best effort via issues |
+Watch areas and the assistant are free on the hosted app; watch-area
+accounts need approval for now, because each one polls on your behalf.
 
 ### Add to Claude
 
@@ -126,10 +134,17 @@ https://mcp.commutescout.com/mcp
 See it on the site: [commutescout.com/mcp](https://commutescout.com/mcp).
 Local stdio setup and the full tool reference: [docs/mcp.md](docs/mcp.md).
 
-### Self-hosting (advanced)
+### Running it yourself
 
-Everything here is MIT licensed and the core runs with zero accounts or
-keys:
+The code is MIT licensed and the repository is complete, so nothing
+stops you running a copy. It is worth being straight about what that
+takes: a Cloud Run deployment, credentials for a dozen state feeds, a
+Firestore database, map snapshot publishing, a scheduler for watch
+areas, and a paid map provider. Keeping that current is most of the work
+of the project, and it is not a path I recommend or support.
+
+The MCP server alone is the reasonable exception, since it needs no
+accounts or keys:
 
 ```json
 {
@@ -142,15 +157,9 @@ keys:
 }
 ```
 
-The web app is `pip install ".[demo]"` then `ca-roads-demo` with an
-`ANTHROPIC_API_KEY` in the environment. For your own Cloud Run copy
-(small enough for the free tier most months), optional feed keys, map
-snapshot publishing, and the watch-areas setup, see
-**[docs/deploy.md](docs/deploy.md)**.
-
-Self-hosted deployments are supported on a best-effort basis: issues and
-PRs are very welcome, but there is no support guarantee for deployments
-I do not run.
+Read the code, lift what is useful, open an issue if something here is
+wrong. [docs/deploy.md](docs/deploy.md) documents the deployment for the
+sake of the record rather than as a recipe to follow.
 
 ## The data
 
