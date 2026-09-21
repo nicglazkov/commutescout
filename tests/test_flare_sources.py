@@ -320,3 +320,53 @@ async def test_a_private_source_is_never_polled_for_the_shared_map():
         await p.run_once(c)
     assert p.sources == {} and p.markers_for_bbox((-90, -180, 90, 180)) == []
 
+
+
+@pytest.mark.asyncio
+async def test_a_cold_plugin_gets_time_to_start():
+    """A plugin is usually a small service that scales to zero, and a
+    cold container can take a minute to answer. Giving up sooner
+    deadlocks the pair: it only stays warm because we poll it, and we
+    only poll it if it answers. The handshake waits, and retries once."""
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+    plugin = FakePlugin()
+    attempts = {"n": 0}
+
+    def cold_once(request):
+        if "handshake" in str(request.url):
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                raise httpx.ConnectError("connection refused", request=request)
+        return plugin.handler(request)
+
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(cold_once)) as c:
+        await p.run_once(c)
+    assert attempts["n"] == 2, "the first attempt should be retried"
+    assert p.status["sabreplus"]["ok"] is True
+    assert flare_sources.COLD_START_TIMEOUT_S >= 60
+
+
+@pytest.mark.asyncio
+async def test_cells_that_produced_alerts_are_asked_before_the_blind_sweep():
+    """A plugin's coverage is a rectangle, and a rectangle over the
+    United States is mostly ocean. A purely rotating sweep spends its
+    turns on water, so a cell that has produced alerts before goes
+    first."""
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+    plugin = FakePlugin()
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(plugin.handler)) as c:
+        await p.run_once(c)
+    good = p.productive.get("sabreplus", {})
+    assert good, "cells that returned alerts should be remembered"
+    bbox = p.handshakes["sabreplus"][1]["coverage"]["bbox"]
+    # Nothing is hot, so the front of the queue is the productive cells
+    # rather than wherever the rotating sweep happens to be pointing.
+    asked = p.cells_to_poll("sabreplus", bbox)
+    front = asked[: flare_sources.PRODUCTIVE_PER_POLL]
+    assert set(front) <= set(good), front
+    # A cell nobody has ever got anything from is not promoted.
+    assert (0.5, 0.5) not in asked

@@ -23,6 +23,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -49,6 +50,19 @@ STATUS_WRITE_EVERY_S = 600
 FAILS_BEFORE_BACKOFF = 3
 MAX_BACKOFF_S = 3600
 CYCLE_DEADLINE_S = 120
+# A plugin is usually a small service that scales to zero, and a cold
+# container can take a minute to answer its first request. Giving up
+# before that deadlocks the pair: the plugin only stays warm because we
+# poll it, and we only poll it if it answers. The first contact of a
+# cycle gets a long timeout and one retry; by the time alerts are
+# fetched the instance is up and the usual timeout applies.
+COLD_START_TIMEOUT_S = 75.0
+# Cells that have produced alerts before are asked again ahead of the
+# blind sweep. A plugin's coverage is a rectangle, and a rectangle over
+# the United States is mostly ocean and empty country, so a purely
+# rotating sweep spends most of its turns on water.
+PRODUCTIVE_PER_POLL = 6
+PRODUCTIVE_KEEP_S = 21_600
 # The catalog shows a plugin's last good count for this long after its
 # cells expire or a poll fails, so a quiet map or one bad poll does not
 # flash "0 alerts" on the marketplace.
@@ -203,6 +217,7 @@ class Poller:
         self._sweep_pos: dict[str, int] = {}
         self._last_status_write: dict[str, float] = {}
         self._fails: dict[str, int] = {}
+        self.productive: dict[str, dict[tuple[float, float], float]] = {}
         self._sources_loaded = 0.0
 
     @property
@@ -262,8 +277,15 @@ class Poller:
         hit = self.handshakes.get(sid)
         if hit and time.monotonic() - hit[0] < HANDSHAKE_TTL_S:
             return hit[1]
-        status, hs = await self.fetch_json(
-            client, f"{src['base'].rstrip('/')}/flare/v1/handshake", src=src)
+        url = f"{src['base'].rstrip('/')}/flare/v1/handshake"
+        try:
+            status, hs = await self.fetch_json(client, url, src=src,
+                                               timeout=COLD_START_TIMEOUT_S)
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout):
+            # One retry: a container that was starting on the first
+            # attempt is usually serving by the second.
+            status, hs = await self.fetch_json(client, url, src=src,
+                                               timeout=COLD_START_TIMEOUT_S)
         if status != 200:
             raise ValueError(f"handshake: HTTP {status}")
         errs = flare.validate_handshake(hs)
@@ -290,12 +312,17 @@ class Poller:
         def inside(c):
             return s - CELL_DEG <= c[0] <= n + CELL_DEG and w - CELL_DEG <= c[1] <= e + CELL_DEG
         hot = [c for c, t in self.viewed.items() if t >= cutoff and inside(c)]
+        # Somewhere this source has had something to say before.
+        seen = self.productive.get(sid, {})
+        live = time.monotonic() - PRODUCTIVE_KEEP_S
+        good = sorted((c for c, t in seen.items() if t >= live and inside(c)),
+                      key=lambda c: -seen[c])[:PRODUCTIVE_PER_POLL]
         grid = lattice(coverage)
         pos = self._sweep_pos.get(sid, 0) % max(1, len(grid))
         sweep = [grid[(pos + i) % len(grid)] for i in range(min(SWEEP_PER_POLL, len(grid)))]
         self._sweep_pos[sid] = pos + SWEEP_PER_POLL
         out: list[tuple[float, float]] = []
-        for c in hot + sweep:
+        for c in hot + good + sweep:
             if c not in out:
                 out.append(c)
         return out[:MAX_CELLS]
@@ -334,8 +361,13 @@ class Poller:
             # Cells not polled this cycle keep what they had, for a while.
             t = time.monotonic()
             cells = self.cells.setdefault(sid, {})
+            seen = self.productive.setdefault(sid, {})
             for c, kept in kept_by_cell.items():
                 cells[c] = (t, kept)
+                if kept:
+                    seen[c] = t
+            for c in [c for c, when in seen.items() if t - when > PRODUCTIVE_KEEP_S]:
+                del seen[c]
             for c in [c for c, (ts, _) in cells.items() if t - ts > CELL_KEEP_S]:
                 del cells[c]
             declared = set(hs.get("kinds") or [])
