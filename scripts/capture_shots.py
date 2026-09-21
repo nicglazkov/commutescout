@@ -49,16 +49,51 @@ def dismiss_overlays(page) -> None:
             pass
 
 
-def search_to(page, place: str) -> None:
-    """Pan the map by searching, which is what a visitor does. The focus
-    parameter was the obvious alternative and it is wrong here: it points
-    at one past incident and opens a "this alert has cleared" card over
-    the middle of the map."""
+def close_popups(page) -> None:
+    """Shut anything the map opened over itself. Searching drops a pin
+    and opens its card, which lands in the middle of the view and hides
+    the thing the shot is meant to show."""
+    for sel in (".leaflet-popup-close-button", "[aria-label='Close popup']"):
+        for _ in range(3):
+            try:
+                el = page.locator(sel).first
+                if not el.is_visible(timeout=600):
+                    break
+                el.click(timeout=1200)
+                page.wait_for_timeout(250)
+            except Exception:
+                break
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+
+
+def search_to(page, place: str, zoom_out: int = 3) -> None:
+    """Frame the map on a place, the way a visitor does.
+
+    Searching is the reliable way to reach a known city, but it leaves
+    two things behind that ruin a screenshot: a result card over the
+    centre of the map, and a street-level zoom where a metro's worth of
+    incidents collapses to two or three dots. Both are undone here.
+
+    The focus parameter was the obvious alternative and is worse: it
+    points at one past incident and opens a "this alert has cleared"
+    card instead.
+    """
     box = page.locator("input[placeholder*='Search a place']").first
     box.click()
     box.fill(place)
     page.wait_for_timeout(1500)
     page.keyboard.press("Enter")
+    page.wait_for_timeout(2500)
+    close_popups(page)
+    for _ in range(zoom_out):
+        try:
+            out_button = "a.leaflet-control-zoom-out, button[title='Zoom out']"
+            page.locator(out_button).first.click(timeout=1200)
+            page.wait_for_timeout(500)
+        except Exception:
+            break
+    close_popups(page)
 
 
 def shot_map(page, out: Path) -> None:
@@ -69,6 +104,7 @@ def shot_map(page, out: Path) -> None:
     search_to(page, "Los Angeles, CA")
     settle(page, 6000)
     dismiss_overlays(page)
+    close_popups(page)
     page.screenshot(path=out / "map.png")
 
 
@@ -141,9 +177,17 @@ def shot_og(page, out: Path) -> None:
     page.goto(f"{BASE}/map", wait_until="domcontentloaded")
     settle(page, 5000)
     dismiss_overlays(page)
+    # The panel remembers which tab was last open, and this shot runs
+    # after the assistant one, so the card led with an empty Ask box.
+    try:
+        page.locator("text=Route").first.click(timeout=2500)
+        page.wait_for_timeout(600)
+    except Exception:
+        pass
     search_to(page, "San Francisco, CA")
     settle(page, 6000)
     dismiss_overlays(page)
+    close_popups(page)
     page.screenshot(path=out / "og.png")
     page.set_viewport_size(VIEWPORT)
 
