@@ -1438,6 +1438,32 @@ async def _fetch_md(client) -> dict:
     return {"markers": markers}
 
 
+# The last camera list each state's reader got, and when.
+_LAST_CAMERAS: dict[str, tuple[float, list[dict]]] = {}
+CAMERAS_KEEP_S = 6 * 3600.0
+
+
+def _keep_cameras(state: str, cameras: list[dict]) -> list[dict]:
+    """This state's cameras, or its last good list when this fetch got none.
+
+    Some readers swallow a failed camera request on purpose, so a camera
+    backend cannot take a state's incidents down with it. That made the
+    fetch a success with no cameras in it, and whole states' cameras
+    vanished from the map, and from any bundle built meanwhile, whenever
+    that backend stumbled: about 3,700 in Illinois alone. A camera list
+    is an inventory that barely changes and the viewer fetches each
+    image live, so the last one stands in for a few hours.
+    """
+    now = time.monotonic()
+    if cameras:
+        _LAST_CAMERAS[state] = (now, cameras)
+        return cameras
+    last = _LAST_CAMERAS.get(state)
+    if last and now - last[0] <= CAMERAS_KEEP_S:
+        return last[1]
+    return []
+
+
 async def _fetch_il(client) -> dict:
     """Illinois TravelMidwest: incident and camera CSVs (attribution
     required; polled well within their reuse-policy caps)."""
@@ -1470,6 +1496,7 @@ async def _fetch_il(client) -> dict:
             "dir": None, "reported": None,
             "detail": (row.get("ClosureDetails") or "")[:250] or None,
         })
+    cameras: list[dict] = []
     for row in csv.DictReader(io.StringIO(cam_txt)):
         snap = (row.get("SnapShot") or "").strip()
         try:
@@ -1480,14 +1507,14 @@ async def _fetch_il(client) -> dict:
             continue
         if str(row.get("TooOld")).strip().lower() == "true":
             continue
-        markers.append({
+        cameras.append({
             "kind": "camera", "lat": lat, "lon": lon,
             "name": row.get("CameraLocation") or "Camera",
             "route": None, "direction": row.get("CameraDirection") or None,
             "near": row.get("CameraLocation"),
             "src": "TravelMidwest (IDOT)", "image": snap, "stream": None,
         })
-    return {"markers": markers}
+    return {"markers": markers + _keep_cameras("il", cameras)}
 
 
 async def _fetch_al(client) -> dict:
@@ -1577,17 +1604,18 @@ async def _fetch_mi(client) -> dict:
         src_m = _MI_ROW_SRC.search(blob)
         if rid and src_m:
             img_by_id[rid.group(1)] = _html.unescape(src_m.group(1))
-    markers: list[dict] = []
+    cameras: list[dict] = []
     for c in cam_meta or []:
         lat, lon = c.get("latitude"), c.get("longitude")
         url = img_by_id.get(str(c.get("id")))
         if not lat or not lon or not url:
             continue
-        markers.append({
+        cameras.append({
             "kind": "camera", "lat": lat, "lon": lon,
             "name": c.get("title") or "Camera",
             "route": None, "direction": None,
             "near": c.get("title"), "image": url, "src": "MDOT MiDrive"})
+    markers: list[dict] = list(_keep_cameras("mi", cameras))
     for e in inc or []:
         lat, lon = e.get("latitude"), e.get("longitude")
         if not lat or not lon:
