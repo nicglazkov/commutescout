@@ -612,3 +612,42 @@ async def test_slow_bundles_wait_for_every_feed(monkeypatch):
     await snapshot.build_bundle("live.json.gz", {"incident"})
     assert seen[("camera",)] >= states.FETCH_CAP_SECONDS
     assert seen[("incident",)] == snapshot.LIVE_FEED_BUDGET_S
+
+
+def _cams(host: str, n: int) -> list[dict]:
+    return [{"kind": "camera", "lat": 40.0 + i / 1000, "lon": -88.0,
+             "image": f"https://{host}/{i}.jpg"} for i in range(n)]
+
+
+@pytest.mark.asyncio
+async def test_a_camera_source_missing_after_a_restart_is_carried(monkeypatch):
+    """A deploy restarts the process, the in-process fallbacks start empty,
+    and whatever source is failing at that moment used to vanish from the
+    camera bundle for an hour. The previous bundle is in the bucket."""
+    previous = _cams("il.example", 120) + _cams("ca.example", 300)
+    monkeypatch.setattr(snapshot, "_previous", {})
+    monkeypatch.setattr(snapshot, "_carried_since", {})
+    monkeypatch.setattr(snapshot, "_download_previous", lambda name: previous)
+    now = _cams("ca.example", 300)
+    out = await snapshot.carry_forward("cameras.json.gz", now)
+    hosts = {snapshot._source_of(m) for m in out}
+    assert hosts == {"il.example", "ca.example"} and len(out) == 420
+    # The live bundle is never carried: stale incidents are wrong, not old.
+    assert await snapshot.carry_forward("live.json.gz", now) == now
+
+
+@pytest.mark.asyncio
+async def test_a_source_gone_for_hours_is_let_go(monkeypatch):
+    monkeypatch.setattr(snapshot, "_previous", {"cameras.json.gz": _cams("il.example", 120)})
+    monkeypatch.setattr(snapshot, "_carried_since", {
+        ("cameras.json.gz", "il.example"): time.monotonic() - snapshot.CARRY_MAX_S - 1})
+    out = await snapshot.carry_forward("cameras.json.gz", _cams("ca.example", 10))
+    assert {snapshot._source_of(m) for m in out} == {"ca.example"}
+
+
+@pytest.mark.asyncio
+async def test_a_source_that_recovers_is_not_carried(monkeypatch):
+    monkeypatch.setattr(snapshot, "_previous", {"cameras.json.gz": _cams("il.example", 120)})
+    monkeypatch.setattr(snapshot, "_carried_since", {})
+    now = _cams("il.example", 118)
+    assert await snapshot.carry_forward("cameras.json.gz", now) == now

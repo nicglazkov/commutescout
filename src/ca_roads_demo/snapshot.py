@@ -28,6 +28,7 @@ areas and `fields=geo` lazy geometry. Only the map boot moved.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import gzip
 import hashlib
 import json
@@ -95,6 +96,23 @@ _last_count: dict[str, int] = {}
 _last_upload: dict[str, float] = {}
 _last_published: dict[str, str] = {}
 
+# Camera bundles carry a source forward instead of dropping it.
+#
+# A camera list is an inventory: where each camera is and the address of
+# its image, which the viewer fetches live. When one source fails for a
+# while, publishing without it makes thousands of cameras vanish for an
+# hour at a time. The in-process fallbacks cover a feed that stumbles,
+# but not one that is failing when the process starts, which is exactly
+# when a deploy or a restart builds the next bundle. The previous bundle
+# lives in the bucket and survives both, so a source it had and this
+# build lacks is taken from there, for up to CARRY_MAX_S.
+CARRY_BUNDLES = frozenset({"cameras.json.gz"})
+CARRY_MIN = 50            # a source this small is not worth guarding
+CARRY_FRACTION = 0.5      # below this share of its last count, carry it
+CARRY_MAX_S = 6 * 3600.0
+_previous: dict[str, list] = {}
+_carried_since: dict[tuple[str, str], float] = {}
+
 
 def _client():
     from google.cloud import storage
@@ -120,6 +138,60 @@ def build_payload(markers, *, degraded: bool = False) -> dict:
 def _encode(payload: dict) -> bytes:
     raw = json.dumps(payload, separators=(",", ":")).encode()
     return gzip.compress(raw, 6)
+
+
+def _source_of(marker: dict) -> str:
+    """Which source a marker came from: its declared source, else the
+    host serving its image, which is one agency's camera system."""
+    if marker.get("src"):
+        return str(marker["src"])
+    url = marker.get("image") or marker.get("stream") or ""
+    host = url.split("://", 1)[-1].split("/", 1)[0]
+    return host or marker.get("kind", "")
+
+
+def _download_previous(name: str) -> list:
+    """The markers of the object currently published, or none."""
+    try:
+        data = _client().bucket(BUCKET).blob(name).download_as_bytes()
+        # The storage client may already have undone the gzip encoding.
+        with contextlib.suppress(OSError):
+            data = gzip.decompress(data)
+        return json.loads(data).get("markers") or []
+    except Exception as exc:  # noqa: BLE001 - no previous object is a normal start
+        log.info("snapshot %s: no previous object to carry from (%s)",
+                 name, type(exc).__name__)
+        return []
+
+
+async def carry_forward(name: str, markers: list) -> list:
+    """This build's markers, with any source that went missing since the
+    last publish taken from the last publish instead."""
+    if name not in CARRY_BUNDLES:
+        return markers
+    if name not in _previous:
+        _previous[name] = await asyncio.to_thread(_download_previous, name)
+    before: dict[str, list] = {}
+    for m in _previous[name]:
+        before.setdefault(_source_of(m), []).append(m)
+    now_counts: dict[str, int] = {}
+    for m in markers:
+        src = _source_of(m)
+        now_counts[src] = now_counts.get(src, 0) + 1
+    out = markers
+    now = time.monotonic()
+    for src, old in before.items():
+        key = (name, src)
+        if len(old) < CARRY_MIN or now_counts.get(src, 0) >= len(old) * CARRY_FRACTION:
+            _carried_since.pop(key, None)
+            continue
+        since = _carried_since.setdefault(key, now)
+        if now - since > CARRY_MAX_S:
+            continue   # gone for good, or long enough to say so
+        log.warning("snapshot %s: carrying %d markers from %s, which sent %d",
+                    name, len(old), src, now_counts.get(src, 0))
+        out = [m for m in out if _source_of(m) != src] + old
+    return out
 
 
 def _digest(markers) -> str:
@@ -185,6 +257,7 @@ async def publish_once(name: str, kinds: set[str], cache_control: str,
     markers = await build_bundle(name, kinds)
     if markers is None:
         return False
+    markers = await carry_forward(name, markers)
     # A feed that drops out takes its markers with it, and the bundle
     # would publish anyway: cameras.json.gz once shipped 14,791 cameras
     # with not one of them in California, because that one feed was
@@ -203,6 +276,8 @@ async def publish_once(name: str, kinds: set[str], cache_control: str,
     await asyncio.to_thread(_upload, name, body, cache_control)
     _last_hash[name] = digest
     _last_count[name] = len(markers)
+    if name in CARRY_BUNDLES:
+        _previous[name] = markers
     _last_upload[name] = time.time()
     _last_published[name] = datetime.now(UTC).isoformat(timespec="seconds")
     log.info("snapshot %s: published %d markers, %d bytes gzipped",
