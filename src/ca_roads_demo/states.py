@@ -1438,9 +1438,30 @@ async def _fetch_md(client) -> dict:
     return {"markers": markers}
 
 
-# The last Illinois camera list that arrived, and when. See _fetch_il.
-_IL_CAMERAS: tuple[float, list[dict]] | None = None
-IL_CAMERAS_KEEP_S = 6 * 3600.0
+# The last camera list each state's reader got, and when.
+_LAST_CAMERAS: dict[str, tuple[float, list[dict]]] = {}
+CAMERAS_KEEP_S = 6 * 3600.0
+
+
+def _keep_cameras(state: str, cameras: list[dict]) -> list[dict]:
+    """This state's cameras, or its last good list when this fetch got none.
+
+    Some readers swallow a failed camera request on purpose, so a camera
+    backend cannot take a state's incidents down with it. That made the
+    fetch a success with no cameras in it, and whole states' cameras
+    vanished from the map, and from any bundle built meanwhile, whenever
+    that backend stumbled: about 3,700 in Illinois alone. A camera list
+    is an inventory that barely changes and the viewer fetches each
+    image live, so the last one stands in for a few hours.
+    """
+    now = time.monotonic()
+    if cameras:
+        _LAST_CAMERAS[state] = (now, cameras)
+        return cameras
+    last = _LAST_CAMERAS.get(state)
+    if last and now - last[0] <= CAMERAS_KEEP_S:
+        return last[1]
+    return []
 
 
 async def _fetch_il(client) -> dict:
@@ -1493,20 +1514,7 @@ async def _fetch_il(client) -> dict:
             "near": row.get("CameraLocation"),
             "src": "TravelMidwest (IDOT)", "image": snap, "stream": None,
         })
-    # Losing the camera file must not take incidents down with it, which
-    # is why its failure is swallowed above. But swallowing it made the
-    # whole fetch a success with no cameras in it, so about 3,700
-    # Illinois cameras vanished from the map, and from any bundle built
-    # meanwhile, every time that backend had a bad minute. A camera list
-    # is an inventory that barely changes, so the last one that arrived
-    # stands in for a few hours.
-    global _IL_CAMERAS
-    now = time.monotonic()
-    if cameras:
-        _IL_CAMERAS = (now, cameras)
-    elif _IL_CAMERAS and now - _IL_CAMERAS[0] <= IL_CAMERAS_KEEP_S:
-        cameras = _IL_CAMERAS[1]
-    return {"markers": markers + cameras}
+    return {"markers": markers + _keep_cameras("il", cameras)}
 
 
 async def _fetch_al(client) -> dict:
@@ -1596,17 +1604,18 @@ async def _fetch_mi(client) -> dict:
         src_m = _MI_ROW_SRC.search(blob)
         if rid and src_m:
             img_by_id[rid.group(1)] = _html.unescape(src_m.group(1))
-    markers: list[dict] = []
+    cameras: list[dict] = []
     for c in cam_meta or []:
         lat, lon = c.get("latitude"), c.get("longitude")
         url = img_by_id.get(str(c.get("id")))
         if not lat or not lon or not url:
             continue
-        markers.append({
+        cameras.append({
             "kind": "camera", "lat": lat, "lon": lon,
             "name": c.get("title") or "Camera",
             "route": None, "direction": None,
             "near": c.get("title"), "image": url, "src": "MDOT MiDrive"})
+    markers: list[dict] = list(_keep_cameras("mi", cameras))
     for e in inc or []:
         lat, lon = e.get("latitude"), e.get("longitude")
         if not lat or not lon:
