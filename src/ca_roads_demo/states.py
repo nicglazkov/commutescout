@@ -1438,6 +1438,11 @@ async def _fetch_md(client) -> dict:
     return {"markers": markers}
 
 
+# The last Illinois camera list that arrived, and when. See _fetch_il.
+_IL_CAMERAS: tuple[float, list[dict]] | None = None
+IL_CAMERAS_KEEP_S = 6 * 3600.0
+
+
 async def _fetch_il(client) -> dict:
     """Illinois TravelMidwest: incident and camera CSVs (attribution
     required; polled well within their reuse-policy caps)."""
@@ -1470,6 +1475,7 @@ async def _fetch_il(client) -> dict:
             "dir": None, "reported": None,
             "detail": (row.get("ClosureDetails") or "")[:250] or None,
         })
+    cameras: list[dict] = []
     for row in csv.DictReader(io.StringIO(cam_txt)):
         snap = (row.get("SnapShot") or "").strip()
         try:
@@ -1480,14 +1486,27 @@ async def _fetch_il(client) -> dict:
             continue
         if str(row.get("TooOld")).strip().lower() == "true":
             continue
-        markers.append({
+        cameras.append({
             "kind": "camera", "lat": lat, "lon": lon,
             "name": row.get("CameraLocation") or "Camera",
             "route": None, "direction": row.get("CameraDirection") or None,
             "near": row.get("CameraLocation"),
             "src": "TravelMidwest (IDOT)", "image": snap, "stream": None,
         })
-    return {"markers": markers}
+    # Losing the camera file must not take incidents down with it, which
+    # is why its failure is swallowed above. But swallowing it made the
+    # whole fetch a success with no cameras in it, so about 3,700
+    # Illinois cameras vanished from the map, and from any bundle built
+    # meanwhile, every time that backend had a bad minute. A camera list
+    # is an inventory that barely changes, so the last one that arrived
+    # stands in for a few hours.
+    global _IL_CAMERAS
+    now = time.monotonic()
+    if cameras:
+        _IL_CAMERAS = (now, cameras)
+    elif _IL_CAMERAS and now - _IL_CAMERAS[0] <= IL_CAMERAS_KEEP_S:
+        cameras = _IL_CAMERAS[1]
+    return {"markers": markers + cameras}
 
 
 async def _fetch_al(client) -> dict:
