@@ -53,6 +53,7 @@ def snapshot() -> dict:
         "snaps_mem": len(roadsnap._mem),
         "snap_queue": len(roadsnap._queue),
         "mapdata_cache": len(app._MAPDATA_CACHE),
+        "mapdata_cache_mb": round(app._mapdata_cache_bytes() / 1_048_576, 1),
         "staticmap_cache": len(app._STATICMAP_CACHE),
         "tile_cache": len(app._TILE_CACHE),
         "flow_cache": len(app._FLOW_CACHE),

@@ -973,6 +973,17 @@ _MAPDATA_CACHE_TTL = 30
 # Region-scoped boot payloads mean many more distinct bboxes than the
 # old one-world-fits-all request, but each is a fraction of the size.
 _MAPDATA_CACHE_MAX = 24
+# The entry count alone was not a bound. A nationwide response is about
+# 2 MB gzipped and five times that raw, and every entry used to hold both,
+# so a full cache was roughly 300 MB on an instance whose working set sits
+# near 1.6 GB of a 2 GB limit. The last two out-of-memory restarts each
+# followed the cache filling up. Entries now keep only the gzipped body,
+# and the total is capped in bytes as well as in count.
+_MAPDATA_CACHE_BYTES = 64 * 1024 * 1024
+
+
+def _mapdata_cache_bytes() -> int:
+    return sum(len(entry[3]) for entry in _MAPDATA_CACHE.values())
 
 
 def shape_markers(markers, *, slim: bool = False, geo_only: bool = False):
@@ -1280,8 +1291,9 @@ async def api_mapdata(request: Request):
     now_mono = time.monotonic()
     hit = _MAPDATA_CACHE.get(cache_key)
     if hit and now_mono - hit[0] < _MAPDATA_CACHE_TTL:
-        (_ts, etag, raw_len, gz_body, raw_body, marker_count,
+        (_ts, etag, raw_len, gz_body, marker_count,
          warm_ready, warm_total) = hit
+        raw_body = None   # rebuilt from gz_body only for a client without gzip
         warming = False
     else:
         markers, warm_ready, warm_total, _degraded = await build_markers(
@@ -1306,9 +1318,10 @@ async def api_mapdata(request: Request):
         # the very next poll should see more feeds, not this snapshot.
         if not warming:
             _MAPDATA_CACHE[cache_key] = (now_mono, etag, raw_len, gz_body,
-                                         raw_body, marker_count,
-                                         warm_ready, warm_total)
-            while len(_MAPDATA_CACHE) > _MAPDATA_CACHE_MAX:
+                                         marker_count, warm_ready, warm_total)
+            while _MAPDATA_CACHE and (
+                    len(_MAPDATA_CACHE) > _MAPDATA_CACHE_MAX
+                    or _mapdata_cache_bytes() > _MAPDATA_CACHE_BYTES):
                 _MAPDATA_CACHE.pop(next(iter(_MAPDATA_CACHE)))
 
     common = {"ETag": etag,
@@ -1334,6 +1347,8 @@ async def api_mapdata(request: Request):
     if "gzip" in (request.headers.get("accept-encoding") or ""):
         return Response(gz_body, media_type="application/json",
                         headers={**common, "Content-Encoding": "gzip"})
+    if raw_body is None:
+        raw_body = _gzip.decompress(gz_body)
     return Response(raw_body, media_type="application/json",
                     headers=common)
 
