@@ -38,3 +38,39 @@ def test_near_identical_bboxes_share_one_build(monkeypatch):
 
 def test_mapdata_is_soft_limited():
     assert "/api/mapdata" in demo_app.SoftLimit.PREFIXES
+
+
+def test_a_cached_answer_keeps_only_its_gzipped_body(monkeypatch):
+    """Each entry used to hold the raw body as well, five times the size
+    of the gzipped one, and a full cache of nationwide answers was enough
+    to push the instance past its memory limit. A client that does not
+    take gzip still gets the right body, rebuilt on the way out."""
+    async def fake_build(box, want, *, geo_only=False, near=None):
+        return [{"kind": "incident", "lat": 37.0, "lon": -122.0}], 1, 1, False
+
+    monkeypatch.setattr(demo_app, "build_markers", fake_build)
+    demo_app._MAPDATA_CACHE.clear()
+    client = TestClient(demo_app.app)
+    url = "/api/mapdata?bbox=37.0,-122.0,37.01,-121.99"
+    first = client.get(url, headers={"Accept-Encoding": "gzip"})
+    assert first.status_code == 200
+    entry = next(iter(demo_app._MAPDATA_CACHE.values()))
+    assert not any(isinstance(v, bytes) and v.startswith(b"{") for v in entry)
+    plain = client.get(url, headers={"Accept-Encoding": "identity"})
+    assert plain.status_code == 200
+    assert plain.json()["markers"][0]["kind"] == "incident"
+    assert plain.headers["ETag"] == first.headers["ETag"]
+
+
+def test_the_cache_is_bounded_in_bytes(monkeypatch):
+    async def fake_build(box, want, *, geo_only=False, near=None):
+        return [{"kind": "incident", "lat": 37.0, "lon": -122.0, "n": i}
+                for i in range(50)], 1, 1, False
+
+    monkeypatch.setattr(demo_app, "build_markers", fake_build)
+    monkeypatch.setattr(demo_app, "_MAPDATA_CACHE_BYTES", 1)
+    demo_app._MAPDATA_CACHE.clear()
+    client = TestClient(demo_app.app)
+    for lat in ("36", "37", "38"):
+        client.get(f"/api/mapdata?bbox={lat}.0,-122.0,{lat}.01,-121.99")
+    assert len(demo_app._MAPDATA_CACHE) <= 1
