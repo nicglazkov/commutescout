@@ -46,10 +46,19 @@ class RoadData:
         self.calfire_source = calfire_feed.CalFireSource(self._client)
         self.cms = portal_feed.PortalSource(
             self._client, "cms", portal_feed.parse_cms, "cms")
+        # A camera list is an inventory: where the cameras are and the
+        # address of each image, which the viewer fetches live. It barely
+        # changes in a day, so a district whose refresh keeps failing
+        # goes on serving its last good list for hours rather than
+        # vanishing from the map after fifteen minutes.
         self.cctv = portal_feed.PortalSource(
-            self._client, "cctv", portal_feed.parse_cctv, "cctv")
+            self._client, "cctv", portal_feed.parse_cctv, "cctv",
+            max_serve=6 * 3600.0)
+        # Districts 4, 5, 7, 11 and 12 run no weather stations and answer
+        # 500 for good, so for this feed alone a 500 means "none here".
         self.rwis = portal_feed.PortalSource(
-            self._client, "rwis", portal_feed.parse_rwis, "rwis")
+            self._client, "rwis", portal_feed.parse_rwis, "rwis",
+            no_feed=(404, 500))
 
     @property
     def client(self) -> httpx.AsyncClient:

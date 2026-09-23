@@ -87,6 +87,8 @@ RETRY_AFTER_SKIP_S = 45
 # thousands of markers and a fresh timestamp. Guard on the drop instead,
 # and keep the previous object until the feed recovers.
 DROP_FRACTION = 0.6
+# Seconds the live bundle waits for a slow feed; see build_bundle.
+LIVE_FEED_BUDGET_S = 15.0
 _started = time.monotonic()
 _last_hash: dict[str, str] = {}
 _last_count: dict[str, int] = {}
@@ -137,9 +139,21 @@ async def build_bundle(name: str, kinds: set[str]) -> list | None:
     belongs.
     """
     from ca_roads_demo import app as demo_app
+    from ca_roads_demo import states
 
+    # A viewport request gives the other states' feeds a few seconds and
+    # serves whatever answered, because a person is waiting. Nobody waits
+    # on the publisher, and what it builds is served to every visitor
+    # until the next build, so the slow bundles wait as long as any one
+    # feed is allowed to take. With the short budget a feed that was
+    # mid-refresh simply went missing: the camera bundle swung between
+    # 9,652 and 22,262 cameras over one day for no reason but timing.
+    # The live bundle is rebuilt every 30 seconds, and a feed that has
+    # been dead a while is retried once a minute at up to a minute a
+    # try, so it gets a middle budget rather than stalling behind one.
+    budget = LIVE_FEED_BUDGET_S if name == "live.json.gz" else states.FETCH_CAP_SECONDS + 5
     markers, ready, total, degraded = await demo_app.build_markers(
-        WORLD_BOX, kinds)
+        WORLD_BOX, kinds, feed_budget=budget)
     if ready < total:
         log.info("snapshot %s: skipped, feeds warming (%s/%s)",
                  name, ready, total)

@@ -1008,7 +1008,8 @@ def shape_markers(markers, *, slim: bool = False, geo_only: bool = False):
     return markers
 
 
-async def build_markers(box, want, *, geo_only: bool = False, near=None):
+async def build_markers(box, want, *, geo_only: bool = False, near=None,
+                        feed_budget: float | None = None):
     """Every marker inside `box`, for the requested kinds.
 
     Shared by the request path and the snapshot publisher, which is the
@@ -1206,7 +1207,8 @@ async def build_markers(box, want, *, geo_only: bool = False, near=None):
     with contextlib.suppress(Exception):  # expansion states never break CA
         markers.extend(await states.markers_for_bbox(
             road.client, box, want,
-            budget_seconds=2.5 if ready0 < total0 else None))
+            budget_seconds=(feed_budget if feed_budget is not None
+                            else 2.5 if ready0 < total0 else None)))
     warm_ready, warm_total = states.warm_progress()
     # A whole-world response with almost nothing in it means the feed
     # layer is degraded (a starved connection pool once served only the

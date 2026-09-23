@@ -193,11 +193,23 @@ class PortalSource:
         kind: str,
         parser: Callable[[bytes, int], list],
         source_name: str,
+        *,
+        no_feed: tuple[int, ...] = (404,),
+        max_serve: float = MAX_SERVE_SECONDS,
     ) -> None:
         self._client = client
         self._kind = kind
         self._parser = parser
         self._source_name = source_name
+        # Which answers mean "this district publishes no such feed". It
+        # differs by feed: every district runs cameras and signs, so a 500
+        # from one of those is Caltrans having a bad minute, while five
+        # districts have no weather stations and answer 500 permanently.
+        # Reading a transient 500 as "no feed" cached an empty district as
+        # a success and replaced good data with nothing: the camera bundle
+        # once shipped two districts of California's twelve.
+        self._no_feed = no_feed
+        self._max_serve = max_serve
         self._cache = TTLCache()
 
     async def _fetch_district(self, district: int):
@@ -206,7 +218,7 @@ class PortalSource:
             headers={"User-Agent": USER_AGENT},
             timeout=TIMEOUT_SECONDS,
         )
-        if resp.status_code in (404, 500):
+        if resp.status_code in self._no_feed:
             return _NO_FEED
         resp.raise_for_status()
         return self._parser(resp.content, district)
@@ -220,7 +232,7 @@ class PortalSource:
                 self._cache.get(
                     d,
                     TTL_SECONDS,
-                    MAX_SERVE_SECONDS,
+                    self._max_serve,
                     lambda d=d: self._fetch_district(d),
                 )
                 for d in wanted
