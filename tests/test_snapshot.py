@@ -592,3 +592,23 @@ async def test_a_bundle_missing_a_feed_is_not_published(monkeypatch):
     state["markers"] = full[:900]
     assert await snapshot.publish_once("cameras.json.gz", {"camera"}, "cc", 60) is True
     assert len(uploaded) == 2
+
+
+@pytest.mark.asyncio
+async def test_slow_bundles_wait_for_every_feed(monkeypatch):
+    """The camera bundle swung between 9,652 and 22,262 cameras in a day
+    because it was built on the few-second budget a person waiting on a
+    viewport gets. Nobody waits on the publisher."""
+    from ca_roads_demo import app as demo_app
+    from ca_roads_demo import states
+    seen = {}
+
+    async def fake_build(box, want, *, geo_only=False, near=None, feed_budget=None):
+        seen[tuple(sorted(want))] = feed_budget
+        return [{"kind": "camera", "lat": 1.0, "lon": 1.0}], 1, 1, False
+
+    monkeypatch.setattr(demo_app, "build_markers", fake_build)
+    await snapshot.build_bundle("cameras.json.gz", {"camera"})
+    await snapshot.build_bundle("live.json.gz", {"incident"})
+    assert seen[("camera",)] >= states.FETCH_CAP_SECONDS
+    assert seen[("incident",)] == snapshot.LIVE_FEED_BUDGET_S

@@ -152,3 +152,35 @@ async def test_camera_liveness_filter():
         road._client = original
     assert [c.image_url for c in live] == ["https://x/live1.jpg", "https://x/live2.jpg"]
     assert dropped == 2
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_camera_district_answering_500_is_a_failure_not_an_empty_district():
+    """Every district runs cameras, so a 500 is Caltrans having a bad
+    minute. Reading it as "this district has none" cached an empty
+    district as a success, and the camera bundle once shipped two of
+    California's twelve districts."""
+    respx.get(portal.feed_url("cctv", 4)).mock(return_value=httpx.Response(500))
+    async with httpx.AsyncClient() as client:
+        cams = portal.PortalSource(client, "cctv", portal.parse_cctv, "cctv")
+        with pytest.raises(httpx.HTTPStatusError):
+            await cams._fetch_district(4)
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_a_weather_district_answering_500_has_no_stations():
+    respx.get(portal.feed_url("rwis", 4)).mock(return_value=httpx.Response(500))
+    async with httpx.AsyncClient() as client:
+        wx = portal.PortalSource(client, "rwis", portal.parse_rwis, "rwis",
+                                 no_feed=(404, 500))
+        assert await wx._fetch_district(4) == portal._NO_FEED
+
+
+def test_the_camera_inventory_outlives_a_long_caltrans_outage():
+    from ca_roads.roaddata import RoadData
+    road = RoadData()
+    assert road.cctv._max_serve >= 6 * 3600
+    assert road.cms._max_serve == portal.MAX_SERVE_SECONDS
+    assert 500 in road.rwis._no_feed and 500 not in road.cctv._no_feed
