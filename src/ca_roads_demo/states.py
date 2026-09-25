@@ -43,6 +43,11 @@ UA = {"User-Agent":
 TTL = 180.0
 MAX_SERVE = 1800.0
 CAM_TTL = 600.0          # the camera XML is ~20 MB per state; refresh slowly
+# A camera list is an inventory that barely changes in a day, and the
+# 20 MB New England feeds time out often enough that the thirty-minute
+# limit dropped three states' cameras several times a night. Served
+# for six hours, like every other camera inventory.
+CAM_MAX_SERVE = 6 * 3600.0
 WZDX_TTL = 600.0         # WZDx dumps change slowly and some are 8-16 MB
 TZ_EAST = ZoneInfo("America/New_York")
 
@@ -2576,7 +2581,7 @@ async def markers_for_bbox(client, box, want,
             _capped(lambda c=code: _fetch_nec(client, c))))
         if "camera" in want:
             lookups.append(_cache.get(
-                f"neccam:{code}", CAM_TTL, MAX_SERVE,
+                f"neccam:{code}", CAM_TTL, CAM_MAX_SERVE,
                 _capped(lambda c=code: _fetch_nec_cameras(client, c), 120.0)))
     for code, (_st, src, bounds, url) in WZDX_FEEDS.items():
         if _overlaps(box, bounds) and not _wzdx_superseded(code):
@@ -2676,7 +2681,7 @@ async def _prewarm_all(client) -> None:
             ], return_exceptions=True)
         # Camera bundles are ~20 MB each; warm them after the light feeds.
         await asyncio.gather(*[
-            _cache.get(f"neccam:{c}", CAM_TTL, MAX_SERVE,
+            _cache.get(f"neccam:{c}", CAM_TTL, CAM_MAX_SERVE,
                        _capped(lambda cc=c: _fetch_nec_cameras(client, cc),
                                120.0))
             for c in NEC_STATES
