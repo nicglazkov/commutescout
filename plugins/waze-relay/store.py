@@ -1,29 +1,31 @@
-"""The cell poller and the Flare records it serves.
+"""The tile poller and the Flare records it serves.
 
 Coverage is demand-driven, not a fixed box. The plugin answers for anywhere
-in its coverage, but it only fetches one-degree cells somebody actually asked
-about in the last ten minutes: an unasked cell costs Waze nothing, however
-wide the coverage box is. There is no background sweep of the box.
+in its coverage, but it only fetches tiles somebody actually asked about in
+the last ten minutes: an unasked tile costs Waze nothing, however wide the
+coverage box is. There is no background sweep of the box.
 
-Demand is also what decides where the one upstream session spends its time.
-That session runs one query at a time, so the busiest cells win: cells are
-ranked by how often they were asked about in that ten-minute window, and only
-the top few stay hot. The ranking is recomputed on a timer rather than on
-every ask, so a sweep in progress is not thrown away when the order shifts.
+A tile is a tenth of a degree, about 11 km on a side, and each one is
+fetched with a single query at city zoom. That size is the point. The
+upstream thins what it returns for a wide viewport the same way the app
+shows fewer pins zoomed out, and the previous design, which queried
+one-degree cells from four points with boxes 70 km wide, held 43 alerts for
+the whole Los Angeles basin on a weekday afternoon. A caller asks for a
+disc around a person or a point along a route, the disc becomes the few
+tiles it touches, and every tile is fetched at a zoom where the upstream
+sends everything it has.
 
-A one-degree cell is about 110 km across, and the upstream thins a wide
-viewport down hard, so a hot cell is not fetched from its center. It is
-swept: each cell holds a lattice of sub-cell points, the points take turns
-stalest first, and each turn runs the shrinking-box series around its own
-point. That way the far corner of a cell gets the same attention as the
-middle.
+One session runs one query at a time, so the tiles take turns, stalest
+first, and no tile is fetched more often than once per refresh window.
+The wanted set is capped; past the cap the tiles nobody has asked about
+for longest drop out, so a flood of asks degrades to slower laps rather
+than to nothing.
 
-Alerts themselves are kept in one cache for the whole service rather than one
-per cell, because the RT protocol sends each alert once per session and not
-once per query: an alert first delivered to one cell's query is never re-sent
-for the neighbouring cell that overlaps it. See waze/cache.py.
+Alerts themselves are kept in one cache for the whole service rather than
+one per tile, because the RT protocol sends each alert once per session and
+not once per query: an alert first delivered to one tile's query is never
+re-sent for the neighbouring tile that overlaps it. See waze/cache.py.
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -41,13 +43,10 @@ from waze.source import PRIMARY_VIEWPORT, WazeSource
 
 log = logging.getLogger("waze_relay.store")
 
-CELL_DEG = 1.0
-CELL_RADIUS_M = 80_000        # what a mediated caller asks for at a cell center
-SUB_CELLS = 2                 # the lattice inside one cell, per side
-HOT_CELLS = 8                 # how many cells one session keeps fresh at once
-HOT_RECHECK_S = 30.0          # how often the hot set is allowed to change
-YIELD_TTL_S = 1800.0          # how long "this cell was empty" is believed
-WANTED_TTL_S = 600.0          # a cell is fetched only if it was asked about this recently
+TILE_DEG = 0.1                # a city-zoom tile, about 11 km on a side
+CELL_RADIUS_M = 80_000        # the radius a caller gets when it names none
+MAX_TILES = 400               # about forty people's neighbourhoods at once
+WANTED_TTL_S = 600.0          # a tile is fetched only if it was asked about this recently
 STALE_GRACE_S = 300.0         # serve on after a failure for this long, then serve nothing
 GONE_VOTES_TO_HIDE = 3
 VOTE_TTL_S = 2 * 3600.0
@@ -62,25 +61,39 @@ def meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return math.hypot((lat2 - lat1) * 111_320, (lon2 - lon1) * kx)
 
 
-def cell_of(lat: float, lon: float) -> tuple[int, int]:
-    return math.floor(lat / CELL_DEG), math.floor(lon / CELL_DEG)
+def tile_of(lat: float, lon: float, tile_deg: float = TILE_DEG) -> tuple[int, int]:
+    return math.floor(lat / tile_deg), math.floor(lon / tile_deg)
 
 
-def cell_center(cell: tuple[int, int]) -> tuple[float, float]:
-    return (cell[0] + 0.5) * CELL_DEG, (cell[1] + 0.5) * CELL_DEG
+def tile_center(tile: tuple[int, int], tile_deg: float = TILE_DEG) -> tuple[float, float]:
+    return (tile[0] + 0.5) * tile_deg, (tile[1] + 0.5) * tile_deg
 
 
-def sub_cell_center(cell: tuple[int, int], row: int, col: int, per_side: int) -> tuple:
-    """The middle of one square of a cell's lattice."""
-    step = CELL_DEG / per_side
-    return (cell[0] * CELL_DEG + (row + 0.5) * step,
-            cell[1] * CELL_DEG + (col + 0.5) * step)
+def tiles_for_disc(lat: float, lon: float, radius_m: float,
+                   tile_deg: float = TILE_DEG) -> list[tuple[int, int]]:
+    """Every tile a disc touches: the tile under the point for a zero
+    radius, and otherwise each tile whose nearest edge is inside it."""
+    if radius_m <= 0:
+        return [tile_of(lat, lon, tile_deg)]
+    d_lat = radius_m / M_PER_DEG_LAT
+    d_lon = radius_m / max(m_per_deg_lon(lat), 1.0)
+    rows = range(math.floor((lat - d_lat) / tile_deg), math.floor((lat + d_lat) / tile_deg) + 1)
+    cols = range(math.floor((lon - d_lon) / tile_deg), math.floor((lon + d_lon) / tile_deg) + 1)
+    out = []
+    for row in rows:
+        for col in cols:
+            south, west = row * tile_deg, col * tile_deg
+            near_lat = min(max(lat, south), south + tile_deg)
+            near_lon = min(max(lon, west), west + tile_deg)
+            if meters(lat, lon, near_lat, near_lon) <= radius_m:
+                out.append((row, col))
+    return out
 
 
-def sub_cell_radius_m(lat: float, per_side: int) -> float:
-    """A radius that still covers a lattice square after the client shrinks
-    its primary viewport to three quarters."""
-    half = CELL_DEG / per_side / 2
+def tile_query_radius_m(lat: float, tile_deg: float = TILE_DEG) -> float:
+    """A radius that still covers a tile after the client shrinks its
+    primary viewport to three quarters."""
+    half = tile_deg / 2
     return math.hypot(half * M_PER_DEG_LAT, half * m_per_deg_lon(lat)) / PRIMARY_VIEWPORT
 
 
@@ -178,117 +191,47 @@ class Store:
     """What the HTTP layer reads, and the loop that keeps it fresh."""
 
     def __init__(self, source: WazeSource, *, bbox: list[float], refresh_s: int = 60,
-                 sub_cells: int = SUB_CELLS, hot_cells: int = HOT_CELLS,
+                 tile_deg: float = TILE_DEG, max_tiles: int = MAX_TILES,
                  now: Callable[[], float] | None = None,
                  wall_clock: Callable[[], float] | None = None) -> None:
         self.source = source
         self.bbox = bbox
         self.refresh_s = refresh_s
-        self.sub_cells = max(1, sub_cells)
-        self.hot_limit = max(1, hot_cells)
+        self.tile_deg = tile_deg
+        self.max_tiles = max(1, max_tiles)
         self._now = now or time.monotonic
         self._wall = wall_clock or time.time
         self.votes = Votes(now=self._wall)
         self.confirmations = ConfirmTracker(now=self._wall)
-        self._asks: dict[tuple[int, int], list[float]] = {}
-        self._yield: dict[tuple[int, int], tuple[float, int]] = {}
-        self._point_ok: dict[tuple[int, int, int, int], float] = {}
-        self._hot: list[tuple[int, int]] = []
-        self._hot_at = -HOT_RECHECK_S
+        # tile -> when it was last asked about, and when it was last fetched.
+        self._asks: dict[tuple[int, int], float] = {}
+        self._tile_ok: dict[tuple[int, int], float] = {}
         self._lock = asyncio.Lock()
 
     # -------------------------------------------------------------- asks
 
-    def want(self, lat: float, lon: float) -> None:
-        """Remember that someone asked about this point. The cell joins the
-        rotation, and asking again is what moves it up the queue."""
-        self._asks.setdefault(cell_of(lat, lon), []).append(self._now())
-
-    def rank(self, cell: tuple[int, int]) -> int:
-        """How worthwhile a cell has proved to be. Lower sorts first.
-
-        Being asked about is not evidence that a cell has anything in it. A
-        caller sweeping a coverage box asks about every cell in the
-        rectangle, and a rectangle covering the United States is largely
-        water: the box this plugin advertises takes in the Gulf of Mexico,
-        most of the Pacific and a good part of the Atlantic. Ranking on
-        demand alone let eleven ocean cells crowd Los Angeles out of a hot
-        set of eight, and the session spent its night querying the sea.
-
-        So a cell that has produced something outranks one nobody has tried,
-        which outranks one that was tried and was empty. Measurements expire,
-        so a city that happened to be quiet gets another turn rather than
-        being written off for the day.
-        """
-        measured = self._yield.get(cell)
-        if measured is None or self._now() - measured[0] > YIELD_TTL_S:
-            return 1                      # never tried, or tried long enough ago
-        return 0 if measured[1] else 2    # produced something, or proved empty
-
-    def note_yield(self, cell: tuple[int, int], count: int) -> None:
-        """Record what a sweep of this cell actually found."""
-        self._yield[cell] = (self._now(), count)
-
-    def cell_yield(self, cell: tuple[int, int]) -> int:
-        """How many cached alerts currently sit inside a cell."""
-        south, west = cell[0] * CELL_DEG, cell[1] * CELL_DEG
-        return sum(1 for a in self.source.snapshot()
-                   if south <= a.lat < south + CELL_DEG and west <= a.lon < west + CELL_DEG)
-
-    def wanted_cells(self) -> list[tuple[int, int]]:
-        """Every cell asked about inside the window, worth the query first
-        and busiest within that."""
+    def want(self, lat: float, lon: float, radius_m: float = 0.0) -> None:
+        """Remember that someone asked about a disc. Every tile it touches
+        joins the rotation, and asking again is what keeps it there."""
         now = self._now()
-        for cell, times in list(self._asks.items()):
-            recent = [t for t in times if now - t <= WANTED_TTL_S]
-            if recent:
-                self._asks[cell] = recent
-                continue
-            self._asks.pop(cell, None)
-            self._yield.pop(cell, None)
-            for point in [p for p in self._point_ok if p[:2] == cell]:
-                self._point_ok.pop(point, None)
-        return sorted(self._asks, key=lambda c: (self.rank(c), -len(self._asks[c]),
-                                                 -self._asks[c][-1]))
+        for tile in tiles_for_disc(lat, lon, radius_m, self.tile_deg):
+            self._asks[tile] = now
+        if len(self._asks) > self.max_tiles:
+            # The tiles nobody has asked about for longest go first.
+            for tile, _ in sorted(self._asks.items(), key=lambda kv: kv[1])[
+                    : len(self._asks) - self.max_tiles]:
+                self._asks.pop(tile, None)
+                self._tile_ok.pop(tile, None)
 
-    def hot_cells(self) -> list[tuple[int, int]]:
-        """The cells the session actually spends its queries on.
-
-        One session runs one query at a time, so wanting a hundred cells and
-        fetching a hundred cells are different things: the busiest few are
-        kept fresh and the rest wait their turn to become busy. The set only
-        changes every HOT_RECHECK_S, so a sweep is not abandoned half done
-        because the order moved underneath it.
-        """
+    def wanted_tiles(self) -> list[tuple[int, int]]:
+        """Every tile asked about inside the window, stalest fetch first
+        and most recently asked within that."""
         now = self._now()
-        wanted = self.wanted_cells()
-        # A cell swept and found empty is not merely last in the queue, it is
-        # out of the queue: sweeping it again before its measurement expires
-        # is the definition of wasted budget. Ranking alone was not enough,
-        # because the hot set fills to its limit whatever is in it, so seven
-        # known-empty cells still took seven eighths of the session. They
-        # come back for one look every YIELD_TTL_S and drop out again.
-        # No fallback when everything known is empty: the honest answer then
-        # is to fetch nothing until a measurement expires, rather than sweep
-        # cells we have just established have nothing in them. It cannot
-        # wedge, because every measurement expires.
-        worthwhile = [c for c in wanted if self.rank(c) < 2]
-        if now - self._hot_at >= HOT_RECHECK_S or not self._hot:
-            self._hot = worthwhile[:self.hot_limit]
-            self._hot_at = now
-        else:
-            # Keep the current set, minus anything that aged out of the
-            # window or has since proved empty.
-            live = set(worthwhile)
-            self._hot = [c for c in self._hot if c in live]
-        return self._hot
-
-    def wanted_points(self) -> list[tuple[int, int, int, int]]:
-        """Every lattice square of every hot cell."""
-        return [(*cell, row, col)
-                for cell in self.hot_cells()
-                for row in range(self.sub_cells)
-                for col in range(self.sub_cells)]
+        for tile, asked in list(self._asks.items()):
+            if now - asked > WANTED_TTL_S:
+                self._asks.pop(tile, None)
+                self._tile_ok.pop(tile, None)
+        return sorted(self._asks, key=lambda t: (self._tile_ok.get(t, 0.0), -self._asks[t]))
 
     def in_coverage(self, lat: float, lon: float) -> bool:
         south, west, north, east = self.bbox
@@ -388,34 +331,30 @@ class Store:
     # ------------------------------------------------------------ polling
 
     async def poll_once(self) -> bool:
-        """Refresh the stalest lattice square that is due. True when one was
+        """Refresh the stalest wanted tile that is due. True when one was
         fetched."""
-        points = self.wanted_points()
-        if not points or self.source.backoff_remaining_s() > 0:
+        tiles = self.wanted_tiles()
+        if not tiles or self.source.backoff_remaining_s() > 0:
             return False
-        # The stalest square of the hot cells goes first, and no square is
-        # fetched more often than once per refresh window. When there are
-        # more hot squares than the window fits, the stalest one is always
-        # overdue and the loop simply keeps sweeping.
-        point = min(points, key=lambda p: self._point_ok.get(p, 0.0))
-        if self._now() - self._point_ok.get(point, 0.0) < self.refresh_s:
+        # The stalest tile goes first, and no tile is fetched more often
+        # than once per refresh window. When there are more wanted tiles
+        # than the window fits, the stalest one is always overdue and the
+        # loop simply keeps going round.
+        tile = tiles[0]
+        if self._now() - self._tile_ok.get(tile, 0.0) < self.refresh_s:
             return False
-        lat, lon = sub_cell_center(point[:2], point[2], point[3], self.sub_cells)
+        lat, lon = tile_center(tile, self.tile_deg)
         async with self._lock:
+            before = len(self.source.cache)
             try:
-                count = await self.source.refresh(
-                    lat, lon, sub_cell_radius_m(lat, self.sub_cells))
-                self._point_ok[point] = self._now()
-                # What this cell actually holds decides whether it is worth
-                # coming back to. A cell swept and found empty steps aside
-                # for one nobody has tried.
-                found = self.cell_yield(point[:2])
-                self.note_yield(point[:2], found)
-                log.info("%.2f,%.2f refreshed, %s in this cell, %s alerts cached",
-                         lat, lon, found, count)
-            except Exception as exc:  # noqa: BLE001 - one bad square never stops the rest
+                count = await self.source.refresh(lat, lon, tile_query_radius_m(lat, self.tile_deg))
+                self._tile_ok[tile] = self._now()
+                log.info("tile %d,%d (%.2f,%.2f) refreshed: %d new, %d cached, %d tiles wanted",
+                         tile[0], tile[1], lat, lon, count - before, count, len(self._asks))
+            except Exception as exc:  # noqa: BLE001 - one bad tile never stops the rest
                 self.source.note_failure(exc)
-                log.warning("%.2f,%.2f failed: %s: %s", lat, lon, type(exc).__name__, exc)
+                log.warning("tile %d,%d (%.2f,%.2f) failed: %s: %s",
+                            tile[0], tile[1], lat, lon, type(exc).__name__, exc)
         return True
 
     async def run(self) -> None:
@@ -434,18 +373,18 @@ class Store:
 
     def status(self) -> dict:
         """Counts and freshness, for a health check. Nothing identifying."""
-        points = self.wanted_points()
-        hot = self.hot_cells()
+        now = self._now()
+        tiles = self.wanted_tiles()
+        ages = [now - self._tile_ok[t] for t in tiles if t in self._tile_ok]
         return {
             "alerts": len(self.source.cache),
             "served": len(self.records()),
-            "cells_wanted": len(self.wanted_cells()),
-            "cells_hot": len(hot),
-            "hot": [f"{lat},{lon}" for lat, lon in hot],
-            # 0 has produced alerts, 1 is untried, 2 was swept and was empty.
-            "hot_rank": [self.rank(c) for c in hot],
-            "points_wanted": len(points),
-            "points_swept": sum(1 for p in points if p in self._point_ok),
+            "tiles_wanted": len(tiles),
+            "tiles_fetched": len(ages),
+            "tiles_fresh": sum(1 for a in ages if a <= self.refresh_s),
+            # How long ago the most neglected wanted tile was fetched: the
+            # lap time, measured rather than estimated.
+            "stalest_s": round(max(ages)) if ages else None,
             "fresh": self.fresh,
             "registered": self.source.registered,
             "backoff_s": round(self.source.backoff_remaining_s()),

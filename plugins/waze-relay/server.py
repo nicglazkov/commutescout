@@ -75,9 +75,11 @@ TOKEN = os.environ.get("FLARE_TOKEN") or None
 CONFIRM_TOKEN = os.environ.get("FLARE_CONFIRM_TOKEN") or None
 BBOX = _bbox(os.environ.get("WAZE_BBOX") or DEFAULT_BBOX)
 REFRESH_S = int(os.environ.get("WAZE_REFRESH_S") or 60)
-SHRINK_STEPS = int(os.environ.get("WAZE_SHRINK_STEPS") or 2)
-SUB_CELLS = int(os.environ.get("WAZE_SUB_CELLS") or store_module.SUB_CELLS)
-HOT_CELLS = int(os.environ.get("WAZE_HOT_CELLS") or store_module.HOT_CELLS)
+# One box per tile: at city zoom there is nothing left for a second,
+# smaller box to find, and the second box was half the budget.
+SHRINK_STEPS = int(os.environ.get("WAZE_SHRINK_STEPS") or 1)
+TILE_DEG = float(os.environ.get("WAZE_TILE_DEG") or store_module.TILE_DEG)
+MAX_TILES = int(os.environ.get("WAZE_MAX_TILES") or store_module.MAX_TILES)
 QUERY_BUDGET_S = float(os.environ.get("WAZE_QUERY_BUDGET_S") or 10)
 STATE_FILE = os.environ.get("WAZE_STATE_FILE") or None
 # Reporting to Waze is off unless the operator turns it on: the approved plan
@@ -213,7 +215,7 @@ async def alerts(request: Request) -> JSONResponse:
         return error(422, "outside_coverage",
                      "That point is outside this plugin's coverage.",
                      "See coverage.bbox in the handshake.")
-    store.want(lat, lon)
+    store.want(lat, lon, radius)
     return JSONResponse({"alerts": store.near(lat, lon, radius),
                          "ttl_s": REFRESH_S, "as_of": store.as_of})
 
@@ -250,7 +252,7 @@ async def my_alerts(request: Request) -> JSONResponse:
         # Every session is taken, or the registry never came up. Either way
         # the shared feed is the honest fallback; nobody gets an error page
         # because the relay is busy.
-        store.want(lat, lon)
+        store.want(lat, lon, radius)
         return JSONResponse({"alerts": store.near(lat, lon, radius), "ttl_s": USER_POLL_S,
                              "as_of": store.as_of, "session": "shared"})
     session.trigger_refresh_if_stale(lat, lon, radius)
@@ -339,8 +341,8 @@ async def lifespan(_: Starlette) -> AsyncIterator[None]:
     client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_S, follow_redirects=False)
     source = WazeSource(client, shrink_steps=SHRINK_STEPS,
                         query_budget_s=QUERY_BUDGET_S, state_path=STATE_FILE)
-    store = Store(source, bbox=BBOX, refresh_s=REFRESH_S, sub_cells=SUB_CELLS,
-                  hot_cells=HOT_CELLS)
+    store = Store(source, bbox=BBOX, refresh_s=REFRESH_S, tile_deg=TILE_DEG,
+                  max_tiles=MAX_TILES)
     if USER_SESSIONS:
         auth_client = httpx.AsyncClient(timeout=15.0)
         # The day's account budget is shared with the relay, so several user
