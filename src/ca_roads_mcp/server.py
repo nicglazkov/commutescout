@@ -61,6 +61,22 @@ quickmap.dot.ca.gov). Not affiliated with any government agency.
 
 mcp = FastMCP("CommuteScout", instructions=INSTRUCTIONS)
 
+
+def app_version() -> str:
+    """This release's version, as pyproject.toml and server.json give it."""
+    try:
+        from importlib.metadata import version
+        return version("ca-roads-mcp")
+    except Exception:  # noqa: BLE001 - a source checkout that was never installed
+        return os.environ.get("APP_VERSION") or "dev"
+
+
+# FastMCP takes no version, so `initialize` answered with the MCP SDK's
+# own version ("1.28.1") in serverInfo, which says nothing about which
+# CommuteScout a client is talking to. The low-level server reports
+# whatever is set here instead.
+mcp._mcp_server.version = app_version()
+
 # FastMCP's constructor runs logging.basicConfig at INFO for the whole
 # process (both services import this module). httpx then logs every
 # request URL at INFO, and the state-feed URLs carry API keys as query
