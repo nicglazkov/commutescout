@@ -208,16 +208,16 @@ def test_near_filters_by_distance_and_sorts_by_it():
     assert [r["id"] for r in store.near(*LA, 5_000)] == ["wz:close"]
 
 
-def test_only_cells_asked_about_recently_are_kept_in_the_rotation():
+def test_only_tiles_asked_about_recently_are_kept_in_the_rotation():
     clock = [1000.0]
     store = _store(clock=lambda: clock[0])
-    assert store.wanted_cells() == []
+    assert store.wanted_tiles() == []
     store.want(*LA)
-    assert store.wanted_cells() == [(34, -119)]
+    assert store.wanted_tiles() == [store_module.tile_of(*LA)]
     clock[0] += 599
-    assert store.wanted_cells() == [(34, -119)]
+    assert store.wanted_tiles() == [store_module.tile_of(*LA)]
     clock[0] += 2
-    assert store.wanted_cells() == []
+    assert store.wanted_tiles() == []
 
 
 def test_coverage_is_the_box_with_a_degree_of_slack():
@@ -235,152 +235,42 @@ def test_the_shipped_coverage_answers_for_anywhere_in_the_country():
     assert not store.in_coverage(51.5, -0.12)    # London is not the United States
 
 
-def test_the_busiest_cells_are_the_ones_kept_fresh():
-    clock = [1000.0]
-    store = _store(clock=lambda: clock[0])
-    store.hot_limit = 2
-    busy, quieter, quietest = (34.05, -118.25), (40.7, -74.0), (41.9, -87.6)
-    for _ in range(5):
-        store.want(*busy)
-    for _ in range(3):
-        store.want(*quieter)
-    store.want(*quietest)
-    assert store.wanted_cells() == [(34, -119), (40, -74), (41, -88)]
-    assert store.hot_cells() == [(34, -119), (40, -74)]
-    assert len(store.wanted_points()) == 2 * 4    # only the hot cells are swept
-
-
-def test_an_empty_cell_gives_way_to_one_that_has_something_in_it():
-    """The bug this closes: a caller sweeping the coverage box asks about
-    every cell in the rectangle, and the rectangle is mostly ocean. Demand
-    alone put eleven Gulf of Mexico cells in a hot set of eight and pushed
-    Los Angeles out of its own budget."""
-    clock = [1000.0]
-    store = _store(_alert(), clock=lambda: clock[0])
-    store.hot_limit = 3
-    ocean = [(24, -85), (24, -86), (24, -87), (24, -88)]
-    # The sweep asks about the ocean far more often than anyone asks about LA.
-    for _ in range(9):
-        for lat, lon in ocean:
-            store.want(lat + 0.5, lon + 0.5)
-    store.want(*LA)
-    assert store.wanted_cells()[0] != (34, -119), "before any sweep, demand decides"
-
-    # Each cell gets swept; the ocean turns out to hold nothing.
-    for cell in ocean:
-        store.note_yield(cell, 0)
-    store.note_yield((34, -119), store.cell_yield((34, -119)))
-
-    assert store.cell_yield((34, -119)) == 1
-    assert store.wanted_cells()[0] == (34, -119), "what produced alerts goes first"
-    assert [store.rank(c) for c in store.wanted_cells()] == [0, 2, 2, 2, 2]
-    # Ranking alone was not enough: the hot set fills to its limit whatever
-    # is in it, so the empty cells still took most of the session. They are
-    # out of the set, not merely last in it.
-    assert store.hot_cells() == [(34, -119)]
-    assert len(store.wanted_points()) == 4, "the whole budget, not an eighth"
-
-
-def test_an_empty_cell_comes_back_for_another_look_when_its_measurement_expires():
-    clock = [1000.0]
-    store = _store(clock=lambda: clock[0])
-    store.want(24.5, -84.5)
-    store.note_yield((24, -85), 0)
-    assert store.hot_cells() == [], "nothing worth sweeping right now"
-    clock[0] += 1801
-    store.want(24.5, -84.5)          # a caller is still asking, as a poller does
-    assert store.hot_cells() == [(24, -85)], "one look, every half hour"
-
-
-async def test_when_everything_known_is_empty_it_fetches_nothing_and_recovers():
-    """Sweeping cells we have just established are empty is the waste this
-    closes, so the honest answer is to fetch nothing for a while. It cannot
-    wedge, because every measurement expires."""
-    clock = [1000.0]
-    store = _store(clock=lambda: clock[0])
-    for lon in (-84.5, -85.5, -86.5):
-        store.want(24.5, lon)
-    for cell in ((24, -85), (24, -86), (24, -87)):
-        store.note_yield(cell, 0)
-    assert store.hot_cells() == []
-    assert store.wanted_points() == []
-    assert await store.poll_once() is False, "nothing due, and nothing invented"
-
-    clock[0] += 1801
-    for lon in (-84.5, -85.5, -86.5):
-        store.want(24.5, lon)        # the caller has not gone away
-    assert len(store.hot_cells()) == 3, "every measurement expires, so it recovers"
-
-
-def test_a_cell_written_off_as_empty_gets_another_turn_later():
-    clock = [1000.0]
-    store = _store(clock=lambda: clock[0])
-    store.want(*LA)
-    store.note_yield((34, -119), 0)
-    assert store.rank((34, -119)) == 2, "swept and empty"
-    clock[0] += 1801
-    assert store.rank((34, -119)) == 1, "long enough ago to be worth another look"
-
-
-def test_a_cell_nobody_has_tried_beats_one_known_to_be_empty():
-    clock = [1000.0]
-    store = _store(clock=lambda: clock[0])
-    untried, empty = (24, -85), (24, -86)
-    assert store_module.cell_of(24.5, -84.5) == untried     # floor, not round
-    assert store_module.cell_of(24.5, -85.5) == empty
-    store.want(24.5, -84.5)
-    store.want(24.5, -85.5)
-    store.note_yield(empty, 0)
-    assert store.rank(untried) == 1
-    assert store.rank(empty) == 2
-    assert store.wanted_cells() == [untried, empty]
-
-
-def test_the_hot_set_holds_still_while_a_sweep_runs():
-    clock = [1000.0]
-    store = _store(clock=lambda: clock[0])
-    store.hot_limit = 1
-    store.want(34.05, -118.25)
-    assert store.hot_cells() == [(34, -119)]
-    # A busier newcomer does not yank the sweep away mid-flight.
-    for _ in range(9):
-        store.want(40.7, -74.0)
-    assert store.hot_cells() == [(34, -119)]
-    clock[0] += 31                                 # ...but it wins on recheck
-    assert store.hot_cells() == [(40, -74)]
-
-
-def test_a_cell_that_stops_being_asked_about_leaves_the_hot_set():
-    clock = [1000.0]
-    store = _store(clock=lambda: clock[0])
-    store.want(34.05, -118.25)
-    assert store.hot_cells() == [(34, -119)]
-    clock[0] += 601                                # past the ten-minute window
-    assert store.wanted_cells() == []
-    assert store.hot_cells() == []
-    assert store.wanted_points() == []
-
-
-def test_a_cell_is_swept_by_a_lattice_that_covers_its_corners():
+def test_an_ask_covers_every_tile_its_disc_touches_and_no_more():
     store = _store()
     store.want(*LA)
-    assert len(store.wanted_points()) == 4        # a two by two lattice
-    centers = [store_module.sub_cell_center(p[:2], p[2], p[3], 2)
-               for p in store.wanted_points()]
-    assert sorted(centers) == [(34.25, -118.75), (34.25, -118.25),
-                               (34.75, -118.75), (34.75, -118.25)]
-    # Downtown Los Angeles sits at the edge of its cell, so the cell center is
-    # too far away to be the only place the plugin looks.
-    assert store_module.meters(*LA, *store_module.cell_center((34, -119))) > 50_000
-    nearest = min(store_module.meters(*LA, *c) for c in centers)
-    assert nearest < 30_000
-    # And the radius asked for still covers a lattice square once the client
-    # shrinks its primary viewport.
-    assert store_module.sub_cell_radius_m(34.5, 2) > math.hypot(0.25 * 110574,
-                                                               0.25 * 91000)
+    assert store.wanted_tiles() == [(340, -1183)], "a bare point is its own tile"
+    store.want(*LA, 12_000)
+    tiles = store.wanted_tiles()
+    assert (340, -1183) in tiles and 6 <= len(tiles) <= 12
+    # Every wanted tile has an edge inside the disc; the far ones do not.
+    for tile in tiles:
+        lat, lon = store_module.tile_center(tile)
+        assert store_module.meters(*LA, lat, lon) < 12_000 + 8_000
+    assert (345, -1183) not in tiles
 
 
-async def test_the_poller_takes_the_stalest_point_and_waits_its_turn():
+def test_the_query_box_still_covers_a_tile_after_the_client_shrinks_it():
+    from waze.source import PRIMARY_VIEWPORT
+    half_diagonal = math.hypot(0.05 * 110574, 0.05 * 91000)
+    assert store_module.tile_query_radius_m(34.5) * PRIMARY_VIEWPORT >= half_diagonal
+    # And it is city zoom, not the regional zoom that got thinned.
+    assert store_module.tile_query_radius_m(34.5) < 12_000
+
+
+def test_the_wanted_set_is_capped_at_the_most_recently_asked():
+    clock = [1000.0]
+    store = _store(clock=lambda: clock[0])
+    store.max_tiles = 3
+    for i in range(5):
+        clock[0] += 1
+        store.want(34.05 + i * 0.5, -118.25)
+    tiles = store.wanted_tiles()
+    assert len(tiles) == 3
+    assert store_module.tile_of(34.05, -118.25) not in tiles, "the oldest ask dropped"
+    assert store_module.tile_of(34.05 + 2.0, -118.25) in tiles
+
+
+async def test_the_poller_takes_the_stalest_tile_and_waits_its_turn():
     clock = [1000.0]
     polled: list[tuple[float, float]] = []
 
@@ -388,25 +278,25 @@ async def test_the_poller_takes_the_stalest_point_and_waits_its_turn():
         polled.append((round(lat, 2), round(lon, 2)))
         return 0
 
-    # An alert in the cell, so it stays worth sweeping and this test is
-    # about the round robin rather than about the ranking.
     store = _store(_alert(), clock=lambda: clock[0])
     store.source.refresh = fake_refresh
     assert await store.poll_once() is False           # nothing asked for yet
 
     store.want(*LA)
-    for _ in range(4):
-        assert await store.poll_once() is True
-        clock[0] += 1
-    assert sorted(polled) == [(34.25, -118.75), (34.25, -118.25),
-                              (34.75, -118.75), (34.75, -118.25)]
-    # The whole cell is swept now, so the next tick waits out the window.
+    store.want(40.7, -74.0)
+    assert await store.poll_once() is True
+    clock[0] += 1
+    assert await store.poll_once() is True
+    assert sorted(polled) == [(34.05, -118.25), (40.75, -73.95)]
+    # Both tiles are fresh now, so the next tick waits out the window.
     assert await store.poll_once() is False
     clock[0] += 61
     assert await store.poll_once() is True
+    # The one fetched first is the one that comes round first.
+    assert polled[-1] == (34.05, -118.25)
 
 
-async def test_a_failed_cell_is_recorded_and_held_off_not_retried_at_once():
+async def test_a_failed_tile_is_recorded_and_held_off_not_retried_at_once():
     clock = [1000.0]
 
     async def boom(lat, lon, radius_m):
@@ -419,6 +309,24 @@ async def test_a_failed_cell_is_recorded_and_held_off_not_retried_at_once():
     assert store.source.last_error == "RuntimeError: waze said no"
     assert store.source.backoff_remaining_s() > 0
     assert await store.poll_once() is False           # holding off
+
+
+async def test_status_measures_the_lap_rather_than_estimating_it():
+    clock = [1000.0]
+
+    async def fake_refresh(lat, lon, radius_m):
+        return 0
+
+    store = _store(clock=lambda: clock[0])
+    store.source.refresh = fake_refresh
+    store.want(*LA, 12_000)
+    n = len(store.wanted_tiles())
+    for _ in range(n):
+        assert await store.poll_once() is True
+        clock[0] += 5
+    st = store.status()
+    assert st["tiles_wanted"] == n and st["tiles_fetched"] == n
+    assert st["stalest_s"] == 5 * n
 
 
 # -------------------------------------------------------------- endpoints
@@ -463,9 +371,10 @@ async def test_alerts_answers_inside_the_box_and_refuses_outside_it():
     body = inside.json()
     assert [a["id"] for a in body["alerts"]] == ["wz:abc-123"]
     assert body["ttl_s"] == 60 and flare.parse_ts(body["as_of"]) is not None
-    assert store.wanted_cells() == [(34, -119)]       # the ask joined the rotation
-    # A refusal must not put the caller's cell into the rotation.
-    assert (51, -1) not in store.wanted_cells()
+    tiles = store.wanted_tiles()                     # the ask joined the rotation
+    assert store_module.tile_of(*LA) in tiles and len(tiles) > 1, "a 25 km disc is several tiles"
+    # A refusal must not put the caller's tile into the rotation.
+    assert store_module.tile_of(51.5, -0.12) not in tiles
     assert outside.status_code == 422
     assert outside.json()["error"]["code"] == "outside_coverage"
     assert missing.status_code == 400
@@ -534,10 +443,13 @@ async def test_the_conformance_check_passes_against_the_app():
     assert "alerts: 3 valid record(s)" in report.passed
 
 
-def test_the_grid_matches_the_one_the_backend_polls_with():
+def test_the_tiles_are_finer_than_what_the_backend_asks_for():
+    """The backend asks for a disc around a person; the relay turns it
+    into tiles. A tile has to be smaller than that disc or the ask would
+    be fetched at the regional zoom this design exists to avoid."""
     from ca_roads_demo import flare_sources
 
-    assert store_module.CELL_DEG == flare_sources.CELL_DEG
+    assert store_module.tile_query_radius_m(37.0) < flare_sources.NEAR_FETCH_M
     assert store_module.CELL_RADIUS_M == flare_sources.CELL_RADIUS_M
 
 

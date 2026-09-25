@@ -6,7 +6,7 @@ Flare: the CommuteScout web map, the iOS app, the Android app, or your own
 client.
 
 It is a small Starlette service. It holds one anonymous upstream session,
-sweeps the one-degree grid cells that callers have asked about in the last
+fetches the city-zoom tiles that callers have asked about in the last
 ten minutes, maps what comes back to the Flare vocabulary, and serves it.
 It answers for anywhere in the United States; see
 [Coverage follows demand](#coverage-follows-demand) for what that does and
@@ -99,27 +99,28 @@ stays fresh is a straight function of the query rate, and a wide coverage box
 cannot change that. What a wide box does change is where the queries are
 allowed to go.
 
-Nothing is fetched on a schedule. A one-degree cell is fetched only after
-somebody asks about it, and only while somebody has asked in the last ten
-minutes. Among those cells, the busiest win: cells are ranked by how many
-times they were asked about inside that window, and the top `WAZE_HOT_CELLS`
-(eight by default) are the ones the session sweeps. The ranking is
-recalculated every thirty seconds rather than on every request, so a sweep in
-progress is not thrown away the moment the order shifts.
+Nothing is fetched on a schedule. A tile is fetched only after somebody
+asks about it, and only while somebody has asked in the last ten minutes.
+A caller asks for a disc, around a person or a point along a route, and the
+disc becomes the few tiles it touches.
 
-Within a hot cell, the fetch is a sweep rather than a sample. A one-degree
-cell is about 110 km across, the upstream thins a wide viewport hard, and
-asking from the cell's center leaves its corners barely covered: Los Angeles,
-for one, sits at the edge of its cell. So each cell is divided into a
-`WAZE_SUB_CELLS` lattice (two by two by default) and the squares take turns,
-stalest first, each fetched with the shrinking-box series around its own
-middle. Eight hot cells is thirty-two squares, a full sweep in a minute or
-two.
+A tile is a tenth of a degree, about 11 km on a side, and each one is
+fetched with a single query at city zoom. That size is the point: the
+upstream thins what it returns for a wide viewport the same way the app
+shows fewer pins zoomed out. The previous design queried one-degree cells
+from four points with boxes 70 km wide and held 43 alerts for the whole
+Los Angeles basin on a weekday afternoon. At city zoom the upstream sends
+everything it has for the tile.
 
-So a quiet night costs nothing at all, and a busy evening spends everything
-the one session has on the handful of places people are actually looking at.
-Raise `WAZE_HOT_CELLS` and each cell simply comes round less often; run an
-instance per region if you want more ground fresh at once.
+The tiles take turns, stalest first, and no tile is fetched more often
+than once per refresh window. Ten people in ten places is roughly ninety
+tiles, a lap of under a minute at the session's pace. The wanted set is
+capped at `WAZE_MAX_TILES`; past that, the tiles nobody has asked about for
+longest drop out, so a flood of asks degrades to slower laps rather than to
+nothing. `/status` reports `stalest_s`, how long ago the most neglected
+wanted tile was fetched, which is the lap time measured rather than
+estimated. When it climbs past the refresh window for good, run an
+instance per region.
 
 If no refresh has succeeded for the refresh window plus five minutes, the
 plugin serves nothing at all. Stale police and crash alerts presented as
@@ -151,10 +152,10 @@ phone then reads it directly and nothing goes through CommuteScout.
 | `FLARE_CONTACT` | the contact page | Where to reach the operator |
 | `FLARE_ATTRIBUTION_URL` | the plugins page | Where the attribution links |
 | `WAZE_BBOX` | `18.0,-168.0,71.5,-66.5` | Coverage, as `south,west,north,east`. The default is the United States |
-| `WAZE_HOT_CELLS` | `8` | How many cells the session keeps fresh at once |
-| `WAZE_REFRESH_S` | `60` | How often one lattice square comes round again |
-| `WAZE_SUB_CELLS` | `2` | The lattice inside one cell, per side; more is finer and costs more |
-| `WAZE_SHRINK_STEPS` | `2` | Query boxes per square; more finds smaller alerts and costs more |
+| `WAZE_TILE_DEG` | `0.1` | Tile size in degrees; smaller is finer and costs more queries |
+| `WAZE_REFRESH_S` | `60` | How often one tile comes round again |
+| `WAZE_MAX_TILES` | `400` | The most tiles kept in the rotation at once |
+| `WAZE_SHRINK_STEPS` | `1` | Query boxes per tile; one is enough at city zoom |
 | `WAZE_QUERY_BUDGET_S` | `10` | Wall-clock budget for one square's box series |
 | `WAZE_RATE_PER_MIN` | `600` | Requests one address may make a minute. A mediated caller asks per grid cell, so this has to fit a few hundred |
 | `WAZE_USER_SESSIONS` | off | Let a signed-in phone hold a session of its own. See below |
