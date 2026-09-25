@@ -58,6 +58,17 @@ NEAR_SERVE_M = 12_000
 VIEW_MAX_DEG = 1.5
 # Enough for a busy day in every metro at once; the oldest fall off.
 MAX_NEAR_POINTS = 250
+# A planned route becomes demand too: a point every ROUTE_STEP_M along
+# it, snapped to ROUTE_SNAP_DEG, each asked about within ROUTE_FETCH_M.
+# The stretch a driver is on gets fetched before they reach it, and a
+# route planned on the site is warm by the time the drive starts. The
+# driver is then shown alerts within CORRIDOR_SERVE_M of their own route
+# in addition to the circle around them, and nobody else is shown them.
+ROUTE_STEP_M = 8_000
+ROUTE_SNAP_DEG = 0.05
+ROUTE_FETCH_M = 6_000
+CORRIDOR_SERVE_M = 2_000
+MAX_ROUTE_POINTS = 600
 VIEW_TTL_S = 600
 SWEEP_PER_POLL = 12
 CELL_KEEP_S = 900
@@ -266,6 +277,8 @@ class Poller:
         self.viewed: dict[tuple[float, float], float] = {}
         # Snapped point -> when somebody was last there.
         self.near: dict[tuple[float, float], float] = {}
+        # Snapped point along a route -> when it was last planned or driven.
+        self.routes: dict[tuple[float, float], float] = {}
         self.cells: dict[str, dict[tuple[float, float], tuple[float, list]]] = {}
         self._sweep_pos: dict[str, int] = {}
         self._last_status_write: dict[str, float] = {}
@@ -374,6 +387,26 @@ class Poller:
             return
         self.note_at((lat_min + lat_max) / 2, (lon_min + lon_max) / 2)
 
+    def note_route(self, path) -> None:
+        """A route was planned or is being driven: keep it warm.
+
+        ``path`` is a polyline of (lat, lon). It is sampled every
+        ROUTE_STEP_M and each sample is snapped before it is stored, so
+        what the plugin is asked about is a chain of neighbourhoods and
+        never the route itself.
+        """
+        from ca_roads_demo import routing
+
+        now = time.monotonic()
+        step = ROUTE_SNAP_DEG
+        for lat, lon in routing._along(list(path), ROUTE_STEP_M):
+            self.routes[(round(round(lat / step) * step, 4),
+                         round(round(lon / step) * step, 4))] = now
+        if len(self.routes) > MAX_ROUTE_POINTS:
+            oldest = sorted(self.routes.items(), key=lambda kv: kv[1])
+            for point, _ in oldest[: len(self.routes) - MAX_ROUTE_POINTS]:
+                del self.routes[point]
+
     def cells_to_poll(self, sid: str, coverage: list
                       ) -> list[tuple[tuple[float, float], float]]:
         """Where to ask this source about, and how far around each point.
@@ -395,6 +428,9 @@ class Poller:
                       key=lambda kv: -kv[1])
         out: list[tuple[tuple[float, float], float]] = [
             (p, float(NEAR_FETCH_M)) for p, _ in near]
+        driven = sorted(((p, t) for p, t in self.routes.items() if t >= cutoff and inside(p)),
+                        key=lambda kv: -kv[1])
+        out += [(p, float(ROUTE_FETCH_M)) for p, _ in driven]
 
         grid = lattice(coverage)
         if len(grid) <= SWEEP_MAX_CELLS:
@@ -562,8 +598,9 @@ class Poller:
                 log.exception("flare poll cycle failed")
             await asyncio.sleep(15)
 
-    def markers_for_bbox(self, box, near=None) -> list[dict]:
-        """Plugin alerts inside ``box`` and within NEAR_SERVE_M of ``near``.
+    def markers_for_bbox(self, box, near=None, corridor=None) -> list[dict]:
+        """Plugin alerts inside ``box`` and within NEAR_SERVE_M of ``near``,
+        or within CORRIDOR_SERVE_M of any polyline in ``corridor``.
 
         ``near`` is the requester's own position, and without one this
         serves nothing at all. That is the whole privacy property, so it
@@ -576,9 +613,14 @@ class Poller:
         snapshot is one file on a CDN serving every visitor at once,
         which is the one place a per-person answer cannot be put.
         """
-        if near is None:
+        if near is None and not corridor:
             return []
-        near_lat, near_lon = near
+        from ca_roads_demo import routing
+
+        # A phone sends its route ahead as a point every few kilometres,
+        # and the matcher's coarse pass expects a dense line, so every
+        # corridor is filled in to a point per kilometre first.
+        paths = [routing._along(list(p), 1000.0) for p in (corridor or []) if len(p) >= 2]
         lat_min, lon_min, lat_max, lon_max = box
         now = self._now()
         out = []
@@ -589,7 +631,10 @@ class Poller:
             for a in alerts:
                 if not (lat_min <= a["lat"] <= lat_max and lon_min <= a["lon"] <= lon_max):
                     continue
-                if meters_between(near_lat, near_lon, a["lat"], a["lon"]) > NEAR_SERVE_M:
+                close = near is not None and meters_between(
+                    near[0], near[1], a["lat"], a["lon"]) <= NEAR_SERVE_M
+                if not close and not any(
+                        routing.on_route(a["lat"], a["lon"], p, CORRIDOR_SERVE_M) for p in paths):
                     continue
                 if flare.validate_alert(a, now=now):  # stale since the poll
                     continue
@@ -779,7 +824,7 @@ def _public(rec: dict) -> dict:
 reports = Reports()
 
 
-def _all_markers_for_bbox(box, near=None) -> list[dict]:
+def _all_markers_for_bbox(box, near=None, corridor=None) -> list[dict]:
     """Plugin alerts near ``near``, plus this service's own community
     reports across the whole box.
 
@@ -788,7 +833,8 @@ def _all_markers_for_bbox(box, near=None) -> list[dict]:
     alert is a by-product of where a person happens to be, so it goes to
     that person and stops there.
     """
-    return poller.markers_for_bbox(box, near=near) + reports.markers_for_bbox(box)
+    return (poller.markers_for_bbox(box, near=near, corridor=corridor)
+            + reports.markers_for_bbox(box))
 
 
 async def _forward_report(src: dict, pub: dict, uid: str, client) -> str | None:

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
@@ -141,6 +142,13 @@ async def api_nav_route(request: Request):
         except Exception:  # noqa: BLE001
             return JSONResponse({"error": "the router did not answer"}, status_code=502)
     media = resp.headers.get("content-type", "application/json")
+    if resp.status_code < 400:
+        # The drive is about to start along this line: keep it warm for
+        # the relay so the community alerts are there before the driver.
+        with contextlib.suppress(Exception):
+            from ca_roads_demo.valhalla import trip_points
+            trip = json.loads(resp.content).get("trip") or {}
+            flare_sources.poller.note_route(trip_points(trip))
     return Response(resp.content, status_code=resp.status_code, media_type=media,
                     headers={"Cache-Control": "no-store",
                              "X-Nav-Costing": NAV_COSTING,

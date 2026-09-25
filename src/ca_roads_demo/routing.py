@@ -323,3 +323,19 @@ async def plan(fetch: Fetcher, markers: list[dict], locations: list[dict],
                        "penalty_min": s["penalty_min"], "hassles": s["hassles"]})
     ranked.sort(key=lambda r: r["score_s"])
     return {"routes": ranked, "preset": preset, "excluded": len(excl), "note": note}
+
+
+def rescore(out: dict, markers: list[dict]) -> dict:
+    """Rank the planned routes again against a fuller set of markers.
+
+    Community alerts along a route are only known once the route is,
+    so they cannot be in the set the plan was scored with. This re-runs
+    the scoring in place with them added and re-sorts.
+    """
+    for r in out.get("routes") or []:
+        s = score(_trip_points(r["trip"]), markers)
+        secs = float((r["trip"].get("summary") or {}).get("time") or 0)
+        r.update(score_s=round(secs + s["penalty_min"] * 60),
+                 penalty_min=s["penalty_min"], hassles=s["hassles"])
+    out["routes"].sort(key=lambda r: r["score_s"])
+    return out
