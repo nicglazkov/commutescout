@@ -23,9 +23,16 @@ INTERVAL = 600
 # tracemalloc costs memory and CPU, so it is a switch for a day of
 # diagnosis, not a default: RSS was measured climbing ~120 MB an hour
 # between restarts with every counted cache flat.
+#
+# Tracing starts TRACE_AFTER_S into the run, not at import. tracemalloc
+# only tracks allocations made while it is on, and its overhead is
+# proportional to what it tracks. Started at boot it tracked the whole
+# working set, and the instance went over its memory limit three
+# minutes after starting, three times in ten minutes (2026-09-25).
+# Started after boot has settled it tracks only the growth, which is
+# the only part anyone wants to see.
 TRACE = os.environ.get("VITALS_TRACEMALLOC", "").strip() == "1"
-if TRACE:
-    tracemalloc.start(1)
+TRACE_AFTER_S = float(os.environ.get("VITALS_TRACE_AFTER_S", "1800"))
 # Injectable so tests can drive the loop without wall-clock waits.
 _sleep = asyncio.sleep
 _started = time.monotonic()
@@ -76,6 +83,10 @@ async def run() -> None:
     """Log vitals forever; started from the app lifespan."""
     while True:
         await _sleep(INTERVAL)
+        if (TRACE and not tracemalloc.is_tracing()
+                and time.monotonic() - _started >= TRACE_AFTER_S):
+            tracemalloc.start(1)
+            log.info("vitals: tracing allocations from here on")
         try:
             log.info("vitals %s", json.dumps(snapshot(), sort_keys=True))
         except Exception as exc:  # noqa: BLE001 - never let vitals kill the loop
