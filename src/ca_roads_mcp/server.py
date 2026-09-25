@@ -1587,6 +1587,7 @@ def main() -> None:
         import uvicorn
         from mcp.server.transport_security import TransportSecuritySettings
 
+        from ca_roads_mcp.headers import SecurityHeaders
         from ca_roads_mcp.ratelimit import ApiKeyMiddleware, RateLimitMiddleware
 
         mcp.settings.host = args.host
@@ -1608,6 +1609,8 @@ def main() -> None:
         # Keys (from Settings on the map page) sit in front: a keyed
         # request is limited by its tier instead of its address.
         app = ApiKeyMiddleware(app)
+        # Outermost, so a 429 from the limiters carries them too.
+        app = SecurityHeaders(app)
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:
         mcp.run(transport="stdio")
