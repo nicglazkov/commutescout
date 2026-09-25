@@ -159,8 +159,8 @@ export default function McpPage() {
           </h1>
           <p className="text-white/70 mx-auto mt-4 max-w-2xl text-balance md:text-lg">
             CommuteScout exposes its entire data layer as an MCP server, so
-            Claude (or any MCP client) can answer questions about
-            California roads with live data instead of guesses.
+            Claude (or any MCP client) can answer questions about the
+            roads in 37 states with live data instead of guesses.
           </p>
 
           <div className="mx-auto mt-8 max-w-md">

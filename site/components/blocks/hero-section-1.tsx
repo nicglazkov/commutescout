@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 //   Hulu, etc.) and the "New:" announcement pill: both were stock Tailark
 //   content with no CommuteScout equivalent to fill them with.
 // - Replaced the screenshot mockup with a real screenshot captured for
-//   Task 7 (site/public/shots/hero-map.png), a wide multi-state view from
+//   Task 7 (site/public/shots/hero-map.webp), a wide multi-state view from
 //   the live production map. A second overlapping Bay Area card
 //   (hero-route.png) was removed 2026-08-06 at Nic's request.
 // - text-muted-foreground replaced with text-cs-ink/60; the rest of the
@@ -66,7 +66,7 @@ export default function HeroSection() {
                 className="focus-visible:ring-cs-sky block cursor-pointer overflow-hidden rounded-2xl shadow-2xl shadow-cs-navy/15 ring-1 ring-cs-line transition hover:shadow-cs-navy/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               >
                 <Image
-                  src="/shots/hero-map.png"
+                  src="/shots/hero-map.webp"
                   alt="The CommuteScout live map showing incidents, closures, chain controls, and cameras across dozens of states"
                   width={1440}
                   height={900}

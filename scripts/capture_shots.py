@@ -18,6 +18,7 @@ import contextlib
 import sys
 from pathlib import Path
 
+from PIL import Image
 from playwright.sync_api import sync_playwright
 
 BASE = "https://commutescout.com"
@@ -184,7 +185,14 @@ def shot_hero(page, out: Path) -> None:
     search_to(page, "Reno, NV", zoom_out=9)
     settle(page, 9000)
     close_popups(page)
+    # 3200 px of PNG was 1.7 MB for a slot 1024 px wide. WebP at 2048
+    # is about 150 KB and indistinguishable at that size.
     page.screenshot(path=out / "hero-map.png")
+    with Image.open(out / "hero-map.png") as im:
+        im = im.convert("RGB")
+        im = im.resize((2048, round(im.height * 2048 / im.width)), Image.LANCZOS)
+        im.save(out / "hero-map.webp", "WEBP", quality=82, method=6)
+    (out / "hero-map.png").unlink()
     page.set_viewport_size(VIEWPORT)
 
 
@@ -208,7 +216,7 @@ SHOTS = {
 # It is now a designed card, adapted from the repository's social
 # preview, and changes only by hand.
 ELSEWHERE = {
-    "hero-map.png": "site/public/shots/hero-map.png",
+    "hero-map.webp": "site/public/shots/hero-map.webp",
 }
 
 
@@ -238,7 +246,7 @@ def main() -> int:
                 SHOTS[name](page, out)
                 # Most shots write <name>.png; the hero writes the file
                 # name the site expects instead.
-                written = out / ("hero-map.png" if name == "hero" else f"{name}.png")
+                written = out / ("hero-map.webp" if name == "hero" else f"{name}.png")
                 size = written.stat().st_size
                 print(f"  {written.name}  {size // 1024} KB")
                 if size < 20_000:
