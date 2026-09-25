@@ -49,6 +49,7 @@ from ca_roads.stadia import auth_headers
 from ca_roads_demo import (
     analytics,
     flare_sources,
+    freshness,
     nav,
     roadsnap,
     routing,
@@ -2165,6 +2166,9 @@ async def _lifespan(app_):
     pub_task = asyncio.create_task(snapshot.run())
     # Memory and cache sizes every ten minutes (see vitals.py).
     vitals_task = asyncio.create_task(vitals.run())
+    # A source that stops refreshing logs `feed stale:` at ERROR, which
+    # an alert policy watches (see freshness.py).
+    fresh_task = asyncio.create_task(freshness.run())
     # Flare sources: poll every enabled plugin on its own cadence, and
     # bring back the community reports that were live before a restart.
     with contextlib.suppress(Exception):
@@ -2176,6 +2180,7 @@ async def _lifespan(app_):
     task.cancel()
     pub_task.cancel()
     vitals_task.cancel()
+    fresh_task.cancel()
 
 
 class ForwardedScheme:
