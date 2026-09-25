@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 
 // What a page says after its form was posted by the browser itself. The
 // server answers such a post with a redirect back here carrying
@@ -8,14 +9,10 @@ import { useEffect, useState } from "react";
 // script sent never comes this way; the script shows its own status.
 export type Notice = { ok: boolean; text: string };
 
-export function FormNotice({ messages }: { messages: Record<string, Notice> }) {
-  const [key, setKey] = useState<string | null>(null);
-  useEffect(() => {
-    const k = new URLSearchParams(window.location.search).get("notice");
-    if (k && messages[k]) setKey(k);
-  }, [messages]);
-  if (!key) return null;
-  const m = messages[key];
+function Line({ messages }: { messages: Record<string, Notice> }) {
+  const key = useSearchParams().get("notice");
+  const m = key ? messages[key] : undefined;
+  if (!m) return null;
   return (
     <div
       role="status"
@@ -27,5 +24,14 @@ export function FormNotice({ messages }: { messages: Record<string, Notice> }) {
     >
       {m.text}
     </div>
+  );
+}
+
+// useSearchParams needs a Suspense boundary on a statically exported page.
+export function FormNotice(props: { messages: Record<string, Notice> }) {
+  return (
+    <Suspense fallback={null}>
+      <Line {...props} />
+    </Suspense>
   );
 }
