@@ -188,42 +188,26 @@ def shot_hero(page, out: Path) -> None:
     page.set_viewport_size(VIEWPORT)
 
 
-def shot_og(page, out: Path) -> None:
-    """The Open Graph card, at the size link unfurlers expect."""
-    page.set_viewport_size({"width": 1200, "height": 630})
-    page.goto(f"{BASE}/map", wait_until="domcontentloaded")
-    settle(page, 5000)
-    dismiss_overlays(page)
-    # The panel remembers which tab was last open, and this shot runs
-    # after the assistant one, so the card led with an empty Ask box.
-    try:
-        page.locator("text=Route").first.click(timeout=2500)
-        page.wait_for_timeout(600)
-    except Exception:
-        pass
-    search_to(page, "San Francisco, CA")
-    settle(page, 6000)
-    dismiss_overlays(page)
-    close_popups(page)
-    page.screenshot(path=out / "og.png")
-    page.set_viewport_size(VIEWPORT)
-
-
 SHOTS = {
     "map": shot_map,
     "planner": shot_planner,
     "answer": shot_answer,
     "marketplace": shot_marketplace,
     "developers": shot_developers,
-    "og": shot_og,
     "hero": shot_hero,
 }
 
-# Two of these are not README images and do not live in docs/shots: the
-# link-preview card the site serves, and the marketing hero. They went
-# stale for months because the capture only knew about one folder.
+# The marketing hero is not a README image and does not live in
+# docs/shots; it went stale for months because the capture only knew
+# about one folder.
+#
+# The link-preview card (src/ca_roads_demo/static/shots/og.png) is not
+# captured at all any more. As a raw screenshot it caught the search
+# dropdown over a third of the map and clipped the version label under
+# the logo, and at 1200x630 a busy map reads as noise in a chat preview.
+# It is now a designed card, adapted from the repository's social
+# preview, and changes only by hand.
 ELSEWHERE = {
-    "og.png": "src/ca_roads_demo/static/shots/og.png",
     "hero-map.png": "site/public/shots/hero-map.png",
 }
 
