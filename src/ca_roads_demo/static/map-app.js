@@ -1766,11 +1766,45 @@ map.on('moveend zoomend', () => {
   if (mapDataShown && !covered) showCoveragePill(0, null);
 });
 refreshAmbient(true);
+
+// ── Community plugin alerts ─────────────────────────────────────────
+// These never ride in the shared snapshot: the server serves them in a
+// small circle around whoever is asking and to nobody else, because an
+// alert exists because somebody was standing somewhere. So they are
+// fetched for this view alone, and only while the view is a place
+// rather than a region, which is also the server's rule. A zoomed-out
+// map shows none, and says nothing, which is correct: a few miles of
+// community reports at state zoom would be noise.
+const PLUGIN_VIEW_MAX_DEG = 1.5;
+let pluginTimer = null;
+let pluginCycle = 0;
+async function refreshPlugins() {
+  const mine = ++pluginCycle;
+  const b = map.getBounds();
+  const span = Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest());
+  if (span > PLUGIN_VIEW_MAX_DEG) { renderBatch([], ['plugin']); return; }
+  const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]
+    .map((v) => v.toFixed(3)).join(',');
+  try {
+    const res = await fetch('/api/mapdata?bbox=' + bbox + '&kinds=plugin&slim=1',
+      { cache: 'no-cache' });
+    if (!res.ok || mine !== pluginCycle) return;
+    const d = await res.json();
+    if (mine !== pluginCycle) return;
+    renderBatch(d.markers || [], ['plugin']);
+  } catch (e) { /* the next view or the next tick tries again */ }
+}
+map.on('moveend zoomend', () => {
+  clearTimeout(pluginTimer);
+  pluginTimer = setTimeout(refreshPlugins, 500);
+});
+refreshPlugins();
+
 // ── Long-running sessions (wall monitor / kiosk) ─────────────────────
 // 30 s, not 180 s: the snapshot carries a strong ETag, so an idle open
 // map costs a 304 and a few bytes per poll. This is what sets on-screen
 // freshness for a display nobody ever touches.
-setInterval(() => refreshAmbient(true), 30000);
+setInterval(() => { refreshAmbient(true); refreshPlugins(); }, 30000);
 // Browsers throttle timers in hidden tabs, and a monitor that sleeps
 // overnight would otherwise show yesterday's dots until the next tick.
 // Catch up the moment the tab is visible again or the network returns.
@@ -2466,7 +2500,7 @@ function inspectorActions(m, g) {
         await navigator.clipboard.writeText(url);
         share.textContent = 'Link copied';
         setTimeout(() => { share.textContent = 'Copy link'; }, 1800);
-      } catch (_) { window.prompt('Copy this link', url); }
+      } catch (_) { showLinkInline(share, url); }
     });
     row.appendChild(share);
   }
@@ -2792,15 +2826,21 @@ function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
     }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 });
   }
   const ICON = { home: '\u2302', work: '\u2692', saved: '\u2605', recent: '\u23F1' };
+  function mylocRow() {
+    const row = document.createElement('div');
+    row.className = 'row myloc';
+    row.textContent = '\u25CE Use my location';
+    row.addEventListener('mousedown', (e) => { e.preventDefault(); useMyLocation(); });
+    return row;
+  }
   function render() {
     sugg.innerHTML = '';
-    if (withMyLocation) {
-      const row = document.createElement('div');
-      row.className = 'row myloc';
-      row.textContent = '\u25CE Use my location';
-      row.addEventListener('mousedown', (e) => { e.preventDefault(); useMyLocation(); });
-      sugg.append(row);
-    }
+    // Before anything is typed, "use my location" is the likeliest
+    // answer and leads. Once somebody has typed a place, it is the
+    // least likely one, and sitting first it caught the Enter key and
+    // the first tap meant for the place they typed.
+    const typing = input.value.trim().length >= 2;
+    if (withMyLocation && !typing) sugg.append(mylocRow());
     // Nothing typed yet: Home, Work, favorites and recent destinations.
     if (!items.length && input.value.trim().length < 2) {
       Places.quick().forEach((q) => {
@@ -2828,6 +2868,7 @@ function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
       row.addEventListener('mousedown', (e) => { e.preventDefault(); pick(c); });
       sugg.append(row);
     });
+    if (withMyLocation && typing) sugg.append(mylocRow());
     if (sugg.children.length) sugg.classList.add('open'); else close();
   }
   async function fetchSuggestions() {
@@ -3085,6 +3126,20 @@ document.getElementById('kmlbtn').addEventListener('click', () => {
     '<name>' + tripSlug() + '</name><Placemark><LineString><coordinates>' +
     coords + '</coordinates></LineString></Placemark></Document></kml>\n');
 });
+function showLinkInline(after, url) {
+  let box = after.parentNode.querySelector('.linkinline');
+  if (!box) {
+    box = document.createElement('input');
+    box.className = 'linkinline';
+    box.readOnly = true;
+    box.setAttribute('aria-label', 'Link to copy');
+    box.style.cssText = 'display:block;width:100%;margin-top:6px;font:inherit;padding:6px 8px;';
+    after.insertAdjacentElement('afterend', box);
+  }
+  box.value = url;
+  box.focus();
+  box.select();
+}
 document.getElementById('sharebtn').addEventListener('click', async () => {
   if (!plannedRoute) return;
   const r = plannedRoute.route;
@@ -3105,12 +3160,18 @@ document.getElementById('sharebtn').addEventListener('click', async () => {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'could not create link');
-    await navigator.clipboard.writeText(data.url).catch(() => {});
-    btn.textContent = 'Link copied!';
+    let copied = true;
+    await navigator.clipboard.writeText(data.url).catch(() => { copied = false; });
+    btn.textContent = copied ? 'Link copied!' : 'Share link';
+    // A browser that refuses the clipboard (no user gesture, a locked
+    // down profile) gets the link on the page instead. Never a native
+    // prompt: that blocks the whole tab until somebody dismisses it.
+    if (!copied) showLinkInline(btn, data.url);
     setTimeout(() => { btn.textContent = 'Share link'; }, 2500);
   } catch (e) {
-    btn.textContent = 'Share link';
-    alert(e.message);
+    btn.textContent = 'Share failed';
+    btn.title = e.message;
+    setTimeout(() => { btn.textContent = 'Share link'; btn.title = ''; }, 4000);
   }
 });
 let plannedRoutes = [];

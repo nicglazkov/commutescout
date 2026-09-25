@@ -17,6 +17,8 @@ export const metadata: Metadata = {
 };
 
 const ANDROID_RELEASES = "https://github.com/nicglazkov/commutescout-app/releases/latest";
+// The public TestFlight group; anyone with the link can install the beta.
+const TESTFLIGHT_PUBLIC = "https://testflight.apple.com/join/1CbutYdy";
 const APP_REPO = "https://github.com/nicglazkov/commutescout-app";
 
 const features = [
@@ -42,13 +44,12 @@ export default function AppPage() {
             voice that tells you what is ahead before you get there.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href="/contact"
-              prefetch={false}
+            <a
+              href={TESTFLIGHT_PUBLIC}
               className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-cs-navy transition-colors hover:bg-white/90"
             >
-              iPhone: join the TestFlight
-            </Link>
+              iPhone: join the TestFlight beta
+            </a>
             <a
               href={ANDROID_RELEASES}
               className="rounded-full border border-white/30 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
@@ -57,8 +58,8 @@ export default function AppPage() {
             </a>
           </div>
           <p className="text-white/50 mt-4 text-sm">
-            Early access. The iPhone build goes out through TestFlight by invitation; ask through the
-            contact page and you get a link by email. The Android build installs from the release page.
+            Early access. The iPhone build is a public TestFlight beta: open the link on your phone and
+            tap Install. The Android build installs from the release page.
           </p>
         </div>
       </section>
@@ -86,13 +87,12 @@ export default function AppPage() {
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
                 <li>Install TestFlight from the App Store.</li>
                 <li>
-                  Ask for an invitation on the{" "}
-                  <Link href="/contact" prefetch={false} className="text-cs-sky hover:underline">
-                    contact page
-                  </Link>
-                  . The invitation arrives by email from App Store Connect.
+                  Open the{" "}
+                  <a href={TESTFLIGHT_PUBLIC} className="text-cs-sky hover:underline">
+                    public beta link
+                  </a>{" "}
+                  on your phone and tap Install. Updates arrive through TestFlight.
                 </li>
-                <li>Open the link on your phone and tap Install. Updates arrive through TestFlight.</li>
               </ol>
             </div>
             <div>
