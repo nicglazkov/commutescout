@@ -60,3 +60,29 @@ def test_snapshot_adds_allocation_sites_when_tracing(monkeypatch):
 
 def test_snapshot_has_no_allocation_sites_by_default():
     assert "top_alloc" not in vitals.snapshot()
+
+
+@pytest.mark.asyncio
+async def test_tracing_starts_only_after_boot_has_settled(monkeypatch):
+    import tracemalloc
+    ticks = []
+
+    async def fake_sleep(seconds):
+        ticks.append(seconds)
+        if len(ticks) > 3:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(vitals, "_sleep", fake_sleep)
+    monkeypatch.setattr(vitals, "TRACE", True)
+    monkeypatch.setattr(vitals, "TRACE_AFTER_S", 10 ** 9)   # never, in this test
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await vitals.run()
+        assert not tracemalloc.is_tracing()
+        monkeypatch.setattr(vitals, "TRACE_AFTER_S", 0.0)
+        ticks.clear()
+        with pytest.raises(asyncio.CancelledError):
+            await vitals.run()
+        assert tracemalloc.is_tracing()
+    finally:
+        tracemalloc.stop()
