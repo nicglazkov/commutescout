@@ -121,7 +121,12 @@ state.
     at any time; the keyless ArcGIS events layer ships instead. A
     stable key means a full upgrade.
 21. **MS beyond alerts**: sign and camera endpoints exist on
-    mdottraffic.com but are not yet resolved to stable URLs.
+    mdottraffic.com but are not yet resolved to stable URLs. Since
+    2026-09-25 mdottraffic.com has refused every request from Google
+    Cloud addresses (403, including its home page), while answering
+    the same request from elsewhere, so the alerts feed is down until
+    MDOT lifts that block. The map shows Mississippi as stale rather
+    than empty.
 22. **UT, AK, CO chains**: chain and traction law state lives inside
     each API's road-conditions resource; a winter parser is queued for
     the season.
