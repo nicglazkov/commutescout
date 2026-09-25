@@ -254,6 +254,7 @@ def _upload(name: str, body: bytes, cache_control: str) -> None:
 async def publish_once(name: str, kinds: set[str], cache_control: str,
                        max_stale: int = 0) -> bool:
     """Build and upload one bundle. True when bytes actually shipped."""
+    t0 = time.monotonic()
     markers = await build_bundle(name, kinds)
     if markers is None:
         return False
@@ -280,8 +281,11 @@ async def publish_once(name: str, kinds: set[str], cache_control: str,
         _previous[name] = markers
     _last_upload[name] = time.time()
     _last_published[name] = datetime.now(UTC).isoformat(timespec="seconds")
-    log.info("snapshot %s: published %d markers, %d bytes gzipped",
-             name, len(markers), len(body))
+    # The build time is the number behind the CPU question: a 30-second
+    # loop that publishes every 99 seconds when the site is idle is
+    # either a slow build or a throttled one, and only this says which.
+    log.info("snapshot %s: published %d markers, %d bytes gzipped, in %.1f s",
+             name, len(markers), len(body), time.monotonic() - t0)
     return True
 
 
