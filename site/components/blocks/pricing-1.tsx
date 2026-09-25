@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { AGENCY_FEED_COUNT, STATE_COUNT } from "@/lib/stats";
+import { FormNotice } from "@/components/form-notice";
 
 // Two-tone pricing layout, approved 2026-08-05 from the W01 mockup: a
 // navy hero band that continues the site header's surface, with both plan
@@ -209,6 +210,13 @@ export default function Pricing() {
                 </svg>
               </button>
             </form>
+            <FormNotice
+              messages={{
+                joined: { ok: true, text: "You're on the list. One email, the day Pro opens." },
+                invalid: { ok: false, text: "Enter a valid email address." },
+                unavailable: { ok: false, text: "Signups are unavailable right now. Try again later." },
+              }}
+            />
 
             <ul className="mt-4 flex flex-col gap-2 border-t border-white/15 pt-4 text-[0.84rem] leading-normal text-white/70">
               <li className="flex items-start gap-2">

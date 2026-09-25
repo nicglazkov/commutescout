@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ArrowUpRight, Bug, ShieldAlert } from "lucide-react";
 
 import { TurnstileWidget } from "@/components/turnstile-widget";
+import { FormNotice } from "@/components/form-notice";
 
 // Contact page takes its own metadata (Task 9 brief). Title/description
 // shape follows the pricing page's metadata export (Task 8); description is
@@ -153,6 +154,14 @@ export default function ContactPage() {
                   Send message
                 </button>
               </form>
+              <FormNotice
+                messages={{
+                  sent: { ok: true, text: "Message sent. We will get back to you soon." },
+                  invalid: { ok: false, text: "Name, a valid email, and a message are required." },
+                  verify: { ok: false, text: "The bot check did not pass. Please try again." },
+                  failed: { ok: false, text: "Sending failed. Please try again in a minute." },
+                }}
+              />
             </div>
 
             {/* "Other ways to reach us" card: page-owned markup pairing the
