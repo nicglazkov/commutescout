@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import json
 import logging
 import math
@@ -1947,17 +1948,17 @@ async def api_contact(request: Request):
     message = (form.get("message") or "").strip()[:2000]
     if (form.get("website") or "").strip():
         return PlainTextResponse("Thanks. Your message is on its way.")
+    answer = functools.partial(_form_answer, request, page="/contact")
     turnstile_secret = os.environ.get("TURNSTILE_SECRET_KEY", "").strip()
     if turnstile_secret:
         token = (form.get("cf-turnstile-response") or "").strip()[:2048]
         if not token or not await _turnstile_verify(
                 turnstile_secret, token, client_ip(request)):
-            return PlainTextResponse(
-                "Human verification failed. Reload the page and try "
-                "again.", status_code=403)
+            return answer("Human verification failed. Reload the page and try "
+                          "again.", status=403, notice="verify")
     if not (name and message and "@" in email and "." in email.rsplit("@", 1)[-1]):
-        return PlainTextResponse("Name, a valid email, and a message are "
-                                 "required.", status_code=400)
+        return answer("Name, a valid email, and a message are required.",
+                      status=400, notice="invalid")
     dest = os.environ.get("CONTACT_EMAIL", "")
     if not dest:
         log.error("contact: CONTACT_EMAIL unset, dropping a real message")
@@ -1977,9 +1978,9 @@ async def api_contact(request: Request):
         # message was lost, which is the part worth alerting on.
         log.error("contact: send failed, message from %s not delivered",
                   email)
-        return PlainTextResponse("Sending failed. Try again in a minute.",
-                                 status_code=502)
-    return PlainTextResponse("Thanks. Your message is on its way.")
+        return answer("Sending failed. Try again in a minute.", status=502,
+                      notice="failed")
+    return answer("Thanks. Your message is on its way.", notice="sent")
 
 
 # A sign-in email goes to an address the requester types, so the endpoint
@@ -2048,6 +2049,24 @@ async def api_signin_link(request: Request):
     return PlainTextResponse("Check your inbox for a sign-in link.")
 
 
+def _browser_form_post(request: Request) -> bool:
+    """Whether the browser itself submitted the form, with no script in
+    the way. Such a post wants a page back: the plain-text answers here
+    were landing people on a bare "You're on the list." in a tab of
+    their own when the page's script had not taken the submit. A fetch
+    from the page sends Accept: */* and keeps getting the text."""
+    return "text/html" in request.headers.get("accept", "")
+
+
+def _form_answer(request: Request, text: str, *, status: int = 200,
+                 page: str, notice: str) -> Response:
+    """The plain-text answer, or a redirect back to the page that says
+    the same thing when a browser posted the form directly."""
+    if _browser_form_post(request):
+        return RedirectResponse(f"{page}?notice={notice}", status_code=303)
+    return PlainTextResponse(text, status_code=status)
+
+
 async def api_waitlist(request: Request):
     """Pro waitlist signups from the pricing page. A filled honeypot
     returns success without storing anything, same as /api/contact."""
@@ -2055,20 +2074,20 @@ async def api_waitlist(request: Request):
     if form is None:
         return PlainTextResponse("Request too large.", status_code=413)
     email = _no_crlf((form.get("email") or "").strip())[:120].lower()
+    answer = functools.partial(_form_answer, request, page="/pricing")
     if (form.get("website") or "").strip():
-        return PlainTextResponse("You're on the list.")
+        return answer("You're on the list.", notice="joined")
     if not ("@" in email and "." in email.rsplit("@", 1)[-1]):
-        return PlainTextResponse("Enter a valid email address.",
-                                 status_code=400)
+        return answer("Enter a valid email address.", status=400, notice="invalid")
     try:
         await watch.get_store().add_waitlist_email(email)
     except Exception:  # noqa: BLE001 - no Firestore locally
         # Logged: without this a Firestore outage silently drops signups
         # and looks identical to nobody signing up.
         log.exception("waitlist: store write failed")
-        return PlainTextResponse("Signups are unavailable right now. "
-                                 "Try again later.", status_code=503)
-    return PlainTextResponse("You're on the list.")
+        return answer("Signups are unavailable right now. Try again later.",
+                      status=503, notice="unavailable")
+    return answer("You're on the list.", notice="joined")
 
 
 async def api_admin_waitlist(request: Request):
