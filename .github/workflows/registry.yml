@@ -30,7 +30,31 @@ jobs:
           chmod +x mcp-publisher
       - name: Validate the manifest
         run: ./mcp-publisher validate
+      - name: Sign in
+        id: login
+        run: ./mcp-publisher login github-oidc
       - name: Publish
+        run: ./mcp-publisher publish
+      # Registry search lists every active version, so a v2.24.0 entry that
+      # still called this "Live California" kept turning up beside the
+      # current one. Every version older than server.json's is marked
+      # deprecated. It also runs when Publish fails, which is what a manual
+      # run for a version already published does, so this step alone can
+      # be used to tidy the listing.
+      - name: Deprecate the older versions
+        if: always() && steps.login.outcome == 'success'
         run: |
-          ./mcp-publisher login github-oidc
-          ./mcp-publisher publish
+          name=$(jq -r .name server.json)
+          current=$(jq -r .version server.json)
+          encoded=$(jq -rn --arg n "$name" '$n|@uri')
+          filter='.servers[]
+            | select(.server.version != $cur)
+            | select((._meta["io.modelcontextprotocol.registry/official"].status // "active") == "active")
+            | .server.version'
+          curl -sf "https://registry.modelcontextprotocol.io/v0/servers/$encoded/versions" \
+            | jq -r --arg cur "$current" "$filter" \
+            | while read -r v; do
+                ./mcp-publisher status --status deprecated \
+                  --message "Superseded by $current" "$name" "$v" \
+                  || echo "could not deprecate $v"
+              done
