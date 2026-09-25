@@ -716,6 +716,18 @@ async def api_route(request: Request):
     out = await routing.plan(fetch, markers, locations, preset, units=units)
     if not out["routes"]:
         return JSONResponse({"error": "no route found"}, status_code=404)
+    # The routes are known now, so the community alerts along them can
+    # be: shown to this planner alone, counted in the ranking, and their
+    # corridors kept warm for the relay so the drive starts covered.
+    with contextlib.suppress(Exception):  # ranking survives a plugin hiccup
+        paths = [routing._trip_points(r["trip"]) for r in out["routes"]]
+        for p in paths:
+            flare_sources.poller.note_route(p)
+        seen = {m.get("id") for m in markers}
+        along = [m for m in flare_sources.poller.markers_for_bbox(box, corridor=paths)
+                 if m.get("id") not in seen]
+        if along:
+            routing.rescore(out, markers + along)
     if len(_ROUTE_CACHE) >= _ROUTE_MAX:
         _ROUTE_CACHE.pop(next(iter(_ROUTE_CACHE)))
     _ROUTE_CACHE[key] = (now, out)
@@ -948,6 +960,34 @@ def _near_point(request: Request, box):
     return flare_sources.snap_point((lat_min + lat_max) / 2, (lon_min + lon_max) / 2)
 
 
+# The stretch of route a phone sends ahead of itself: enough points for
+# an hour of driving at eight kilometres apart, and no more.
+AHEAD_MAX_POINTS = 40
+
+
+def _ahead_path(request: Request):
+    """The route ahead of the caller, as (lat, lon) pairs, or None.
+
+    A navigating phone sends ``ahead=lat,lon;lat,lon;...``: the next
+    stretch of its route, never the destination. Plugin alerts along it
+    are served to that phone alone, and the stretch is kept warm for the
+    relay so they are there before the driver is.
+    """
+    raw = (request.query_params.get("ahead") or "").strip()
+    if not raw:
+        return None
+    pts = []
+    for pair in raw.split(";")[:AHEAD_MAX_POINTS]:
+        try:
+            lat, lon = (float(v) for v in pair.split(",", 1))
+        except ValueError:
+            return None
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            return None
+        pts.append((round(lat, 3), round(lon, 3)))
+    return pts if len(pts) >= 2 else None
+
+
 def _bbox_params(request: Request):
     try:
         parts = [float(x) for x in (request.query_params.get("bbox") or "").split(",")]
@@ -1021,7 +1061,7 @@ def shape_markers(markers, *, slim: bool = False, geo_only: bool = False):
 
 
 async def build_markers(box, want, *, geo_only: bool = False, near=None,
-                        feed_budget: float | None = None):
+                        corridor=None, feed_budget: float | None = None):
     """Every marker inside `box`, for the requested kinds.
 
     Shared by the request path and the snapshot publisher, which is the
@@ -1249,7 +1289,8 @@ async def build_markers(box, want, *, geo_only: bool = False, near=None,
     # by every visitor, and a per-person answer cannot go in one.
     if "plugin" in want:
         with contextlib.suppress(Exception):
-            markers.extend(flare_sources._all_markers_for_bbox(box, near=near))
+            markers.extend(flare_sources._all_markers_for_bbox(
+                box, near=near, corridor=corridor))
 
     return markers, warm_ready, warm_total, degraded
 
@@ -1273,6 +1314,10 @@ async def api_mapdata(request: Request):
     near = _near_point(request, box)
     if near is not None:
         flare_sources.poller.note_at(*near)
+    ahead = _ahead_path(request)
+    if ahead:
+        flare_sources.poller.note_route(ahead)
+    corridor = [ahead] if ahead else None
     want = set((request.query_params.get("kinds") or
                 "incident,closure,chain,fire").split(","))
     slim = request.query_params.get("slim") == "1"
@@ -1290,7 +1335,8 @@ async def api_mapdata(request: Request):
     # one caller the other's circle, which is the one thing this must
     # never do. It is snapped, so a town still shares a single entry.
     cache_key = (tuple(round(v, 4) for v in box),
-                 request.query_params.get("kinds") or "", slim, geo_only, near)
+                 request.query_params.get("kinds") or "", slim, geo_only, near,
+                 tuple(ahead) if ahead else None)
     now_mono = time.monotonic()
     hit = _MAPDATA_CACHE.get(cache_key)
     if hit and now_mono - hit[0] < _MAPDATA_CACHE_TTL:
@@ -1300,7 +1346,7 @@ async def api_mapdata(request: Request):
         warming = False
     else:
         markers, warm_ready, warm_total, _degraded = await build_markers(
-            box, want, geo_only=geo_only, near=near)
+            box, want, geo_only=geo_only, near=near, corridor=corridor)
         warming = warm_ready < warm_total
         markers = shape_markers(markers, slim=slim, geo_only=geo_only)
         marker_count = len(markers)

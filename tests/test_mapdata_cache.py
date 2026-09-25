@@ -23,7 +23,7 @@ def test_bbox_snaps_outward_to_the_grid():
 def test_near_identical_bboxes_share_one_build(monkeypatch):
     calls = []
 
-    async def fake_build(box, want, *, geo_only=False, near=None):
+    async def fake_build(box, want, *, geo_only=False, near=None, corridor=None, feed_budget=None):
         calls.append(box)
         return [], 1, 1, False
 
@@ -45,7 +45,7 @@ def test_a_cached_answer_keeps_only_its_gzipped_body(monkeypatch):
     of the gzipped one, and a full cache of nationwide answers was enough
     to push the instance past its memory limit. A client that does not
     take gzip still gets the right body, rebuilt on the way out."""
-    async def fake_build(box, want, *, geo_only=False, near=None):
+    async def fake_build(box, want, *, geo_only=False, near=None, corridor=None, feed_budget=None):
         return [{"kind": "incident", "lat": 37.0, "lon": -122.0}], 1, 1, False
 
     monkeypatch.setattr(demo_app, "build_markers", fake_build)
@@ -63,7 +63,7 @@ def test_a_cached_answer_keeps_only_its_gzipped_body(monkeypatch):
 
 
 def test_the_cache_is_bounded_in_bytes(monkeypatch):
-    async def fake_build(box, want, *, geo_only=False, near=None):
+    async def fake_build(box, want, *, geo_only=False, near=None, corridor=None, feed_budget=None):
         return [{"kind": "incident", "lat": 37.0, "lon": -122.0, "n": i}
                 for i in range(50)], 1, 1, False
 
@@ -74,3 +74,26 @@ def test_the_cache_is_bounded_in_bytes(monkeypatch):
     for lat in ("36", "37", "38"):
         client.get(f"/api/mapdata?bbox={lat}.0,-122.0,{lat}.01,-121.99")
     assert len(demo_app._MAPDATA_CACHE) <= 1
+
+
+def test_a_route_ahead_is_its_own_answer_and_keeps_the_relay_warm(monkeypatch):
+    calls, noted = [], []
+
+    async def fake_build(box, want, *, geo_only=False, near=None, corridor=None, feed_budget=None):
+        calls.append(corridor)
+        return [], 1, 1, False
+
+    monkeypatch.setattr(demo_app, "build_markers", fake_build)
+    monkeypatch.setattr(demo_app.flare_sources.poller, "note_route",
+                        lambda path: noted.append(list(path)))
+    demo_app._MAPDATA_CACHE.clear()
+    client = TestClient(demo_app.app)
+    base = "/api/mapdata?bbox=37.0,-122.0,37.01,-121.99&at=37.005,-121.995"
+    assert client.get(base).status_code == 200
+    assert client.get(base + "&ahead=37.005,-121.995;37.05,-121.9").status_code == 200
+    ahead = [(37.005, -121.995), (37.05, -121.9)]
+    assert calls == [None, [ahead]], "a route ahead is never served from the plain answer"
+    assert noted == [ahead]
+    # A malformed stretch is ignored, and the plain answer comes from cache.
+    assert client.get(base + "&ahead=37.005,-121.995;bogus").status_code == 200
+    assert len(calls) == 2

@@ -603,7 +603,7 @@ async def test_slow_bundles_wait_for_every_feed(monkeypatch):
     from ca_roads_demo import states
     seen = {}
 
-    async def fake_build(box, want, *, geo_only=False, near=None, feed_budget=None):
+    async def fake_build(box, want, *, geo_only=False, near=None, corridor=None, feed_budget=None):
         seen[tuple(sorted(want))] = feed_budget
         return [{"kind": "camera", "lat": 1.0, "lon": 1.0}], 1, 1, False
 

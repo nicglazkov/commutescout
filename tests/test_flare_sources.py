@@ -491,3 +491,44 @@ async def test_one_cell_a_cycle_waits_out_a_cold_start():
     # Later cells did not each pay for a wait.
     assert all(w == 20.0 for w in waits[2:]), waits
     assert p.status["sabreplus"]["ok"] is True
+
+
+def test_a_route_becomes_a_chain_of_snapped_neighbourhoods():
+    """A planned route is demand too, sampled every few kilometres and
+    snapped before it is stored, so the plugin is asked about a chain of
+    neighbourhoods and never handed the route itself."""
+    p = flare_sources.Poller(flare_sources.MemorySourceStore())
+    p.note_route([(37.0, -122.0), (37.0, -121.5)])       # about 44 km east
+    points = list(p.routes)
+    assert 5 <= len(points) <= 8
+    step = flare_sources.ROUTE_SNAP_DEG
+    for lat, lon in points:
+        assert abs(lat / step - round(lat / step)) < 1e-6
+        assert abs(lon / step - round(lon / step)) < 1e-6
+    asked = p.cells_to_poll("sabreplus", [18.0, -168.0, 71.5, -66.5])
+    assert len(asked) == len(points)
+    assert {r for _, r in asked} == {float(flare_sources.ROUTE_FETCH_M)}
+
+
+@pytest.mark.asyncio
+async def test_alerts_along_a_corridor_reach_only_the_driver():
+    """An alert a few hundred metres off the route is the driver's to see;
+    one five kilometres off is not, and nobody without that route sees
+    either."""
+    national = [18.0, -168.0, 71.5, -66.5]
+    plugin = FakePlugin(handshake={"coverage": {"bbox": national}})
+    on = {k: v for k, v in GOOD.items() if k != "geometry"}
+    on.update(id="on", lat=37.005, lon=-121.75)          # ~550 m north of the line
+    off = dict(on, id="off", lat=37.05, lon=-121.75)      # ~5.5 km north of it
+    plugin.alerts = {"on": on, "off": off}
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    path = [(37.0, -122.0), (37.0, -121.5)]
+    p.note_route(path)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(plugin.handler)) as c:
+        await p.run_once(c)
+    world = (-90.0, -180.0, 90.0, 180.0)
+    assert [m["id"] for m in p.markers_for_bbox(world, corridor=[path])] == ["sabreplus:on"]
+    assert p.markers_for_bbox(world) == []
+    assert p.markers_for_bbox(world, near=(34.0, -118.0)) == []
