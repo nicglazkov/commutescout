@@ -86,7 +86,7 @@ gcloud run deploy ca-roads-demo \
   --region us-west1 \
   --allow-unauthenticated \
   --service-account ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com \
-  --memory 2Gi \
+  --memory 4Gi \
   --cpu 1 \
   --min-instances 1 \
   --max-instances 1 \
