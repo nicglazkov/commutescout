@@ -47,7 +47,7 @@ it as a tool instead of guessing about traffic.
 
 - **A live national map:** incidents by type, closures by class, chain
   controls, wildfires with real burn footprints, roadside weather
-  stations, more than 18,000 traffic cameras, and every message sign
+  stations, roughly 18,000 traffic cameras, and every message sign
   currently displaying something.
 - **Toll and express-lane pricing:** current rates on tolled corridors
   and bridges, drawn along the actual carriageway with hand-verified

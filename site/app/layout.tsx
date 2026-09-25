@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://commutescout.com"),
   title: "CommuteScout",
   description:
-    "Live California road conditions: incidents, closures, and chain control from CHP, Caltrans, and the state DOTs.",
+    "Live road conditions across 37 states: incidents, closures, chain controls, cameras, and wildfires from official agency feeds.",
   // The four legacy app pages (map/watch/trip/admin.html) already use
   // <link rel="icon" href="/logo.svg">, served by the Starlette app from
   // src/ca_roads_demo/static/logo.svg (see the "/logo.svg" route in
