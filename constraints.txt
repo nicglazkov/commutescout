@@ -48,7 +48,7 @@ Pygments==2.20.0
 PyJWT==2.13.0
 pytest==9.1.1
 pytest-asyncio==1.4.0
-python-dotenv==1.2.2
+python-dotenv==1.2.3
 python-multipart==0.0.32
 pywebpush==2.3.0
 pywin32==312
