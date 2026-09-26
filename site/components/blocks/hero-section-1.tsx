@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ArrowRight, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // Source: Tailark OSS registry, Dusk kit, dusk-hero-section-1
@@ -27,6 +28,18 @@ export default function HeroSection() {
       <div className="relative pt-4 md:pt-6">
         <div className="mx-auto max-w-7xl">
           <div className="px-6 text-center sm:mx-auto lg:mr-auto lg:mt-0">
+            {/* The app announcement. It is the first thing on the page
+                after the header, so nobody has to scroll to learn the
+                phone apps exist. */}
+            <Link
+              href="/app"
+              prefetch={false}
+              className="group mx-auto inline-flex items-center gap-2 rounded-full border border-cs-line bg-cs-paper py-1 pl-1 pr-3 text-sm text-cs-ink shadow-sm transition-colors hover:border-cs-sky/50"
+            >
+              <span className="rounded-full bg-cs-sky px-2 py-0.5 text-xs font-semibold text-white">New</span>
+              <span>CommuteScout Drive is on iPhone and Android</span>
+              <ArrowRight className="size-4 text-cs-ink/50 transition-transform group-hover:translate-x-0.5" aria-hidden />
+            </Link>
             <h1 className="mx-auto mt-4 max-w-4xl text-balance text-5xl font-medium tracking-tight md:text-6xl lg:mt-6 xl:text-7xl">
               Live road conditions, straight from the source.
             </h1>
@@ -41,6 +54,16 @@ export default function HeroSection() {
                 render={
                   <Link href="/map" prefetch={false}>
                     <span className="text-nowrap">Open the map</span>
+                  </Link>
+                }
+              />
+              <Button
+                variant="secondary"
+                nativeButton={false}
+                render={
+                  <Link href="/app" prefetch={false}>
+                    <Smartphone aria-hidden />
+                    <span className="text-nowrap">Get the app</span>
                   </Link>
                 }
               />
