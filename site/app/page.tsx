@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import HeroSection from "@/components/blocks/hero-section-1";
+import AppBand from "@/components/blocks/app-band";
 import Features from "@/components/blocks/features-1";
 import StatsSection from "@/components/blocks/stats-1";
 import { CopyField } from "@/components/copy-field";
@@ -49,41 +50,9 @@ export default function Home() {
   return (
     <>
       <HeroSection />
+      <AppBand />
       <Features />
       <StatsSection />
-
-      {/* Apps band: the phone apps, above the developer band. */}
-      <section className="bg-cs-bg">
-        <div className="mx-auto max-w-7xl px-6 py-16 md:py-20">
-          <div className="grid gap-8 md:grid-cols-2 md:items-center md:gap-12">
-            <div>
-              <p className="text-sm font-medium uppercase tracking-wider text-cs-ink/50">New</p>
-              <h2 className="mt-2 text-balance text-3xl font-medium tracking-tight text-cs-ink md:text-4xl">
-                CommuteScout Drive is on iPhone and Android.
-              </h2>
-              <p className="text-cs-ink/70 mt-4 max-w-md text-balance">
-                Turn-by-turn navigation with the same live alerts as this map, spoken before you
-                reach them, and one-tap reports from the road. Same account as the website.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3 md:justify-end">
-              <Link
-                href="/app"
-                prefetch={false}
-                className="rounded-full bg-cs-navy px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-cs-navy/90"
-              >
-                Get the app
-              </Link>
-              <a
-                href="https://github.com/nicglazkov/commutescout-app/releases/latest"
-                className="rounded-full border border-cs-ink/20 px-5 py-2.5 text-sm font-medium text-cs-ink transition-colors hover:bg-white"
-              >
-                Android APK
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Developer band. Not a vendored Tailark block: none of the six
           required block types (hero, feature grid, stat band, pricing,
