@@ -1588,6 +1588,7 @@ def main() -> None:
         from mcp.server.transport_security import TransportSecuritySettings
 
         from ca_roads_mcp.headers import SecurityHeaders
+        from ca_roads_mcp.nostream import NoIdleStream
         from ca_roads_mcp.ratelimit import ApiKeyMiddleware, RateLimitMiddleware
 
         mcp.settings.host = args.host
@@ -1604,7 +1605,7 @@ def main() -> None:
         # them 429s, and every one of them billed CPU. The bucket keeps
         # the rate polite; the daily cap keeps the day bounded.
         app = RateLimitMiddleware(
-            mcp.streamable_http_app(),
+            NoIdleStream(mcp.streamable_http_app(), mcp.settings.streamable_http_path),
             daily_limit=int(os.environ.get("MCP_PER_CLIENT_DAILY", "10000")))
         # Keys (from Settings on the map page) sit in front: a keyed
         # request is limited by its tier instead of its address.
