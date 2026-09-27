@@ -15,8 +15,27 @@ updates:
       interval: weekly
     open-pull-requests-limit: 3
     groups:
+      # react and react-dom must move in lockstep (react-dom pins the
+      # exact react it was built with), so they come as one PR. A group
+      # listed first wins a dependency that matches two.
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
       dev-dependencies:
         dependency-type: development
+    ignore:
+      # typescript-eslint accepts TypeScript below 6.1 only; 7.0 fails
+      # lint outright ("typescript-eslint does not support TS 7.0").
+      - dependency-name: typescript
+        versions: [">=6.1"]
+      # eslint 10 crashes inside the eslint-plugin-react that
+      # eslint-config-next bundles (usedPropTypes). Lift when Next's
+      # config ships a plugin that runs on it.
+      - dependency-name: eslint
+        versions: [">=10"]
+      # CI runs Node 22; the node types follow the runtime, not the
+      # newest major.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: pip
     directory: /
     schedule:
