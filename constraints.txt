@@ -50,7 +50,7 @@ pytest==9.1.1
 pytest-asyncio==1.4.0
 python-dotenv==1.2.3
 python-multipart==0.0.32
-pywebpush==2.3.0
+pywebpush==2.5.0
 pywin32==312
 PyYAML==6.0.3
 referencing==0.37.0
