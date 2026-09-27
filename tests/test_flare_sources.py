@@ -532,3 +532,97 @@ async def test_alerts_along_a_corridor_reach_only_the_driver():
     assert [m["id"] for m in p.markers_for_bbox(world, corridor=[path])] == ["sabreplus:on"]
     assert p.markers_for_bbox(world) == []
     assert p.markers_for_bbox(world, near=(34.0, -118.0)) == []
+
+
+async def test_a_new_place_is_polled_at_once_then_followed_up(monkeypatch):
+    # A relay has nothing for a neighbourhood nobody has asked about, and
+    # fills it in over the next half minute. So a new place makes a
+    # source due right away, and the poll that carried it owes two more.
+    clock = [10_000.0]
+    monkeypatch.setattr(flare_sources.time, "monotonic", lambda: clock[0])
+    mem = flare_sources.MemorySourceStore()
+    await mem.put("sabreplus", dict(MANIFEST, enabled=True))
+    p = flare_sources.Poller(mem, now=lambda: NOW)
+    plugin = FakePlugin()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(plugin.handler)) as c:
+        await p.run_once(c)                # the first poll ever
+        src = p.sources["sabreplus"]
+        clock[0] += 1
+        assert not p.due(src)              # just polled, nothing new
+
+        p.note_at(*HERE)
+        assert not p.due(src)              # new, but inside the floor
+        clock[0] += flare_sources.URGENT_FLOOR_S
+        assert p.due(src)                  # long before the 60 s period
+        started = clock[0]
+        await p.run_once(c)                # this poll carries the new place
+        assert not p.due(src)
+        assert p._rechecks["sabreplus"] == [started + d for d in flare_sources.RECHECKS_S]
+        assert p._idle_wait() == min(flare_sources.IDLE_WAIT_S, flare_sources.RECHECKS_S[0])
+
+        clock[0] = started + flare_sources.RECHECKS_S[0]
+        assert p.due(src)                  # the first follow-up
+        await p.run_once(c)
+        assert p._rechecks["sabreplus"] == [started + flare_sources.RECHECKS_S[1]]
+        clock[0] = started + flare_sources.RECHECKS_S[1]
+        assert p.due(src)                  # the second
+        await p.run_once(c)
+        assert p._rechecks["sabreplus"] == []
+        clock[0] += flare_sources.URGENT_FLOOR_S
+        assert not p.due(src)              # and then back to the ordinary period
+
+
+def test_a_place_already_warm_does_not_hurry_anything(monkeypatch):
+    clock = [10_000.0]
+    monkeypatch.setattr(flare_sources.time, "monotonic", lambda: clock[0])
+    p = flare_sources.Poller(flare_sources.MemorySourceStore(), now=lambda: NOW)
+    src = {"id": "sabreplus"}
+    p.note_at(*HERE)
+    p._last_poll["sabreplus"] = p._polled_from["sabreplus"] = clock[0] + 1
+    clock[0] += 30
+    p.note_at(*HERE)                       # the same person, still there
+    p.note_at(HERE[0] + 0.0001, HERE[1])   # snaps to the same place
+    assert not p.due(src)
+    clock[0] += flare_sources.POLL_FLOOR_S
+    assert p.due(src)                      # the ordinary period still applies
+
+
+def test_a_new_stretch_of_route_hurries_the_poll_but_a_failing_source_waits(monkeypatch):
+    clock = [10_000.0]
+    monkeypatch.setattr(flare_sources.time, "monotonic", lambda: clock[0])
+    p = flare_sources.Poller(flare_sources.MemorySourceStore(), now=lambda: NOW)
+    ok, bad = {"id": "ok"}, {"id": "bad"}
+    for sid in ("ok", "bad"):
+        p._last_poll[sid] = p._polled_from[sid] = clock[0]
+    p._fails["bad"] = flare_sources.FAILS_BEFORE_BACKOFF
+    clock[0] += flare_sources.URGENT_FLOOR_S
+    p.note_route([(37.30, -121.90), (37.40, -122.10)])
+    assert p.due(ok)
+    assert not p.due(bad)                  # backoff is never cut short
+
+
+async def test_new_demand_wakes_the_loop_instead_of_waiting_out_the_tick():
+    import asyncio
+
+    p = flare_sources.Poller(flare_sources.MemorySourceStore(), now=lambda: NOW)
+    passes = []
+
+    async def fake_run_once(client):
+        passes.append(time.monotonic())
+
+    p.run_once = fake_run_once
+    task = asyncio.create_task(p.run(lambda: None))
+    try:
+        for _ in range(50):
+            if passes:
+                break
+            await asyncio.sleep(0.01)
+        assert len(passes) == 1
+        p.note_at(*HERE)
+        for _ in range(100):
+            if len(passes) > 1:
+                break
+            await asyncio.sleep(0.01)
+        assert len(passes) == 2            # woke in well under the 15 s tick
+    finally:
+        task.cancel()

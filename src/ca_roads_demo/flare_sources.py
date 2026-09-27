@@ -108,6 +108,17 @@ SWEEP_MAX_CELLS = (CELL_KEEP_S // POLL_FLOOR_S) * SWEEP_PER_POLL
 COUNT_HOLD_S = 3600
 STALE_AFTER_S = 900
 CONCURRENCY = 4
+# A place or a route nobody was asking about a moment ago is asked about
+# at once instead of at the next poll period, and asked again a little
+# later: a relay that has never been asked about a neighbourhood has
+# nothing for it on the first ask, and fills it in over the next half
+# minute. Without this a new area waited out two full periods, about
+# three and a half minutes, before its first community alert showed.
+# URGENT_FLOOR_S spaces those extra polls so a burst of new places costs
+# a plugin one request every few seconds at most, never one per place.
+URGENT_FLOOR_S = 5
+RECHECKS_S = (20, 45)
+IDLE_WAIT_S = 15
 USER_AGENT = "commutescout.com flare poller (https://commutescout.com/developers)"
 
 
@@ -285,6 +296,13 @@ class Poller:
         self._fails: dict[str, int] = {}
         self.productive: dict[str, dict[tuple[float, float], float]] = {}
         self._sources_loaded = 0.0
+        # When demand last appeared somewhere that was not already warm,
+        # when each source's last poll started (demand after that start
+        # was not in it), and the follow-up polls each source still owes.
+        self._urgent_at = float("-inf")
+        self._polled_from: dict[str, float] = {}
+        self._rechecks: dict[str, list[float]] = {}
+        self._wake: asyncio.Event | None = None
 
     @property
     def store(self):
@@ -368,7 +386,11 @@ class Poller:
         of a place-sized map, so coverage follows the people using the
         service instead of a fixed rotation that never reaches them.
         """
-        self.near[snap_point(lat, lon)] = time.monotonic()
+        now = time.monotonic()
+        point = snap_point(lat, lon)
+        if self.near.get(point, float("-inf")) < now - VIEW_TTL_S:
+            self._new_demand(now)
+        self.near[point] = now
         if len(self.near) > MAX_NEAR_POINTS:
             oldest = sorted(self.near.items(), key=lambda kv: kv[1])
             for point, _ in oldest[: len(self.near) - MAX_NEAR_POINTS]:
@@ -399,13 +421,23 @@ class Poller:
 
         now = time.monotonic()
         step = ROUTE_SNAP_DEG
+        new = False
         for lat, lon in routing._along(list(path), ROUTE_STEP_M):
-            self.routes[(round(round(lat / step) * step, 4),
-                         round(round(lon / step) * step, 4))] = now
+            point = (round(round(lat / step) * step, 4), round(round(lon / step) * step, 4))
+            new = new or self.routes.get(point, float("-inf")) < now - VIEW_TTL_S
+            self.routes[point] = now
+        if new:
+            self._new_demand(now)
         if len(self.routes) > MAX_ROUTE_POINTS:
             oldest = sorted(self.routes.items(), key=lambda kv: kv[1])
             for point, _ in oldest[: len(self.routes) - MAX_ROUTE_POINTS]:
                 del self.routes[point]
+
+    def _new_demand(self, now: float) -> None:
+        """Somewhere cold is wanted: poll soon, not at the next period."""
+        self._urgent_at = now
+        if self._wake is not None:
+            self._wake.set()
 
     def cells_to_poll(self, sid: str, coverage: list
                       ) -> list[tuple[tuple[float, float], float]]:
@@ -457,6 +489,9 @@ class Poller:
         """Fetch the cells that matter for one source; returns the count served."""
         sid = src["id"]
         now = self._now()
+        started = time.monotonic()
+        urgent = self._urgent_at > self._polled_from.get(sid, float("-inf"))
+        self._polled_from[sid] = started
         try:
             hs = await self.handshake(src, client)
             base = src["base"].rstrip("/")
@@ -548,6 +583,13 @@ class Poller:
             self.status[sid]["fails"] = self._fails[sid]
             log.warning("flare source %s failed: %s", sid, self.status[sid]["last_error"])
         self._last_poll[sid] = time.monotonic()
+        # A poll that carried new demand owes the follow-ups; any other
+        # poll just spends the ones that have come due.
+        if urgent:
+            self._rechecks[sid] = [started + d for d in RECHECKS_S]
+        else:
+            self._rechecks[sid] = [t for t in self._rechecks.get(sid, [])
+                                   if t > self._last_poll[sid]]
         await self._write_status(sid)
         return len(self.alerts.get(sid, []))
 
@@ -575,7 +617,25 @@ class Poller:
         fails = self._fails.get(src["id"], 0)
         if fails >= FAILS_BEFORE_BACKOFF:
             period = min(MAX_BACKOFF_S, period * 2 ** (fails - FAILS_BEFORE_BACKOFF + 1))
-        return time.monotonic() - last >= period
+            return time.monotonic() - last >= period  # a failing source is never hurried
+        now = time.monotonic()
+        if now - last >= URGENT_FLOOR_S and (
+                self._urgent_at > self._polled_from.get(src["id"], float("-inf"))
+                or any(t <= now for t in self._rechecks.get(src["id"], []))):
+            return True
+        return now - last >= period
+
+    def _idle_wait(self) -> float:
+        """How long the loop may sleep before something could be due: the
+        usual tick, or sooner for a follow-up or a hurried poll."""
+        now = time.monotonic()
+        wait = float(IDLE_WAIT_S)
+        for sid in self.sources:
+            for t in self._rechecks.get(sid, []):
+                wait = min(wait, t - now)
+            if self._urgent_at > self._polled_from.get(sid, float("-inf")):
+                wait = min(wait, self._last_poll.get(sid, now) + URGENT_FLOOR_S - now)
+        return max(0.5, wait)
 
     async def run_once(self, client) -> None:
         if time.monotonic() - self._sources_loaded > 60 or not self._sources_loaded:
@@ -590,13 +650,18 @@ class Poller:
                 await self.poll_source(src, client)
 
     async def run(self, client_factory) -> None:
-        """Background task for the demo's lifespan."""
+        """Background task for the demo's lifespan. It sleeps between
+        passes until the next tick, a follow-up coming due, or new demand
+        somewhere cold, whichever is first."""
+        self._wake = asyncio.Event()
         while True:
+            self._wake.clear()
             try:
                 await self.run_once(client_factory())
             except Exception:  # noqa: BLE001
                 log.exception("flare poll cycle failed")
-            await asyncio.sleep(15)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._wake.wait(), timeout=self._idle_wait())
 
     def markers_for_bbox(self, box, near=None, corridor=None) -> list[dict]:
         """Plugin alerts inside ``box`` and within NEAR_SERVE_M of ``near``,

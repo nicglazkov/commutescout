@@ -206,6 +206,9 @@ class Store:
         # tile -> when it was last asked about, and when it was last fetched.
         self._asks: dict[tuple[int, int], float] = {}
         self._tile_ok: dict[tuple[int, int], float] = {}
+        # tile -> how far its centre is from the point of its latest ask,
+        # so a fresh disc fills from the person outward.
+        self._ask_m: dict[tuple[int, int], float] = {}
         self._lock = asyncio.Lock()
 
     # -------------------------------------------------------------- asks
@@ -216,22 +219,31 @@ class Store:
         now = self._now()
         for tile in tiles_for_disc(lat, lon, radius_m, self.tile_deg):
             self._asks[tile] = now
+            c_lat, c_lon = tile_center(tile, self.tile_deg)
+            self._ask_m[tile] = math.hypot((c_lat - lat) * M_PER_DEG_LAT,
+                                           (c_lon - lon) * m_per_deg_lon(lat))
         if len(self._asks) > self.max_tiles:
             # The tiles nobody has asked about for longest go first.
             for tile, _ in sorted(self._asks.items(), key=lambda kv: kv[1])[
                     : len(self._asks) - self.max_tiles]:
-                self._asks.pop(tile, None)
-                self._tile_ok.pop(tile, None)
+                self._forget(tile)
+
+    def _forget(self, tile: tuple[int, int]) -> None:
+        self._asks.pop(tile, None)
+        self._tile_ok.pop(tile, None)
+        self._ask_m.pop(tile, None)
 
     def wanted_tiles(self) -> list[tuple[int, int]]:
-        """Every tile asked about inside the window, stalest fetch first
-        and most recently asked within that."""
+        """Every tile asked about inside the window, stalest fetch first,
+        most recently asked within that, and nearest the asker after
+        that: a disc nobody had asked about fills from the middle, so the
+        alerts closest to the person are the first ones there."""
         now = self._now()
         for tile, asked in list(self._asks.items()):
             if now - asked > WANTED_TTL_S:
-                self._asks.pop(tile, None)
-                self._tile_ok.pop(tile, None)
-        return sorted(self._asks, key=lambda t: (self._tile_ok.get(t, 0.0), -self._asks[t]))
+                self._forget(tile)
+        return sorted(self._asks, key=lambda t: (self._tile_ok.get(t, 0.0), -self._asks[t],
+                                                 self._ask_m.get(t, 0.0)))
 
     def in_coverage(self, lat: float, lon: float) -> bool:
         south, west, north, east = self.bbox

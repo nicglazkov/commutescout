@@ -477,3 +477,27 @@ def test_as_of_is_when_the_data_was_last_refreshed():
     assert flare.parse_ts(store.as_of).timestamp() == pytest.approx(NOW, abs=1)
     clock[0] += 45                       # forty-five seconds since the last poll
     assert flare.parse_ts(store.as_of).timestamp() == pytest.approx(NOW - 45, abs=1)
+
+
+async def test_a_new_disc_fills_from_the_person_outward():
+    # Twenty tiles nobody has fetched are all equally stale; the one under
+    # the person goes first so the closest alerts are there first.
+    clock = [1000.0]
+    polled: list[tuple[float, float]] = []
+
+    async def fake_refresh(lat, lon, radius_m):
+        polled.append((lat, lon))
+        return 0
+
+    store = _store(_alert(), clock=lambda: clock[0])
+    store.source.refresh = fake_refresh
+    here = (LA[0] + 0.03, LA[1] + 0.07)
+    store.want(*here, radius_m=20_000)
+    assert len(store.wanted_tiles()) > 9
+    assert await store.poll_once() is True
+    assert store_module.tile_of(*polled[0]) == store_module.tile_of(*here)
+    for _ in range(3):
+        clock[0] += 1
+        await store.poll_once()
+    dist = [math.hypot(a - here[0], b - here[1]) for a, b in polled]
+    assert dist == sorted(dist)

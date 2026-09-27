@@ -36,7 +36,7 @@ from starlette.routing import Route
 from store import CELL_RADIUS_M, Store
 from waze.source import WazeSource
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 # The United States, Alaska and Hawaii included. Coverage is what the plugin
 # will answer for, not what it fetches: it only ever fetches the one-degree
 # cells somebody asked about, so a wide box costs nothing on its own.
