@@ -29,7 +29,7 @@ Three packages, cleanly layered:
   background), stale-serve on upstream failure, parsers that salvage
   complete records from truncated feeds, and rules learned from running
   these feeds in production. Details: [data sources](data-sources.md).
-- **`ca_roads_mcp`**: the MCP surface. FastMCP server, curated
+- **`ca_roads_mcp`**: the MCP surface. MCP SDK server, curated
   corridor and region tables, route-name normalization, an offline
   California gazetteer, and docstrings written for the LLM consumer.
   Details: [the MCP server](mcp.md).

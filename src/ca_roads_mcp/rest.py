@@ -167,7 +167,8 @@ DOCS_HTML = """<!doctype html>
 
 def register(mcp) -> None:
     """Mount the bridge on ``mcp`` (before ``streamable_http_app()`` runs)."""
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver import Context
+    from mcp.server.mcpserver.exceptions import ToolError
 
     @mcp.custom_route(f"{PREFIX}/openapi.json", methods=["GET"])
     async def openapi_doc(_: Request) -> Response:
@@ -214,7 +215,9 @@ def register(mcp) -> None:
             where = ".".join(str(p) for p in first.get("loc", ())) or "parameters"
             return error(400, "invalid_parameter", f"{where}: {first.get('msg', 'invalid')}.")
         try:
-            result = await tool.run(args)
+            # 2.x hands every tool a context; the bridge's tools take none,
+            # so a bare one bound to this server is enough.
+            result = await tool.run(args, Context(mcp_server=mcp))
         except ToolError as exc:
             return error(400, "tool_error", str(exc))
         except Exception:  # noqa: BLE001 - one envelope for the caller, the log has the trace

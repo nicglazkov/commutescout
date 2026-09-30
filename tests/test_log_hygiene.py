@@ -1,7 +1,7 @@
 """Upstream feed keys must never reach Cloud Logging.
 
 httpx logs "HTTP Request: GET <full url>" at INFO for every call, and
-the state-feed URLs carry API keys as query parameters. FastMCP's
+the state-feed URLs carry API keys as query parameters. The MCP server's
 import-time basicConfig turns the root logger on at INFO in both
 services, so the only safe default is httpx (and httpcore) at WARNING.
 """

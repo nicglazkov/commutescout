@@ -16,8 +16,7 @@ def client():
     # on /mcp, and that manager can only be started once per instance.
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(server, "get_road", lambda: FakeRoad(incidents=[INC]))
-        server.mcp.settings.stateless_http = True
-        with TestClient(server.mcp.streamable_http_app()) as c:
+        with TestClient(server.mcp.streamable_http_app(stateless_http=True)) as c:
             yield c
 
 

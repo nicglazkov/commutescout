@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 from ca_roads.dedupe import dedupe
@@ -59,9 +59,6 @@ cannot forecast. Remind users to verify before they drive (dial 511 or check
 quickmap.dot.ca.gov). Not affiliated with any government agency.
 """
 
-mcp = FastMCP("CommuteScout", instructions=INSTRUCTIONS)
-
-
 def app_version() -> str:
     """This release's version, as pyproject.toml and server.json give it."""
     try:
@@ -71,13 +68,11 @@ def app_version() -> str:
         return os.environ.get("APP_VERSION") or "dev"
 
 
-# FastMCP takes no version, so `initialize` answered with the MCP SDK's
-# own version ("1.28.1") in serverInfo, which says nothing about which
-# CommuteScout a client is talking to. The low-level server reports
-# whatever is set here instead.
-mcp._mcp_server.version = app_version()
+# The version goes in serverInfo on `initialize`, so a client can tell
+# which CommuteScout it is talking to rather than which MCP SDK.
+mcp = MCPServer("CommuteScout", instructions=INSTRUCTIONS, version=app_version())
 
-# FastMCP's constructor runs logging.basicConfig at INFO for the whole
+# The server's constructor configures logging at INFO for the whole
 # process (both services import this module). httpx then logs every
 # request URL at INFO, and the state-feed URLs carry API keys as query
 # parameters, so those lines would put every upstream key into Cloud
@@ -1591,21 +1586,21 @@ def main() -> None:
         from ca_roads_mcp.nostream import NoIdleStream
         from ca_roads_mcp.ratelimit import ApiKeyMiddleware, RateLimitMiddleware
 
-        mcp.settings.host = args.host
-        mcp.settings.port = args.port
-        mcp.settings.stateless_http = True
         # The SDK's DNS-rebinding protection only allows localhost hosts by
         # default, which answers 421 behind Cloud Run's hostname. This is a
         # public, unauthenticated, read-only API served over TLS by the
         # platform; host-header validation adds nothing here.
-        mcp.settings.transport_security = TransportSecuritySettings(
-            enable_dns_rebinding_protection=False
+        http_app = mcp.streamable_http_app(
+            streamable_http_path="/mcp",
+            stateless_http=True,
+            transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+            host=args.host,
         )
         # One client sent 60k requests in a day (2026-09-15), most of
         # them 429s, and every one of them billed CPU. The bucket keeps
         # the rate polite; the daily cap keeps the day bounded.
         app = RateLimitMiddleware(
-            NoIdleStream(mcp.streamable_http_app(), mcp.settings.streamable_http_path),
+            NoIdleStream(http_app, "/mcp"),
             daily_limit=int(os.environ.get("MCP_PER_CLIENT_DAILY", "10000")))
         # Keys (from Settings on the map page) sit in front: a keyed
         # request is limited by its tier instead of its address.

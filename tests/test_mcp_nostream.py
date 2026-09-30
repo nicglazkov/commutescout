@@ -42,6 +42,6 @@ def test_posts_and_the_rest_bridge_pass_through():
 def test_the_real_server_app_refuses_the_stream():
     from ca_roads_mcp.server import mcp
 
-    r = TestClient(NoIdleStream(mcp.streamable_http_app())).get(
+    r = TestClient(NoIdleStream(mcp.streamable_http_app(stateless_http=True))).get(
         "/mcp", headers={"accept": "text/event-stream"})
     assert r.status_code == 405
