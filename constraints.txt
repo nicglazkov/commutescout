@@ -1,5 +1,5 @@
 annotated-types==0.7.0
-anthropic==0.116.0
+anthropic==1.8.0
 anyio==4.14.2
 attrs==26.1.0
 certifi==2026.6.17
@@ -50,7 +50,7 @@ pytest==9.1.1
 pytest-asyncio==1.4.0
 python-dotenv==1.2.3
 python-multipart==0.0.32
-pywebpush==2.3.0
+pywebpush==2.5.0
 pywin32==312
 PyYAML==6.0.3
 referencing==0.37.0
