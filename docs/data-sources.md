@@ -83,8 +83,12 @@ WZDx roadwork feeds are consumed from the federal
 feed, Hawaii's Blyncsy-hosted feed, and Florida's one.network feed with
 its registry-published app key, is issued by the state DOT itself and
 listed as active in the registry, which exists to make these feeds
-publicly consumable. Basemap tiles, routing, and geocoding are licensed
-commercially from Stadia Maps; map data is (c) OpenStreetMap
-contributors (ODbL; rendered maps and routes are Produced Works).
+publicly consumable. On the website, basemap tiles, routing, and
+geocoding are licensed commercially from Stadia Maps. The phone apps
+draw their base map from CommuteScout's own vector tile files, cut
+from the [Protomaps](https://protomaps.com) build of OpenStreetMap
+(`scripts/map_refresh.sh`); routing and geocoding still come from
+Stadia. Map data is (c) OpenStreetMap contributors (ODbL; rendered
+maps and routes are Produced Works).
 
 Want to add a feed? See [adding a data source](adding-a-source.md).
