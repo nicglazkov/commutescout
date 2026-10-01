@@ -33,6 +33,11 @@ COPY --from=site /site/out ./src/ca_roads_demo/static/site
 # green.
 RUN pip install --no-cache-dir -c constraints.txt ".[demo]"
 
+# The pmtiles tool cuts route corridors out of the US map file
+# (src/ca_roads_demo/mapfiles.py). One static Go binary.
+ADD https://github.com/protomaps/go-pmtiles/releases/download/v1.31.2/go-pmtiles_1.31.2_Linux_x86_64.tar.gz /tmp/pmtiles.tar.gz
+RUN tar -xzf /tmp/pmtiles.tar.gz -C /usr/local/bin pmtiles && rm /tmp/pmtiles.tar.gz && pmtiles version
+
 # Run as a non-root user; nothing in the image needs write access.
 RUN useradd --create-home --uid 1001 app
 USER app

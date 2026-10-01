@@ -51,6 +51,7 @@ from ca_roads_demo import (
     analytics,
     flare_sources,
     freshness,
+    mapfiles,
     nav,
     roadsnap,
     routing,
@@ -170,6 +171,8 @@ PAID_PER_CLIENT_DAILY = {
     "snap": int(os.environ.get("SNAP_PER_CLIENT_DAILY", "300")),
     "tiles": int(os.environ.get("APP_TILES_PER_CLIENT_DAILY", "4000")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
+    # A map corridor cut for a trip: tens of megabytes read upstream each.
+    "map-extract": int(os.environ.get("MAP_EXTRACT_PER_CLIENT_DAILY", "20")),
 }
 # Static map tiles, about 1 credit each; see the note on the nav caps.
 STADIA_TILES_DAILY = int(os.environ.get("STADIA_TILES_DAILY", "4000"))
@@ -2397,6 +2400,9 @@ app = Starlette(
         Route("/api/route", api_route, methods=["POST"]),
         Route("/api/nav/route", nav.api_nav_route, methods=["POST"]),
         Route("/api/snap", nav.api_snap, methods=["GET"]),
+        Route("/api/map/manifest", mapfiles.api_manifest, methods=["GET"]),
+        Route("/api/map/style.json", mapfiles.api_style, methods=["GET"]),
+        Route("/api/map/extract", mapfiles.api_extract, methods=["POST"]),
         Route("/api/tiles/style.json", nav.api_tile_style, methods=["GET"]),
         Route("/api/tiles/{style}/{z:int}/{x:int}/{yfile}", nav.api_tile, methods=["GET"]),
         Route("/api/traffictile/{z:int}/{x:int}/{y:int}.png", api_traffic_tile,
