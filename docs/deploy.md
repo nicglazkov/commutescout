@@ -88,11 +88,12 @@ gcloud run deploy ca-roads-demo \
   --service-account ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com \
   --memory 4Gi \
   --cpu 1 \
+  --no-cpu-throttling \
   --min-instances 1 \
   --max-instances 1 \
   --concurrency 20 \
   --set-secrets ANTHROPIC_API_KEY=anthropic-api-key:latest \
-  --set-env-vars DEMO_MODEL=claude-sonnet-5,TELEMETRY_SALT=<random 32 chars>
+  --set-env-vars DEMO_MODEL=claude-sonnet-5-5,TELEMETRY_SALT=<random 32 chars>
 ```
 
 Map tiles, routing, and geocoding go through Stadia Maps. Create a

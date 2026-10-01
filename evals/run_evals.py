@@ -40,7 +40,7 @@ RESULTS_DIR = Path(__file__).parent / "results"
 # Only the production model is scored on the regular cadence: Haiku
 # trend data was costing half of every run to answer a hypothetical
 # switch. Evaluate a candidate explicitly with --models when comparing.
-DEFAULT_MODELS = ["claude-sonnet-5"]
+DEFAULT_MODELS = ["claude-sonnet-5-5"]
 # The judge must not be an evaluated model (self-grading bias).
 # Sonnet 4.6 is a different model from the evaluated Sonnet 5, grades
 # this rubric reliably, and costs a fraction of the Opus judge that

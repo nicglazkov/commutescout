@@ -79,7 +79,7 @@ try:
 except PackageNotFoundError:  # running from a bare checkout
     VERSION = "dev"
 
-MODEL = os.environ.get("DEMO_MODEL", "claude-sonnet-5")
+MODEL = os.environ.get("DEMO_MODEL", "claude-sonnet-5-5")
 
 log = logging.getLogger(__name__)
 MAX_QUESTION_CHARS = 300
@@ -96,6 +96,8 @@ PRICING_PER_MTOK = {
     "claude-haiku-4-5": (1.00, 5.00),
     "claude-sonnet-4-6": (3.00, 15.00),
     "claude-sonnet-5": (3.00, 15.00),
+    # Listed at $2/$10; counted at Sonnet 5 rates so the daily cap errs high.
+    "claude-sonnet-5-5": (3.00, 15.00),
 }
 INPUT_PER_MTOK, OUTPUT_PER_MTOK = PRICING_PER_MTOK.get(MODEL, (3.00, 15.00))
 
