@@ -72,7 +72,7 @@ echo "done \$(date -u +%FT%TZ)"
 EOF
 
 gcloud compute instances create map-refresh-omt --project "$PROJECT" --zone "$ZONE" \
-  --machine-type e2-standard-4 --boot-disk-size 200GB --boot-disk-type pd-balanced \
+  --machine-type e2-highmem-8 --boot-disk-size 200GB --boot-disk-type pd-balanced \
   --image-family debian-12 --image-project debian-cloud \
   --instance-termination-action DELETE --max-run-duration 2h \
   --service-account 15002631928-compute@developer.gserviceaccount.com --scopes cloud-platform \
