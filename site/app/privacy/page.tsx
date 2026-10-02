@@ -159,18 +159,11 @@ export default function PrivacyPage() {
                 any image load does.
               </li>
               <li>
-                <strong>Stadia Maps</strong> provides routing and address
-                lookup; it sees the coordinates and place names involved
-                in what you look up, as your browser or our server
-                queries it.
-              </li>
-              <li>
-                <strong>OpenFreeMap</strong> serves the Positron and
-                Bright base maps. Your browser loads those map tiles
-                from it directly, so it sees the request the way any
-                image load does: your address and the area of the map
-                you are viewing. The other map styles load from our own
-                files. Map data comes from OpenStreetMap contributors.
+                <strong>Stadia Maps</strong> provides map tiles, routing,
+                and address lookup; it sees the coordinates and place
+                names involved in what you look up, as your browser or
+                our server queries it. Map data comes from OpenStreetMap
+                contributors.
               </li>
             </ul>
           </div>
