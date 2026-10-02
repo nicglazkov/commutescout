@@ -36,10 +36,12 @@ BUILD=$BUILD
 cd /root
 echo "start \$(date -u +%FT%TZ) build \$BUILD planetiler $PLANETILER"
 # Whatever happens, the log lands in the bucket and the VM goes away.
+# Powering off is what removes it: the VM is created to be deleted when
+# it stops, and after four hours regardless.
 finish() {
   echo "finish \$(date -u +%FT%TZ)"
   gcloud storage cp /root/refresh.log "$BUCKET/_refresh.log"
-  gcloud compute instances delete map-refresh-omt --zone $ZONE --quiet
+  shutdown -h now
 }
 trap finish EXIT
 apt-get update -qq >/dev/null && apt-get install -y -qq curl ca-certificates python3 >/dev/null
@@ -52,7 +54,15 @@ tar xzf pmtiles.tar.gz && chmod +x pmtiles && ./pmtiles version
 curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/us-states" > us-states.json
 curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/map-states-py" > map_states.py
 T0=\$(date +%s)
-./jdk/bin/java -Xmx24g -jar planetiler.jar --download --area=us --output=us.pmtiles \\
+# The extract comes down with curl, which retries and resumes; Planetiler's
+# own downloader gave up on Geofabrik after one slow answer.
+mkdir -p data/sources
+for url in https://download.geofabrik.de/north-america/us-latest.osm.pbf \\
+           https://ftp5.gwdg.de/pub/misc/openstreetmap/download.geofabrik.de/north-america/us-latest.osm.pbf; do
+  curl -L --fail --retry 8 --retry-delay 20 --retry-all-errors -C - -o data/sources/us.osm.pbf "\$url" && break
+done
+echo "extract: \$(ls -la data/sources/us.osm.pbf) after \$(( \$(date +%s) - T0 )) s"
+./jdk/bin/java -Xmx24g -jar planetiler.jar --download --osm-path=data/sources/us.osm.pbf --output=us.pmtiles \\
   --maxzoom=14 --languages=en --nodemap-type=sparsearray --storage=mmap --force
 echo "planetiler exit \$? after \$(( \$(date +%s) - T0 )) s: \$(ls -la us.pmtiles)"
 [ -s us.pmtiles ] || exit 1
@@ -69,7 +79,8 @@ EOF
 gcloud compute instances create map-refresh-omt --project "$PROJECT" --zone "$ZONE" \
   --machine-type e2-highmem-8 --boot-disk-size 300GB --boot-disk-type pd-ssd \
   --image-family debian-12 --image-project debian-cloud \
+  --instance-termination-action DELETE --max-run-duration 4h \
   --service-account 15002631928-compute@developer.gserviceaccount.com --scopes cloud-platform \
   --metadata-from-file "startup-script=$TMPW/startup.sh,us-states=$TMPW/us-states.json,map-states-py=$TMPW/map_states.py"
-echo "VM map-refresh-omt started; it deletes itself when done. Watch with:"
-echo "  gcloud compute ssh map-refresh-omt --zone $ZONE --project $PROJECT --command 'sudo tail -5 /root/refresh.log'"
+echo "VM map-refresh-omt started; it deletes itself when done, or after four hours."
+echo "The log lands at $BUCKET/_refresh.log when it finishes."
