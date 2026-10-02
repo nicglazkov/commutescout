@@ -16,6 +16,7 @@ import json
 import logging
 import math
 import os
+import re
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
@@ -1663,38 +1664,44 @@ async def sitemap_xml(_: Request):
 _INDEX_CACHE: dict = {}
 _GEO_SLOT = "<!--BOOT_GEO-->"
 _ASSET_SLOT = "__ASSET_V__"
-_MAP_ASSETS = ("map.css", "map-assistant.js", "map-app.js", "watch.css", "watch-app.js",
-               "units.js")
-_WATCH_ASSETS = ("watch.css", "watch-app.js", "units.js")
+_ASSET_REF = re.compile(r"/static/([A-Za-z0-9_./-]+)\?v=" + _ASSET_SLOT)
 _WATCH_CACHE: dict = {}
 
 
-def _stamped_template(page: str, assets: tuple, cache: dict) -> str:
+def _stamped_template(page: str, cache: dict) -> str:
     """A page with its asset links stamped by content hash. The page
     itself is no-cache; its stylesheets and scripts are cached an hour,
     so the stamp is what keeps a deploy from pairing new HTML with an
-    old script in a visitor's cache."""
+    old script in a visitor's cache.
+
+    The hash covers every file the page stamps, read from the page
+    itself: a hand-kept list missed basemap.js, and a release that
+    changed only that file kept its old address and its old cached
+    copy. It also covers the security policy, because the map's worker
+    is stamped too and obeys the policy sent with its own file: a
+    policy change must give the worker a new address."""
     path = STATIC_DIR / page
-    stamp = tuple((STATIC_DIR / n).stat().st_mtime for n in assets)
-    stamp = (path.stat().st_mtime, *stamp)
+    text = path.read_text(encoding="utf-8")
+    assets = sorted(set(_ASSET_REF.findall(text)))
+    stamp = (path.stat().st_mtime, *((STATIC_DIR / n).stat().st_mtime for n in assets))
     if cache.get("stamp") != stamp:
         import hashlib as _hashlib
 
         digest = _hashlib.sha1()
         for n in assets:
             digest.update((STATIC_DIR / n).read_bytes())
+        digest.update(SecurityHeaders.CSP.encode())
         cache["stamp"] = stamp
-        cache["text"] = path.read_text(encoding="utf-8").replace(
-            _ASSET_SLOT, digest.hexdigest()[:10])
+        cache["text"] = text.replace(_ASSET_SLOT, digest.hexdigest()[:10])
     return cache["text"]
 
 
 def _index_template() -> str:
-    return _stamped_template("map.html", _MAP_ASSETS, _INDEX_CACHE)
+    return _stamped_template("map.html", _INDEX_CACHE)
 
 
 def _watch_template() -> str:
-    return _stamped_template("watch.html", _WATCH_ASSETS, _WATCH_CACHE)
+    return _stamped_template("watch.html", _WATCH_CACHE)
 
 
 def _visitor_view(request: Request) -> dict | None:
