@@ -1,9 +1,13 @@
 /* Service worker: receives watch-area push alerts and opens /watch on
    tap. No fetch interception - the page works identically without it. */
 
-const ASSET_CACHE = 'ca-roads-assets-v2';
+const ASSET_CACHE = 'ca-roads-assets-v3';
 const SNAP_CACHE = 'ca-roads-snap-v1';
 const SNAP_HOST = 'data.commutescout.com';
+// The same host serves the base map's files under /map/: byte-range
+// reads of one large archive, which the Cache API cannot store, plus
+// fonts and icons the browser caches on its own. Those pass through.
+const MAP_PREFIX = '/map/';
 // Basemap tiles, cached on-device only (rev 2: the server's CSP now
 // lists the tile host in connect-src, which governs fetch() in this
 // worker; the byte change here forces installed workers to update and
@@ -121,6 +125,7 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(tileFirst(e.request));
     return;
   }
+  if (url.hostname === SNAP_HOST && url.pathname.startsWith(MAP_PREFIX)) return;
   if (url.hostname === SNAP_HOST && e.request.method === 'GET') {
     e.respondWith(snapshotFirst(e.request));
     return;

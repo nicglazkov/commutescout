@@ -261,34 +261,15 @@ function ensureMap() {
     if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 1000 });
     else setTimeout(run, 200);
   });
-  // Basemap picker: Leaflet's collapsed layers control in the top-right
-  // corner (the sidebar is spoken for). Choice sticks per device via
-  // localStorage. crossOrigin makes tile loads CORS requests so the
-  // service worker can cache them on-device (Stadia's terms allow
-  // client-local caching; server-side caching is prohibited).
-  const CS_ATTR = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>'
-    + ' &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a>'
-    + ' &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-  const CS_STAMEN_ATTR = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>'
-    + ' &copy; <a href="https://stamen.com/">Stamen Design</a>'
-    + ' &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a>'
-    + ' &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-  const CS_BASEMAPS = {
-    'Smooth': ['alidade_smooth', CS_ATTR],
-    'Bright': ['osm_bright', CS_ATTR],
-    'Outdoors': ['outdoors', CS_ATTR],
-    'Terrain': ['stamen_terrain', CS_STAMEN_ATTR],
-  };
+  // The base map (basemap.js): our own map files, with two Stadia
+  // styles kept for their hill shading. The choice sticks per device
+  // via localStorage.
   const baseLayers = {};
-  for (const [label, [style, attr]] of Object.entries(CS_BASEMAPS)) {
-    baseLayers[label] = L.tileLayer(
-      'https://tiles.stadiamaps.com/tiles/' + style + '/{z}/{x}/{y}{r}.png',
-      { keepBuffer: 4, maxZoom: 17, crossOrigin: 'anonymous',
-        attribution: attr });
-  }
+  for (const name of CS_BASEMAPS) baseLayers[name] = csBaseLayer(name);
   let savedBase = null;
   try { savedBase = localStorage.getItem('cs-basemap'); } catch (e) { /* private mode */ }
-  if (!baseLayers[savedBase]) savedBase = 'Smooth';
+  // Smooth and Bright were Stadia styles the Light map replaced.
+  if (!baseLayers[savedBase]) savedBase = CS_BASEMAP_DEFAULT;
   let baseOn = baseLayers[savedBase].addTo(map);
   // The style choice lives in the Layers pane with everything else that
   // is on the map; no second control floats over the map.

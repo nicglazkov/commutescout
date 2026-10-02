@@ -2547,7 +2547,9 @@ class SecurityHeaders:
         # cwwp2.dot.ca.gov serves the Caltrans camera snapshots; without it
         # here the browser blocks every popup image and cameras all read
         # "snapshot unavailable".
-        "img-src 'self' data: https://tiles.stadiamaps.com "
+        # blob: is MapLibre's: it decodes the base map's icon sheet
+        # through object URLs.
+        "img-src 'self' data: blob: https://tiles.stadiamaps.com "
         "https://cwwp2.dot.ca.gov "
         # Expansion-state camera hosts (WSDOT, TripCheck, OHGO).
         "https://images.wsdot.wa.gov https://*.tripcheck.com "

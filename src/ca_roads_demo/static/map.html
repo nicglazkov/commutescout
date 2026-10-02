@@ -38,10 +38,11 @@
 <link rel="preload" as="script" href="/static/vendor/deck-slim.min.js">
 <!-- Map tiles are the LCP element (measured via Web Analytics); warming
      the tile CDN connections shaves the TLS handshake off first paint. -->
-<link rel="preconnect" href="https://tiles.stadiamaps.com">
+<link rel="preconnect" href="https://data.commutescout.com" crossorigin>
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="stylesheet" href="/static/vendor/maplibre-gl.css">
 <link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="/static/map.css?v=__ASSET_V__">
 <link rel="stylesheet" href="/static/watch.css?v=__ASSET_V__">
@@ -481,6 +482,10 @@
 </div>
 
 <script src="/static/vendor/leaflet.js"></script>
+<script src="/static/vendor/maplibre-gl-csp.js"></script>
+<script src="/static/vendor/pmtiles.js"></script>
+<script src="/static/vendor/leaflet-maplibre-gl.js"></script>
+<script src="/static/basemap.js?v=__ASSET_V__"></script>
 <script src="/static/units.js?v=__ASSET_V__"></script>
 <script src="/static/map-assistant.js?v=__ASSET_V__"></script>
 <script src="/static/map-app.js?v=__ASSET_V__"></script>

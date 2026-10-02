@@ -15,6 +15,7 @@
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">
+<link rel="stylesheet" href="/static/vendor/maplibre-gl.css">
 <style>
 :root {
   --navy:#0b1f33; --navy2:#122c47; --ink:#0f1c2b; --dim:#5b6b7d;
@@ -118,6 +119,10 @@ details summary { cursor:pointer; font-weight:600; font-size:.9rem }
   </div>
 </main>
 <script src="/static/vendor/leaflet.js"></script>
+<script src="/static/vendor/maplibre-gl-csp.js"></script>
+<script src="/static/vendor/pmtiles.js"></script>
+<script src="/static/vendor/leaflet-maplibre-gl.js"></script>
+<script src="/static/basemap.js"></script>
 <script>
 const TRIP = __TRIP_JSON__;
 
@@ -147,10 +152,7 @@ document.getElementById('sub').textContent =
   (TRIP.via ? ' · via ' + TRIP.via : '');
 
 const map = L.map('tmap');
-L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
-  maxZoom: 18, crossOrigin: 'anonymous',
-  attribution: '&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap contributors',
-}).addTo(map);
+csBaseLayer(CS_BASEMAP_DEFAULT).addTo(map);
 const line = L.polyline(pts, { color: '#0b1f33', weight: 4.5, opacity: 0.85 })
   .addTo(map);
 const mkIcon = (label) => L.divIcon({ className: '', iconSize: [26, 26],
