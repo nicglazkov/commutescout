@@ -10,17 +10,33 @@ from starlette.testclient import TestClient
 
 from ca_roads_demo import mapfiles
 
+OURS = ("slate", "grayscale", "dark", "light")       # themes over our own map file
+OPENFREEMAP = ("positron", "bright")                 # OpenFreeMap's styles, as published
 
-def test_every_style_is_complete_and_points_at_the_us_file():
+
+def test_every_style_is_complete_and_points_at_its_tiles():
+    assert set(mapfiles.FLAVORS) == set(OURS + OPENFREEMAP)
     for flavor in mapfiles.FLAVORS:
         spec = mapfiles.style_json(flavor)
         assert spec["version"] == 8 and spec["layers"], flavor
+        # Driving map: no points of interest.
+        assert not [layer["id"] for layer in spec["layers"] if layer["id"].startswith("poi")]
+        assert "__" not in json.dumps(spec)
+    for flavor in OURS:
+        spec = mapfiles.style_json(flavor)
         assert spec["sources"]["protomaps"]["url"] == "pmtiles://https://data.commutescout.com/map/us.pmtiles"
         assert spec["glyphs"].startswith("https://data.commutescout.com/map/assets/fonts/")
-        assert spec["sprite"] == f"https://data.commutescout.com/map/assets/sprites/v4/{flavor}"
-        # Driving map: no points of interest.
-        assert not [layer["id"] for layer in spec["layers"] if layer["id"].startswith("pois")]
-        assert "__" not in json.dumps(spec)
+        assert spec["sprite"].startswith("https://data.commutescout.com/map/assets/sprites/v4/")
+    for flavor in OPENFREEMAP:
+        spec = mapfiles.style_json(flavor)
+        assert spec["sources"]["openmaptiles"]["url"] == "https://tiles.openfreemap.org/planet"
+        assert spec["glyphs"].startswith("https://tiles.openfreemap.org/fonts/")
+
+
+def test_every_style_has_a_picture_for_the_picker():
+    thumbs = mapfiles.STYLE_DIR / "thumbs"
+    for flavor in ("positron", "bright", "slate", "grayscale", "dark"):
+        assert (thumbs / f"{flavor}.webp").stat().st_size > 1000, flavor
 
 
 def test_a_phone_fills_the_placeholders_with_its_own_paths():

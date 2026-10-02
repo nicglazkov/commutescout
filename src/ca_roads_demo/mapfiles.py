@@ -41,7 +41,9 @@ log = logging.getLogger(__name__)
 MAP_BASE_URL = os.environ.get("MAP_BASE_URL", "https://data.commutescout.com/map").rstrip("/")
 PMTILES_BIN = os.environ.get("PMTILES_BIN", "pmtiles")
 STYLE_DIR = Path(__file__).parent / "static" / "mapstyle"
-FLAVORS = ("light", "dark", "grayscale")
+# positron and bright are OpenFreeMap's styles (OpenMapTiles layout);
+# the rest are themes over our own map file (Protomaps layout).
+FLAVORS = ("positron", "bright", "slate", "grayscale", "dark", "light")
 
 # A corridor: this far either side of the route, at this detail.
 BUFFER_M = 2_500

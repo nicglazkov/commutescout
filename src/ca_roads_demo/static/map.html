@@ -189,6 +189,11 @@
     <section id="pane-layers" data-tool="layers">
   <div class="filters" id="filters">
       <b>Show on map</b>
+      <div class="pills" id="srcfilter" role="radiogroup" aria-label="Which sources">
+        <label><input type="radio" name="srcfilter" value="all" checked>Everything</label>
+        <label><input type="radio" name="srcfilter" value="official">Official only</label>
+        <label><input type="radio" name="srcfilter" value="plugins">Plugins only</label>
+      </div>
       <button type="button" id="allnone" class="allnone">Show all / none</button>
       <u>Incidents</u>
       <label><input type="checkbox" data-group="inc_collision" checked><i style="--dot:#c9611a"></i>Collisions <em id="n-inc_collision"></em></label>
@@ -212,8 +217,9 @@
       <label class="subopt"><input type="checkbox" disabled><i style="--dot:#2f9e6e"></i>flowing</label>
       <label class="subopt"><input type="checkbox" disabled><i style="--dot:#e8a13c"></i>slow</label>
       <label class="subopt"><input type="checkbox" disabled><i style="--dot:#d64545"></i>congested</label>
-      <u>Community</u>
-      <label><input type="checkbox" data-group="plugin" checked><i style="--dot:#0e9f9f"></i>Community reports (Flare plugins) <em id="n-plugin"></em></label>
+      <u>Plugins</u>
+      <label><input type="checkbox" data-group="plugin" checked><span class="pbadge sm" style="--pc:#64748b"></span>All plugin alerts <em id="n-plugin"></em></label>
+      <div id="pluginlist"></div>
       <u>Roadside</u>
       <label><input type="checkbox" data-group="camera"><i style="--dot:#2f81f7"></i>Cameras <em id="n-camera"></em></label>
       <label class="subopt"><input type="checkbox" id="camvideo"><i></i>only with live video <em id="n-camvideo"></em></label>
@@ -487,6 +493,7 @@
 <script src="/static/vendor/leaflet-maplibre-gl.js"></script>
 <script src="/static/basemap.js?v=__ASSET_V__"></script>
 <script src="/static/units.js?v=__ASSET_V__"></script>
+<script src="/static/plugin-badges.js?v=__ASSET_V__"></script>
 <script src="/static/map-assistant.js?v=__ASSET_V__"></script>
 <script src="/static/map-app.js?v=__ASSET_V__"></script>
 <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d2d77aff6dfe4462b09ca501c9151de4"}'></script>

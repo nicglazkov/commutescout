@@ -808,3 +808,32 @@ aside section[data-tool].on { display:block }
     white-space:normal; line-height:1.2; min-height:40px;
     display:flex; align-items:center; justify-content:center }
 }
+
+/* Plugin alerts: a rounded badge, colored by plugin (plugin-badges.js).
+   Official data stays dots, so the two are never mistaken. */
+.pbadge { display:inline-flex; align-items:center; justify-content:center;
+  width:26px; height:26px; border-radius:8px; background:var(--pc, #64748b);
+  border:2px solid #fff; box-shadow:0 1px 3px rgba(11,31,51,.35); flex:none }
+.pbadge svg { width:16px; height:16px }
+.pbadge.sm { width:16px; height:16px; border-radius:5px; border-width:1px; box-shadow:none }
+.pbadge.sm svg { width:11px; height:11px }
+.pbadge-pin { background:none; border:0 }
+.pbadge-pin .pbadge { cursor:pointer }
+.pbadge-pin:hover .pbadge { transform:scale(1.12) }
+.filters label.plug { color:var(--ink) }
+.filters label.plug span:not(.pbadge) { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+#srcfilter { padding-bottom:6px }
+
+/* The map style picker: a small picture of each style, the chosen one
+   ringed, like a map app's layer picker. */
+.basemap { display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:8px }
+.basemap label { display:flex; flex-direction:column; align-items:stretch; gap:4px; padding:0;
+  border:0; border-radius:10px; background:none; text-align:center; font:600 .7rem Inter }
+.basemap label img { display:block; width:100%; height:auto; aspect-ratio:8/5; object-fit:cover;
+  border-radius:10px; border:2px solid var(--line); background:#e9edf1 }
+.basemap label:hover img { border-color:var(--dim) }
+.basemap label:has(input:checked) { background:none }
+.basemap label:has(input:checked) img { border-color:var(--sky); box-shadow:0 0 0 2px var(--sky-soft) }
+.basemap label:has(input:checked) span { color:var(--sky) }
+.basemap label:has(input:focus-visible) { outline:none }
+.basemap label:has(input:focus-visible) img { outline:2px solid var(--sky); outline-offset:2px }

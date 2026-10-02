@@ -653,7 +653,8 @@ function popupFor(m, g) {
       n ? ['Confirmed', n + (n === 1 ? ' time' : ' times')] : null,
       (m.reliability != null) ? ['Reliability', Math.round(m.reliability * 100) + '%'] : null,
     ];
-    return v2(ACC.plugin, 'Community report', m.reported ? agoTxt(m.reported) : null,
+    return v2(csPlugin.color(csPlugin.sourceId(m)), esc(m.source || 'Plugin'),
+      m.reported ? agoTxt(m.reported) : null,
       kindTxt, m.label ? esc(m.label) : null, [], facts, [
         'Source: ' + esc(m.source || 'community plugin') +
           (m.tier === 'approved' ? ' (approved by CommuteScout)'
@@ -775,6 +776,14 @@ function popupFor(m, g) {
 }
 
 function pointMarker(m, g) {
+  if (g === 'plugin') {
+    // A badge: the picture is what it is, the color is whose it is
+    // (plugin-badges.js). Official data stays dots.
+    const mk = L.marker([m.lat, m.lon], { icon: csPlugin.icon(m), keyboard: false })
+      .bindPopup(() => popupFor(m, g), { maxWidth: 320 });
+    mk.__m = m; mk.__g = g;
+    return mk;
+  }
   let style = { renderer: canvasR, radius: 6, color: '#fff', weight: 1.2,
     fillColor: GROUP_DOT[g], fillOpacity: 0.9 };
   if (g.startsWith('clo_') && CLOSURE_STYLES[m.cls]) {
@@ -1006,6 +1015,8 @@ GL.rebuild = () => {
     for (const it of items[g]) {
       // Perimeter fires render as Leaflet polygons, not dots.
       if (g === 'fire_pt' && drawablePoly(it.m.poly)) continue;
+      // Plugin alerts are badges (cullPlugins), never dots.
+      if (g === 'plugin') continue;
       pts.push([it.m, g]);
     }
   }
@@ -1037,6 +1048,15 @@ function cullPolysOnly() {
   for (const it of items.fire_pt) {
     if (!drawablePoly(it.m.poly) || it.on) continue;
     ambient.fire_pt.addLayer(layerForItem(it));
+    it.on = true;
+  }
+}
+// Plugin badges also attach as Leaflet markers in GL mode: a view holds
+// at most a few hundred, and a badge is an icon, not a dot.
+function cullPlugins() {
+  for (const it of items.plugin) {
+    if (it.on) continue;
+    ambient.plugin.addLayer(layerForItem(it));
     it.on = true;
   }
 }
@@ -1488,7 +1508,7 @@ function renderBatch(markers, groups) {
   syncStrips();
   syncTollLabels();
   const attach = GL.on
-    ? (cullPolysOnly(), GL.rebuild())
+    ? (cullPolysOnly(), cullPlugins(), GL.rebuild())
     : mapDataShown ? (cullSync(), Promise.resolve())
     : cullBatched();
   if (groups.includes('camera')) { rebuildCameras(); rebuildSigns(); }
@@ -1767,6 +1787,52 @@ map.on('moveend zoomend', () => {
 });
 refreshAmbient(true);
 
+// ── Plugins in the Layers list ──────────────────────────────────────
+// One row per plugin under the master switch: its badge, its name, how
+// many of its alerts are in view, and a switch. The switch is the same
+// one the marketplace's Install button flips (cs.plugins.off), so the
+// two can never disagree.
+const pluginListEl = document.getElementById('pluginlist');
+const pluginRows = new Map();   // id -> { name, kinds, count }
+function pluginSeen(markers) {
+  for (const row of pluginRows.values()) row.count = 0;
+  for (const m of markers) {
+    const sid = csPlugin.sourceId(m);
+    if (!pluginRows.has(sid)) pluginRows.set(sid, { name: m.source || sid, kinds: null, count: 0 });
+    pluginRows.get(sid).count += 1;
+  }
+  drawPluginList();
+}
+function drawPluginList() {
+  if (!pluginListEl) return;
+  const off = pluginSwitches().off;
+  pluginListEl.innerHTML = [...pluginRows.entries()].map(([sid, row]) =>
+    '<label class="subopt plug"><input type="checkbox" data-plugin="' + esc(sid) + '"' +
+    (off.includes(sid) ? '' : ' checked') + '>' +
+    csPlugin.badge(sid, row.kinds ? csPlugin.kindFor(row.kinds) : null, 'sm') +
+    '<span>' + esc(row.name) + '</span> <em>' + (row.count || '') + '</em></label>').join('');
+}
+if (pluginListEl) {
+  pluginListEl.addEventListener('change', (e) => {
+    const sid = e.target && e.target.dataset.plugin;
+    if (!sid) return;
+    const sw = pluginSwitches();
+    const off = sw.off.filter((x) => x !== sid);
+    if (!e.target.checked) off.push(sid);
+    try { localStorage.setItem('cs.plugins.off', off.join(',')); } catch (err) { /* private mode */ }
+    refreshPlugins();
+  });
+  fetch('/api/flare/sources', { headers: { Accept: 'application/json' } })
+    .then((r) => (r.ok ? r.json() : { sources: [] }))
+    .then((d) => {
+      for (const s of d.sources || []) {
+        const row = pluginRows.get(s.id) || { count: 0 };
+        pluginRows.set(s.id, { name: s.name || s.id, kinds: s.kinds || null, count: row.count });
+      }
+      drawPluginList();
+    }).catch(() => { /* the list fills from the alerts themselves */ });
+}
+
 // ── Community plugin alerts ─────────────────────────────────────────
 // These never ride in the shared snapshot: the server serves them in a
 // small circle around whoever is asking and to nobody else, because an
@@ -1782,7 +1848,7 @@ async function refreshPlugins() {
   const mine = ++pluginCycle;
   const b = map.getBounds();
   const span = Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest());
-  if (span > PLUGIN_VIEW_MAX_DEG) { renderBatch([], ['plugin']); return; }
+  if (span > PLUGIN_VIEW_MAX_DEG) { pluginSeen([]); renderBatch([], ['plugin']); return; }
   const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]
     .map((v) => v.toFixed(3)).join(',');
   try {
@@ -1791,6 +1857,7 @@ async function refreshPlugins() {
     if (!res.ok || mine !== pluginCycle) return;
     const d = await res.json();
     if (mine !== pluginCycle) return;
+    pluginSeen(d.markers || []);
     renderBatch(d.markers || [], ['plugin']);
   } catch (e) { /* the next view or the next tick tries again */ }
 }
@@ -1853,6 +1920,33 @@ document.getElementById('allnone').addEventListener('click', () => {
     }
   }
 });
+
+// Official sources, plugins, or both: three buttons over the same
+// checkboxes below, so there is still one switch per layer. Leaving
+// "Everything" remembers what was on; coming back restores it.
+(function sourceFilter() {
+  const el = document.getElementById('srcfilter');
+  if (!el) return;
+  const boxes = () => [...document.querySelectorAll('#filters input[data-group]')];
+  let saved = null;
+  function set(box, on) {
+    if (box.checked === on) return;
+    box.checked = on;
+    box.dispatchEvent(new Event('change'));
+  }
+  el.addEventListener('change', (e) => {
+    const mode = e.target && e.target.value;
+    if (!mode) return;
+    if (!saved) saved = new Map(boxes().map((b) => [b.dataset.group, b.checked]));
+    for (const b of boxes()) {
+      const plugin = b.dataset.group === 'plugin';
+      if (mode === 'all') set(b, saved.get(b.dataset.group));
+      else if (mode === 'official') set(b, plugin ? false : saved.get(b.dataset.group));
+      else set(b, plugin);
+    }
+    if (mode === 'all') saved = null;
+  });
+})();
 
 // States without coverage yet get a gray outline that says so.
 const COVERED = new Set(['California', 'Nevada', 'Maine', 'New Hampshire',

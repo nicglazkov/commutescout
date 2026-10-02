@@ -25,17 +25,20 @@ def test_no_leaflet_layers_control_on_the_map():
 
 
 def test_the_styles_and_the_saved_choice_survive():
-    for name in ("Light", "Gray", "Dark", "Outdoors", "Terrain"):
+    for name in ("Positron", "Bright", "Slate", "Gray", "Dark"):
         assert f"{name}: " in BASEMAP, name
+    assert "CS_BASEMAP_DEFAULT = 'Positron'" in BASEMAP
+    # The picker shows a picture of each style, not just its name.
+    assert "csBasemapThumb(name)" in ASSIST
     assert "localStorage.getItem('cs-basemap')" in ASSIST
     assert "localStorage.setItem('cs-basemap', name)" in ASSIST
-    # A saved choice that no longer exists (Smooth, Bright) falls back.
+    # A saved choice that is no longer offered (Smooth, Light) falls back.
     assert "if (!baseLayers[savedBase]) savedBase = CS_BASEMAP_DEFAULT;" in ASSIST
     assert "map.removeLayer(baseOn);" in ASSIST  # one base layer at a time
 
 
 def test_the_base_map_is_ours_with_a_fallback():
-    """Light, Gray and Dark draw from our own map files; a browser
+    """Every style comes from the server's style endpoint; a browser
     without WebGL still gets a map."""
     assert "/api/map/style.json?flavor=" in BASEMAP
     assert "canDrawOwn()" in BASEMAP and "alidade_smooth" in BASEMAP

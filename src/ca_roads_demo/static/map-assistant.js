@@ -261,14 +261,13 @@ function ensureMap() {
     if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 1000 });
     else setTimeout(run, 200);
   });
-  // The base map (basemap.js): our own map files, with two Stadia
-  // styles kept for their hill shading. The choice sticks per device
-  // via localStorage.
+  // The base map (basemap.js). The choice sticks per device via
+  // localStorage.
   const baseLayers = {};
   for (const name of CS_BASEMAPS) baseLayers[name] = csBaseLayer(name);
   let savedBase = null;
   try { savedBase = localStorage.getItem('cs-basemap'); } catch (e) { /* private mode */ }
-  // Smooth and Bright were Stadia styles the Light map replaced.
+  // A saved choice that is no longer offered falls back to the default.
   if (!baseLayers[savedBase]) savedBase = CS_BASEMAP_DEFAULT;
   let baseOn = baseLayers[savedBase].addTo(map);
   // The style choice lives in the Layers pane with everything else that
@@ -277,7 +276,8 @@ function ensureMap() {
   if (basemapEl) {
     basemapEl.innerHTML = Object.keys(baseLayers).map((name) =>
       '<label><input type="radio" name="basemap" value="' + name + '"' +
-      (name === savedBase ? ' checked' : '') + '>' + name + '</label>').join('');
+      (name === savedBase ? ' checked' : '') + '><img src="' + csBasemapThumb(name) +
+      '" alt="" width="240" height="150" loading="lazy"><span>' + name + '</span></label>').join('');
     basemapEl.addEventListener('change', (e) => {
       const name = e.target && e.target.value;
       if (!baseLayers[name] || baseLayers[name] === baseOn) return;

@@ -2573,7 +2573,10 @@ class SecurityHeaders:
         # service worker re-fetches tiles with fetch(), and a worker's
         # fetch() is governed by connect-src, not img-src. Without it
         # every SW-controlled (repeat) visit gets a blank basemap.
+        # tiles.openfreemap.org serves the Positron and Bright base maps:
+        # tiles, fonts and icons, all read with fetch().
         "connect-src 'self' https://data.commutescout.com "
+        "https://tiles.openfreemap.org "
         "https://api.stadiamaps.com https://tiles.stadiamaps.com "
         "https://*.googleapis.com "
         "https://*.google.com https://cloudflareinsights.com "
