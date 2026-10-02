@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { Apple, ArrowRight, Smartphone } from "lucide-react";
 import { PhoneShot } from "@/components/phone-shot";
-import { ANDROID_RELEASES, TESTFLIGHT_PUBLIC } from "@/lib/app-links";
+import {
+  ANDROID_RELEASES,
+  TESTFLIGHT_IN_REVIEW,
+  TESTFLIGHT_IN_REVIEW_NOTE,
+  TESTFLIGHT_PUBLIC,
+} from "@/lib/app-links";
 
 // The phone apps, right under the homepage hero, so anyone landing on
 // the site sees them before the feature list. Two phones from the real
@@ -46,6 +51,9 @@ export default function AppBand() {
               Android APK
             </a>
           </div>
+          {TESTFLIGHT_IN_REVIEW && (
+            <p className="mt-4 max-w-md text-sm text-white/60">{TESTFLIGHT_IN_REVIEW_NOTE}</p>
+          )}
           <Link
             href="/app"
             prefetch={false}

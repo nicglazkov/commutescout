@@ -11,7 +11,13 @@ import {
   Volume2,
 } from "lucide-react";
 import { PhoneShot } from "@/components/phone-shot";
-import { ANDROID_RELEASES, APP_REPO, TESTFLIGHT_PUBLIC } from "@/lib/app-links";
+import {
+  ANDROID_RELEASES,
+  APP_REPO,
+  TESTFLIGHT_IN_REVIEW,
+  TESTFLIGHT_IN_REVIEW_NOTE,
+  TESTFLIGHT_PUBLIC,
+} from "@/lib/app-links";
 
 export const metadata: Metadata = {
   title: "Get the app - CommuteScout",
@@ -132,6 +138,9 @@ export default function AppPage() {
               Free while in beta. Open the link on your phone: TestFlight installs the iPhone build,
               and the Android build installs from the release page.
             </p>
+            {TESTFLIGHT_IN_REVIEW && (
+              <p className="mt-2 text-sm text-white/70">{TESTFLIGHT_IN_REVIEW_NOTE}</p>
+            )}
           </div>
 
           <div className="flex items-end justify-center gap-4 sm:gap-6 md:justify-end">
@@ -216,6 +225,9 @@ export default function AppPage() {
                 </li>
                 <li>Updates arrive through TestFlight.</li>
               </ol>
+              {TESTFLIGHT_IN_REVIEW && (
+                <p className="mt-3 text-sm text-cs-ink/70">{TESTFLIGHT_IN_REVIEW_NOTE}</p>
+              )}
               <a
                 href={TESTFLIGHT_PUBLIC}
                 className="mt-5 inline-flex items-center gap-2 rounded-full bg-cs-navy px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cs-navy/90"
