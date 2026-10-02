@@ -60,6 +60,7 @@ jobs:
           # there indefinitely with CI green. These pins are Linux-clean, so
           # requirements mode works here.
           pip-audit -r plugins/waze-relay/requirements.txt
+          pip-audit -r plugins/osm-cameras/requirements.txt
 
   site:
     runs-on: ubuntu-24.04
