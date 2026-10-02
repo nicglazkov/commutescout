@@ -124,3 +124,48 @@ def test_the_style_endpoint_serves_each_flavor():
         r = c.get("/api/map/style.json?flavor=grayscale")
         assert r.status_code == 200 and r.json()["name"] == "commutescout-grayscale"
         assert c.get("/api/map/style.json?flavor=sepia").status_code == 400
+
+
+class _TileJsonClient:
+    def __init__(self, doc=None, fail=False):
+        self.doc, self.fail, self.calls = doc, fail, 0
+
+    async def get(self, url, timeout=None):
+        self.calls += 1
+        if self.fail:
+            raise RuntimeError("down")
+        doc = self.doc
+
+        class R:
+            def raise_for_status(self): pass
+            def json(self): return doc
+        return R()
+
+
+@pytest.mark.asyncio
+async def test_the_tile_address_rides_inside_the_style(monkeypatch):
+    """One round trip fewer before the first tile: the server reads the
+    tile host's TileJSON and puts what it says in the style."""
+    monkeypatch.setattr(mapfiles, "_tilejson_cache", {})
+    client = _TileJsonClient({"tiles": ["https://tiles.openfreemap.org/planet/v1/{z}/{x}/{y}.pbf"],
+                              "maxzoom": 14, "attribution": "OpenFreeMap"})
+    spec = await mapfiles._inline_tilejson(mapfiles.style_json("positron"), client)
+    source = spec["sources"]["openmaptiles"]
+    assert "url" not in source
+    assert source["tiles"] == ["https://tiles.openfreemap.org/planet/v1/{z}/{x}/{y}.pbf"]
+    assert source["maxzoom"] == 14
+    # Asked once, then remembered.
+    await mapfiles._inline_tilejson(mapfiles.style_json("positron"), client)
+    assert client.calls == 1
+    # Our own files have no TileJSON to read: untouched, and nothing fetched.
+    ours = await mapfiles._inline_tilejson(mapfiles.style_json("slate"), client)
+    assert ours["sources"]["protomaps"]["url"].startswith("pmtiles://")
+    assert client.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_a_tile_host_that_does_not_answer_leaves_the_style_working(monkeypatch):
+    monkeypatch.setattr(mapfiles, "_tilejson_cache", {})
+    down = _TileJsonClient(fail=True)
+    spec = await mapfiles._inline_tilejson(mapfiles.style_json("positron"), down)
+    assert spec["sources"]["openmaptiles"]["url"] == "https://tiles.openfreemap.org/planet"

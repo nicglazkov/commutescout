@@ -47,9 +47,9 @@ def test_the_base_map_is_ours_with_a_fallback():
         assert "/static/basemap.js" in text, page
         assert "tiles.stadiamaps.com/tiles/" not in text, page
         # Leaflet first, then MapLibre, PMTiles and the bridge, then ours.
-        order = [text.index(x) for x in ("vendor/leaflet.js", "vendor/maplibre-gl-csp.js",
-                                         "vendor/pmtiles.js", "vendor/leaflet-maplibre-gl.js",
-                                         "/static/basemap.js")]
+        order = [text.index('<script src="/static/' + x) for x in (
+            "vendor/leaflet.js", "vendor/maplibre-gl-csp.js", "vendor/pmtiles.js",
+            "vendor/leaflet-maplibre-gl.js", "basemap.js")]
         assert order == sorted(order), page
 
 
@@ -57,3 +57,26 @@ def test_the_service_worker_leaves_map_files_alone():
     """Byte-range reads cannot go in the Cache API; they pass through."""
     sw = (STATIC / "sw.js").read_text(encoding="utf-8")
     assert "url.pathname.startsWith(MAP_PREFIX)) return;" in sw
+
+
+def test_the_worker_address_changes_with_every_deploy():
+    """A worker obeys the security policy sent with its own file. Under a
+    fixed address that file, and so that policy, stayed cached for a week
+    at the CDN and in browsers: a new tile host was allowed on the page
+    and refused in the worker, and the default map drew nothing."""
+    assert "maplibre-gl-csp-worker.js?v=' + REV" in BASEMAP
+    assert "document.currentScript.src" in BASEMAP
+    html = (STATIC / "map.html").read_text(encoding="utf-8")
+    assert '/static/basemap.js?v=__ASSET_V__' in html
+    # The preload names the same address, or it fetches the worker twice.
+    assert 'as="worker" href="/static/vendor/maplibre-gl-csp-worker.js?v=__ASSET_V__"' in html
+
+
+def test_the_style_is_asked_for_before_the_map_code_loads():
+    html = (STATIC / "map.html").read_text(encoding="utf-8")
+    head = html[:html.index("</head>")]
+    assert "link.as = 'fetch'" in head and "/api/map/style.json?flavor=" in head
+    assert 'rel="preconnect" href="https://tiles.openfreemap.org"' in head
+    # The names the early script maps must be the picker's.
+    for name in ("Positron", "Bright", "Slate", "Gray", "Dark"):
+        assert f"{name}: '" in head, name

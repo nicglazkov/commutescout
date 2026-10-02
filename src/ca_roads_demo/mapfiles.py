@@ -75,6 +75,43 @@ def style_json(flavor: str, *, pmtiles_url: str | None = None,
     return json.loads(text)
 
 
+# OpenFreeMap's styles name their tiles by a second document (a TileJSON)
+# that says where this week's tiles are. Read by the browser that is one
+# more round trip before the first tile; read here, every so often, it
+# rides inside the style and the map starts on the tiles at once.
+TILEJSON_TTL_S = 1800
+_tilejson_cache: dict[str, tuple[float, dict]] = {}
+
+
+async def _inline_tilejson(spec: dict, client: httpx.AsyncClient) -> dict:
+    """Replace a vector source's TileJSON address with what it says.
+    Any failure leaves the address in place, which still works."""
+    for source in spec.get("sources", {}).values():
+        url = source.get("url")
+        if source.get("type") != "vector" or not isinstance(url, str) or not url.startswith("https://"):
+            continue
+        hit = _tilejson_cache.get(url)
+        if not hit or time.monotonic() - hit[0] > TILEJSON_TTL_S:
+            try:
+                r = await client.get(url, timeout=5.0)
+                r.raise_for_status()
+                doc = r.json()
+                if not doc.get("tiles"):
+                    raise ValueError("no tiles")
+                hit = (time.monotonic(), doc)
+                _tilejson_cache[url] = hit
+            except Exception as exc:  # noqa: BLE001
+                log.warning("tilejson %s: %s", url, exc)
+                if not hit:
+                    continue
+        doc = hit[1]
+        del source["url"]
+        for key in ("tiles", "minzoom", "maxzoom", "bounds", "attribution"):
+            if key in doc:
+                source[key] = doc[key]
+    return spec
+
+
 async def api_style(request: Request) -> Response:
     flavor = request.query_params.get("flavor") or "light"
     try:
@@ -82,6 +119,9 @@ async def api_style(request: Request) -> Response:
     except KeyError:
         return JSONResponse({"error": "flavor must be one of " + ", ".join(FLAVORS)},
                             status_code=400)
+    from ca_roads_demo import app as demo
+
+    spec = await _inline_tilejson(spec, demo.tools.get_road().client)
     return JSONResponse(spec, headers={"Cache-Control": "public, max-age=3600",
                                        "Access-Control-Allow-Origin": "*"})
 
