@@ -46,6 +46,14 @@
     closed: 'M12 21a9 9 0 100-18 9 9 0 000 18zM7 12h10',
     chains: 'M9 15l6-6M10 7l1-1a4 4 0 015.6 5.6l-1 1M14 17l-1 1a4 4 0 01-5.6-5.6l1-1',
     other: 'M12 14.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z',
+    // Official kinds, for the inspector's header.
+    incident: 'M12 8v5M12 16.5v.01M12 21a9 9 0 100-18 9 9 0 000 18z',
+    fire: 'M12 3c1 4 5 5.5 5 10a5 5 0 01-10 0c0-2 1-3.5 2-4.5.5 2 1.5 2.5 2 2.5 0-3 0-5 1-8z',
+    snow: 'M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9',
+    thermo: 'M10 14V5a2 2 0 114 0v9a4 4 0 11-4 0z',
+    toll: 'M12 3v18M16 7.5c0-1.7-1.8-2.5-4-2.5s-4 1-4 3 1.8 2.8 4 3.3 4 1.3 4 3.4-1.8 3.3-4 3.3-4-1-4-2.8',
+    video: 'M4 7h11v10H4zM15 10.5l5-3v9l-5-3',
+    sign: 'M4 5h16v10H4zM8 9h8M8 12h5M12 15v5',
   };
   function svg(cat) {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" ' +
@@ -75,5 +83,5 @@
     return cats.size === 1 ? kinds[0] : null;
   }
 
-  window.csPlugin = { color, category, badge, icon, sourceId, kindFor };
+  window.csPlugin = { color, category, badge, icon, sourceId, kindFor, svg };
 })();

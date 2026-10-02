@@ -67,3 +67,23 @@ def test_alert_row_click_opens_the_same_popup_builder():
 def test_escape_and_close_button_close_the_inspector():
     assert "document.getElementById('inspclose').addEventListener('click', closeInspector)" in APP
     assert "if (e.key === 'Escape') closeInspector();" in APP
+
+
+def test_the_inspector_is_a_page_of_its_own():
+    """A header with the kind's picture, the popup's content restyled
+    larger, and the actions in a footer that does not scroll away."""
+    for i in ("inspicon", "inspwhen", "inspfoot"):
+        assert HTML.count(f'id="{i}"') == 1, i
+    assert "inspFoot.replaceChildren(inspectorActions(m, g))" in APP
+    assert "inspectorEl.style.setProperty('--acc', acc)" in APP
+    for rule in (".inspbody .p2 .hd { display:none }", ".inspfoot {", ".inspicon {",
+                 ".inspbody .p2 .fact {"):
+        assert rule in CSS, rule
+    # Every group the map draws has a picture for the header.
+    glyphs = APP[APP.index("const INSP_GLYPH = {"):APP.index("function inspectorActions")]
+    for g in ("inc_collision", "inc_fire", "inc_hazard", "inc_other", "clo_full", "clo_lane",
+              "clo_oneway", "clo_ramp", "chain", "rwis", "fire_pt", "toll", "camera", "sign"):
+        assert f"{g}:" in glyphs, g
+    badges = (STATIC / "plugin-badges.js").read_text(encoding="utf-8")
+    for cat in set(re.findall(r": '([a-z]+)'", glyphs)):
+        assert f"\n    {cat}: '" in badges, cat

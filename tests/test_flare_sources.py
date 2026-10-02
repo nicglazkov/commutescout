@@ -2,6 +2,7 @@
 what the spec accepts, serves markers for a bbox, and the admin
 endpoints manage the registry."""
 
+import json
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -626,3 +627,92 @@ async def test_new_demand_wakes_the_loop_instead_of_waiting_out_the_tick():
         assert len(passes) == 2            # woke in well under the 15 s tick
     finally:
         task.cancel()
+
+
+# ------------------------------------------------------------- shared data
+def _shared_poller(alerts, *, shared=True, snapshot=True):
+    p = flare_sources.Poller(store=flare_sources.MemorySourceStore())
+    src = {"id": "cams", "name": "Cameras", "base": "https://cams.example",
+           "visibility": "public", "trust": "community", "shared": shared}
+    p.sources = {"cams": src}
+    hs = {"capabilities": {"alerts": True, "snapshot": snapshot}, "kinds": ["CAMERA_SPEED"]}
+    p.handshakes = {"cams": (0.0, hs)}
+    p.alerts = {"cams": alerts}
+    return p
+
+
+def _camera(i, lat, lon):
+    return {"id": f"c{i}", "kind": "CAMERA_SPEED", "lat": lat, "lon": lon,
+            "report_ts": datetime.now(UTC).isoformat(), "ttl_s": 86400}
+
+
+def test_a_shared_source_shows_across_the_map_with_nobody_near():
+    """Fixed cameras are the same for everyone: a region-wide view, with
+    no position of the asker's at all, still gets them."""
+    p = _shared_poller([_camera(1, 37.78, -122.42), _camera(2, 41.88, -87.63)])
+    got = p.markers_for_bbox([24.0, -125.0, 50.0, -66.0], near=None)
+    assert sorted(m["id"] for m in got) == ["cams:c1", "cams:c2"]
+    assert [m["id"] for m in p.markers_for_bbox([37.0, -123.0, 38.0, -122.0])] == ["cams:c1"]
+
+
+def test_shared_is_the_catalog_entrys_call_and_needs_a_snapshot():
+    """A plugin cannot declare itself shared, and a catalog entry marked
+    shared without the snapshot capability is not treated as one: in both
+    cases the small circle around the asker still applies."""
+    cams = [_camera(1, 37.78, -122.42)]
+    for shared, snapshot in ((False, True), (True, False)):
+        p = _shared_poller(cams, shared=shared, snapshot=snapshot)
+        assert p.markers_for_bbox([24.0, -125.0, 50.0, -66.0], near=None) == []
+        near = p.markers_for_bbox([37.0, -123.0, 38.0, -122.0], near=(37.78, -122.42))
+        assert [m["id"] for m in near] == ["cams:c1"]
+    snap = {"capabilities": {"snapshot": True}}
+    assert flare_sources.Poller.is_shared({"shared": True}, snap) is True
+    assert flare_sources.Poller.is_shared({}, snap) is False
+
+
+class _SnapshotClient:
+    """Answers the handshake and the snapshot; records the paths asked for."""
+
+    def __init__(self, alerts):
+        self.alerts, self.paths = alerts, []
+
+    def stream(self, method, url, **kwargs):
+        path = url.split("cams.example")[1]
+        self.paths.append(path)
+        hs = {"protocol": "flare/1", "id": "cams", "name": "Cameras",
+              "capabilities": {"alerts": True, "snapshot": True}, "kinds": ["CAMERA_SPEED"],
+              "coverage": {"bbox": [18.0, -168.0, 71.5, -66.5]}, "refresh_s": 3600,
+              "attribution": {"name": "x"}, "auth": "none"}
+        body = hs if path.endswith("handshake") else {"alerts": self.alerts, "ttl_s": 3600}
+
+        class R:
+            status_code = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def aclose(self):
+                pass
+
+            async def aiter_bytes(self):
+                yield json.dumps(body).encode()
+        return R()
+
+
+@pytest.mark.asyncio
+async def test_a_shared_source_is_read_whole_in_one_request():
+    p = flare_sources.Poller(store=flare_sources.MemorySourceStore())
+    src = {"id": "cams", "name": "Cameras", "base": "https://cams.example",
+           "visibility": "public", "trust": "community", "shared": True}
+    p.sources = {"cams": src}
+    client = _SnapshotClient([_camera(i, 30.0 + i * 0.01, -100.0) for i in range(700)])
+    assert await p.poll_source(src, client) == 700   # past the 500 cap of an alerts answer
+    assert client.paths == ["/flare/v1/handshake", "/flare/v1/snapshot"]
+    assert p.status["cams"]["ok"] is True and p.card("cams")["shared"] is True
+    # A fixed list is re-read on its own period, not whenever somebody
+    # looks somewhere new.
+    p.note_at(40.0, -100.0)
+    assert p.due(src) is False

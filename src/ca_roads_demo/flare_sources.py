@@ -73,6 +73,8 @@ VIEW_TTL_S = 600
 SWEEP_PER_POLL = 12
 CELL_KEEP_S = 900
 POLL_FLOOR_S = 60
+# The most markers one shared source puts in one map response.
+SHARED_PER_RESPONSE = 5_000
 HANDSHAKE_TTL_S = 3600
 STATUS_WRITE_EVERY_S = 600
 # A source that keeps failing is backed off instead of being asked every
@@ -267,6 +269,8 @@ def alert_marker(src: dict, a: dict) -> dict:
         "source_url": _https_only(a.get("source_url")) or _https_only(attribution.get("url")),
         "trust": src.get("trust") or "community",
         "tier": flare.tier_of(src),
+        # Where the plugin says this record came from, when it says.
+        "data": (a.get("extra") or {}).get("data") if isinstance(a.get("extra"), dict) else None,
     }
     geom = a.get("geometry")
     if isinstance(geom, dict) and geom.get("type") == "LineString":
@@ -331,7 +335,8 @@ class Poller:
         return h
 
     async def fetch_json(self, client, url: str, *, src: dict, params: dict | None = None,
-                         timeout: float = 15.0) -> tuple[int, Any]:
+                         timeout: float = 15.0,
+                         max_bytes: int = flare.MAX_BYTES) -> tuple[int, Any]:
         """One capped GET to a plugin.
 
         Redirects are refused: a base that passed the address guard at
@@ -349,8 +354,8 @@ class Poller:
             body = bytearray()
             async for chunk in r.aiter_bytes():
                 body.extend(chunk)
-                if len(body) > flare.MAX_BYTES:
-                    raise ValueError(f"body over {flare.MAX_BYTES} bytes")
+                if len(body) > max_bytes:
+                    raise ValueError(f"body over {max_bytes} bytes")
         try:
             return r.status_code, json.loads(bytes(body))
         except ValueError as exc:
@@ -495,6 +500,8 @@ class Poller:
         try:
             hs = await self.handshake(src, client)
             base = src["base"].rstrip("/")
+            if self.is_shared(src, hs):
+                return await self._poll_snapshot(src, hs, client, now)
             sem = asyncio.Semaphore(CONCURRENCY)
             problems: list[str] = []
             kept_by_cell: dict[tuple[float, float], list[dict]] = {}
@@ -593,6 +600,46 @@ class Poller:
         await self._write_status(sid)
         return len(self.alerts.get(sid, []))
 
+    @staticmethod
+    def is_shared(src: dict, hs: dict | None) -> bool:
+        """Whether a source's alerts are the same for everyone.
+
+        Two things have to be true. The catalog entry says ``shared``,
+        which only CommuteScout sets: it is a statement that none of the
+        plugin's alerts exists because a person was somewhere, and a
+        plugin cannot make that statement about itself. And the plugin
+        offers ``snapshot``, its whole list in one response.
+
+        A shared source is exempt from the small circle around the
+        person asking, because there is nobody's position to protect:
+        its alerts show across the whole map at any zoom.
+        """
+        return bool(src.get("shared")) and bool(
+            ((hs or {}).get("capabilities") or {}).get("snapshot"))
+
+    async def _poll_snapshot(self, src: dict, hs: dict, client, now) -> int:
+        """One request for a shared source's whole list."""
+        sid = src["id"]
+        status, payload = await self.fetch_json(
+            client, src["base"].rstrip("/") + "/flare/v1/snapshot", src=src,
+            timeout=COLD_START_TIMEOUT_S, max_bytes=flare.SNAPSHOT_MAX_BYTES)
+        if status != 200:
+            raise RuntimeError(f"snapshot: HTTP {status}")
+        kept, problems = flare.accept_alerts(payload, now=now, limit=flare.SNAPSHOT_MAX_ALERTS)
+        if problems and not kept:
+            raise RuntimeError(problems[0])
+        declared = set(hs.get("kinds") or [])
+        alerts = [a for a in kept if a["kind"] in declared]
+        self.alerts[sid] = alerts
+        self.status[sid] = {"ok": True, "count": len(alerts), "last_ok": now.isoformat(),
+                            "held_count": len(alerts), "held_at": now.timestamp(),
+                            "problems": problems[:5], "name": hs.get("name")}
+        self._fails.pop(sid, None)
+        self._last_poll[sid] = time.monotonic()
+        self._rechecks[sid] = []
+        await self._write_status(sid)
+        return len(alerts)
+
     async def _write_status(self, sid: str) -> None:
         if time.monotonic() - self._last_status_write.get(sid, 0.0) < STATUS_WRITE_EVERY_S:
             return
@@ -619,6 +666,8 @@ class Poller:
             period = min(MAX_BACKOFF_S, period * 2 ** (fails - FAILS_BEFORE_BACKOFF + 1))
             return time.monotonic() - last >= period  # a failing source is never hurried
         now = time.monotonic()
+        if self.is_shared(src, hs[1] if hs else None):
+            return now - last >= period
         if now - last >= URGENT_FLOOR_S and (
                 self._urgent_at > self._polled_from.get(src["id"], float("-inf"))
                 or any(t <= now for t in self._rechecks.get(src["id"], []))):
@@ -677,9 +726,11 @@ class Poller:
         It is also why these never go into a published snapshot. A
         snapshot is one file on a CDN serving every visitor at once,
         which is the one place a per-person answer cannot be put.
+
+        A shared source (see is_shared) is the exception: its alerts are
+        fixed things that are the same for everyone, so they are served
+        across the whole box whoever is asking and wherever they are.
         """
-        if near is None and not corridor:
-            return []
         from ca_roads_demo import routing
 
         # A phone sends its route ahead as a point every few kilometres,
@@ -692,6 +743,14 @@ class Poller:
         for sid, alerts in self.alerts.items():
             src = self.sources.get(sid)
             if not src:
+                continue
+            if self.is_shared(src, (self.handshakes.get(sid) or (0, {}))[1]):
+                inside = [a for a in alerts
+                          if lat_min <= a["lat"] <= lat_max and lon_min <= a["lon"] <= lon_max
+                          and not flare.validate_alert(a, now=now)]
+                out.extend(alert_marker(src, a) for a in inside[:SHARED_PER_RESPONSE])
+                continue
+            if near is None and not paths:
                 continue
             for a in alerts:
                 if not (lat_min <= a["lat"] <= lat_max and lon_min <= a["lon"] <= lon_max):
@@ -743,6 +802,7 @@ class Poller:
                 "coverage": (hs.get("coverage") or {}).get("bbox"),
                 "kinds": hs.get("kinds") or [],
                 "capabilities": hs.get("capabilities") or {},
+                "shared": self.is_shared(src, hs),
                 "base": _https_only(src.get("base"))}
 
     def public_sources(self) -> list[dict]:
@@ -1075,6 +1135,9 @@ async def api_admin_flare(request: Request) -> JSONResponse:
         sid = manifest["id"]
         doc = {k: manifest[k] for k in ("id", "name", "base", "protocol", "visibility",
                                         "trust", "attribution", "token") if k in manifest}
+        # Only an admin adding a source can call it shared (see is_shared).
+        if manifest.get("shared") is True or body.get("shared") is True:
+            doc["shared"] = True
         doc.update({"enabled": True, "added_at": datetime.now(UTC).isoformat()})
         try:
             from ca_roads_mcp import server as tools

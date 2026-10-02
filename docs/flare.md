@@ -22,6 +22,7 @@ everything below.
 | `report` | Accept a new report from a user (police, crash, hazard, and the rest). |
 | `confirm` | Accept a "still there" or "not there" vote on an alert. |
 | `notify` | Mark alerts the app should announce out loud and push, not just draw. |
+| `snapshot` | Serve the whole list in one response, for data that is the same for everyone. |
 
 A plugin declares what it supports in its handshake. The apps only ask for
 what a plugin declared.
@@ -194,6 +195,16 @@ with the error envelope when refused (for example too far from a road).
 `vote` is `up` (still there) or `gone` (not there). Response `200` with
 the updated alert, or `404` when the alert is unknown.
 
+### GET /flare/v1/snapshot
+
+Every alert the plugin has, in one response. Needs the `snapshot`
+capability. The body is the same shape as `alerts`, with up to 20,000
+records and 16 MB.
+
+This exists for shared data: fixed things that are the same for everyone
+and exist whether or not anyone is nearby, such as enforcement cameras.
+See "Shared data" below for what a caller does with it.
+
 ### Errors
 
 The same envelope CommuteScout's API uses:
@@ -248,6 +259,23 @@ catalog row as `tier`:
 
 Official agency data (the state feeds) is not a plugin and always
 outranks all three.
+
+## Shared data
+
+Most plugin alerts exist because a person was somewhere: a report of
+police is also a report of where the reporter was. CommuteScout
+therefore serves a plugin's alerts only in a small circle around the
+person asking, and a map zoomed out to a region shows none.
+
+Some data is not like that. A fixed camera is the same fact for everyone
+and says nothing about anybody. A plugin whose alerts are all of that
+kind can be marked **shared** in the catalog. A shared plugin's alerts
+are read whole through `snapshot` and shown across the map at any zoom.
+
+`shared` is set by CommuteScout on the catalog entry, never by the
+plugin: it is a statement about privacy that a plugin cannot make about
+itself. The catalog row carries `shared: true` so clients can tell. A
+plugin that is not shared may still offer `snapshot`; it is not used.
 
 ## Rules for callers
 

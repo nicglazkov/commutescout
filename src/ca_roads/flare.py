@@ -38,7 +38,7 @@ KINDS = frozenset({
     "CAMERA_SPEED", "CAMERA_RED_LIGHT", "CAMERA_ISSUE",
     "MAP_ISSUE", "OTHER",
 })
-CAPABILITIES = ("alerts", "report", "confirm", "notify")
+CAPABILITIES = ("alerts", "report", "confirm", "notify", "snapshot")
 VOTES = ("up", "gone")
 TRUST = ("official", "verified", "community", "private")
 TIERS = ("approved", "unreviewed", "private")
@@ -62,6 +62,10 @@ MAX_ALERTS = 500
 MAX_PER_CELL = 50
 MAX_BYTES = 1_000_000
 MAX_TTL_S = 86_400
+# A snapshot is a plugin's whole list in one response: more records than
+# an alerts answer, and a bigger body.
+SNAPSHOT_MAX_ALERTS = 20_000
+SNAPSHOT_MAX_BYTES = 16_000_000
 MAX_RADIUS_M = 100_000
 MAX_DESCRIPTION = 200
 MAX_HANDSHAKE_DESCRIPTION = 500
@@ -155,10 +159,12 @@ def validate_alert(a: Any, *, now: datetime | None = None) -> list[str]:
     return p
 
 
-def accept_alerts(data: Any, *, now: datetime | None = None) -> tuple[list[dict], list[str]]:
+def accept_alerts(data: Any, *, now: datetime | None = None,
+                  limit: int = MAX_ALERTS) -> tuple[list[dict], list[str]]:
     """The alerts a caller keeps from an /alerts response, and why the
     rest were dropped. Applies the response caps: unknown kinds and
-    malformed records are dropped, and the list is cut at MAX_ALERTS."""
+    malformed records are dropped, and the list is cut at ``limit``
+    (MAX_ALERTS, or SNAPSHOT_MAX_ALERTS for a snapshot)."""
     if not isinstance(data, dict) or not isinstance(data.get("alerts"), list):
         return [], ["response: {alerts: [...]} required"]
     kept: list[dict] = []
@@ -170,9 +176,9 @@ def accept_alerts(data: Any, *, now: datetime | None = None) -> tuple[list[dict]
             problems.append(f"alerts[{i}]{' ' + str(ident) if ident else ''}: " + "; ".join(errs))
             continue
         kept.append(a)
-    if len(kept) > MAX_ALERTS:
-        problems.append(f"alerts: {len(kept)} returned, cut at {MAX_ALERTS}")
-        kept = kept[:MAX_ALERTS]
+    if len(kept) > limit:
+        problems.append(f"alerts: {len(kept)} returned, cut at {limit}")
+        kept = kept[:limit]
     return kept, problems
 
 
@@ -370,6 +376,22 @@ async def check_plugin(base: str, *, token: str | None = None, client=None,
             rep.fail("alerts oversize radius", f"HTTP {r.status_code}; answer 200 (clamped) or 400")
         else:
             rep.ok("alerts oversize radius handled")
+        if hs["capabilities"].get("snapshot"):
+            r = await client.get(f"{base}/flare/v1/snapshot", headers=headers, timeout=30.0)
+            if r.status_code != 200:
+                rep.fail("snapshot", f"HTTP {r.status_code}")
+            elif len(r.content) > SNAPSHOT_MAX_BYTES:
+                rep.fail("snapshot", f"{len(r.content)} bytes, cap is {SNAPSHOT_MAX_BYTES}")
+            else:
+                try:
+                    kept, problems = accept_alerts(r.json(), now=now or datetime.now(UTC),
+                                                   limit=SNAPSHOT_MAX_ALERTS)
+                except ValueError:
+                    kept, problems = [], ["not JSON"]
+                for pr in problems[:5]:
+                    rep.fail("snapshot", pr)
+                if not problems:
+                    rep.ok(f"snapshot: {len(kept)} valid record(s)")
         caps = hs["capabilities"]
         if caps.get("report"):
             body = {"kind": "OTHER", "lat": lat, "lon": lon,

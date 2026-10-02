@@ -652,6 +652,7 @@ function popupFor(m, g) {
       m.road ? ['Road', esc(m.road)] : null,
       n ? ['Confirmed', n + (n === 1 ? ' time' : ' times')] : null,
       (m.reliability != null) ? ['Reliability', Math.round(m.reliability * 100) + '%'] : null,
+      m.data ? ['Data from', esc(m.data)] : null,
     ];
     return v2(csPlugin.color(csPlugin.sourceId(m)), esc(m.source || 'Plugin'),
       m.reported ? agoTxt(m.reported) : null,
@@ -1837,18 +1838,15 @@ if (pluginListEl) {
 // These never ride in the shared snapshot: the server serves them in a
 // small circle around whoever is asking and to nobody else, because an
 // alert exists because somebody was standing somewhere. So they are
-// fetched for this view alone, and only while the view is a place
-// rather than a region, which is also the server's rule. A zoomed-out
-// map shows none, and says nothing, which is correct: a few miles of
-// community reports at state zoom would be noise.
-const PLUGIN_VIEW_MAX_DEG = 1.5;
+// fetched for this view alone. The server decides what a view gets: a
+// community plugin's alerts only while the view is a place rather than
+// a region, and a shared plugin's (fixed cameras: the same for
+// everyone, nobody's position in them) at any zoom.
 let pluginTimer = null;
 let pluginCycle = 0;
 async function refreshPlugins() {
   const mine = ++pluginCycle;
   const b = map.getBounds();
-  const span = Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest());
-  if (span > PLUGIN_VIEW_MAX_DEG) { pluginSeen([]); renderBatch([], ['plugin']); return; }
   const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]
     .map((v) => v.toFixed(3)).join(',');
   try {
@@ -1865,6 +1863,16 @@ map.on('moveend zoomend', () => {
   clearTimeout(pluginTimer);
   pluginTimer = setTimeout(refreshPlugins, 500);
 });
+// Full badges where there is room for them, small ones at city-region
+// zoom, colored specks beyond that.
+function badgeScale() {
+  const z = map.getZoom();
+  const el = map.getContainer();
+  el.classList.toggle('pz-mid', z < 11 && z >= 8);
+  el.classList.toggle('pz-low', z < 8);
+}
+map.on('zoomend', badgeScale);
+badgeScale();
 refreshPlugins();
 
 // ── Long-running sessions (wall monitor / kiosk) ─────────────────────
@@ -2579,15 +2587,37 @@ const inspResize = document.getElementById('inspresize');
 function focusKind(g) {
   return Object.keys(FOCUS_GROUPS).find((k) => FOCUS_GROUPS[k].includes(g)) || null;
 }
+// The inspector is a page of its own, not a popup in a column: a header
+// with the kind's picture in its color, the title large, the facts as a
+// table, and the actions pinned to the bottom where a thumb or a mouse
+// finds them without scrolling.
+const inspIcon = document.getElementById('inspicon');
+const inspWhen = document.getElementById('inspwhen');
+const inspFoot = document.getElementById('inspfoot');
+const INSP_GLYPH = {
+  inc_collision: 'crash', inc_fire: 'fire', inc_hazard: 'hazard', inc_other: 'incident',
+  clo_full: 'closed', clo_lane: 'closed', clo_oneway: 'closed', clo_ramp: 'closed',
+  chain: 'snow', rwis: 'thermo', fire_pt: 'fire', fire_poly: 'fire', toll: 'toll',
+  camera: 'video', sign: 'sign',
+};
 function inspectorActions(m, g) {
-  const row = document.createElement('div');
-  row.className = 'inspacts';
+  const row = document.createDocumentFragment();
+  function button(id, label, primary, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = id; b.textContent = label;
+    b.className = primary ? 'inspact primary' : 'inspact';
+    b.addEventListener('click', () => onClick(b));
+    row.appendChild(b);
+    return b;
+  }
+  if (Number.isFinite(m.lat) && Number.isFinite(m.lon)) {
+    button('inspcenter', 'Show on map', true, () => {
+      map.setView([m.lat, m.lon], Math.max(map.getZoom(), 13));
+    });
+  }
   const kind = focusKind(g);
   if (kind && Number.isFinite(m.lat) && Number.isFinite(m.lon)) {
-    const share = document.createElement('button');
-    share.type = 'button'; share.className = 'detbtn'; share.id = 'inspshare';
-    share.textContent = 'Copy link';
-    share.addEventListener('click', async () => {
+    button('inspshare', 'Copy link', false, async (share) => {
       const url = location.origin + '/map?focus=' + m.lat.toFixed(5) + ',' +
         m.lon.toFixed(5) + '&k=' + kind;
       try {
@@ -2596,25 +2626,29 @@ function inspectorActions(m, g) {
         setTimeout(() => { share.textContent = 'Copy link'; }, 1800);
       } catch (_) { showLinkInline(share, url); }
     });
-    row.appendChild(share);
   }
-  const watch = document.createElement('button');
-  watch.type = 'button'; watch.className = 'detbtn'; watch.id = 'inspwatch';
-  watch.textContent = 'Watch this stretch';
-  watch.addEventListener('click', () => {
+  button('inspwatch', 'Watch this stretch', false, () => {
     closeInspector();
     setTool('watch', { toggle: false, reveal: true });
     if (watchLoad) watchLoad.then((w) => { if (w) w.watchHere(m.lat, m.lon); });
   });
-  row.appendChild(watch);
   return row;
 }
 function openInspector(m, g) {
-  const label = (POP_LABEL[g] || 'Details').toLowerCase();
+  const plugin = g === 'plugin';
+  const acc = plugin ? csPlugin.color(csPlugin.sourceId(m)) : (GROUP_DOT[g] || '#64748b');
+  inspectorEl.style.setProperty('--acc', acc);
+  inspIcon.innerHTML = csPlugin.svg(plugin ? csPlugin.category(m.flare_kind) : (INSP_GLYPH[g] || 'other'));
+  inspIcon.classList.toggle('square', plugin);
+  const label = plugin ? (m.source || 'Plugin') : (POP_LABEL[g] || 'Details').toLowerCase();
   inspTitle.textContent = label.charAt(0).toUpperCase() + label.slice(1);
   inspBody.innerHTML = popupFor(m, g);
+  // The popup's own "how long ago" moves into the header.
+  const ago = inspBody.querySelector('.ago');
+  inspWhen.textContent = ago ? ago.textContent : '';
+  inspBody.scrollTop = 0;
   wireDispatchLog(inspBody, null);
-  inspBody.appendChild(inspectorActions(m, g));
+  inspFoot.replaceChildren(inspectorActions(m, g));
   inspectorEl.hidden = false;
   if (inspResize) inspResize.hidden = false;
   shellEl.classList.add('insp');

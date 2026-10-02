@@ -31,6 +31,15 @@ def test_every_flare_kind_gets_a_picture():
         assert f"\n    {cat}: '" in BADGES, cat
 
 
+def test_plugins_are_asked_for_at_every_zoom_and_shrink_when_far():
+    """The server decides what a view gets (a shared plugin's cameras at
+    any zoom, a community plugin's alerts only up close); the page no
+    longer refuses to ask."""
+    assert "PLUGIN_VIEW_MAX_DEG" not in APP
+    assert "el.classList.toggle('pz-low', z < 8)" in APP
+    assert ".pz-low .pbadge-pin .pbadge svg { display:none }" in CSS
+
+
 def test_plugin_alerts_are_badges_and_never_gpu_dots():
     assert "icon: csPlugin.icon(m)" in APP
     assert "if (g === 'plugin') continue;" in APP          # kept out of the dot layer

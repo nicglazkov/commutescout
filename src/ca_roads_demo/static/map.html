@@ -492,9 +492,12 @@
   </div>
   <div class="resizer" id="inspresize" role="separator" aria-orientation="vertical" aria-label="Resize the details pane" tabindex="0" hidden></div>
   <aside class="inspector" id="inspector" hidden aria-label="Details">
-    <div class="insphead"><b id="insptitle">Details</b>
+    <div class="insphead">
+      <span class="inspicon" id="inspicon" aria-hidden="true"></span>
+      <div class="insphd"><b id="insptitle">Details</b><span id="inspwhen"></span></div>
       <button type="button" class="inspx" id="inspclose" aria-label="Close the details pane">&times;</button></div>
     <div class="inspbody" id="inspbody"></div>
+    <div class="inspfoot" id="inspfoot"></div>
   </aside>
 </div>
 
