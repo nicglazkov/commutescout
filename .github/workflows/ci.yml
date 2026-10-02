@@ -53,14 +53,6 @@ jobs:
           # yet, add "--ignore-vuln <ID>" here with a comment saying why
           # and when to remove it, rather than leaving main red.
           pip-audit
-          # plugins/waze-relay ships as its own Cloud Run service from its
-          # own pinned requirements.txt, which the step above never sees:
-          # CI installs .[dev,demo] and the relay is not part of that. So a
-          # vulnerability in what the relay actually deploys with could sit
-          # there indefinitely with CI green. These pins are Linux-clean, so
-          # requirements mode works here.
-          pip-audit -r plugins/waze-relay/requirements.txt
-          pip-audit -r plugins/osm-cameras/requirements.txt
 
   site:
     runs-on: ubuntu-24.04

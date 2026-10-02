@@ -10,6 +10,10 @@ everyone (public, listed in the catalog).
 This document is the specification. Version 1. Additive changes only
 within version 1; the version is in every path.
 
+The plugins the CommuteScout project runs itself live in their own
+repository, [commutescout-plugins](https://github.com/nicglazkov/commutescout-plugins); they are working examples of
+everything below.
+
 ## What a plugin can do
 
 | Capability | What it means |

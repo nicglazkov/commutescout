@@ -44,9 +44,7 @@ packages = ["src/ca_roads", "src/ca_roads_mcp", "src/ca_roads_demo"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-# plugins/waze-relay is a deployable service of its own, not part of the
-# wheel; its modules are importable here so its tests live with the rest.
-pythonpath = [".", "plugins/waze-relay"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100

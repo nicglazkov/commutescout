@@ -10,7 +10,7 @@ highway-radar-sabre-plus, which does the same for a radar app.
 ## Now live
 
 The plugin is built, deployed and listed. It is
-[`plugins/waze-relay`](../plugins/waze-relay/README.md), running on Cloud
+[`waze-relay`](https://github.com/nicglazkov/commutescout-plugins/tree/main/waze-relay), running on Cloud
 Run at `https://wz-flare-15002631928.us-west1.run.app`, listed in the
 catalog as tier `unreviewed`, and `python -m ca_roads.flare check` passes
 against it.
@@ -21,7 +21,7 @@ README covers each in full:
 - **The protocol.** The `live-map/api/georss` feed this plan describes now
   answers 403. The plugin speaks the mobile app's RT protocol instead, the
   same one highway-radar-sabre-plus uses, ported to Python under
-  `plugins/waze-relay/waze`. Two fields go with the old feed: jams arrive as
+  `waze-relay/waze` in the plugins repository. Two fields go with the old feed: jams arrive as
   points rather than polylines, so there is no `geometry`, and there is no
   upstream `reliability`, so confidence is derived from the confirmation
   count.
