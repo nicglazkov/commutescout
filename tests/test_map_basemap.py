@@ -75,8 +75,10 @@ def test_the_worker_address_changes_with_every_deploy():
 def test_the_style_is_asked_for_before_the_map_code_loads():
     html = (STATIC / "map.html").read_text(encoding="utf-8")
     head = html[:html.index("</head>")]
-    assert "link.as = 'fetch'" in head and "/api/map/style.json?flavor=" in head
+    assert '<script src="/static/basemap-early.js?v=__ASSET_V__"></script>' in head
     assert 'rel="preconnect" href="https://tiles.openfreemap.org"' in head
+    early = (STATIC / "basemap-early.js").read_text(encoding="utf-8")
+    assert "link.as = 'fetch'" in early and "/api/map/style.json?flavor=" in early
     # The names the early script maps must be the picker's.
     for name in ("Positron", "Bright", "Slate", "Gray", "Dark"):
-        assert f"{name}: '" in head, name
+        assert f"{name}: '" in early, name

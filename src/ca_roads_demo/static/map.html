@@ -49,17 +49,7 @@
      code has been parsed: the map library then finds it already here.
      Which style depends on the saved choice, so a script picks it. The
      names match basemap.js. -->
-<script>
-(function () {
-  var flavor = { Positron: 'positron', Bright: 'bright', Slate: 'slate', Gray: 'grayscale', Dark: 'dark' };
-  var name = null;
-  try { name = localStorage.getItem('cs-basemap'); } catch (e) { /* private mode */ }
-  var link = document.createElement('link');
-  link.rel = 'preload'; link.as = 'fetch'; link.crossOrigin = 'anonymous';
-  link.href = '/api/map/style.json?flavor=' + (flavor[name] || 'positron');
-  document.head.appendChild(link);
-})();
-</script>
+<script src="/static/basemap-early.js?v=__ASSET_V__"></script>
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css">

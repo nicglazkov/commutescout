@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
-# Build the second set of base map files: the United States in the
+# Refresh the second set of base map files: the United States in the
 # OpenMapTiles layout, which the Positron and Bright styles draw from.
 #
-# map_refresh.sh cuts the Protomaps-layout files (Slate, Gray, Dark) out
-# of a ready-made world build. Nobody publishes a ready-made
-# OpenMapTiles build to cut from, so this one makes it: a one-off VM
-# downloads the OpenStreetMap extract for the United States, runs
-# Planetiler's OpenMapTiles profile over it, cuts every state, uploads
-# the lot beside the others under map/omt/, and deletes itself. About an
-# hour and a half, around a dollar. Check the log afterwards:
+# OpenFreeMap publishes its whole planet as one PMTiles file, the same
+# tiles its hosted service serves. A one-off VM cuts the United States
+# out of it over HTTP (only the tiles needed are read), then every
+# state, uploads them beside the Protomaps-layout files under map/omt/,
+# and removes itself. About half an hour, well under a dollar. Check the
+# log afterwards:
 #   gcloud storage cat gs://data.commutescout.com/map/omt/_refresh.log
 #
-#   scripts/map_refresh_omt.sh
+#   scripts/map_refresh_omt.sh                      # the version being served now
+#   scripts/map_refresh_omt.sh 20260927_080001_pt   # a specific one
 set -euo pipefail
 PROJECT=ca-roads-mcp
 ZONE=us-west1-b
 BUCKET=gs://data.commutescout.com/map/omt
-PLANETILER="${PLANETILER:-0.10.2}"
-BUILD="$(date -u +%Y%m%d)"
+# The version OpenFreeMap is serving is the dated folder in its tile address.
+BUILD="${1:-$(curl -s https://tiles.openfreemap.org/planet | python -c 'import json,sys; print(json.load(sys.stdin)["tiles"][0].split("/planet/")[1].split("/")[0])')}"
+echo "build $BUILD"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TMP="$(mktemp -d)"
 # gcloud on Windows is a native program: it needs the Windows spelling of
@@ -34,10 +35,10 @@ exec > /root/refresh.log 2>&1 < /dev/null
 set -u
 BUILD=$BUILD
 cd /root
-echo "start \$(date -u +%FT%TZ) build \$BUILD planetiler $PLANETILER"
+echo "start \$(date -u +%FT%TZ) build \$BUILD"
 # Whatever happens, the log lands in the bucket and the VM goes away.
 # Powering off is what removes it: the VM is created to be deleted when
-# it stops, and after four hours regardless.
+# it stops, and after two hours regardless.
 finish() {
   echo "finish \$(date -u +%FT%TZ)"
   gcloud storage cp /root/refresh.log "$BUCKET/_refresh.log"
@@ -45,26 +46,20 @@ finish() {
 }
 trap finish EXIT
 apt-get update -qq >/dev/null && apt-get install -y -qq curl ca-certificates python3 >/dev/null
-curl -sL -o jdk.tar.gz "https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse"
-mkdir jdk && tar xzf jdk.tar.gz -C jdk --strip-components=1 && ./jdk/bin/java -version
-curl -sL -o planetiler.jar "https://github.com/onthegomap/planetiler/releases/download/v$PLANETILER/planetiler.jar"
-ls -la planetiler.jar
 curl -sL -o pmtiles.tar.gz https://github.com/protomaps/go-pmtiles/releases/download/v1.31.2/go-pmtiles_1.31.2_Linux_x86_64.tar.gz
 tar xzf pmtiles.tar.gz && chmod +x pmtiles && ./pmtiles version
 curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/us-states" > us-states.json
 curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/map-states-py" > map_states.py
+cat > us.geojson <<'GEO'
+{"type":"Feature","properties":{},"geometry":{"type":"MultiPolygon","coordinates":[
+ [[[-125.6,24.2],[-66.6,24.2],[-66.6,49.6],[-125.6,49.6],[-125.6,24.2]]],
+ [[[-180.0,51.0],[-129.0,51.0],[-129.0,72.0],[-180.0,72.0],[-180.0,51.0]]],
+ [[[-161.0,18.5],[-154.5,18.5],[-154.5,22.5],[-161.0,22.5],[-161.0,18.5]]]
+]}}
+GEO
 T0=\$(date +%s)
-# The extract comes down with curl, which retries and resumes; Planetiler's
-# own downloader gave up on Geofabrik after one slow answer.
-mkdir -p data/sources
-for url in https://download.geofabrik.de/north-america/us-latest.osm.pbf \\
-           https://ftp5.gwdg.de/pub/misc/openstreetmap/download.geofabrik.de/north-america/us-latest.osm.pbf; do
-  curl -L --fail --retry 8 --retry-delay 20 --retry-all-errors -C - -o data/sources/us.osm.pbf "\$url" && break
-done
-echo "extract: \$(ls -la data/sources/us.osm.pbf) after \$(( \$(date +%s) - T0 )) s"
-./jdk/bin/java -Xmx24g -jar planetiler.jar --download --osm-path=data/sources/us.osm.pbf --output=us.pmtiles \\
-  --maxzoom=14 --languages=en --nodemap-type=sparsearray --storage=mmap --force
-echo "planetiler exit \$? after \$(( \$(date +%s) - T0 )) s: \$(ls -la us.pmtiles)"
+./pmtiles extract "https://btrfs.openfreemap.com/areas/planet/\$BUILD/tiles.pmtiles" us.pmtiles --region=us.geojson --maxzoom=14 --download-threads=8
+echo "us extract exit \$? after \$(( \$(date +%s) - T0 )) s: \$(ls -la us.pmtiles)"
 [ -s us.pmtiles ] || exit 1
 ./pmtiles show us.pmtiles | head -20
 gcloud storage cp us.pmtiles "$BUCKET/us-\$BUILD.pmtiles" --cache-control="public, max-age=86400" && echo "uploaded us-\$BUILD"
@@ -77,10 +72,10 @@ echo "done \$(date -u +%FT%TZ)"
 EOF
 
 gcloud compute instances create map-refresh-omt --project "$PROJECT" --zone "$ZONE" \
-  --machine-type e2-highmem-8 --boot-disk-size 300GB --boot-disk-type pd-ssd \
+  --machine-type e2-standard-4 --boot-disk-size 200GB --boot-disk-type pd-balanced \
   --image-family debian-12 --image-project debian-cloud \
-  --instance-termination-action DELETE --max-run-duration 4h \
+  --instance-termination-action DELETE --max-run-duration 2h \
   --service-account 15002631928-compute@developer.gserviceaccount.com --scopes cloud-platform \
   --metadata-from-file "startup-script=$TMPW/startup.sh,us-states=$TMPW/us-states.json,map-states-py=$TMPW/map_states.py"
-echo "VM map-refresh-omt started; it deletes itself when done, or after four hours."
+echo "VM map-refresh-omt started; it removes itself when done, or after two hours."
 echo "The log lands at $BUCKET/_refresh.log when it finishes."
