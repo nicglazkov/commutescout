@@ -646,17 +646,28 @@ function popupFor(m, g) {
   }
   if (g === 'plugin') {
     // A Flare plugin alert: what it is, where, how sure, and who says so.
-    const kindTxt = esc(humanize((m.flare_kind || 'OTHER').toLowerCase().replace(/_/g, ' ')));
+    // A camera reads the way people say it ("Speed camera", not "Camera
+    // speed"), and its description opens with those same words, so they
+    // come off the line under the title.
+    const camera = { CAMERA_SPEED: 'Speed camera', CAMERA_RED_LIGHT: 'Red light camera' }[m.flare_kind];
+    const kindTxt = camera || esc(humanize((m.flare_kind || 'OTHER').toLowerCase().replace(/_/g, ' ')));
+    let about = m.label || '';
+    if (camera && about.toLowerCase().startsWith(camera.toLowerCase())) {
+      about = about.slice(camera.length).replace(/^[,.\s]+/, '');
+      about = about.charAt(0).toUpperCase() + about.slice(1);
+    }
+    // Something fixed in place was not "reported 38 minutes ago".
+    const fixed = (m.ttl_s || 0) >= 86400;
     const n = Number(m.confirmations) || 0;
     const facts = [
       m.road ? ['Road', esc(m.road)] : null,
       n ? ['Confirmed', n + (n === 1 ? ' time' : ' times')] : null,
-      (m.reliability != null) ? ['Reliability', Math.round(m.reliability * 100) + '%'] : null,
+      (m.reliability != null && !fixed) ? ['Reliability', Math.round(m.reliability * 100) + '%'] : null,
       m.data ? ['Data from', esc(m.data)] : null,
     ];
     return v2(csPlugin.color(csPlugin.sourceId(m)), esc(m.source || 'Plugin'),
-      m.reported ? agoTxt(m.reported) : null,
-      kindTxt, m.label ? esc(m.label) : null, [], facts, [
+      m.reported && !fixed ? agoTxt(m.reported) : null,
+      kindTxt, about ? esc(about) : null, [], facts, [
         'Source: ' + esc(m.source || 'community plugin') +
           (m.tier === 'approved' ? ' (approved by CommuteScout)'
             : m.tier === 'unreviewed' ? ' (public, not reviewed)'
@@ -1868,8 +1879,8 @@ map.on('moveend zoomend', () => {
 function badgeScale() {
   const z = map.getZoom();
   const el = map.getContainer();
-  el.classList.toggle('pz-mid', z < 11 && z >= 8);
-  el.classList.toggle('pz-low', z < 8);
+  el.classList.toggle('pz-mid', z < 12 && z >= 9);
+  el.classList.toggle('pz-low', z < 9);
 }
 map.on('zoomend', badgeScale);
 badgeScale();
