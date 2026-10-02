@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Camera, Check, MapPin, Puzzle, Users } from "lucide-react";
 
 // The plugin marketplace: one tile per listed plugin, read live from
 // /api/flare/sources. "Install" on the web turns the plugin's layer on
@@ -73,17 +74,46 @@ function kindsLabel(kinds?: string[]): string {
   return Array.from(groups).join(", ");
 }
 
-function Tier({ tier }: { tier?: string | null }) {
-  const approved = tier === "approved";
+// What a plugin is mostly about, read from its kinds: it picks the icon
+// and its color, the way a store listing has an app icon.
+function category(kinds?: string[]): "cameras" | "crowd" | "other" {
+  const k = kinds || [];
+  if (k.length > 0 && k.every((x) => x.startsWith("CAMERA"))) return "cameras";
+  if (k.some((x) => x.startsWith("POLICE") || x.startsWith("CRASH") || x.startsWith("HAZARD"))) return "crowd";
+  return "other";
+}
+
+const ICONS = {
+  cameras: { Icon: Camera, tile: "from-amber-400 to-orange-600" },
+  crowd: { Icon: Users, tile: "from-sky-400 to-blue-700" },
+  other: { Icon: Puzzle, tile: "from-slate-400 to-slate-700" },
+} as const;
+
+function PluginIcon({ kinds }: { kinds?: string[] }) {
+  const { Icon, tile } = ICONS[category(kinds)];
   return (
-    <span
-      className={
-        "rounded-full px-2 py-0.5 text-[11px] font-semibold " +
-        (approved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")
-      }
+    <div
+      className={"flex size-14 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br text-white shadow-sm " + tile}
+      aria-hidden
     >
-      {approved ? "Approved" : "Public, not reviewed"}
-    </span>
+      <Icon className="size-7" strokeWidth={1.75} />
+    </div>
+  );
+}
+
+function kindChips(kinds?: string[]): string[] {
+  const label = kindsLabel(kinds);
+  return label ? label.split(", ") : [];
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 flex-1 px-3 text-center first:pl-0 last:pr-0">
+      <dt className="text-cs-ink/50 text-[10px] font-semibold uppercase tracking-wider">{label}</dt>
+      <dd className="mt-0.5 truncate text-sm font-semibold text-cs-ink" style={{ fontVariantNumeric: "tabular-nums" }}>
+        {value}
+      </dd>
+    </div>
   );
 }
 
@@ -150,70 +180,93 @@ export function Marketplace() {
     return <p className="text-cs-ink/70 mt-6">No plugin is listed yet.</p>;
   }
   return (
-    <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="mt-8 grid gap-5 md:grid-cols-2">
       {sources.map((s) => {
         const installed = isInstalled(s);
+        const approved = s.tier === "approved";
+        // An operator named the same as its plugin says nothing twice.
+        const named = s.attribution?.name && s.attribution.name !== s.name ? s.attribution.name : "";
+        const operator = named || "Run by its community";
         return (
           <article
             key={s.id}
-            className="flex flex-col rounded-2xl border border-cs-ink/10 bg-white p-5 shadow-sm"
+            className="flex flex-col rounded-3xl border border-cs-ink/10 bg-white p-5 shadow-sm transition-shadow hover:shadow-md sm:p-6"
             data-plugin={s.id}
           >
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-lg font-semibold leading-tight text-cs-ink">{s.name}</h2>
-              <Tier tier={s.tier} />
-            </div>
-            {s.visibility === "unlisted" && (
-              <p className="text-cs-ink/60 mt-1 text-xs">Unlisted: shared with you by link, not on the catalog.</p>
-            )}
-            <p className="text-cs-ink/70 mt-2 text-sm">
-              {s.description || (kindsLabel(s.kinds) ? `Shows ${kindsLabel(s.kinds)}.` : "Community alerts for the map.")}
-            </p>
-            <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-cs-ink/60">
-              <dt>Coverage</dt>
-              <dd className="text-cs-ink">{coverageLabel(s.coverage)}</dd>
-              <dt>Alerts now</dt>
-              <dd className="text-cs-ink" style={{ fontVariantNumeric: "tabular-nums" }}>
-                {s.ok === false ? "not answering" : (s.count ?? 0).toLocaleString()}
-              </dd>
-              <dt>Kinds</dt>
-              <dd className="text-cs-ink">{kindsLabel(s.kinds) || "—"}</dd>
-              <dt>Operator</dt>
-              <dd className="text-cs-ink">
-                {s.attribution?.url ? (
-                  <a href={s.attribution.url} className="text-cs-sky hover:underline">
-                    {s.attribution?.name || s.name}
-                  </a>
-                ) : (
-                  s.attribution?.name || "Not stated"
-                )}
-              </dd>
-              <dt>Reports</dt>
-              <dd className="text-cs-ink">{s.capabilities?.report ? "accepted" : "read only"}</dd>
-              <dt>Price</dt>
-              <dd className="text-cs-ink">Free</dd>
-            </dl>
-            <div className="mt-5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-4">
+              <PluginIcon kinds={s.kinds} />
+              <div className="min-w-0 flex-1">
+                <h2 className="text-balance text-base font-semibold leading-snug text-cs-ink sm:text-lg">{s.name}</h2>
+                <p className="text-cs-ink/60 mt-0.5 truncate text-sm">
+                  {s.attribution?.url ? (
+                    <a href={s.attribution.url} className="hover:text-cs-sky hover:underline">
+                      {operator}
+                    </a>
+                  ) : (
+                    operator
+                  )}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => toggle(s)}
                 className={
-                  "rounded-full px-4 py-2 text-sm font-medium transition-colors " +
+                  "inline-flex shrink-0 items-center gap-1 rounded-full px-5 py-2 text-sm font-semibold transition-colors " +
                   (installed
-                    ? "border border-cs-ink/20 text-cs-ink hover:bg-cs-bg"
-                    : "bg-cs-navy text-white hover:bg-cs-navy/90")
+                    ? "bg-cs-ink/5 text-cs-ink hover:bg-cs-ink/10"
+                    : "bg-cs-sky text-white hover:bg-cs-sky/90")
                 }
                 aria-pressed={installed}
               >
+                {installed && <Check className="size-4" aria-hidden />}
                 {installed ? "Installed" : "Install"}
               </button>
-              <a href={`/map?plugin=${encodeURIComponent(s.id)}`} className="text-sm text-cs-sky hover:underline">
+            </div>
+
+            <p className="text-cs-ink/75 mt-4 text-sm leading-relaxed">
+              {s.description || (kindsLabel(s.kinds) ? `Shows ${kindsLabel(s.kinds)}.` : "Community alerts for the map.")}
+            </p>
+
+            {kindChips(s.kinds).length > 0 && (
+              <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="What it shows">
+                {kindChips(s.kinds).map((k) => (
+                  <li key={k} className="bg-cs-ink/5 text-cs-ink/70 rounded-full px-2.5 py-0.5 text-xs capitalize">
+                    {k}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <dl className="divide-cs-ink/10 border-cs-ink/10 mt-5 flex divide-x border-y py-3">
+              <Stat label="Alerts now" value={s.ok === false ? "Offline" : (s.count ?? 0).toLocaleString()} />
+              <Stat label="Coverage" value={coverageLabel(s.coverage)} />
+              <Stat label="Reports" value={s.capabilities?.report ? "Accepted" : "Read only"} />
+              <Stat label="Price" value="Free" />
+            </dl>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <span
+                className={
+                  "rounded-full px-2.5 py-0.5 text-xs font-semibold " +
+                  (approved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")
+                }
+              >
+                {approved ? "Approved by CommuteScout" : "Public, not reviewed"}
+              </span>
+              <a
+                href={`/map?plugin=${encodeURIComponent(s.id)}`}
+                className="inline-flex items-center gap-1 text-sm font-medium text-cs-sky hover:underline"
+              >
+                <MapPin className="size-4" aria-hidden />
                 See it on the map
               </a>
             </div>
-            {s.tier !== "approved" && (
-              <p className="text-cs-ink/50 mt-3 text-[11px]">
-                Not reviewed by CommuteScout. Use at your own risk; it never speaks unless you turn voice on for it.
+            {s.visibility === "unlisted" && (
+              <p className="text-cs-ink/60 mt-3 text-xs">Unlisted: shared with you by link, not on the catalog.</p>
+            )}
+            {!approved && (
+              <p className="text-cs-ink/50 mt-3 text-xs">
+                Use at your own risk. It never speaks unless you turn voice on for it.
               </p>
             )}
           </article>
