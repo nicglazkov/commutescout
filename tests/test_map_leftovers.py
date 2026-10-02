@@ -27,9 +27,10 @@ def test_inspector_actions_share_only_what_a_focus_link_can_find():
     assert "function inspectorActions(m, g)" in APP
     assert "'/map?focus=' + m.lat.toFixed(5) + ',' +" in APP
     assert "function focusKind(g)" in APP and "FOCUS_GROUPS[k].includes(g)" in APP
-    assert "watch.textContent = 'Watch this stretch';" in APP
+    assert "button('inspwatch', 'Watch this stretch', false," in APP
     assert "w.watchHere(m.lat, m.lon)" in APP
-    assert "inspBody.appendChild(inspectorActions(m, g));" in APP
+    # The actions sit in the inspector's footer, which does not scroll away.
+    assert "inspFoot.replaceChildren(inspectorActions(m, g));" in APP
 
 
 def test_watch_module_accepts_a_center_from_the_map():
