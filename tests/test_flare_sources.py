@@ -3,9 +3,9 @@ what the spec accepts, serves markers for a bbox, and the admin
 endpoints manage the registry."""
 
 import json
-from pathlib import Path
 import time
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -727,5 +727,5 @@ def test_the_circle_around_a_person_is_the_decided_size():
     assert flare_sources.VIEW_MAX_DEG == 4.0
     assert flare_sources.NEAR_FETCH_M >= flare_sources.NEAR_SERVE_M + 6_200
     # The web map asks for community alerts up to the same view width.
-    app_js = (Path(__file__).resolve().parents[1] / "src/ca_roads_demo/static/map-app.js").read_text(encoding="utf-8")
-    assert "if (span <= 4.0) {" in app_js
+    app_js = Path(__file__).resolve().parents[1] / "src/ca_roads_demo/static/map-app.js"
+    assert "if (span <= 4.0) {" in app_js.read_text(encoding="utf-8")
