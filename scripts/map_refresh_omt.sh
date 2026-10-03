@@ -68,6 +68,20 @@ gcloud storage cp states/*.pmtiles "$BUCKET/states/" --cache-control="public, ma
 # The stable names last, so a client never sees a half-replaced set.
 gcloud storage cp "$BUCKET/us-\$BUILD.pmtiles" "$BUCKET/us.pmtiles" && echo "us.pmtiles now \$BUILD"
 gcloud storage cp index.json "$BUCKET/index.json" --cache-control="public, max-age=600" && echo "index uploaded"
+# Cloudflare R2 is what the site and the apps read from (maps.commutescout.com,
+# no egress charge); GCS keeps a copy. The same files go there, the stable
+# names last. Keys come from Secret Manager, which the VM's account can read.
+curl -sSL https://rclone.org/install.sh | bash >/dev/null 2>&1 || true
+tok() { curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])'; }
+secret() { curl -s -H "Authorization: Bearer \$(tok)" "https://secretmanager.googleapis.com/v1/projects/ca-roads-mcp/secrets/\$1/versions/latest:access" | python3 -c 'import sys,json,base64;print(base64.b64decode(json.load(sys.stdin)["payload"]["data"]).decode().strip())'; }
+mkdir -p /root/.config/rclone
+printf '[r2]\ntype = s3\nprovider = Cloudflare\naccess_key_id = %s\nsecret_access_key = %s\nendpoint = %s\nacl = private\nno_check_bucket = true\n' "\$(secret r2-access-key-id)" "\$(secret r2-secret-access-key)" "\$(secret r2-endpoint)" > /root/.config/rclone/rclone.conf
+R2=r2:commutescout-maps/omt
+rclone copyto us.pmtiles "\$R2/us-\$BUILD.pmtiles" --s3-chunk-size 64M --s3-upload-concurrency 8 && echo "r2: uploaded us-\$BUILD"
+rclone copy states "\$R2/states" --transfers 8 --s3-chunk-size 64M && echo "r2: states uploaded"
+rclone copyto "\$R2/us-\$BUILD.pmtiles" "\$R2/us.pmtiles" && echo "r2: us.pmtiles now \$BUILD"
+rclone copyto index.json "\$R2/index.json" && echo "r2: index uploaded"
+rclone check . "\$R2" --one-way --size-only --include "us.pmtiles" --include "index.json" --include "states/**" 2>&1 | tail -2
 echo "done \$(date -u +%FT%TZ)"
 EOF
 

@@ -111,4 +111,7 @@ def test_every_template_placeholder_is_covered_by_the_pattern():
     known = {m.group(0) for m in
              re.finditer(r"__(?:TITLE|OG_IMAGE|OG_URL|TRIP_JSON)__",
                          " ".join(found))}
+    # __ASSET_V__ is the asset stamp, consumed by the app's stamping
+    # helper before the trip placeholders are filled in.
+    found.discard("__ASSET_V__")
     assert found == known, f"template has unhandled placeholders: {found - known}"
