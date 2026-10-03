@@ -49,13 +49,18 @@ MAX_CELLS = 200
 # person's own position their alerts are shown. Serving has to stay
 # inside what was fetched, or the map would show an empty ring where
 # nothing was ever asked about: half a snap step is at most 6.2 km
-# anywhere in the coverage area, and 12 + 6.2 is under 20.
+# anywhere in the coverage area, and 40 + 6.2 is under 50.
+#
+# Widened on 2026-10-03 from 12 km served (20 fetched) and a 1.5 degree
+# view: about 25 miles around the person and a view up to 4 degrees
+# across, so alerts are there from a regional zoom too. The rule is the
+# same: alerts reach the person near them and nobody else.
 NEAR_SNAP_DEG = 0.1
-NEAR_FETCH_M = 20_000
-NEAR_SERVE_M = 12_000
+NEAR_FETCH_M = 50_000
+NEAR_SERVE_M = 40_000
 # A view wider than this is a region, not a place. Nobody is driving
 # across it, and a plugin has nothing useful to say about all of it.
-VIEW_MAX_DEG = 1.5
+VIEW_MAX_DEG = 4.0
 # Enough for a busy day in every metro at once; the oldest fall off.
 MAX_NEAR_POINTS = 250
 # A planned route becomes demand too: a point every ROUTE_STEP_M along

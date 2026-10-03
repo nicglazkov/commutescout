@@ -1933,7 +1933,9 @@ async function refreshPlugins() {
     }
     const b = map.getBounds();
     const span = Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest());
-    if (span <= 1.5) {
+    // The server's VIEW_MAX_DEG: wider than this is a region, and the
+    // community plugins are not asked.
+    if (span <= 4.0) {
       const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]
         .map((v) => v.toFixed(3)).join(',');
       if (bbox !== lastPluginBox || now - (communityAlerts.at || 0) > 60000) {
