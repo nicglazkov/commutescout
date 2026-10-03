@@ -1043,6 +1043,7 @@ GL.rebuild = () => {
     col[i * 4 + 2] = c[2]; col[i * 4 + 3] = 230;
   }
   GL.index = pts;
+  if (n && !GL.firstPaint) { GL.firstPaint = true; try { performance.mark('markers-ready'); } catch (e) { /* no marks */ } }
   GL.deck.setProps({ layers: [new deckSlim.ScatterplotLayer({
     id: 'dots',
     data: { length: n, attributes: {
@@ -1066,11 +1067,14 @@ function cullPolysOnly() {
 // Plugin badges also attach as Leaflet markers in GL mode: a view holds
 // at most a few hundred, and a badge is an icon, not a dot.
 function cullPlugins() {
+  let added = 0;
   for (const it of items.plugin) {
     if (it.on) continue;
     ambient.plugin.addLayer(layerForItem(it));
     it.on = true;
+    added++;
   }
+  if (added && !cullPlugins.marked) { cullPlugins.marked = true; try { performance.mark('plugins-ready'); } catch (e) { /* no marks */ } }
 }
 // Click picking: the GL canvas never intercepts pointer events, so
 // every existing Leaflet interaction is untouched; dot hits resolve
@@ -1513,7 +1517,7 @@ function renderBatch(markers, groups) {
     // Tolls are lines-only: no dot in the point registries, so they
     // can never be confused with incident or closure dots.
     if (g === 'toll') continue;
-    if (g === 'plugin' && pluginHidden(m)) continue;
+    if (g === 'plugin') continue;   // drawn by applyPlugins, by difference
     items[g].push({ m, g, layer: null, on: false });
   }
   stripsBuilt = false;
@@ -1807,13 +1811,10 @@ refreshAmbient(true);
 const pluginListEl = document.getElementById('pluginlist');
 const pluginRows = new Map();   // id -> { name, kinds, count }
 function pluginSeen(markers) {
-  for (const row of pluginRows.values()) row.count = 0;
   for (const m of markers) {
     const sid = csPlugin.sourceId(m);
     if (!pluginRows.has(sid)) pluginRows.set(sid, { name: m.source || sid, kinds: null, count: 0 });
-    pluginRows.get(sid).count += 1;
   }
-  drawPluginList();
 }
 function drawPluginList() {
   if (!pluginListEl) return;
@@ -1832,7 +1833,7 @@ if (pluginListEl) {
     const off = sw.off.filter((x) => x !== sid);
     if (!e.target.checked) off.push(sid);
     try { localStorage.setItem('cs.plugins.off', off.join(',')); } catch (err) { /* private mode */ }
-    refreshPlugins();
+    applyPlugins();
   });
   fetch('/api/flare/sources', { headers: { Accept: 'application/json' } })
     .then((r) => (r.ok ? r.json() : { sources: [] }))
@@ -1845,34 +1846,115 @@ if (pluginListEl) {
     }).catch(() => { /* the list fills from the alerts themselves */ });
 }
 
-// ── Community plugin alerts ─────────────────────────────────────────
-// These never ride in the shared snapshot: the server serves them in a
-// small circle around whoever is asking and to nobody else, because an
-// alert exists because somebody was standing somewhere. So they are
-// fetched for this view alone. The server decides what a view gets: a
-// community plugin's alerts only while the view is a place rather than
-// a region, and a shared plugin's (fixed cameras: the same for
-// everyone, nobody's position in them) at any zoom.
+// ── Plugin alerts ───────────────────────────────────────────────────
+// Two kinds of plugin, fetched two ways, drawn as one layer that is
+// never cleared and redrawn: markers are added and removed by id, so a
+// pan or a zoom moves what is there and nothing blinks.
+//
+// Shared plugins (fixed cameras: the same for everyone, nobody's
+// position in them) are fetched once for the whole country and again
+// every so often. Community plugins are served in a small circle
+// around whoever is asking and to nobody else, because an alert exists
+// because somebody was standing somewhere; those are fetched for a
+// place-sized view, and what was fetched stays on the map while the
+// view widens, until it expires.
+const SHARED_REFRESH_MS = 15 * 60 * 1000;
+const COMMUNITY_KEEP_MS = 20 * 60 * 1000;
+const sharedAlerts = new Map();      // id -> marker
+const communityAlerts = new Map();   // id -> { m, at }
+let sharedAt = 0;
 let pluginTimer = null;
 let pluginCycle = 0;
+let lastPluginBox = null;
+
+function pluginMarkerStale(m, at, now) {
+  if (now - at > COMMUNITY_KEEP_MS) return true;
+  const t = Date.parse(m.confirmed || m.reported || '');
+  return Number.isFinite(t) && m.ttl_s && now - t > m.ttl_s * 1000;
+}
+
+// The plugin layer, brought to the wanted set: add what is new, drop
+// what is gone, touch nothing else. A marker whose popup is open stays
+// until it closes.
+function applyPlugins() {
+  const now = Date.now();
+  const want = new Map();
+  for (const m of sharedAlerts.values()) if (!pluginHidden(m)) want.set(m.id, m);
+  for (const [id, rec] of communityAlerts) {
+    if (pluginMarkerStale(rec.m, rec.at, now)) { communityAlerts.delete(id); continue; }
+    if (!pluginHidden(rec.m)) want.set(id, rec.m);
+  }
+  const open = (map._popup && map._popup.isOpen()) ? (map._popup.__m || (map._popup._source || {}).__m) : null;
+  const have = new Map(items.plugin.map((it) => [it.m.id, it]));
+  for (const [id, it] of have) {
+    if (want.has(id) || (open && open.id === id)) continue;
+    if (it.layer && it.on) ambient.plugin.removeLayer(it.layer);
+    have.delete(id);
+  }
+  for (const [id, m] of want) {
+    if (have.has(id)) continue;
+    const it = { m, g: 'plugin', layer: null, on: false };
+    have.set(id, it);
+  }
+  items.plugin = [...have.values()];
+  cullPlugins();
+  if (!GL.on) cullSync();
+  const el = document.getElementById('n-plugin');
+  if (el) el.textContent = items.plugin.length;
+  const counts = new Map();
+  for (const it of items.plugin) {
+    const sid = csPlugin.sourceId(it.m);
+    counts.set(sid, (counts.get(sid) || 0) + 1);
+  }
+  for (const [sid, row] of pluginRows) row.count = counts.get(sid) || 0;
+  drawPluginList();
+  scheduleAlerts();
+}
+
+async function fetchPluginBox(bbox) {
+  const res = await fetch('/api/mapdata?bbox=' + bbox + '&kinds=plugin&slim=1', { cache: 'no-cache' });
+  if (!res.ok) return null;
+  return (await res.json()).markers || [];
+}
+
 async function refreshPlugins() {
   const mine = ++pluginCycle;
-  const b = map.getBounds();
-  const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]
-    .map((v) => v.toFixed(3)).join(',');
+  const now = Date.now();
   try {
-    const res = await fetch('/api/mapdata?bbox=' + bbox + '&kinds=plugin&slim=1',
-      { cache: 'no-cache' });
-    if (!res.ok || mine !== pluginCycle) return;
-    const d = await res.json();
-    if (mine !== pluginCycle) return;
-    pluginSeen(d.markers || []);
-    renderBatch(d.markers || [], ['plugin']);
+    if (now - sharedAt > SHARED_REFRESH_MS) {
+      // Every shared plugin at once: the server gives a region-wide view
+      // only what is the same for everyone.
+      const all = await fetchPluginBox('17,-170,72,-65');
+      if (all && mine === pluginCycle) {
+        sharedAlerts.clear();
+        for (const m of all) { pluginSeen([m]); sharedAlerts.set(m.id, m); }
+        sharedAt = Date.now();
+      }
+    }
+    const b = map.getBounds();
+    const span = Math.max(b.getNorth() - b.getSouth(), b.getEast() - b.getWest());
+    if (span <= 1.5) {
+      const bbox = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]
+        .map((v) => v.toFixed(3)).join(',');
+      if (bbox !== lastPluginBox || now - (communityAlerts.at || 0) > 60000) {
+        const got = await fetchPluginBox(bbox);
+        if (got && mine === pluginCycle) {
+          lastPluginBox = bbox;
+          communityAlerts.at = Date.now();
+          for (const m of got) {
+            if (sharedAlerts.has(m.id)) continue;
+            pluginSeen([m]);
+            communityAlerts.set(m.id, { m, at: communityAlerts.at });
+          }
+        }
+      }
+    }
   } catch (e) { /* the next view or the next tick tries again */ }
+  if (mine === pluginCycle) applyPlugins();
 }
 map.on('moveend zoomend', () => {
   clearTimeout(pluginTimer);
-  pluginTimer = setTimeout(refreshPlugins, 500);
+  pluginTimer = setTimeout(refreshPlugins, 300);
 });
 // Full badges where there is room for them, small ones at city-region
 // zoom, colored specks beyond that.
