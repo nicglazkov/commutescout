@@ -9,7 +9,7 @@ export const TESTFLIGHT_PUBLIC = "https://testflight.apple.com/join/1CbutYdy";
  * the public link tells new testers the beta is not accepting anyone.
  * Pages say so next to the link instead of sending people into that.
  */
-export const TESTFLIGHT_IN_REVIEW = true;
+export const TESTFLIGHT_IN_REVIEW = false;
 export const TESTFLIGHT_IN_REVIEW_NOTE =
   "The iPhone beta is waiting on Apple's review. Until it clears, the link says the beta is not accepting testers. Android installs today.";
 
