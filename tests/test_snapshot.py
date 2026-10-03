@@ -651,3 +651,42 @@ async def test_a_source_that_recovers_is_not_carried(monkeypatch):
     monkeypatch.setattr(snapshot, "_carried_since", {})
     now = _cams("il.example", 118)
     assert await snapshot.carry_forward("cameras.json.gz", now) == now
+
+
+@pytest.mark.asyncio
+async def test_a_drop_that_lasts_is_published_as_degraded(monkeypatch):
+    """A feed that is gone for good (decommissioned, key revoked) must
+    not freeze the object forever: after DROP_MAX_S of skips the smaller
+    bundle ships, marked degraded, and the "as of" time moves again."""
+    uploaded = []
+    monkeypatch.setattr(snapshot, "BUCKET", "example-bucket")
+    monkeypatch.setattr(snapshot, "_upload", lambda n, b, c: uploaded.append((n, b)))
+    monkeypatch.setattr(snapshot, "_last_hash", {})
+    monkeypatch.setattr(snapshot, "_last_count", {})
+    monkeypatch.setattr(snapshot, "_last_upload", {})
+    monkeypatch.setattr(snapshot, "_last_published", {})
+    monkeypatch.setattr(snapshot, "_first_skip", {})
+
+    full = [{"kind": "incident", "lat": 37.0 + i / 1000, "lon": -122.0} for i in range(1000)]
+    state = {"markers": full}
+
+    async def fake_build(name, kinds):
+        return state["markers"]
+
+    monkeypatch.setattr(snapshot, "build_bundle", fake_build)
+    name = "live.json.gz"
+    assert name not in snapshot.CARRY_BUNDLES
+    assert await snapshot.publish_once(name, {"incident"}, "cc", 60) is True
+    state["markers"] = full[:300]
+    assert await snapshot.publish_once(name, {"incident"}, "cc", 60) is False
+    assert await snapshot.publish_once(name, {"incident"}, "cc", 60) is False
+    assert len(uploaded) == 1
+    snapshot._first_skip[name] -= snapshot.DROP_MAX_S + 1
+    assert await snapshot.publish_once(name, {"incident"}, "cc", 60) is True
+    assert len(uploaded) == 2
+    payload = json.loads(gzip.decompress(uploaded[-1][1]))
+    assert payload["degraded"] is True and len(payload["markers"]) == 300
+    assert name not in snapshot._first_skip
+    # From here the smaller count is the baseline again.
+    state["markers"] = full[:290]
+    assert await snapshot.publish_once(name, {"incident"}, "cc", 60) is True

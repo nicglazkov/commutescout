@@ -27,7 +27,8 @@ def fake_tile() -> bytes:
 
 def test_staticmap_validates_inputs(client):
     assert client.get("/api/staticmap").status_code == 400
-    assert client.get("/api/staticmap?lat=40.7&lon=-74.0").status_code == 404
+    assert client.get("/api/staticmap?lat=51.5&lon=-0.1").status_code == 404  # London
+    assert client.get("/api/staticmap?lat=40.7&lon=-74.0&z=22").status_code == 404
     assert client.get("/api/staticmap?lat=37.3&lon=-121.9&z=22").status_code == 404
 
 

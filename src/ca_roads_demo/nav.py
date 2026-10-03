@@ -102,10 +102,7 @@ def nav_body(body: dict, locations: list[dict], exclusions: list[dict]) -> dict:
 async def api_nav_route(request: Request):
     from ca_roads_demo import app as demo
 
-    try:
-        body = await request.json()
-    except Exception:  # noqa: BLE001
-        body = None
+    body = await demo._capped_json(request)
     if not isinstance(body, dict):
         return JSONResponse({"error": "JSON body required"}, status_code=400)
     locations = _locations(body.get("locations"))

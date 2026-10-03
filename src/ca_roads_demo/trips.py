@@ -140,9 +140,9 @@ async def api_trip_create(request: Request) -> JSONResponse:
         return JSONResponse({"error": "latlngs must be [lat, lon] pairs"},
                             status_code=400)
     for lat, lon in (points[0], points[-1]):
-        if not watch_mod.in_california(lat, lon):
-            return JSONResponse({"error": "trips must start and end in "
-                                          "California"}, status_code=400)
+        if not watch_mod.in_coverage(lat, lon):
+            return JSONResponse({"error": "trips must start and end in a "
+                                          "state CommuteScout covers"}, status_code=400)
 
     steps = []
     for s in (body.get("steps") or [])[:MAX_TRIP_STEPS]:

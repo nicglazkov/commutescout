@@ -673,10 +673,7 @@ async def api_route(request: Request):
     lies on them (see routing.py). The page falls back to plain
     keyless routing whenever this answers anything but 200, so a spent
     budget or a missing key only costs the closure-aware ranking."""
-    try:
-        body = await request.json()
-    except Exception:  # noqa: BLE001 - any malformed body is a 400
-        body = None
+    body = await _capped_json(request)
     if not isinstance(body, dict):
         return JSONResponse({"error": "JSON body required"}, status_code=400)
     locations = _route_locations(body.get("locations"))
@@ -814,7 +811,9 @@ async def api_staticmap(request: Request):
         lon = float(request.query_params["lon"])
     except (KeyError, ValueError):
         return JSONResponse({"error": "lat and lon required"}, status_code=400)
-    if not (5 <= z <= 15 and 31.0 <= lat <= 43.5 and -126.5 <= lon <= -112.5):
+    # Anywhere a watch area may be drawn: the alert emails for every
+    # covered state embed one of these.
+    if not (5 <= z <= 15 and watch.in_coverage(lat, lon)):
         return Response(status_code=404)
     # Only URLs this app minted (alert emails, trip pages) carry a valid
     # signature; anything else would be spending Stadia tiles for free.
@@ -1067,6 +1066,11 @@ def shape_markers(markers, *, slim: bool = False, geo_only: bool = False):
             for m in markers
         ]
     return markers
+
+
+# Every kind /api/mapdata knows; anything else in `kinds` is ignored.
+MAPDATA_KINDS = frozenset({"incident", "closure", "chain", "fire", "camera", "rwis",
+                           "sign", "toll", "plugin"})
 
 
 async def build_markers(box, want, *, geo_only: bool = False, near=None,
@@ -1328,7 +1332,7 @@ async def api_mapdata(request: Request):
         flare_sources.poller.note_route(ahead)
     corridor = [ahead] if ahead else None
     want = set((request.query_params.get("kinds") or
-                "incident,closure,chain,fire").split(","))
+                "incident,closure,chain,fire").split(",")) & MAPDATA_KINDS
     slim = request.query_params.get("slim") == "1"
     geo_only = request.query_params.get("fields") == "geo"
     # Served-response cache, checked BEFORE the build: a hit skips the
@@ -1343,8 +1347,11 @@ async def api_mapdata(request: Request):
     # chosen by it, so sharing an entry between two positions would hand
     # one caller the other's circle, which is the one thing this must
     # never do. It is snapped, so a town still shares a single entry.
+    # Keyed on the known kinds, sorted: a caller cannot mint a fresh
+    # entry per request with a made-up or reordered list and push every
+    # real visitor's entry out of the 24 slots.
     cache_key = (tuple(round(v, 4) for v in box),
-                 request.query_params.get("kinds") or "", slim, geo_only, near,
+                 ",".join(sorted(want)), slim, geo_only, near,
                  tuple(ahead) if ahead else None)
     now_mono = time.monotonic()
     hit = _MAPDATA_CACHE.get(cache_key)

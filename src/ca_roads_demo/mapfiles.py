@@ -136,9 +136,18 @@ async def _fetch_index(client: httpx.AsyncClient) -> dict:
     now = time.monotonic()
     if _manifest_cache and now - _manifest_cache[0] < MANIFEST_TTL_S:
         return _manifest_cache[1]
-    r = await client.get(f"{MAP_BASE_URL}/index.json", timeout=10.0)
-    r.raise_for_status()
-    index = r.json()
+    try:
+        r = await client.get(f"{MAP_BASE_URL}/index.json", timeout=10.0)
+        r.raise_for_status()
+        index = r.json()
+    except Exception:
+        # The apps read this at boot; a passing hiccup at the file host
+        # must not turn into "no maps". The last good index is served
+        # until the host answers again.
+        if _manifest_cache:
+            log.warning("map index fetch failed; serving the cached index")
+            return _manifest_cache[1]
+        raise
     _manifest_cache = (now, index)
     return index
 
