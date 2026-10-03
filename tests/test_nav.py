@@ -79,7 +79,6 @@ def wired(monkeypatch):
 
     monkeypatch.setattr(demo_app, "build_markers", fake_build)
     monkeypatch.setenv("STADIA_API_KEY", "k")
-    nav._TILES.clear()
     return client
 
 
@@ -107,38 +106,10 @@ def test_nav_route_without_key_is_503(wired, monkeypatch):
     assert TestClient(demo_app.app).post("/api/nav/route", json=FERROSTAR_BODY).status_code == 503
 
 
-def test_style_can_be_dark_or_outdoors_but_nothing_else(wired):
-    c = TestClient(demo_app.app)
-    dark = c.get("/api/tiles/style.json?style=alidade_smooth_dark").json()
-    assert "/api/tiles/alidade_smooth_dark/" in dark["sources"]["base"]["tiles"][0]
-    out = c.get("/api/tiles/style.json?style=outdoors").json()
-    assert "/api/tiles/outdoors/" in out["sources"]["base"]["tiles"][0]
-    assert c.get("/api/tiles/style.json?style=satellite").status_code == 400
-    plain = c.get("/api/tiles/style.json").json()
-    assert "/api/tiles/alidade_smooth/" in plain["sources"]["base"]["tiles"][0]
-
-
-def test_style_points_at_the_proxy_and_tiles_are_cached(wired):
-    c = TestClient(demo_app.app)
-    style = c.get("/api/tiles/style.json").json()
-    base = style["sources"]["base"]
-    assert base["tiles"][0].endswith("/api/tiles/alidade_smooth/{z}/{x}/{y}@2x.png")
-    assert base["tileSize"] == 256 and "Stadia" in base["attribution"]
-    r = c.get("/api/tiles/alidade_smooth/12/655/1583@2x.png")
-    assert r.status_code == 200 and r.content == b"PNG"
-    assert r.headers["cache-control"].startswith("public, max-age=86400")
-    assert wired.calls[-1].endswith("/alidade_smooth/12/655/1583@2x.png")
-    n = len(wired.calls)
-    assert c.get("/api/tiles/alidade_smooth/12/655/1583@2x.png").status_code == 200
-    assert len(wired.calls) == n  # served from memory
-    assert c.get("/api/tiles/evil/1/0/0.png").status_code == 404
-    assert c.get("/api/tiles/alidade_smooth/1/9/0.png").status_code == 404  # x out of range
-
-
 def test_budgets_and_limiters_cover_the_new_routes():
     # One caller stays under the service-wide cap for the same upstream.
     assert demo_app.PAID_PER_CLIENT_DAILY["nav"] <= nav.STADIA_NAV_DAILY
-    assert demo_app.PAID_PER_CLIENT_DAILY["tiles"] <= nav.STADIA_APP_TILES_DAILY
+    assert demo_app.PAID_PER_CLIENT_DAILY["speedlimit"] <= nav.STADIA_LIMIT_DAILY
     assert "/api/nav" in demo_app.SoftLimit.PREFIXES
 
 
@@ -194,3 +165,24 @@ def test_speed_limit_is_the_first_known_value_on_the_road_ahead():
     assert limit_from_osrm({}) == {}
     # A limit that only starts far ahead is not the limit here.
     assert limit_from_osrm(route([unknown, {"speed": 65, "unit": "mph"}], [500.0, 10.0])) == {}
+
+
+def test_speedlimit_failures_are_remembered_only_briefly(monkeypatch):
+    class _Boom:
+        calls = 0
+
+        async def post(self, url, *, json, headers, timeout):
+            self.calls += 1
+            raise OSError("timed out")
+
+    client = _Boom()
+    _wire(monkeypatch, client)
+    nav._LIMITS.clear()
+    c = TestClient(demo_app.app)
+    assert c.get("/api/speedlimit?lat=37.36&lon=-121.9&heading=45").json() == {}
+    assert client.calls == 1
+    _, out, ttl = next(iter(nav._LIMITS.values()))
+    assert out == {} and ttl == nav._LIMIT_FAIL_TTL < nav._LIMIT_TTL
+    # Within the short window the same stretch is not asked again.
+    assert c.get("/api/speedlimit?lat=37.36&lon=-121.9&heading=45").headers["x-cache"] == "hit"
+    assert client.calls == 1

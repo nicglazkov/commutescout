@@ -171,8 +171,7 @@ PAID_PER_CLIENT_DAILY = {
     # Report placement asks the road once per click.
     "snap": int(os.environ.get("SNAP_PER_CLIENT_DAILY", "300")),
     # The speedometer's posted limit, once a minute at most while moving.
-    "speedlimit": int(os.environ.get("SPEEDLIMIT_PER_CLIENT_DAILY", "400")),
-    "tiles": int(os.environ.get("APP_TILES_PER_CLIENT_DAILY", "4000")),
+    "speedlimit": int(os.environ.get("SPEEDLIMIT_PER_CLIENT_DAILY", "300")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
     # A map corridor cut for a trip: tens of megabytes read upstream each.
     "map-extract": int(os.environ.get("MAP_EXTRACT_PER_CLIENT_DAILY", "20")),
@@ -2413,8 +2412,6 @@ app = Starlette(
         Route("/api/map/manifest", mapfiles.api_manifest, methods=["GET"]),
         Route("/api/map/style.json", mapfiles.api_style, methods=["GET"]),
         Route("/api/map/extract", mapfiles.api_extract, methods=["POST"]),
-        Route("/api/tiles/style.json", nav.api_tile_style, methods=["GET"]),
-        Route("/api/tiles/{style}/{z:int}/{x:int}/{yfile}", nav.api_tile, methods=["GET"]),
         Route("/api/traffictile/{z:int}/{x:int}/{y:int}.png", api_traffic_tile,
               methods=["GET"]),
         Route("/api/staticmap", api_staticmap, methods=["GET"]),
@@ -2813,9 +2810,6 @@ app = RateLimitMiddleware(
                      "/api/geocode",
                      "/api/incident/", "/api/sources", "/api/stcam/",
                      "/api/suggest", "/api/flow", "/api/traffictile",
-                     # The app's base map: hundreds of tiles a session,
-                     # edge-cached a day; the daily caps bound the rest.
-                     "/api/tiles/",
                      # Watch pages + public bootstrap config are as cheap
                      # as static files; the mutating watch APIs stay
                      # inside the bucket (and are token-gated anyway).
