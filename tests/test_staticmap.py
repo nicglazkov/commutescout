@@ -91,3 +91,20 @@ def test_email_caps_map_images_not_links():
     _, html, _ = watch.render_alert_email("Sierra", events)
     assert html.count("/api/staticmap") == 4  # images capped
     assert html.count("View on the live map") == 6  # links for all
+
+
+def test_a_missing_signing_key_is_said_at_startup(monkeypatch, caplog):
+    import logging
+
+    from ca_roads_demo import staticmap_sig
+
+    monkeypatch.setenv("STADIA_API_KEY", "k")
+    monkeypatch.delenv("STATICMAP_SIGNING_KEY", raising=False)
+    with caplog.at_level(logging.ERROR, logger="ca_roads_demo.staticmap"):
+        staticmap_sig.warn_if_unset()
+    assert "STATICMAP_SIGNING_KEY is not set" in caplog.text
+    caplog.clear()
+    monkeypatch.setenv("STATICMAP_SIGNING_KEY", "s")
+    with caplog.at_level(logging.ERROR, logger="ca_roads_demo.staticmap"):
+        staticmap_sig.warn_if_unset()
+    assert caplog.text == ""

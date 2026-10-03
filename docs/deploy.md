@@ -96,10 +96,9 @@ gcloud run deploy ca-roads-demo \
   --set-env-vars DEMO_MODEL=claude-sonnet-5-5,TELEMETRY_SALT=<random 32 chars>
 ```
 
-Map tiles, routing, and geocoding go through Stadia Maps. Create a
-Stadia account, allowlist your domain in their dashboard (browser
-requests authenticate by Origin, no key in the client), put an API key
-in Secret Manager, and mount it on BOTH services as `STADIA_API_KEY`
+Routing and geocoding go through Stadia Maps. Create a Stadia
+account, put an API key in Secret Manager, and mount it on BOTH
+services as `STADIA_API_KEY`
 (`--update-secrets STADIA_API_KEY=<secret-name>:latest`). The server
 uses it for alert-email and trip static maps, closure road-snapping,
 and geocoding. With the variable unset everything degrades softly:
@@ -174,12 +173,13 @@ EOF
 | `SNAPSHOT_BUCKET` | GCS bucket the map snapshots publish to. Unset disables the publisher and the map falls back to `/api/mapdata` | unset |
 | `APP_VERSION` | Stamped into each snapshot as `build`; informational | unset |
 | `ROUTE_PER_CLIENT_DAILY` | Server-side route plans per visitor per day (`/api/route`); the page falls back to keyless routing past it | `300` |
-| `STADIA_ROUTE_DAILY` | Global daily cap on server-side route plans (20 Stadia credits each) | `4000` |
+| `STADIA_ROUTE_DAILY` | Global daily cap on server-side route plans (20 Stadia credits each) | `200` |
+| `STADIA_LIMIT_DAILY` | Global daily cap on posted speed limit lookups (`/api/speedlimit`, 20 credits each) | `400` |
+| `STADIA_SNAP_DAILY` | Global daily cap on closure and toll road snaps (20 credits each; the queue waits past it) | `300` |
+| `MAP_BASE_URL` | Where the base map files live: `us.pmtiles`, `states/*.pmtiles` and `index.json`, written by `scripts/map_refresh.sh` to the `commutescout-maps` R2 bucket (secrets `r2-access-key-id`, `r2-secret-access-key`, `r2-endpoint`) with a GCS copy | `https://maps.commutescout.com` |
 | `NAV_COSTING` | Valhalla profile the app navigates with; set `auto_traffic` on the Stadia Standard plan for traffic-influenced routes | `auto` |
-| `STADIA_NAV_DAILY` | Global daily cap on app navigation routes (`/api/nav/route`) | `6000` |
-| `STADIA_APP_TILES_DAILY` | Global daily cap on base-map tiles proxied for the app | `150000` |
-| `NAV_PER_CLIENT_DAILY` | App navigation routes per client per day | `400` |
-| `APP_TILES_PER_CLIENT_DAILY` | App tiles per client per day | `8000` |
+| `STADIA_NAV_DAILY` | Global daily cap on app navigation routes (`/api/nav/route`) | `300` |
+| `NAV_PER_CLIENT_DAILY` | App navigation routes per client per day | `150` |
 | `STATICMAP_SIGNING_KEY` | Random 32+ chars; signs the `/api/staticmap` URLs minted for alert emails and trip pages so nobody else can spend map tiles through that endpoint. Unset disables the check. Rotating it breaks the images in emails already sent | unset |
 | `MCP_PER_CLIENT_DAILY` | Requests per client address per UTC day on the MCP service, on top of the per-second bucket. Hosted MCP clients can share an egress address, so keep this well above one office's daily use | `10000` |
 

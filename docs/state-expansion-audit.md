@@ -25,7 +25,7 @@ NJ KY OK HI LA (WZDx roadwork), TX-Austin (city CC0 feed), NV (route
 flow). Wildfires, weather alerts, quakes, and the traffic overlay are
 nationwide.
 
-**One credential away (Nic: see the shopping list below).**
+**One credential away (see the shopping list below).**
 ID NY GA CT LA (Travel-IQ developer keys, one shared
 client), VA (SmarterRoads
 registration), NC (full DriveNC API), OH-WZDx (already keyed via
@@ -47,7 +47,7 @@ their keyless ArcGIS events layer ships.
 TX statewide (non-commercial mirror), SC WV NM WY RI (no usable public
 feed found; details in the regional notes).
 
-## Credentials shopping list for Nic
+## Credentials shopping list for the maintainer
 
 Exact steps, and the Secret Manager name to use so each state lights
 up on deploy. All are free.

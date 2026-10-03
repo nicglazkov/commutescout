@@ -861,6 +861,15 @@ def _salt() -> str:
     return os.environ.get("REPORT_SALT") or os.environ.get("TELEMETRY_SALT") or "dev"
 
 
+def warn_if_dev_salt() -> None:
+    """Said once at startup: in production (a snapshot bucket is set)
+    reporter pseudonyms must not derive from the "dev" salt anyone can
+    read in this file."""
+    if os.environ.get("SNAPSHOT_BUCKET") and _salt() == "dev":
+        log.error("REPORT_SALT and TELEMETRY_SALT are both unset: reporter "
+                  "pseudonyms derive from the public dev salt")
+
+
 class Reports:
     """The community source's records and votes."""
 

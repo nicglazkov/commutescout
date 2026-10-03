@@ -293,8 +293,8 @@ def extract_geo(tool: str, result: dict) -> dict | None:
 
 
 def _safe_zone(name) -> ZoneInfo:
-    """The browser-reported IANA zone, or Pacific: this is a California
-    road service, so PT is the right default when the header is absent or
+    """The browser-reported IANA zone, or Pacific, where the service
+    started and most visitors still are, when the header is absent or
     garbage."""
     try:
         return ZoneInfo(str(name)[:64])
@@ -1616,7 +1616,7 @@ ASSET_DIR = _asset_source_dir()
 
 
 def _site_response(page: str):
-    # Ruling (Task 8 fix round 1, Nic): served URLs are slash-less, matching
+    # Project ruling: served URLs are slash-less, matching
     # the Starlette route table exactly, so site/next.config.ts builds with
     # trailingSlash: false and Next emits a flat "<page>.html" sibling file
     # per route rather than "<page>/index.html". Prefer that flat layout;
@@ -2234,6 +2234,8 @@ SNAP_LOAD_STARTUP_SECONDS = 150
 
 @contextlib.asynccontextmanager
 async def _lifespan(app_):
+    staticmap_sig.warn_if_unset()
+    flare_sources.warn_if_dev_salt()
     with contextlib.suppress(Exception):
         await asyncio.wait_for(roadsnap.load_persisted(),
                                SNAP_LOAD_STARTUP_SECONDS)
