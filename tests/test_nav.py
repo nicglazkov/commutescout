@@ -177,3 +177,20 @@ def test_snap_without_a_key_or_on_error_is_the_click_itself(monkeypatch):
     assert c.get("/api/snap?lat=37.3&lon=-121.9").json() == {
         "snapped": False, "lat": 37.3, "lon": -121.9, "road": None, "distance_m": 0}
     assert c.get("/api/snap?lat=x&lon=1").status_code == 400
+
+
+def test_speed_limit_is_the_first_known_value_on_the_road_ahead():
+    from ca_roads_demo.nav import limit_from_osrm
+
+    def route(maxspeed, distance):
+        ann = {"maxspeed": maxspeed, "distance": distance}
+        return {"routes": [{"legs": [{"annotation": ann}]}]}
+
+    unknown = {"unknown": True}
+    body = route([unknown, unknown, {"speed": 56, "unit": "km/h"}, {"speed": 80, "unit": "km/h"}],
+                 [40.0, 50.0, 60.0, 70.0])
+    assert limit_from_osrm(body) == {"kmh": 56, "mph": 35}
+    assert limit_from_osrm(route([unknown], [5.0])) == {}
+    assert limit_from_osrm({}) == {}
+    # A limit that only starts far ahead is not the limit here.
+    assert limit_from_osrm(route([unknown, {"speed": 65, "unit": "mph"}], [500.0, 10.0])) == {}

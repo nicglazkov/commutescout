@@ -170,6 +170,8 @@ PAID_PER_CLIENT_DAILY = {
     "nav": int(os.environ.get("NAV_PER_CLIENT_DAILY", "150")),
     # Report placement asks the road once per click.
     "snap": int(os.environ.get("SNAP_PER_CLIENT_DAILY", "300")),
+    # The speedometer's posted limit, once a minute at most while moving.
+    "speedlimit": int(os.environ.get("SPEEDLIMIT_PER_CLIENT_DAILY", "400")),
     "tiles": int(os.environ.get("APP_TILES_PER_CLIENT_DAILY", "4000")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
     # A map corridor cut for a trip: tens of megabytes read upstream each.
@@ -2407,6 +2409,7 @@ app = Starlette(
         Route("/api/route", api_route, methods=["POST"]),
         Route("/api/nav/route", nav.api_nav_route, methods=["POST"]),
         Route("/api/snap", nav.api_snap, methods=["GET"]),
+        Route("/api/speedlimit", nav.api_speedlimit, methods=["GET"]),
         Route("/api/map/manifest", mapfiles.api_manifest, methods=["GET"]),
         Route("/api/map/style.json", mapfiles.api_style, methods=["GET"]),
         Route("/api/map/extract", mapfiles.api_extract, methods=["POST"]),

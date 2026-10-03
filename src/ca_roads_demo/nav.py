@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 import os
 import time
 
@@ -43,6 +44,10 @@ NAV_COSTING = os.environ.get("NAV_COSTING", "auto")
 # the hard cap in the Stadia dashboard too: these counters live in the
 # process and a deploy grants the whole day again.
 STADIA_NAV_DAILY = int(os.environ.get("STADIA_NAV_DAILY", "300"))
+# Posted speed limits for the speedometer while driving with no trip:
+# one short route a minute per moving phone at most, cached by road
+# stretch, under its own daily budget.
+STADIA_LIMIT_DAILY = int(os.environ.get("STADIA_LIMIT_DAILY", "3000"))
 STADIA_APP_TILES_DAILY = int(os.environ.get("STADIA_APP_TILES_DAILY", "16000"))
 TILE_STYLES = ("alidade_smooth", "alidade_smooth_dark", "outdoors")
 ATTRIBUTION = ("&copy; <a href=\"https://stadiamaps.com/\">Stadia Maps</a> "
@@ -217,6 +222,84 @@ async def api_snap(request: Request):
         return JSONResponse(same, headers={"Cache-Control": "no-store"})
     return JSONResponse({"snapped": True, **near, "distance_m": d},
                         headers={"Cache-Control": "no-store"})
+
+
+# ---------------------------------------------------------------- speed limit
+
+_LIMITS: dict[tuple, tuple[float, dict]] = {}
+_LIMIT_TTL = 3600.0
+_LIMIT_MAX = 5000
+
+
+def _ahead(lat: float, lon: float, heading: float, meters: float) -> dict:
+    """A point `meters` along `heading` from (lat, lon)."""
+    k = math.cos(math.radians(lat)) or 1e-6
+    return {"lat": round(lat + meters * math.cos(math.radians(heading)) / 110_540, 6),
+            "lon": round(lon + meters * math.sin(math.radians(heading)) / (111_320 * k), 6)}
+
+
+def limit_from_osrm(body: dict, within_m: float = 200.0) -> dict:
+    """The posted limit on the road just ahead, from the maxspeed
+    annotation of an OSRM-format route: the first known value within
+    `within_m` of the start. {} when the map does not say."""
+    try:
+        leg = body["routes"][0]["legs"][0]
+        ann = leg.get("annotation") or {}
+        speeds, dists = ann.get("maxspeed") or [], ann.get("distance") or []
+    except (KeyError, IndexError, TypeError):
+        return {}
+    gone = 0.0
+    for i, m in enumerate(speeds):
+        if gone > within_m:
+            break
+        if isinstance(m, dict) and not m.get("unknown") and m.get("speed"):
+            kmh = float(m["speed"]) * (1.609344 if m.get("unit") == "mph" else 1.0)
+            return {"kmh": round(kmh), "mph": round(kmh / 1.609344)}
+        gone += float(dists[i]) if i < len(dists) else 0.0
+    return {}
+
+
+async def api_speedlimit(request: Request):
+    """GET /api/speedlimit?lat=&lon=&heading= : the posted limit on the
+    road ahead, for the speedometer when no trip is running (a trip
+    carries its own). Empty when unknown, never an error the app has to
+    handle. Cached by a 100 m cell and a 45 degree heading sector."""
+    from ca_roads_demo import app as demo
+
+    try:
+        lat, lon = float(request.query_params["lat"]), float(request.query_params["lon"])
+        heading = float(request.query_params.get("heading", "0")) % 360
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "lat and lon required"}, status_code=400)
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return JSONResponse({"error": "lat and lon out of range"}, status_code=400)
+    headers = {"Cache-Control": "private, max-age=30"}
+    key = (round(lat, 3), round(lon, 3), int(heading // 45))
+    hit = _LIMITS.get(key)
+    now = time.monotonic()
+    if hit and now - hit[0] < _LIMIT_TTL:
+        return JSONResponse(hit[1], headers={**headers, "X-Cache": "hit"})
+    api_key = os.environ.get("STADIA_API_KEY", "").strip()
+    if not api_key or demo._client_over_daily(request, "speedlimit") \
+            or not UPSTREAM.allow("stadia-limit", STADIA_LIMIT_DAILY):
+        return JSONResponse({}, headers=headers)
+    road = demo.tools.get_road()
+    try:
+        resp = await road.client.post(
+            ROUTE_URL,
+            json={"locations": [{"lat": lat, "lon": lon}, _ahead(lat, lon, heading, 350)],
+                  "costing": "auto", "format": "osrm",
+                  "filters": {"action": "include",
+                              "attributes": ["shape_attributes.speed_limit",
+                                             "shape_attributes.length"]}},
+            headers=auth_headers(api_key, USER_AGENT), timeout=10.0)
+        out = limit_from_osrm(json.loads(resp.content)) if resp.status_code < 400 else {}
+    except Exception:  # noqa: BLE001 - a blank limit beats an error on the dashboard
+        out = {}
+    if len(_LIMITS) >= _LIMIT_MAX:
+        _LIMITS.pop(next(iter(_LIMITS)))
+    _LIMITS[key] = (now, out)
+    return JSONResponse(out, headers=headers)
 
 
 def style_json(base: str = PUBLIC_BASE, style: str = "alidade_smooth") -> dict:

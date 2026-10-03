@@ -802,6 +802,12 @@ class Poller:
                 "tier": flare.tier_of(src), "visibility": src.get("visibility"),
                 "count": count, "stale": stale, "ok": st.get("ok"),
                 "last_ok": st.get("last_ok"),
+                # For the apps' plugin status page: what went wrong and
+                # what the plugin says about itself.
+                "last_error": st.get("last_error"), "fails": st.get("fails", 0),
+                "version": hs.get("version"), "protocol": hs.get("protocol"),
+                "refresh_s": hs.get("refresh_s"),
+                "contact": hs.get("contact"),
                 # For the marketplace cards.
                 "description": hs.get("description"),
                 "coverage": (hs.get("coverage") or {}).get("bbox"),
