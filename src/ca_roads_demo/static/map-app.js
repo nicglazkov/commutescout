@@ -3256,28 +3256,10 @@ function valhallaTripToRoute(trip) {
     })),
   };
 }
-async function valhallaDirections(points) {
-  const req = { locations: points.map(p => ({ lat: p[0], lon: p[1] })),
-    costing: 'auto', alternates: points.length === 2 ? 2 : 0,
-    directions_options: { units: csUnits.get() === 'km' ? 'kilometers' : 'miles' } };
-  const res = await fetch(VALHALLA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-    signal: AbortSignal.timeout(8000),
-  });
-  const data = await res.json();
-  if (!data.trip?.legs?.length) return null;
-  const routes = [valhallaTripToRoute(data.trip)];
-  for (const alt of data.alternates || []) {
-    if (alt.trip?.legs?.length) routes.push(valhallaTripToRoute(alt.trip));
-  }
-  return routes.slice(0, 3);
-}
 // The server plans with our own knowledge (full closures excluded,
-// candidates ranked by what lies on them, one-tap presets). Plain
-// keyless routing is the fallback whenever it answers anything else,
-// so the map never loses routing to a spent budget.
+// candidates ranked by what lies on them, one-tap presets) and holds
+// the routing key and the daily budget; past the budget the page says
+// the route servers are busy rather than route around it.
 let routePreset = 'fastest';
 let planNote = null;
 async function serverDirections(points, preset) {
@@ -3298,11 +3280,7 @@ async function serverDirections(points, preset) {
 }
 async function anyDirections(points) {
   planNote = null;
-  try {
-    const ranked = await serverDirections(points, routePreset);
-    if (ranked && ranked.length) return ranked;
-  } catch (e) { /* fall through to plain routing */ }
-  try { return await valhallaDirections(points); } catch (e) { return null; }
+  try { return await serverDirections(points, routePreset); } catch (e) { return null; }
 }
 document.getElementById('routepresets').addEventListener('click', async (e) => {
   const btn = e.target.closest('button[data-preset]');

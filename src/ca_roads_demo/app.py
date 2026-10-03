@@ -2563,7 +2563,7 @@ class SecurityHeaders:
         # "snapshot unavailable".
         # blob: is MapLibre's: it decodes the base map's icon sheet
         # through object URLs.
-        "img-src 'self' data: blob: https://tiles.stadiamaps.com "
+        "img-src 'self' data: blob: "
         "https://cwwp2.dot.ca.gov "
         # Expansion-state camera hosts (WSDOT, TripCheck, OHGO).
         "https://images.wsdot.wa.gov https://*.tripcheck.com "
@@ -2583,10 +2583,8 @@ class SecurityHeaders:
         # Leaving it out does not break the site (the client falls back
         # to /api/mapdata) which is exactly why it is easy to miss: the
         # map keeps working while quietly using the slow path.
-        # tiles.stadiamaps.com appears here as well as img-src: the
-        # service worker re-fetches tiles with fetch(), and a worker's
-        # fetch() is governed by connect-src, not img-src. Without it
-        # every SW-controlled (repeat) visit gets a blank basemap.
+        # No Stadia host: routing and lookups go through this server,
+        # which holds the key and the budget, never from the browser.
         # tiles.openfreemap.org serves the Positron and Bright base maps:
         # tiles, fonts and icons, all read with fetch().
         # maps.commutescout.com is the map files on Cloudflare R2 (the
@@ -2594,7 +2592,6 @@ class SecurityHeaders:
         # keeps the snapshots and the old copy of the map files.
         "connect-src 'self' https://data.commutescout.com https://maps.commutescout.com "
         "https://tiles.openfreemap.org "
-        "https://api.stadiamaps.com https://tiles.stadiamaps.com "
         "https://*.googleapis.com "
         "https://*.google.com https://cloudflareinsights.com "
         "https://*.gstatic.com; "
