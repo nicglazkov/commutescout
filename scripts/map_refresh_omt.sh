@@ -77,10 +77,13 @@ secret() { curl -s -H "Authorization: Bearer \$(tok)" "https://secretmanager.goo
 mkdir -p /root/.config/rclone
 printf '[r2]\ntype = s3\nprovider = Cloudflare\naccess_key_id = %s\nsecret_access_key = %s\nendpoint = %s\nacl = private\nno_check_bucket = true\n' "\$(secret r2-access-key-id)" "\$(secret r2-secret-access-key)" "\$(secret r2-endpoint)" > /root/.config/rclone/rclone.conf
 R2=r2:commutescout-maps/omt
-rclone copyto us.pmtiles "\$R2/us-\$BUILD.pmtiles" --s3-chunk-size 64M --s3-upload-concurrency 8 && echo "r2: uploaded us-\$BUILD"
-rclone copy states "\$R2/states" --transfers 8 --s3-chunk-size 64M && echo "r2: states uploaded"
-rclone copyto "\$R2/us-\$BUILD.pmtiles" "\$R2/us.pmtiles" && echo "r2: us.pmtiles now \$BUILD"
-rclone copyto index.json "\$R2/index.json" && echo "r2: index uploaded"
+# The same Cache-Control the GCS copies carry, so the edge revalidates a
+# day after a refresh and the index within ten minutes.
+PM="--header-upload=Cache-Control: public, max-age=86400"
+rclone copyto us.pmtiles "\$R2/us-\$BUILD.pmtiles" --s3-chunk-size 64M --s3-upload-concurrency 8 "\$PM" && echo "r2: uploaded us-\$BUILD"
+rclone copy states "\$R2/states" --transfers 8 --s3-chunk-size 64M "\$PM" && echo "r2: states uploaded"
+rclone copyto "\$R2/us-\$BUILD.pmtiles" "\$R2/us.pmtiles" "\$PM" && echo "r2: us.pmtiles now \$BUILD"
+rclone copyto index.json "\$R2/index.json" "--header-upload=Cache-Control: public, max-age=600" && echo "r2: index uploaded"
 rclone check . "\$R2" --one-way --size-only --include "us.pmtiles" --include "index.json" --include "states/**" 2>&1 | tail -2
 echo "done \$(date -u +%FT%TZ)"
 EOF
