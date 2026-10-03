@@ -2582,7 +2582,10 @@ class SecurityHeaders:
         # every SW-controlled (repeat) visit gets a blank basemap.
         # tiles.openfreemap.org serves the Positron and Bright base maps:
         # tiles, fonts and icons, all read with fetch().
-        "connect-src 'self' https://data.commutescout.com "
+        # maps.commutescout.com is the map files on Cloudflare R2 (the
+        # archive read in byte ranges, fonts, icons); data.commutescout.com
+        # keeps the snapshots and the old copy of the map files.
+        "connect-src 'self' https://data.commutescout.com https://maps.commutescout.com "
         "https://tiles.openfreemap.org "
         "https://api.stadiamaps.com https://tiles.stadiamaps.com "
         "https://*.googleapis.com "

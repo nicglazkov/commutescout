@@ -38,7 +38,10 @@ from starlette.responses import FileResponse, JSONResponse, Response
 
 log = logging.getLogger(__name__)
 
-MAP_BASE_URL = os.environ.get("MAP_BASE_URL", "https://data.commutescout.com/map").rstrip("/")
+# The map files live on Cloudflare R2 behind maps.commutescout.com since
+# 2026-10-03 (zero egress cost); the GCS copy under data.commutescout.com/map
+# is kept for a while as a fallback.
+MAP_BASE_URL = os.environ.get("MAP_BASE_URL", "https://maps.commutescout.com").rstrip("/")
 PMTILES_BIN = os.environ.get("PMTILES_BIN", "pmtiles")
 STYLE_DIR = Path(__file__).parent / "static" / "mapstyle"
 # positron and bright are OpenFreeMap's styles (OpenMapTiles layout);
