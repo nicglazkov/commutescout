@@ -171,7 +171,7 @@ PAID_PER_CLIENT_DAILY = {
     # Report placement asks the road once per click.
     "snap": int(os.environ.get("SNAP_PER_CLIENT_DAILY", "300")),
     # The speedometer's posted limit, once a minute at most while moving.
-    "speedlimit": int(os.environ.get("SPEEDLIMIT_PER_CLIENT_DAILY", "300")),
+    "speedlimit": int(os.environ.get("SPEEDLIMIT_PER_CLIENT_DAILY", "200")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
     # A map corridor cut for a trip: tens of megabytes read upstream each.
     "map-extract": int(os.environ.get("MAP_EXTRACT_PER_CLIENT_DAILY", "20")),

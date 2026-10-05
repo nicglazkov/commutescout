@@ -36,9 +36,9 @@ NAV_COSTING = os.environ.get("NAV_COSTING", "auto")
 # Sized against the purchased Stadia plan, not against what the service
 # could physically serve. A nav, route, speed-limit or snap request
 # costs about 20 credits and a static map tile about 1, so the defaults
-# here, in app.py and in roadsnap.py (300 nav, 400 speed limits, 300
-# road snaps, 200 planner routes, 4,000 tiles) come to 28,000 credits a
-# day, about 840,000 a month against a 1,000,000 allowance; tests/
+# here, in app.py and in roadsnap.py (300 nav, 200 speed limits, 600
+# road snaps, 200 planner routes, 4,000 tiles) come to 30,000 credits a
+# day, about 900,000 a month against a 1,000,000 allowance; tests/
 # test_budget.py adds them up. Nothing joins without lowering one. Raise them
 # with the environment variables when real usage justifies it, and set
 # the hard cap in the Stadia dashboard too: these counters live in the
@@ -47,7 +47,7 @@ STADIA_NAV_DAILY = int(os.environ.get("STADIA_NAV_DAILY", "300"))
 # Posted speed limits for the speedometer while driving with no trip:
 # one short route a minute per moving phone at most, cached by road
 # stretch, under its own daily budget.
-STADIA_LIMIT_DAILY = int(os.environ.get("STADIA_LIMIT_DAILY", "400"))
+STADIA_LIMIT_DAILY = int(os.environ.get("STADIA_LIMIT_DAILY", "200"))
 
 
 def _locations(raw) -> list[dict] | None:
