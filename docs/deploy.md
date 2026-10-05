@@ -174,8 +174,8 @@ EOF
 | `APP_VERSION` | Stamped into each snapshot as `build`; informational | unset |
 | `ROUTE_PER_CLIENT_DAILY` | Server-side route plans per visitor per day (`/api/route`); the page falls back to keyless routing past it | `300` |
 | `STADIA_ROUTE_DAILY` | Global daily cap on server-side route plans (20 Stadia credits each) | `200` |
-| `STADIA_LIMIT_DAILY` | Global daily cap on posted speed limit lookups (`/api/speedlimit`, 20 credits each) | `400` |
-| `STADIA_SNAP_DAILY` | Global daily cap on closure and toll road snaps (20 credits each; the queue waits past it) | `300` |
+| `STADIA_LIMIT_DAILY` | Global daily cap on posted speed limit lookups (`/api/speedlimit`, 20 credits each) | `200` |
+| `STADIA_SNAP_DAILY` | Global daily cap on closure and toll road snaps (20 credits each; the queue waits past it; a Monday needs about 300) | `600` |
 | `MAP_BASE_URL` | Where the base map files live: `us.pmtiles`, `states/*.pmtiles` and `index.json`, written by `scripts/map_refresh.sh` to the `commutescout-maps` R2 bucket (secrets `r2-access-key-id`, `r2-secret-access-key`, `r2-endpoint`) with a GCS copy | `https://maps.commutescout.com` |
 | `NAV_COSTING` | Valhalla profile the app navigates with; set `auto_traffic` on the Stadia Standard plan for traffic-influenced routes | `auto` |
 | `STADIA_NAV_DAILY` | Global daily cap on app navigation routes (`/api/nav/route`) | `300` |

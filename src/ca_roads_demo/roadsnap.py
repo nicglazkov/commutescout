@@ -47,7 +47,12 @@ PACE_SECONDS = 0.7
 # some 120,000 a day, so the worker also stops at this many purchases
 # a day; what is left waits for tomorrow. Set in the environment with
 # the other Stadia budgets.
-STADIA_SNAP_DAILY = int(os.environ.get("STADIA_SNAP_DAILY", "300"))
+# Quiet days need 50 to 100 snaps; a Monday, when the agencies post the
+# week's work zones, needed 225 in six hours (2026-10-05) and spent a
+# cap of 300 by noon. The queue keeps what the cap refuses until the
+# next UTC day, so a too-small cap only delays the lines, but 600
+# covers the Monday burst.
+STADIA_SNAP_DAILY = int(os.environ.get("STADIA_SNAP_DAILY", "600"))
 # A feed that jitters its endpoints past the key precision mints new
 # pairs every poll; the queue holds this many before dropping the
 # oldest asks, so it cannot grow without bound between restarts.
