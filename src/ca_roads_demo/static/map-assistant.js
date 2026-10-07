@@ -299,10 +299,9 @@ function resetMap() {
   document.getElementById('roadinfo').textContent = '';
 }
 
-// Road-following geometry comes from Stadia's Valhalla endpoint. The
-// browser authenticates by Origin (domain auth), so no key ships here.
-const VALHALLA_URL = 'https://api.stadiamaps.com/route/v1';
-
+// Road-following geometry comes from the server's planner, which
+// holds the routing key and the daily budget; nothing here talks to
+// the router directly.
 // Valhalla encodes geometry as a precision-6 polyline.
 function decodePolyline6(str) {
   let index = 0, lat = 0, lon = 0;
@@ -323,28 +322,27 @@ function decodePolyline6(str) {
   return out;
 }
 
-async function valhallaRoute(points) {
-  const locations = points.map(([lat, lon], i) => ({
-    lat, lon,
-    type: (i === 0 || i === points.length - 1) ? 'break' : 'through',
-  }));
-  const res = await fetch(VALHALLA_URL, {
+async function serverRoute(points) {
+  const res = await fetch('/api/route', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ locations, costing: 'auto' }),
-    signal: AbortSignal.timeout(6000),
+    body: JSON.stringify({ locations: points.map(([lat, lon]) => ({ lat, lon })),
+      preset: 'fastest', units: 'kilometers' }),
+    signal: AbortSignal.timeout(8000),
   });
+  if (!res.ok) return null;
   const data = await res.json();
-  if (!data.trip?.legs?.length) return null;
+  const trip = data.routes?.[0]?.trip;
+  if (!trip?.legs?.length) return null;
   return {
-    latlngs: data.trip.legs.flatMap(l => decodePolyline6(l.shape)),
-    distance: data.trip.summary.length * 1000,
-    duration: data.trip.summary.time,
+    latlngs: trip.legs.flatMap(l => decodePolyline6(l.shape)),
+    distance: trip.summary.length * 1000,
+    duration: trip.summary.time,
   };
 }
 
 async function anyRoute(points) {
-  try { return await valhallaRoute(points); } catch (e) { return null; }
+  try { return await serverRoute(points); } catch (e) { return null; }
 }
 
 async function roadSnap(geo, fallbackLine) {

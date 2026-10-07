@@ -27,7 +27,8 @@ def fake_tile() -> bytes:
 
 def test_staticmap_validates_inputs(client):
     assert client.get("/api/staticmap").status_code == 400
-    assert client.get("/api/staticmap?lat=40.7&lon=-74.0").status_code == 404
+    assert client.get("/api/staticmap?lat=51.5&lon=-0.1").status_code == 404  # London
+    assert client.get("/api/staticmap?lat=40.7&lon=-74.0&z=22").status_code == 404
     assert client.get("/api/staticmap?lat=37.3&lon=-121.9&z=22").status_code == 404
 
 
@@ -91,3 +92,20 @@ def test_email_caps_map_images_not_links():
     _, html, _ = watch.render_alert_email("Sierra", events)
     assert html.count("/api/staticmap") == 4  # images capped
     assert html.count("View on the live map") == 6  # links for all
+
+
+def test_a_missing_signing_key_is_said_at_startup(monkeypatch, caplog):
+    import logging
+
+    from ca_roads_demo import staticmap_sig
+
+    monkeypatch.setenv("STADIA_API_KEY", "k")
+    monkeypatch.delenv("STATICMAP_SIGNING_KEY", raising=False)
+    with caplog.at_level(logging.ERROR, logger="ca_roads_demo.staticmap"):
+        staticmap_sig.warn_if_unset()
+    assert "STATICMAP_SIGNING_KEY is not set" in caplog.text
+    caplog.clear()
+    monkeypatch.setenv("STATICMAP_SIGNING_KEY", "s")
+    with caplog.at_level(logging.ERROR, logger="ca_roads_demo.staticmap"):
+        staticmap_sig.warn_if_unset()
+    assert caplog.text == ""

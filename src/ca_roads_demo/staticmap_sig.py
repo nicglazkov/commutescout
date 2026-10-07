@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 
 
@@ -35,6 +36,16 @@ def query(lat: float, lon: float, z: int, kind: str, sep: str = "&") -> str:
     if _key():
         parts.append(f"s={sign(lat_s, lon_s, z_s, kind)}")
     return sep.join(parts)
+
+
+def warn_if_unset() -> None:
+    """Said once at startup: with a Stadia key mounted and no signing
+    key, every static map request is served, and that is paid tiles for
+    anyone who asks. Silent otherwise, so a redeploy that drops the
+    variable is noticed in the logs, not on the bill."""
+    if os.environ.get("STADIA_API_KEY", "").strip() and not _key():
+        logging.getLogger("ca_roads_demo.staticmap").error(
+            "STATICMAP_SIGNING_KEY is not set: /api/staticmap accepts unsigned requests")
 
 
 def verify(params) -> bool:
