@@ -52,7 +52,6 @@ def _trip_allowed(ip: str) -> bool:
         _trip_counts.clear()
     return True
 
-_TEMPLATE_PATH = Path(__file__).parent / "static" / "trip.html"
 _TRIP_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _MAX_TRIP_BODY = 256 * 1024
 
@@ -65,7 +64,9 @@ def _clean(value, limit):
 # regex pass keeps an inserted value from being read as a placeholder by
 # a later replacement (see the comment in trip_page).
 _PLACEHOLDER_RE = re.compile(r"__(?:TITLE|OG_IMAGE|OG_URL|TRIP_JSON)__")
-_template_cache: str | None = None
+_TEMPLATE_PATH = Path(__file__).parent / "static" / "trip.html"
+# The stamped template, kept by the app's stamping helper.
+_TRIP_CACHE: dict = {}
 
 
 def encode_polyline(points: list, precision: int = 5) -> str:
@@ -139,9 +140,9 @@ async def api_trip_create(request: Request) -> JSONResponse:
         return JSONResponse({"error": "latlngs must be [lat, lon] pairs"},
                             status_code=400)
     for lat, lon in (points[0], points[-1]):
-        if not watch_mod.in_california(lat, lon):
-            return JSONResponse({"error": "trips must start and end in "
-                                          "California"}, status_code=400)
+        if not watch_mod.in_coverage(lat, lon):
+            return JSONResponse({"error": "trips must start and end in a "
+                                          "state CommuteScout covers"}, status_code=400)
 
     steps = []
     for s in (body.get("steps") or [])[:MAX_TRIP_STEPS]:
@@ -185,7 +186,6 @@ async def api_trip_get(request: Request) -> JSONResponse:
 async def trip_page(request: Request) -> HTMLResponse:
     """Server-rendered so link unfurlers (which run no JS) see the og
     tags, and the page itself needs no second fetch."""
-    global _template_cache
     tid = request.path_params["trip_id"]
     if not _TRIP_ID_RE.match(tid):
         # Raise so the app's branded 404 handler renders the site shell
@@ -194,8 +194,12 @@ async def trip_page(request: Request) -> HTMLResponse:
     trip = await watch_mod.get_store().get_trip(tid)
     if trip is None:
         raise HTTPException(status_code=404)
-    if _template_cache is None:
-        _template_cache = _TEMPLATE_PATH.read_text(encoding="utf-8")
+    # Stamped like the map page, so a release that changes basemap.js
+    # (and the worker address it carries) reaches this page too instead
+    # of pairing new HTML with a week-old cached script.
+    from ca_roads_demo import app as app_mod
+
+    template = app_mod._stamped_template("trip.html", _TRIP_CACHE)
     pub = _trip_public(trip)
     title = (f"{pub['from_name']} → {pub['to_name']} · "
              f"{pub['miles']:.0f} mi · CommuteScout")
@@ -220,5 +224,5 @@ async def trip_page(request: Request) -> HTMLResponse:
             f"{DEMO_URL}/trip/{request.path_params['trip_id']}"),
         "__TRIP_JSON__": json.dumps(pub).replace("</", "<\\/"),
     }
-    page = _PLACEHOLDER_RE.sub(lambda m: values[m.group(0)], _template_cache)
+    page = _PLACEHOLDER_RE.sub(lambda m: values[m.group(0)], template)
     return HTMLResponse(page)

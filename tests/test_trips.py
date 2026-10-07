@@ -68,8 +68,8 @@ def test_create_and_fetch_trip(client):
 
 def test_trip_validation(client):
     assert client.post("/api/trip", json={}).status_code == 400
-    ny = {**ROUTE, "latlngs": [[40.7, -74.0], [40.8, -74.1]]}
-    assert client.post("/api/trip", json=ny).status_code == 400
+    abroad = {**ROUTE, "latlngs": [[51.5, -0.1], [51.6, -0.2]]}
+    assert client.post("/api/trip", json=abroad).status_code == 400
     too_many = {**ROUTE,
                 "latlngs": [[37.3 + i / 10000, -121.9] for i in range(600)]}
     assert client.post("/api/trip", json=too_many).status_code == 400

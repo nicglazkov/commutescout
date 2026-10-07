@@ -96,7 +96,7 @@ jobs:
           test -f site/out/sitemap.xml
       - name: Built pages use slash-less internal links
         run: |
-          # Guards the Task 8 fix-round ruling (Nic): served/canonical URLs
+          # Guards the project ruling: served/canonical URLs
           # are slash-less, matching the Starlette route table exactly
           # (every route - /pricing, /map, /about, ... - is registered
           # without a trailing slash). Scans every exported page for a

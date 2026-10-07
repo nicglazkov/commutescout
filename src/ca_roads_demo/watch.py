@@ -1599,7 +1599,7 @@ def render_alert_email(watch_name: str, events: list[dict],
     <div style="font:400 11.5px/1.6 -apple-system,Segoe UI,Arial,
       sans-serif;color:#8a94a3">
       Informational only; may be delayed, incomplete, or wrong. Verify
-      with 511 or quickmap.dot.ca.gov before you drive, and never rely
+      with your state's 511 or DOT site before you drive, and never rely
       on this for evacuation or emergency decisions.<br>
       You get these because your
       <a href="{DEMO_URL}/watch" style="color:#8a94a3">CommuteScout watch
@@ -1616,7 +1616,7 @@ def render_alert_email(watch_name: str, events: list[dict],
             + "\n".join(text_lines)
             + f"\n\nLive map: {DEMO_URL}/\n\n"
             "Informational only; may be delayed, incomplete, or wrong. "
-            "Verify with 511 or quickmap.dot.ca.gov before you drive. "
+            "Verify with your state's 511 or DOT site before you drive. "
             f"Manage or delete watches: {DEMO_URL}/watch")
     return subject, html, text
 

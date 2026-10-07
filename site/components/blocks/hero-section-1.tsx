@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 // - Replaced the screenshot mockup with a real screenshot captured for
 //   Task 7 (site/public/shots/hero-map.webp), a wide multi-state view from
 //   the live production map. A second overlapping Bay Area card
-//   (hero-route.png) was removed 2026-08-06 at Nic's request.
+//   (hero-route.png) was removed 2026-08-06 by project decision.
 // - text-muted-foreground replaced with text-cs-ink/60; the rest of the
 //   text inherits the page's --cs-ink color from the body rule in
 //   app/globals.css, same as upstream relied on a global text-foreground.

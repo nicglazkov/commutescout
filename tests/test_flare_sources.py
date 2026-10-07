@@ -5,6 +5,7 @@ endpoints manage the registry."""
 import json
 import time
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -716,3 +717,15 @@ async def test_a_shared_source_is_read_whole_in_one_request():
     # looks somewhere new.
     p.note_at(40.0, -100.0)
     assert p.due(src) is False
+
+
+def test_the_circle_around_a_person_is_the_decided_size():
+    """2026-10-03: about 25 miles around the person, a view up to 4
+    degrees across. Serving must stay inside what is fetched, with room
+    for half a snap step (6.2 km at most)."""
+    assert flare_sources.NEAR_SERVE_M == 40_000
+    assert flare_sources.VIEW_MAX_DEG == 4.0
+    assert flare_sources.NEAR_FETCH_M >= flare_sources.NEAR_SERVE_M + 6_200
+    # The web map asks for community alerts up to the same view width.
+    app_js = Path(__file__).resolve().parents[1] / "src/ca_roads_demo/static/map-app.js"
+    assert "if (span <= 4.0) {" in app_js.read_text(encoding="utf-8")

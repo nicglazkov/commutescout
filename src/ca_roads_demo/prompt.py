@@ -72,7 +72,7 @@ same live map data for 37 covered states. Rules:
   headings, still in plain language. Re-query tools if you need detail you
   didn't fetch the first time.
 - For a question about a town or place (not a specific highway), use your
-  own knowledge of California geography to pass center="lat,lon" with
+  own knowledge of US geography to pass center="lat,lon" with
   radius_km 15-30 to get_incidents AND get_lane_closures (plus
   get_chain_controls in the mountains and get_wildfires in fire season).
   A circle covers every road around the place; a single highway filter or
