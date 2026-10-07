@@ -56,7 +56,8 @@ public, and read-only. Every response carries a `sources` list with a
 `data_as_of` timestamp per source - always relay meaningful staleness or
 feed errors to the user. This service reports CURRENT conditions only; it
 cannot forecast. Remind users to verify before they drive (dial 511 or check
-quickmap.dot.ca.gov). Not affiliated with any government agency.
+their state DOT site; quickmap.dot.ca.gov in California). Not affiliated with
+any government agency.
 """
 
 def app_version() -> str:
@@ -1555,8 +1556,8 @@ conditions for this trip:
    trip would use.
 4. Report the data_as_of times and any source errors so I know how fresh
    this is. This is current status, not a forecast.
-5. Close with: conditions change - verify before driving (511 or
-   quickmap.dot.ca.gov).
+5. Close with: conditions change - verify before driving (511 or your
+   state DOT site; quickmap.dot.ca.gov in California).
 """
 
 
