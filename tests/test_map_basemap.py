@@ -37,15 +37,19 @@ def test_the_styles_and_the_saved_choice_survive():
     assert "map.removeLayer(baseOn);" in ASSIST  # one base layer at a time
 
 
-def test_the_base_map_is_ours_with_a_fallback():
+def test_the_base_map_is_ours_and_nothing_in_the_browser_calls_stadia():
     """Every style comes from the server's style endpoint; a browser
-    without WebGL still gets a map."""
+    without WebGL gets a notice, not a paid raster layer; routing goes
+    through the server's budgeted planner."""
     assert "/api/map/style.json?flavor=" in BASEMAP
-    assert "canDrawOwn()" in BASEMAP and "alidade_smooth" in BASEMAP
+    assert "canDrawOwn()" in BASEMAP and "This map needs WebGL" in BASEMAP
+    for name in ("basemap.js", "map-app.js", "map-assistant.js", "watch-app.js", "sw.js",
+                 "map.html", "trip.html", "watch.html"):
+        text = (STATIC / name).read_text(encoding="utf-8")
+        assert "stadiamaps.com" not in text, name
     for page in ("map.html", "trip.html", "watch.html"):
         text = (STATIC / page).read_text(encoding="utf-8")
         assert "/static/basemap.js" in text, page
-        assert "tiles.stadiamaps.com/tiles/" not in text, page
         # Leaflet first, then MapLibre, PMTiles and the bridge, then ours.
         order = [text.index('<script src="/static/' + x) for x in (
             "vendor/leaflet.js", "vendor/maplibre-gl-csp.js", "vendor/pmtiles.js",

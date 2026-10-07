@@ -384,16 +384,16 @@ export async function initWatch(opts) {
     msg('createmsg', 'Routing\u2026');
     try {
       const [a, b] = await Promise.all([geocodeOne(fromQ), geocodeOne(toQ)]);
-      const res = await fetch('https://api.stadiamaps.com/route/v1', {
+      const res = await fetch('/api/route', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           locations: [{ lat: a.lat, lon: a.lon }, { lat: b.lat, lon: b.lon }],
-          costing: 'auto',
+          preset: 'fastest', units: 'miles',
         }),
       });
       if (!res.ok) throw new Error('routing service unavailable, try again');
-      const trip = (await res.json()).trip;
+      const trip = ((await res.json()).routes || [])[0]?.trip;
       if (!trip || !trip.legs || !trip.legs.length) {
         throw new Error('no drivable route found');
       }

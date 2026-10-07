@@ -170,7 +170,8 @@ PAID_PER_CLIENT_DAILY = {
     "nav": int(os.environ.get("NAV_PER_CLIENT_DAILY", "150")),
     # Report placement asks the road once per click.
     "snap": int(os.environ.get("SNAP_PER_CLIENT_DAILY", "300")),
-    "tiles": int(os.environ.get("APP_TILES_PER_CLIENT_DAILY", "4000")),
+    # The speedometer's posted limit, once a minute at most while moving.
+    "speedlimit": int(os.environ.get("SPEEDLIMIT_PER_CLIENT_DAILY", "200")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
     # A map corridor cut for a trip: tens of megabytes read upstream each.
     "map-extract": int(os.environ.get("MAP_EXTRACT_PER_CLIENT_DAILY", "20")),
@@ -292,8 +293,8 @@ def extract_geo(tool: str, result: dict) -> dict | None:
 
 
 def _safe_zone(name) -> ZoneInfo:
-    """The browser-reported IANA zone, or Pacific: this is a California
-    road service, so PT is the right default when the header is absent or
+    """The browser-reported IANA zone, or Pacific, where the service
+    started and most visitors still are, when the header is absent or
     garbage."""
     try:
         return ZoneInfo(str(name)[:64])
@@ -671,10 +672,7 @@ async def api_route(request: Request):
     lies on them (see routing.py). The page falls back to plain
     keyless routing whenever this answers anything but 200, so a spent
     budget or a missing key only costs the closure-aware ranking."""
-    try:
-        body = await request.json()
-    except Exception:  # noqa: BLE001 - any malformed body is a 400
-        body = None
+    body = await _capped_json(request)
     if not isinstance(body, dict):
         return JSONResponse({"error": "JSON body required"}, status_code=400)
     locations = _route_locations(body.get("locations"))
@@ -812,7 +810,9 @@ async def api_staticmap(request: Request):
         lon = float(request.query_params["lon"])
     except (KeyError, ValueError):
         return JSONResponse({"error": "lat and lon required"}, status_code=400)
-    if not (5 <= z <= 15 and 31.0 <= lat <= 43.5 and -126.5 <= lon <= -112.5):
+    # Anywhere a watch area may be drawn: the alert emails for every
+    # covered state embed one of these.
+    if not (5 <= z <= 15 and watch.in_coverage(lat, lon)):
         return Response(status_code=404)
     # Only URLs this app minted (alert emails, trip pages) carry a valid
     # signature; anything else would be spending Stadia tiles for free.
@@ -1065,6 +1065,11 @@ def shape_markers(markers, *, slim: bool = False, geo_only: bool = False):
             for m in markers
         ]
     return markers
+
+
+# Every kind /api/mapdata knows; anything else in `kinds` is ignored.
+MAPDATA_KINDS = frozenset({"incident", "closure", "chain", "fire", "camera", "rwis",
+                           "sign", "toll", "plugin"})
 
 
 async def build_markers(box, want, *, geo_only: bool = False, near=None,
@@ -1326,7 +1331,7 @@ async def api_mapdata(request: Request):
         flare_sources.poller.note_route(ahead)
     corridor = [ahead] if ahead else None
     want = set((request.query_params.get("kinds") or
-                "incident,closure,chain,fire").split(","))
+                "incident,closure,chain,fire").split(",")) & MAPDATA_KINDS
     slim = request.query_params.get("slim") == "1"
     geo_only = request.query_params.get("fields") == "geo"
     # Served-response cache, checked BEFORE the build: a hit skips the
@@ -1341,8 +1346,11 @@ async def api_mapdata(request: Request):
     # chosen by it, so sharing an entry between two positions would hand
     # one caller the other's circle, which is the one thing this must
     # never do. It is snapped, so a town still shares a single entry.
+    # Keyed on the known kinds, sorted: a caller cannot mint a fresh
+    # entry per request with a made-up or reordered list and push every
+    # real visitor's entry out of the 24 slots.
     cache_key = (tuple(round(v, 4) for v in box),
-                 request.query_params.get("kinds") or "", slim, geo_only, near,
+                 ",".join(sorted(want)), slim, geo_only, near,
                  tuple(ahead) if ahead else None)
     now_mono = time.monotonic()
     hit = _MAPDATA_CACHE.get(cache_key)
@@ -1615,7 +1623,7 @@ ASSET_DIR = _asset_source_dir()
 
 
 def _site_response(page: str):
-    # Ruling (Task 8 fix round 1, Nic): served URLs are slash-less, matching
+    # Project ruling: served URLs are slash-less, matching
     # the Starlette route table exactly, so site/next.config.ts builds with
     # trailingSlash: false and Next emits a flat "<page>.html" sibling file
     # per route rather than "<page>/index.html". Prefer that flat layout;
@@ -2233,6 +2241,8 @@ SNAP_LOAD_STARTUP_SECONDS = 150
 
 @contextlib.asynccontextmanager
 async def _lifespan(app_):
+    staticmap_sig.warn_if_unset()
+    flare_sources.warn_if_dev_salt()
     with contextlib.suppress(Exception):
         await asyncio.wait_for(roadsnap.load_persisted(),
                                SNAP_LOAD_STARTUP_SECONDS)
@@ -2407,11 +2417,10 @@ app = Starlette(
         Route("/api/route", api_route, methods=["POST"]),
         Route("/api/nav/route", nav.api_nav_route, methods=["POST"]),
         Route("/api/snap", nav.api_snap, methods=["GET"]),
+        Route("/api/speedlimit", nav.api_speedlimit, methods=["GET"]),
         Route("/api/map/manifest", mapfiles.api_manifest, methods=["GET"]),
         Route("/api/map/style.json", mapfiles.api_style, methods=["GET"]),
         Route("/api/map/extract", mapfiles.api_extract, methods=["POST"]),
-        Route("/api/tiles/style.json", nav.api_tile_style, methods=["GET"]),
-        Route("/api/tiles/{style}/{z:int}/{x:int}/{yfile}", nav.api_tile, methods=["GET"]),
         Route("/api/traffictile/{z:int}/{x:int}/{y:int}.png", api_traffic_tile,
               methods=["GET"]),
         Route("/api/staticmap", api_staticmap, methods=["GET"]),
@@ -2556,7 +2565,7 @@ class SecurityHeaders:
         # "snapshot unavailable".
         # blob: is MapLibre's: it decodes the base map's icon sheet
         # through object URLs.
-        "img-src 'self' data: blob: https://tiles.stadiamaps.com "
+        "img-src 'self' data: blob: "
         "https://cwwp2.dot.ca.gov "
         # Expansion-state camera hosts (WSDOT, TripCheck, OHGO).
         "https://images.wsdot.wa.gov https://*.tripcheck.com "
@@ -2576,15 +2585,15 @@ class SecurityHeaders:
         # Leaving it out does not break the site (the client falls back
         # to /api/mapdata) which is exactly why it is easy to miss: the
         # map keeps working while quietly using the slow path.
-        # tiles.stadiamaps.com appears here as well as img-src: the
-        # service worker re-fetches tiles with fetch(), and a worker's
-        # fetch() is governed by connect-src, not img-src. Without it
-        # every SW-controlled (repeat) visit gets a blank basemap.
+        # No Stadia host: routing and lookups go through this server,
+        # which holds the key and the budget, never from the browser.
         # tiles.openfreemap.org serves the Positron and Bright base maps:
         # tiles, fonts and icons, all read with fetch().
-        "connect-src 'self' https://data.commutescout.com "
+        # maps.commutescout.com is the map files on Cloudflare R2 (the
+        # archive read in byte ranges, fonts, icons); data.commutescout.com
+        # keeps the snapshots and the old copy of the map files.
+        "connect-src 'self' https://data.commutescout.com https://maps.commutescout.com "
         "https://tiles.openfreemap.org "
-        "https://api.stadiamaps.com https://tiles.stadiamaps.com "
         "https://*.googleapis.com "
         "https://*.google.com https://cloudflareinsights.com "
         "https://*.gstatic.com; "
@@ -2807,9 +2816,6 @@ app = RateLimitMiddleware(
                      "/api/geocode",
                      "/api/incident/", "/api/sources", "/api/stcam/",
                      "/api/suggest", "/api/flow", "/api/traffictile",
-                     # The app's base map: hundreds of tiles a session,
-                     # edge-cached a day; the daily caps bound the rest.
-                     "/api/tiles/",
                      # Watch pages + public bootstrap config are as cheap
                      # as static files; the mutating watch APIs stay
                      # inside the bucket (and are token-gated anyway).

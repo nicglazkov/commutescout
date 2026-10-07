@@ -360,3 +360,41 @@ def test_toll_pair_for_decodes_cached_dict():
     assert got == {"path": [[1, 2], [3, 4]], "a": [1, 2], "b": [3, 4]}
     roadsnap._mem[key] = None  # a rejected pair stays "no line"
     assert roadsnap.toll_pair_for(a, b, brg, token) is None
+
+
+async def test_drain_stops_at_the_daily_budget(monkeypatch):
+    from ca_roads.budget import UPSTREAM
+    monkeypatch.setattr(roadsnap, "_get_db", lambda: _FakeDb())
+    monkeypatch.setattr(roadsnap, "STADIA_SNAP_DAILY", 1)
+    UPSTREAM.counts.clear()
+    UPSTREAM.spent.clear()
+    slept = []
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
+        if seconds == 300:
+            raise asyncio.CancelledError  # the worker went to wait for tomorrow
+
+    monkeypatch.setattr(roadsnap, "_sleep", fake_sleep)
+    assert roadsnap.path_for(37.3, -121.9, 37.33, -121.92) is None
+    assert roadsnap.path_for(37.4, -121.9, 37.43, -121.92) is None
+    points = [[37.3, -121.9], [37.31, -121.91], [37.33, -121.92]]
+    with respx.mock:
+        route = respx.post(url__regex=ROUTE_RE).mock(
+            return_value=httpx.Response(200, json=_trip(points, 4.0)))
+        async with httpx.AsyncClient() as client:
+            with pytest.raises(asyncio.CancelledError):
+                await roadsnap._drain(client)
+    assert route.call_count == 1
+    assert len(roadsnap._queue) == 1  # the second pair waits, not lost
+    UPSTREAM.counts.clear()
+    UPSTREAM.spent.clear()
+
+
+def test_queue_drops_the_oldest_ask_past_its_cap(monkeypatch):
+    monkeypatch.setattr(roadsnap, "QUEUE_MAX", 3)
+    for i in range(5):
+        roadsnap.path_for(37.0 + i * 0.01, -121.9, 37.33, -121.92)
+    assert len(roadsnap._queue) == 3 == len(roadsnap._queued) == len(roadsnap._pairs)
+    assert roadsnap._key(37.0, -121.9, 37.33, -121.92) not in roadsnap._queued
+    assert roadsnap._key(37.04, -121.9, 37.33, -121.92) in roadsnap._queued
