@@ -88,6 +88,11 @@ RETRY_AFTER_SKIP_S = 45
 # thousands of markers and a fresh timestamp. Guard on the drop instead,
 # and keep the previous object until the feed recovers.
 DROP_FRACTION = 0.6
+# A drop that lasts this long is not a missing feed but the new truth
+# (a feed decommissioned, a key revoked): publish it, marked degraded,
+# rather than freeze the object and its "as of" time forever.
+DROP_MAX_S = 30 * 60.0
+_first_skip: dict[str, float] = {}
 # Seconds the live bundle waits for a slow feed; see build_bundle.
 LIVE_FEED_BUDGET_S = 15.0
 _started = time.monotonic()
@@ -265,15 +270,25 @@ async def publish_once(name: str, kinds: set[str], cache_control: str,
     # missing while every other state was fine. The count alone reads as
     # healthy, so compare it with what was last published.
     before = _last_count.get(name)
+    degraded = False
     if before and len(markers) < before * DROP_FRACTION:
-        log.warning("snapshot %s: skipped, %d markers against %d last time; "
-                    "a feed is probably missing", name, len(markers), before)
-        return False
+        since = _first_skip.setdefault(name, time.monotonic())
+        if time.monotonic() - since < DROP_MAX_S:
+            log.warning("snapshot %s: skipped, %d markers against %d last time; "
+                        "a feed is probably missing", name, len(markers), before)
+            return False
+        log.warning("snapshot %s: publishing %d markers against %d after %d min "
+                    "of skips; a feed is gone", name, len(markers), before,
+                    int((time.monotonic() - since) / 60))
+        degraded = True
+        _first_skip.pop(name, None)
+    else:
+        _first_skip.pop(name, None)
     digest = _digest(markers)
     aged = time.time() - _last_upload.get(name, 0.0)
     if _last_hash.get(name) == digest and aged < max_stale:
         return False              # unchanged: keep the ETag stable
-    body = _encode(build_payload(markers))
+    body = _encode(build_payload(markers, degraded=degraded))
     await asyncio.to_thread(_upload, name, body, cache_control)
     _last_hash[name] = digest
     _last_count[name] = len(markers)

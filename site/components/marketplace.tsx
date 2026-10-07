@@ -180,7 +180,7 @@ export function Marketplace() {
     return <p className="text-cs-ink/70 mt-6">No plugin is listed yet.</p>;
   }
   return (
-    <div className="mt-8 grid gap-5 md:grid-cols-2">
+    <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2">
       {sources.map((s) => {
         const installed = isInstalled(s);
         const approved = s.tier === "approved";
@@ -190,7 +190,7 @@ export function Marketplace() {
         return (
           <article
             key={s.id}
-            className="flex flex-col rounded-3xl border border-cs-ink/10 bg-white p-5 shadow-sm transition-shadow hover:shadow-md sm:p-6"
+            className="flex min-w-0 flex-col rounded-3xl border border-cs-ink/10 bg-white p-5 shadow-sm transition-shadow hover:shadow-md sm:p-6"
             data-plugin={s.id}
           >
             <div className="flex items-center gap-4">

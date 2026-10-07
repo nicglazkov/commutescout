@@ -7,15 +7,15 @@
   closures included), and the traffic profile is one setting here when
   the plan changes (``NAV_COSTING=auto_traffic``). The answer is
   Stadia's OSRM-format response, untouched, which Ferrostar parses.
-- ``GET /api/tiles/style.json`` and ``GET /api/tiles/{style}/{z}/{x}/{y}``:
-  a raster base map for the app, proxied so the key stays here and the
-  edge caches a day of tiles.
+- ``GET /api/speedlimit``: the posted limit on the road ahead, for the
+  speedometer when no trip is running.
 """
 
 from __future__ import annotations
 
 import contextlib
 import json
+import math
 import os
 import time
 
@@ -30,29 +30,24 @@ ROUTE_URL = "https://api.stadiamaps.com/route/v1"
 # A report placed within this distance of a road snaps onto it; further
 # away it stays where the person put it (a field, a trailhead, a beach).
 SNAP_MAX_M = 60.0
-TILE_URL = "https://tiles.stadiamaps.com/tiles/{style}/{z}/{x}/{y}{scale}.png"
 USER_AGENT = "commutescout.com drive app (https://commutescout.com/developers)"
-PUBLIC_BASE = os.environ.get("DEMO_URL", "https://commutescout.com").rstrip("/")
 
 NAV_COSTING = os.environ.get("NAV_COSTING", "auto")
 # Sized against the purchased Stadia plan, not against what the service
-# could physically serve. A nav or route request costs about 20 credits
-# and a tile about 1, so these defaults come to roughly 26,000 credits a
-# day, about 780,000 a month against a 1,000,000 allowance. Raise them
+# could physically serve. A nav, route, speed-limit or snap request
+# costs about 20 credits and a static map tile about 1, so the defaults
+# here, in app.py and in roadsnap.py (300 nav, 200 speed limits, 600
+# road snaps, 200 planner routes, 4,000 tiles) come to 30,000 credits a
+# day, about 900,000 a month against a 1,000,000 allowance; tests/
+# test_budget.py adds them up. Nothing joins without lowering one. Raise them
 # with the environment variables when real usage justifies it, and set
 # the hard cap in the Stadia dashboard too: these counters live in the
 # process and a deploy grants the whole day again.
 STADIA_NAV_DAILY = int(os.environ.get("STADIA_NAV_DAILY", "300"))
-STADIA_APP_TILES_DAILY = int(os.environ.get("STADIA_APP_TILES_DAILY", "16000"))
-TILE_STYLES = ("alidade_smooth", "alidade_smooth_dark", "outdoors")
-ATTRIBUTION = ("&copy; <a href=\"https://stadiamaps.com/\">Stadia Maps</a> "
-               "&copy; <a href=\"https://openmaptiles.org/\">OpenMapTiles</a> "
-               "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> "
-               "contributors")
-
-_TILES: dict[str, tuple[float, bytes]] = {}
-_TILE_TTL = 3600.0
-_TILE_MAX = 1500
+# Posted speed limits for the speedometer while driving with no trip:
+# one short route a minute per moving phone at most, cached by road
+# stretch, under its own daily budget.
+STADIA_LIMIT_DAILY = int(os.environ.get("STADIA_LIMIT_DAILY", "200"))
 
 
 def _locations(raw) -> list[dict] | None:
@@ -97,10 +92,7 @@ def nav_body(body: dict, locations: list[dict], exclusions: list[dict]) -> dict:
 async def api_nav_route(request: Request):
     from ca_roads_demo import app as demo
 
-    try:
-        body = await request.json()
-    except Exception:  # noqa: BLE001
-        body = None
+    body = await demo._capped_json(request)
     if not isinstance(body, dict):
         return JSONResponse({"error": "JSON body required"}, status_code=400)
     locations = _locations(body.get("locations"))
@@ -219,69 +211,86 @@ async def api_snap(request: Request):
                         headers={"Cache-Control": "no-store"})
 
 
-def style_json(base: str = PUBLIC_BASE, style: str = "alidade_smooth") -> dict:
-    """A MapLibre style for one of TILE_STYLES: the apps pick light,
-    dark or outdoors and every tile still comes through the proxy."""
-    if style not in TILE_STYLES:
-        style = "alidade_smooth"
-    return {
-        "version": 8,
-        "name": f"CommuteScout {style}",
-        "sources": {"base": {
-            "type": "raster", "tileSize": 256,
-            "tiles": [f"{base}/api/tiles/{style}/{{z}}/{{x}}/{{y}}@2x.png"],
-            "minzoom": 0, "maxzoom": 18, "attribution": ATTRIBUTION,
-        }},
-        "layers": [{"id": "base", "type": "raster", "source": "base"}],
-    }
+# ---------------------------------------------------------------- speed limit
+
+# (asked at, answer, how long it holds): a known limit for an hour, a
+# failed ask for two minutes.
+_LIMITS: dict[tuple, tuple[float, dict, float]] = {}
+_LIMIT_TTL = 3600.0
+_LIMIT_FAIL_TTL = 120.0
+_LIMIT_MAX = 5000
 
 
-async def api_tile_style(request: Request):
-    style = request.query_params.get("style") or "alidade_smooth"
-    if style not in TILE_STYLES:
-        return JSONResponse({"error": {
-            "code": "unknown_style",
-            "message": "style must be one of " + ", ".join(TILE_STYLES)}}, status_code=400)
-    return JSONResponse(style_json(style=style), headers={"Cache-Control": "public, max-age=3600"})
+def _ahead(lat: float, lon: float, heading: float, meters: float) -> dict:
+    """A point `meters` along `heading` from (lat, lon)."""
+    k = math.cos(math.radians(lat)) or 1e-6
+    return {"lat": round(lat + meters * math.cos(math.radians(heading)) / 110_540, 6),
+            "lon": round(lon + meters * math.sin(math.radians(heading)) / (111_320 * k), 6)}
 
 
-async def api_tile(request: Request):
+def limit_from_osrm(body: dict, within_m: float = 200.0) -> dict:
+    """The posted limit on the road just ahead, from the maxspeed
+    annotation of an OSRM-format route: the first known value within
+    `within_m` of the start. {} when the map does not say."""
+    try:
+        leg = body["routes"][0]["legs"][0]
+        ann = leg.get("annotation") or {}
+        speeds, dists = ann.get("maxspeed") or [], ann.get("distance") or []
+    except (KeyError, IndexError, TypeError):
+        return {}
+    gone = 0.0
+    for i, m in enumerate(speeds):
+        if gone > within_m:
+            break
+        if isinstance(m, dict) and not m.get("unknown") and m.get("speed"):
+            kmh = float(m["speed"]) * (1.609344 if m.get("unit") == "mph" else 1.0)
+            return {"kmh": round(kmh), "mph": round(kmh / 1.609344)}
+        gone += float(dists[i]) if i < len(dists) else 0.0
+    return {}
+
+
+async def api_speedlimit(request: Request):
+    """GET /api/speedlimit?lat=&lon=&heading= : the posted limit on the
+    road ahead, for the speedometer when no trip is running (a trip
+    carries its own). Empty when unknown, never an error the app has to
+    handle. Cached by a 100 m cell and a 45 degree heading sector."""
     from ca_roads_demo import app as demo
 
-    style = request.path_params["style"]
-    if style not in TILE_STYLES:
-        return Response(status_code=404)
     try:
-        z, x = int(request.path_params["z"]), int(request.path_params["x"])
-        yfile = request.path_params["yfile"]
-        scale = "@2x" if yfile.endswith("@2x.png") else ""
-        y = int(yfile.removesuffix("@2x.png").removesuffix(".png"))
+        lat, lon = float(request.query_params["lat"]), float(request.query_params["lon"])
+        heading = float(request.query_params.get("heading", "0")) % 360
     except (KeyError, ValueError):
-        return Response(status_code=404)
-    if not (0 <= z <= 18 and 0 <= x < 2 ** z and 0 <= y < 2 ** z):
-        return Response(status_code=404)
-    key = f"{style}/{z}/{x}/{y}{scale}"
+        return JSONResponse({"error": "lat and lon required"}, status_code=400)
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return JSONResponse({"error": "lat and lon out of range"}, status_code=400)
+    headers = {"Cache-Control": "private, max-age=30"}
+    key = (round(lat, 3), round(lon, 3), int(heading // 45))
+    hit = _LIMITS.get(key)
     now = time.monotonic()
-    hit = _TILES.get(key)
-    cache = {"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"}
-    if hit and now - hit[0] < _TILE_TTL:
-        return Response(hit[1], media_type="image/png", headers=cache)
+    if hit and now - hit[0] < hit[2]:
+        return JSONResponse(hit[1], headers={**headers, "X-Cache": "hit"})
     api_key = os.environ.get("STADIA_API_KEY", "").strip()
-    if not api_key:
-        return Response(status_code=404)
-    if (demo._client_over_daily(request, "tiles")
-            or not UPSTREAM.allow("stadia-app-tiles", STADIA_APP_TILES_DAILY)):
-        return Response(status_code=429, headers={"Retry-After": "3600"})
+    if not api_key or demo._client_over_daily(request, "speedlimit") \
+            or not UPSTREAM.allow("stadia-limit", STADIA_LIMIT_DAILY):
+        return JSONResponse({}, headers=headers)
     road = demo.tools.get_road()
     try:
-        resp = await road.client.get(TILE_URL.format(style=style, z=z, x=x, y=y, scale=scale),
-                                     headers=auth_headers(api_key, USER_AGENT), timeout=10.0)
-    except Exception:  # noqa: BLE001
-        return Response(status_code=502)
-    if resp.status_code != 200:
-        return Response(status_code=resp.status_code if resp.status_code in (404, 429) else 502)
-    if len(_TILES) >= _TILE_MAX:
-        for k, _ in sorted(_TILES.items(), key=lambda kv: kv[1][0])[: _TILE_MAX // 4]:
-            _TILES.pop(k, None)
-    _TILES[key] = (now, resp.content)
-    return Response(resp.content, media_type="image/png", headers=cache)
+        resp = await road.client.post(
+            ROUTE_URL,
+            json={"locations": [{"lat": lat, "lon": lon}, _ahead(lat, lon, heading, 350)],
+                  "costing": "auto", "format": "osrm",
+                  "filters": {"action": "include",
+                              "attributes": ["shape_attributes.speed_limit",
+                                             "shape_attributes.length"]}},
+            headers=auth_headers(api_key, USER_AGENT), timeout=10.0)
+        out = limit_from_osrm(json.loads(resp.content)) if resp.status_code < 400 else {}
+        ttl = _LIMIT_TTL if resp.status_code < 400 else _LIMIT_FAIL_TTL
+    except Exception:  # noqa: BLE001 - a blank limit beats an error on the dashboard
+        # A timeout or a dropped connection is not "the map does not
+        # say": it is remembered only briefly, so the next car on this
+        # stretch asks again.
+        out, ttl = {}, _LIMIT_FAIL_TTL
+    if len(_LIMITS) >= _LIMIT_MAX:
+        _LIMITS.pop(next(iter(_LIMITS)))
+    _LIMITS[key] = (now, out, ttl)
+    return JSONResponse(out, headers=headers)

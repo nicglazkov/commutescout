@@ -1,5 +1,5 @@
 annotated-types==0.7.0
-anthropic==1.8.0
+anthropic==1.9.0
 anyio==4.14.2
 attrs==26.1.0
 certifi==2026.6.17
@@ -44,7 +44,7 @@ pycparser==3.0
 pydantic==2.13.4
 pydantic-settings==2.14.2
 pydantic_core==2.46.4
-Pygments==2.20.0
+Pygments==2.21.0
 PyJWT==2.15.0
 pytest==9.1.1
 pytest-asyncio==1.4.0
