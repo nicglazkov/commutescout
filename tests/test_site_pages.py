@@ -48,7 +48,7 @@ def _visible(raw_html: str) -> str:
 @pytest.mark.parametrize("page", ["privacy", "terms"])
 def test_legal_content_survived_the_reskin(page):
     """The reskin moves privacy and terms into the site shell. The words
-    themselves are CalOPPA-reviewed and must not change without Nic's
+    themselves are CalOPPA-reviewed and must not change without the maintainer's
     approval, so this compares normalized visible text against the
     pre-reskin extraction committed in tests/fixtures/."""
     new = _visible((REAL_SITE_OUT / f"{page}.html").read_text(encoding="utf-8"))

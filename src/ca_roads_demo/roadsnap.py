@@ -28,6 +28,7 @@ import re
 import time
 from datetime import UTC, datetime, timedelta
 
+from ca_roads.budget import UPSTREAM
 from ca_roads_demo import valhalla
 
 log = logging.getLogger("roadsnap")
@@ -42,6 +43,20 @@ MAX_METERS = 120_000
 MAX_RATIO = 3.0
 MAX_EXTRA_METERS = 20_000
 PACE_SECONDS = 0.7
+# Every snap is a paid route (about 20 credits). The pace alone allows
+# some 120,000 a day, so the worker also stops at this many purchases
+# a day; what is left waits for tomorrow. Set in the environment with
+# the other Stadia budgets.
+# Quiet days need 50 to 100 snaps; a Monday, when the agencies post the
+# week's work zones, needed 225 in six hours (2026-10-05) and spent a
+# cap of 300 by noon. The queue keeps what the cap refuses until the
+# next UTC day, so a too-small cap only delays the lines, but 600
+# covers the Monday burst.
+STADIA_SNAP_DAILY = int(os.environ.get("STADIA_SNAP_DAILY", "600"))
+# A feed that jitters its endpoints past the key precision mints new
+# pairs every poll; the queue holds this many before dropping the
+# oldest asks, so it cannot grow without bound between restarts.
+QUEUE_MAX = 2000
 
 # key -> compact JSON string of the snapped path (a list for closures,
 # a dict for toll pairs), or None for a pair that failed the quality
@@ -177,10 +192,18 @@ def path_for(lat1, lon1, lat2, lon2) -> list | None:
         raw = _mem[key]
         return json.loads(raw) if raw else None
     if key not in _queued:
-        _queued.add(key)
-        _pairs[key] = vals
-        _queue.append(key)
+        _enqueue(key, vals)
     return None
+
+
+def _enqueue(key: str, pair: tuple) -> None:
+    _queued.add(key)
+    _pairs[key] = pair
+    _queue.append(key)
+    while len(_queue) > QUEUE_MAX:
+        old = _queue.pop(0)
+        _queued.discard(old)
+        _pairs.pop(old, None)
 
 
 def toll_pair_for(a, b, brg: float, token: str | None) -> dict | None:
@@ -200,10 +223,8 @@ def toll_pair_for(a, b, brg: float, token: str | None) -> dict | None:
         got = json.loads(raw) if raw else None
         return got if isinstance(got, dict) else None
     if key not in _queued:
-        _queued.add(key)
-        _pairs[key] = ("T", vals[0], vals[1], vals[2], vals[3], brg,
-                       token or "")
-        _queue.append(key)
+        _enqueue(key, ("T", vals[0], vals[1], vals[2], vals[3], brg,
+                       token or ""))
     return None
 
 
@@ -442,6 +463,11 @@ async def _drain(client) -> None:
             continue
         if not _queue:
             await _sleep(5)
+            continue
+        if not UPSTREAM.allow("stadia-snap", STADIA_SNAP_DAILY):
+            # The day's purchases are spent; the queue keeps its asks
+            # and the first poll after midnight UTC resumes them.
+            await _sleep(300)
             continue
         key = _queue.pop(0)
         _queued.discard(key)

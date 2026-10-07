@@ -24,9 +24,9 @@ def test_every_style_is_complete_and_points_at_its_tiles():
         assert "__" not in json.dumps(spec)
     for flavor in OURS:
         spec = mapfiles.style_json(flavor)
-        assert spec["sources"]["protomaps"]["url"] == "pmtiles://https://data.commutescout.com/map/us.pmtiles"
-        assert spec["glyphs"].startswith("https://data.commutescout.com/map/assets/fonts/")
-        assert spec["sprite"].startswith("https://data.commutescout.com/map/assets/sprites/v4/")
+        assert spec["sources"]["protomaps"]["url"] == "pmtiles://https://maps.commutescout.com/us.pmtiles"
+        assert spec["glyphs"].startswith("https://maps.commutescout.com/assets/fonts/")
+        assert spec["sprite"].startswith("https://maps.commutescout.com/assets/sprites/v4/")
     for flavor in OPENFREEMAP:
         spec = mapfiles.style_json(flavor)
         assert spec["sources"]["openmaptiles"]["url"] == "https://tiles.openfreemap.org/planet"

@@ -21,13 +21,15 @@ def test_presets_are_one_group_of_five_in_the_planner():
     assert HTML.count('id="routepresets"') == 1 and HTML.count('id="plannote"') == 1
 
 
-def test_server_first_then_plain_routing():
+def test_routing_goes_through_the_server_only():
+    """The server holds the routing key and the daily budget; the page
+    never routes around a spent budget by calling the router itself."""
     assert "async function serverDirections(points, preset)" in APP
     assert "fetch('/api/route'" in APP
+    assert "valhallaDirections" not in APP and "stadiamaps.com" not in APP
     fallback = APP[APP.index("async function anyDirections(points)"):]
-    fallback = fallback[:fallback.index("}\n", fallback.index("valhallaDirections(points)")) + 2]
+    fallback = fallback[:fallback.index("\n}\n") + 3]
     assert "serverDirections(points, routePreset)" in fallback
-    assert "return await valhallaDirections(points)" in fallback
 
 
 def test_alternatives_carry_a_hassle_line_and_presets_replan():

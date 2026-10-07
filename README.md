@@ -232,10 +232,11 @@ NWS, and USGS. Not affiliated with any agency. Conditions change faster
 than any feed; verify before you drive (511 or your state DOT, and
 [quickmap.dot.ca.gov](https://quickmap.dot.ca.gov) in California).
 
-On the website, map tiles, routing, and place-name lookup come from
-Stadia Maps (data (c) OpenStreetMap contributors), so that service
-sees the coordinates involved. The phone apps draw their base map from
-CommuteScout's own map files instead, built from the Protomaps
-OpenStreetMap build and served from this project, so no third party
-sees where the map is being looked at; routing and search still go
-through Stadia. Fonts and map libraries are served locally.
+Routing and place-name lookup come from Stadia Maps, which sees the
+coordinates involved. The base map is drawn from this project's own
+map files (built from the Protomaps OpenStreetMap build, served from
+maps.commutescout.com on Cloudflare R2) on the website and in the
+phone apps, so no third party sees where the map is being looked at;
+the Positron and Bright styles on the website load their tiles from
+OpenFreeMap instead, which sees the viewer's address and map area.
+Fonts and map libraries are served locally.

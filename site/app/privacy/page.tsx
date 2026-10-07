@@ -44,7 +44,7 @@ export default function PrivacyPage() {
           Privacy
         </h1>
         <p className="text-cs-ink/70 mt-3 text-sm">
-          Effective August 18, 2026. Material changes will be posted here with
+          Effective October 3, 2026. Material changes will be posted here with
           a new effective date; account holders get an email when a change
           affects them.
         </p>
@@ -159,11 +159,17 @@ export default function PrivacyPage() {
                 any image load does.
               </li>
               <li>
-                <strong>Stadia Maps</strong> provides map tiles, routing,
-                and address lookup; it sees the coordinates and place
-                names involved in what you look up, as your browser or
-                our server queries it. Map data comes from OpenStreetMap
-                contributors.
+                <strong>Stadia Maps</strong> provides routing and address
+                lookup; it sees the coordinates and place names involved
+                in what you look up, as our server queries it.
+              </li>
+              <li>
+                <strong>OpenFreeMap</strong> serves the tiles for the
+                Positron and Bright base maps; when you use one of them,
+                your browser requests tiles from tiles.openfreemap.org,
+                which sees your IP address and the map area you are
+                viewing. The other base maps are drawn from files we
+                host. Map data comes from OpenStreetMap contributors.
               </li>
             </ul>
           </div>
