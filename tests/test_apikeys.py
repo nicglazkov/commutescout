@@ -1,5 +1,5 @@
 """API keys: format, hashing, resolution with a cached store, the
-per-account cap, and the tier table Nic set (free 2,000 a day, pro
+per-account cap, and the tier table the project set (free 2,000 a day, pro
 10,000 a day)."""
 
 import pytest

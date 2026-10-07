@@ -15,9 +15,6 @@
  * style for the picker.
  */
 (function () {
-  const STADIA_ATTR = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>'
-    + ' &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a>'
-    + ' &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
   const FLAVOR = { Positron: 'positron', Bright: 'bright', Slate: 'slate', Gray: 'grayscale', Dark: 'dark' };
 
   // The worker is fetched under a fresh address on every deploy. A
@@ -60,9 +57,22 @@
   window.csBaseLayer = function (name) {
     const flavor = FLAVOR[name] || FLAVOR.Positron;
     if (!canDrawOwn()) {
-      return L.tileLayer('https://tiles.stadiamaps.com/tiles/'
-        + (flavor === 'dark' ? 'alidade_smooth_dark' : 'alidade_smooth') + '/{z}/{x}/{y}{r}.png',
-      { keepBuffer: 4, maxZoom: 17, crossOrigin: 'anonymous', attribution: STADIA_ATTR });
+      // No WebGL (an old browser, a headless fetch): the road data still
+      // draws over a blank map, and one line says why. There is no
+      // raster fallback any more: it was a paid tile for every bot visit.
+      const empty = L.layerGroup();
+      empty.on('add', (e) => {
+        const box = e.target._map && e.target._map.getContainer();
+        if (!box || box.querySelector('.cs-nogl')) return;
+        const note = document.createElement('div');
+        note.className = 'cs-nogl';
+        note.textContent = 'This map needs WebGL, which this browser does not offer. Road data still shows.';
+        note.style.cssText = 'position:absolute;left:50%;top:12px;transform:translateX(-50%);'
+          + 'z-index:400;max-width:90%;background:#fff;color:#333;padding:6px 10px;'
+          + 'border-radius:6px;font:13px system-ui,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.3)';
+        box.appendChild(note);
+      });
+      return empty;
     }
     mark('basemap-start');
     // No cross-fade: tiles and labels show the moment they are ready,

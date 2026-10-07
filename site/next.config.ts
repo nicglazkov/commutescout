@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   // Static export: the build writes plain HTML/CSS/JS to out/, which the
   // Python app serves. No Node runs in production.
   output: "export",
-  // Ruling (Task 8 fix round 1, Nic): served URLs are slash-less, to match
+  // Project ruling: served URLs are slash-less, to match
   // the Starlette route table exactly (every route is registered without a
   // trailing slash - /pricing, /about, /map, ...). trailingSlash: true was
   // tried and reverted: it made every internal link a trailing-slash URL
