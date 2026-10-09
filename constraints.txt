@@ -12,7 +12,7 @@ distro==1.9.0
 docstring_parser==0.18.0
 google-api-core==2.31.0
 google-auth==2.55.2
-google-cloud-bigquery==3.42.2
+google-cloud-bigquery==3.46.1
 google-cloud-core==2.6.0
 google-cloud-firestore==2.28.0
 google-cloud-storage==3.13.0
