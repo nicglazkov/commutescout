@@ -33,7 +33,7 @@ jobs:
           # pull-requests: write, so an unpinned install is the one place
           # here where a compromised release could push to the
           # repository. Bump it on purpose, not by surprise.
-          pip install "playwright==1.63.0" "pillow==12.3.0"
+          pip install "playwright==1.63.0" "pillow==13.0.0"
           playwright install --with-deps chromium
       - name: Capture the stills
         run: python scripts/capture_shots.py --out docs/shots
