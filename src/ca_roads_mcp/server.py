@@ -1586,6 +1586,7 @@ def main() -> None:
         from ca_roads_mcp.headers import SecurityHeaders
         from ca_roads_mcp.nostream import NoIdleStream
         from ca_roads_mcp.ratelimit import ApiKeyMiddleware, RateLimitMiddleware
+        from ca_roads_mcp.telemetry import uvicorn_log_config
 
         # The SDK's DNS-rebinding protection only allows localhost hosts by
         # default, which answers 421 behind Cloud Run's hostname. This is a
@@ -1608,7 +1609,8 @@ def main() -> None:
         app = ApiKeyMiddleware(app)
         # Outermost, so a 429 from the limiters carries them too.
         app = SecurityHeaders(app)
-        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info",
+                    log_config=uvicorn_log_config())
     else:
         mcp.run(transport="stdio")
 
