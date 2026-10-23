@@ -498,6 +498,15 @@ async def _capped_form(request: Request):
 
 
 async def ask(request: Request):
+    # JSON content type only. A page on another site can send a
+    # text/plain body with no CORS preflight, so its visitors' browsers
+    # could spend the shared daily budget from many addresses at once;
+    # application/json needs a preflight, which this origin never grants.
+    # The web page and both apps already send it.
+    ctype = request.headers.get("content-type") or ""
+    if ctype.split(";")[0].strip().lower() != "application/json":
+        return JSONResponse({"error": "send the question as application/json"},
+                            status_code=415)
     body = await _capped_json(request)
     if body is None:
         return JSONResponse({"error": "invalid JSON"}, status_code=400)
