@@ -13,6 +13,7 @@ import contextlib
 import ipaddress
 import logging
 import os
+import time
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
@@ -46,6 +47,7 @@ from ca_roads_mcp.serialize import (
     source_status,
     wildfire_dict,
 )
+from ca_roads_mcp.telemetry import log_event
 
 INSTRUCTIONS = """\
 Live road conditions. California in depth: CHP incidents, Caltrans lane
@@ -69,9 +71,32 @@ def app_version() -> str:
         return os.environ.get("APP_VERSION") or "dev"
 
 
+class _CountedServer(MCPServer):
+    """Logs one ``mcp_tool`` event per call: the tool, whether it worked,
+    and how long it took. Never the arguments, which can carry a place.
+
+    Off until main() turns it on for HTTP: over stdio, stdout is the
+    protocol channel and a stray line would break the session.
+    """
+
+    count_calls = False
+
+    async def call_tool(self, name, arguments, context=None):
+        t0 = time.monotonic()
+        ok = False
+        try:
+            result = await super().call_tool(name, arguments, context)
+            ok = not getattr(result, "is_error", False)
+            return result
+        finally:
+            if self.count_calls:
+                log_event("mcp_tool", tool=str(name)[:64], ok=ok,
+                          duration_ms=int((time.monotonic() - t0) * 1000))
+
+
 # The version goes in serverInfo on `initialize`, so a client can tell
 # which CommuteScout it is talking to rather than which MCP SDK.
-mcp = MCPServer("CommuteScout", instructions=INSTRUCTIONS, version=app_version())
+mcp = _CountedServer("CommuteScout", instructions=INSTRUCTIONS, version=app_version())
 
 # The server's constructor configures logging at INFO for the whole
 # process (both services import this module). httpx then logs every
@@ -1581,6 +1606,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.transport == "http":
         import uvicorn
+
+        mcp.count_calls = True
         from mcp.server.transport_security import TransportSecuritySettings
 
         from ca_roads_mcp.headers import SecurityHeaders

@@ -48,6 +48,8 @@ def main() -> None:
     by_day_questions = Counter()
     event_counts = Counter()
     tool_counts = Counter()
+    mcp_calls = Counter()
+    mcp_failed = Counter()
     questions = []
     cost = 0.0
     feedback = Counter()
@@ -62,6 +64,10 @@ def main() -> None:
             questions.append(p)
             for t in p.get("tools") or []:
                 tool_counts[t.get("tool")] += 1
+        if p.get("event") == "mcp_tool":
+            mcp_calls[p.get("tool")] += 1
+            if not p.get("ok"):
+                mcp_failed[p.get("tool")] += 1
         if str(p.get("event", "")).startswith("feedback"):
             feedback[p["event"]] += 1
 
@@ -71,6 +77,9 @@ def main() -> None:
         print(f"{day}  {len(by_day_visitors[day]):7}  {by_day_questions[day]:9}")
     print(f"\nEvents: {dict(event_counts)}")
     print(f"Tool calls: {dict(tool_counts.most_common())}")
+    if mcp_calls:
+        print(f"MCP tool calls: {dict(mcp_calls.most_common())}")
+        print(f"MCP tool failures: {dict(mcp_failed.most_common())}")
     up, down = feedback.get("feedback_up", 0), feedback.get("feedback_down", 0)
     if up or down:
         print(f"Feedback: {up} up / {down} down")
