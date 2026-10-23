@@ -1663,6 +1663,22 @@ async def sitemap_xml(_: Request):
     return FileResponse(f)
 
 
+# Crawlers were asking for this about daily and getting a 404. The JSON
+# endpoints are per-request computation with nothing to index, so they
+# stay out of crawl budgets; every page stays crawlable.
+ROBOTS_TXT = """User-agent: *
+Disallow: /api/
+Allow: /
+
+Sitemap: https://commutescout.com/sitemap.xml
+"""
+
+
+async def robots_txt(_: Request):
+    return PlainTextResponse(ROBOTS_TXT,
+                             headers={"Cache-Control": "public, max-age=3600"})
+
+
 # The page opens on the visitor's own area, which is both friendlier
 # and much cheaper: a metro viewport loads a fraction of the markers a
 # nationwide view does. No permission prompt is involved. Cloudflare's
@@ -2447,6 +2463,7 @@ app = Starlette(
         Route("/developers", site_developers),
         Route("/favicon.ico", favicon_ico),
         Route("/sitemap.xml", sitemap_xml),
+        Route("/robots.txt", robots_txt),
         Route("/api/contact", api_contact, methods=["POST"]),
         Route("/api/waitlist", api_waitlist, methods=["POST"]),
         Route("/api/signin-link", api_signin_link, methods=["POST"]),
