@@ -87,6 +87,30 @@ async def test_every_keyed_request_logs_one_metering_line(stack, caplog):
     assert lines[-1]["key"] == view["id"] and lines[-1]["status"] == 200
 
 
+def test_guessing_keys_is_capped_per_address_before_any_lookup():
+    """A bad key skips the address limiter (it is answered here), so a
+    fresh random key per request used to cost one store read each with
+    no ceiling. Past a small budget the address gets a 429 unlooked-up."""
+    lookups = []
+
+    class Counting(apikeys.MemoryKeyStore):
+        async def get(self, key_id):
+            lookups.append(key_id)
+            return await super().get(key_id)
+
+    mw = ApiKeyMiddleware(Starlette(routes=[Route("/v1/tools/x", ok)]),
+                          resolver=apikeys.KeyResolver(Counting()))
+    c = TestClient(mw)
+    codes = [c.get("/v1/tools/x",
+                   headers={"X-API-Key": f"cs_live_{i:08x}_nope"}).status_code
+             for i in range(40)]
+    assert codes[0] == 401
+    assert codes[-1] == 429
+    assert len(lookups) <= 15
+    # Keyless calls from that address are not this limiter's business.
+    assert c.get("/v1/tools/x").status_code == 200
+
+
 def test_store_outage_is_a_503_not_a_free_pass():
     class Broken:
         async def get(self, key_id):
