@@ -117,6 +117,18 @@ def test_the_extract_endpoint_answers_with_the_file_and_refuses_long_routes(fake
         assert bad.status_code == 400
 
 
+def test_the_extract_endpoint_stops_at_the_global_daily_budget(fake_pmtiles, monkeypatch):
+    from ca_roads.budget import UPSTREAM
+    from ca_roads_demo.app import app
+
+    monkeypatch.setattr(mapfiles, "EXTRACT_DAILY", UPSTREAM.used("map-extract") + 1)
+    with TestClient(app) as c:
+        ok = c.post("/api/map/extract", json={"path": [[37.0, -122.0], [37.0, -121.95]]})
+        assert ok.status_code == 200, ok.text
+        spent = c.post("/api/map/extract", json={"path": [[37.0, -122.0], [37.0, -121.95]]})
+        assert spent.status_code == 503 and "tomorrow" in spent.json()["error"]
+
+
 def test_the_style_endpoint_serves_each_flavor():
     from ca_roads_demo.app import app
 

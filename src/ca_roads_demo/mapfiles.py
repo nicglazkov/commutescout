@@ -36,6 +36,8 @@ import httpx
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
+from ca_roads.budget import UPSTREAM
+
 log = logging.getLogger(__name__)
 
 # The map files live on Cloudflare R2 behind maps.commutescout.com since
@@ -61,6 +63,9 @@ MAX_POINTS = 2_000
 # plenty for one instance, and a slow one cannot run forever.
 CONCURRENT_EXTRACTS = 2
 EXTRACT_TIMEOUT_S = 240
+# Every cut sends tens of megabytes out of Cloud Run. The per-client cap
+# stops one address; this stops many. Real use is a few a day.
+EXTRACT_DAILY = int(os.environ.get("MAP_EXTRACT_DAILY", "300"))
 MANIFEST_TTL_S = 600
 
 _extracts = asyncio.Semaphore(CONCURRENT_EXTRACTS)
@@ -296,6 +301,9 @@ async def api_extract(request: Request) -> Response:
     if demo._client_over_daily(request, "map-extract"):
         return JSONResponse({"error": "daily limit for map downloads reached"}, status_code=429,
                             headers={"Retry-After": "3600"})
+    if not UPSTREAM.allow("map-extract", EXTRACT_DAILY):
+        return JSONResponse({"error": "map downloads are paused for today; try tomorrow"},
+                            status_code=503, headers={"Retry-After": "3600"})
     region = corridor_region(path, buffer_m)
     started = time.monotonic()
     async with _extracts:
