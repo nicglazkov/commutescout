@@ -520,24 +520,12 @@ export default function PluginsPage() {
           <H2 id="roadmap">Roadmap</H2>
           <ul className="text-cs-ink/70 mt-4 list-disc space-y-2 pl-5 text-sm">
             <li>
-              An unofficial Waze relay as a public, unreviewed plugin: police, crashes, hazards
-              and jams from the crowd, mapped onto the Flare kinds, with confirmations kept here.
-              The{" "}
-              <a
-                href="https://github.com/nicglazkov/commutescout/blob/main/docs/plugins-waze-google-plan.md"
-                className="text-cs-sky hover:underline"
-              >
-                plan and wireframe
-              </a>{" "}
-              explain the gray zone, what Google does and does not offer, and the steps.
-            </li>
-            <li>
               Plugin ideas on the list: red light cameras, aircraft enforcement (ADS-B), license
               plate readers (Flock), air quality, EV charging, and radar detector integration.
             </li>
             <li>
-              Per-account subscriptions, so the plugins you use follow you between the web and
-              the apps.
+              Plugin choices that follow your account on the web, as they already do between the
+              apps.
             </li>
           </ul>
         </div>
