@@ -74,7 +74,7 @@ from ca_roads_mcp.ratelimit import (
     trusted_client_ip,
 )
 from ca_roads_mcp.serialize import direction_hint
-from ca_roads_mcp.telemetry import log_event, redact_coords, visitor_hash
+from ca_roads_mcp.telemetry import log_event, redact_coords, uvicorn_log_config, visitor_hash
 
 try:
     VERSION = version("ca-roads-mcp")
@@ -2854,7 +2854,8 @@ app = CloudflareOnly(app)
 def main() -> None:
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8081)))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8081)),
+                log_config=uvicorn_log_config())
 
 
 if __name__ == "__main__":

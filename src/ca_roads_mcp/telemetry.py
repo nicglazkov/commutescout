@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import sys
@@ -70,3 +71,32 @@ def redact_coords(value):
             lambda m: f"{float(m.group(1)):.2f}", value
         )
     return value
+
+
+class RedactCoordsFilter(logging.Filter):
+    """Round coordinates in uvicorn's access lines.
+
+    The access log writes each request line with its query string, and
+    /api/speedlimit, /api/suggest and /api/mapdata carry the user's
+    position there. The privacy page promises about a kilometer at most.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # uvicorn.access args: (client, method, path, http_version, status)
+        if isinstance(record.args, tuple) and len(record.args) >= 3:
+            args = list(record.args)
+            args[2] = redact_coords(str(args[2]))
+            record.args = tuple(args)
+        return True
+
+
+def uvicorn_log_config() -> dict:
+    """uvicorn's own logging setup with the access lines redacted."""
+    import copy
+
+    from uvicorn.config import LOGGING_CONFIG
+
+    config = copy.deepcopy(LOGGING_CONFIG)
+    config.setdefault("filters", {})["redact_coords"] = {"()": RedactCoordsFilter}
+    config["handlers"]["access"]["filters"] = ["redact_coords"]
+    return config
