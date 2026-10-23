@@ -5,11 +5,14 @@ a stub, so these tests exercise the real handlers and checker logic
 without credentials or network.
 """
 
+import asyncio
+
 import pytest
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
+from ca_roads import apikeys
 from ca_roads_demo import watch
 
 
@@ -149,7 +152,10 @@ def store(monkeypatch):
         return USERS.get(header.removeprefix("Bearer ").strip())
 
     monkeypatch.setattr(watch, "verify_user", fake_verify)
-    return mem
+    # Account deletion revokes API keys, so keep those in memory too.
+    apikeys.set_key_store(apikeys.MemoryKeyStore())
+    yield mem
+    apikeys.set_key_store(None)
 
 
 @pytest.fixture
@@ -738,6 +744,18 @@ def test_account_delete_removes_everything(approved_client, store):
     # Anonymous callers get refused.
     assert approved_client.request(
         "DELETE", "/api/watch/account").status_code == 401
+
+
+def test_account_delete_revokes_api_keys(approved_client):
+    mem = apikeys.get_key_store()
+    asyncio.run(apikeys.create_key(mem, "sam", "sam@example.com", "cli"))
+    asyncio.run(apikeys.create_key(mem, "other", "o@example.com", "x"))
+    r = approved_client.request("DELETE", "/api/watch/account",
+                                headers=auth())
+    assert r.status_code == 200
+    assert r.json()["keys"] == 1
+    # The deleted account's key is gone; nobody else's is touched.
+    assert [v["uid"] for v in mem.keys.values()] == ["other"]
 
 
 ROUTE_PTS = [[37.34, -121.89], [37.45, -122.0], [37.6, -122.1],

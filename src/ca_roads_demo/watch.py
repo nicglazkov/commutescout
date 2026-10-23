@@ -1126,17 +1126,17 @@ async def api_watch_update(request: Request) -> JSONResponse:
 
 
 async def api_account_delete(request: Request) -> JSONResponse:
-    """Removes the account and everything hanging off it, API keys
-    included (see below)."""
     """Self-serve account deletion: removes the user record, every
-    watch and its alert state, and all push subscriptions. The privacy
+    watch and its alert state, all push subscriptions, and every API
+    key, so a key minted before deletion stops working. The privacy
     page promises this is immediate and complete."""
     claims = await verify_user(request)
     if not claims:
         return _err("sign in required", 401)
     uid = claims["sub"]
     store = get_store()
-    removed = {"watches": 0, "devices": 0}
+    removed = {"watches": 0, "devices": 0,
+               "keys": await apikeys.get_key_store().delete_for(uid)}
     for w in await store.list_watches(uid):
         await store.delete_watch(w["id"])
         removed["watches"] += 1
