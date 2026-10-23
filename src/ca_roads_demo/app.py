@@ -510,6 +510,8 @@ async def ask(request: Request):
     body = await _capped_json(request)
     if body is None:
         return JSONResponse({"error": "invalid JSON"}, status_code=400)
+    if not isinstance(body, dict) or not isinstance(body.get("question") or "", str):
+        return JSONResponse({"error": "question is required"}, status_code=400)
     question = (body.get("question") or "").strip()
     if not question:
         return JSONResponse({"error": "question is required"}, status_code=400)
