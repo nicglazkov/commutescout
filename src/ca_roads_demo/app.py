@@ -2027,8 +2027,20 @@ async def api_contact(request: Request):
 # addresses. Firebase's own flow had this built in; ours has to add it.
 _SIGNIN_PER_EMAIL_HOUR = 4
 _SIGNIN_PER_IP_HOUR = 12
+# A site-wide ceiling on top: an attacker with many IPs spraying many
+# addresses still stops here, which bounds what our sender domain can be
+# made to emit (and its reputation). Real use is a handful a month.
+_SIGNIN_GLOBAL_HOUR = 60
 _signin_email_hits: dict[str, list[float]] = {}
 _signin_ip_hits: dict[str, list[float]] = {}
+_signin_global_hits: list[float] = []
+
+
+def _prune(store: dict, now: float) -> None:
+    """Drop keys whose every hit is over an hour old. Only expired
+    entries go: clearing live ones would reset a victim's cap."""
+    for key in [k for k, v in store.items() if not v or now - v[-1] >= 3600]:
+        del store[key]
 
 
 def _signin_allowed(email: str, ip: str) -> bool:
@@ -2043,15 +2055,22 @@ def _signin_allowed(email: str, ip: str) -> bool:
         store[key] = hits
         return True
 
+    _signin_global_hits[:] = [t for t in _signin_global_hits if now - t < 3600]
+    if len(_signin_global_hits) >= _SIGNIN_GLOBAL_HOUR:
+        log.warning("signin-link: global hourly cap reached")
+        return False
     if len(_signin_email_hits) > 5000:
-        _signin_email_hits.clear()
+        _prune(_signin_email_hits, now)
     if len(_signin_ip_hits) > 5000:
-        _signin_ip_hits.clear()
+        _prune(_signin_ip_hits, now)
     # Check the email cap first, but only consume an IP token if the email
     # cap passed, so a blocked-victim retry does not burn the IP budget.
     if not ok(_signin_email_hits, email, _SIGNIN_PER_EMAIL_HOUR):
         return False
-    return ok(_signin_ip_hits, ip, _SIGNIN_PER_IP_HOUR)
+    if not ok(_signin_ip_hits, ip, _SIGNIN_PER_IP_HOUR):
+        return False
+    _signin_global_hits.append(now)
+    return True
 
 
 async def api_signin_link(request: Request):

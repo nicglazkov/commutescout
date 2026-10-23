@@ -17,6 +17,7 @@ def client(monkeypatch):
     # Reset the in-process abuse throttle state between tests.
     monkeypatch.setattr(demo_app, "_signin_email_hits", {})
     monkeypatch.setattr(demo_app, "_signin_ip_hits", {})
+    monkeypatch.setattr(demo_app, "_signin_global_hits", [])
 
     sent = []
 
@@ -49,6 +50,33 @@ def test_honeypot_sends_nothing_but_looks_successful(client):
                     data={"email": "bot@b.co", "website": "filled"})
     assert r.status_code == 200
     assert not client.sent
+
+
+def _fresh_caps(monkeypatch, global_cap):
+    monkeypatch.setattr(demo_app, "_signin_email_hits", {})
+    monkeypatch.setattr(demo_app, "_signin_ip_hits", {})
+    monkeypatch.setattr(demo_app, "_signin_global_hits", [])
+    monkeypatch.setattr(demo_app, "_SIGNIN_GLOBAL_HOUR", global_cap)
+
+
+def test_flooding_the_tables_does_not_reset_a_victims_cap(monkeypatch):
+    """Spraying thousands of throwaway addresses used to clear every
+    counter at once, handing a bomber a fresh per-victim budget."""
+    _fresh_caps(monkeypatch, 10**6)
+    for _ in range(demo_app._SIGNIN_PER_EMAIL_HOUR):
+        assert demo_app._signin_allowed("victim@x.co", "1.1.1.1")
+    for i in range(6000):
+        demo_app._signin_allowed(f"spray{i}@x.co", f"10.0.{i // 250}.{i % 250}")
+    assert not demo_app._signin_allowed("victim@x.co", "2.2.2.2")
+
+
+def test_global_hourly_ceiling(monkeypatch):
+    """Many addresses from many sources still stop at a site-wide cap,
+    which bounds what the sender domain can be made to emit."""
+    _fresh_caps(monkeypatch, 3)
+    assert all(demo_app._signin_allowed(f"u{i}@x.co", f"9.9.9.{i}")
+               for i in range(3))
+    assert not demo_app._signin_allowed("u9@x.co", "9.9.9.9")
 
 
 def test_invalid_email_rejected(client):
