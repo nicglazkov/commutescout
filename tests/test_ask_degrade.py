@@ -33,6 +33,15 @@ async def test_other_errors_yield_retry_note(monkeypatch):
     assert "boom" not in joined
 
 
+def test_a_malformed_body_is_a_400_not_a_500():
+    from starlette.testclient import TestClient
+
+    with TestClient(app.app, raise_server_exceptions=False) as c:
+        for body in ([], "text", 7, {"question": 5}, {"question": ["a"]}):
+            r = c.post("/api/ask", json=body)
+            assert r.status_code == 400, (body, r.status_code)
+
+
 async def test_normal_stream_passes_through(monkeypatch):
     async def ok():
         yield "a"
