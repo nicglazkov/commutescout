@@ -38,3 +38,21 @@ async def test_normal_stream_passes_through(monkeypatch):
         yield "a"
         yield "b"
     assert await _collect(app._safe_answer_stream(ok())) == ["a", "b"]
+
+
+def test_ask_refuses_non_json_content_types():
+    """A cross-site text/plain post skips the CORS preflight; only a JSON
+    content type reaches the model (and the shared daily budget)."""
+    from starlette.testclient import TestClient
+    c = TestClient(app.app)
+    body = '{"question": "Is I-80 open?"}'
+    for ctype in ("text/plain", "application/x-www-form-urlencoded", None):
+        headers = {"content-type": ctype} if ctype else {}
+        r = c.post("/api/ask", content=body, headers=headers)
+        assert r.status_code == 415, ctype
+    # A JSON content type passes the gate, then fails validation on an
+    # empty question before any model call.
+    assert c.post("/api/ask", json={"question": ""}).status_code == 400
+    r = c.post("/api/ask", content="{}",
+               headers={"content-type": "application/json; charset=utf-8"})
+    assert r.status_code == 400
