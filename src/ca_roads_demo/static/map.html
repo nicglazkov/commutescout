@@ -35,7 +35,7 @@
      tens of milliseconds. -->
 <!-- GPU renderer bundle: default path for WebGL2 browsers, so start the
      fetch alongside the map data instead of after the boot script runs. -->
-<link rel="preload" as="script" href="/static/vendor/deck-slim.min.js">
+<link rel="preload" as="script" href="/static/vendor/deck-slim.min.js?v=__ASSET_V__">
 <!-- Map tiles are the LCP element (measured via Web Analytics); warming
      the tile CDN connections shaves the TLS handshake off first paint. -->
 <link rel="preconnect" href="https://data.commutescout.com" crossorigin>
@@ -43,7 +43,7 @@
 <!-- The map library and its worker, fetched alongside the page instead
      of when the parser reaches the bottom of it. The worker's address
      carries the same version basemap.js gives it. -->
-<link rel="preload" as="script" href="/static/vendor/maplibre-gl-csp.js">
+<link rel="preload" as="script" href="/static/vendor/maplibre-gl-csp.js?v=__ASSET_V__">
 <link rel="preload" as="worker" href="/static/vendor/maplibre-gl-csp-worker.js?v=__ASSET_V__">
 <!-- The base map's style is asked for now, not after a megabyte of map
      code has been parsed: the map library then finds it already here.
@@ -52,8 +52,8 @@
 <script src="/static/basemap-early.js?v=__ASSET_V__"></script>
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
-<link rel="stylesheet" href="/static/vendor/leaflet.css">
-<link rel="stylesheet" href="/static/vendor/maplibre-gl.css">
+<link rel="stylesheet" href="/static/vendor/leaflet.css?v=__ASSET_V__">
+<link rel="stylesheet" href="/static/vendor/maplibre-gl.css?v=__ASSET_V__">
 <link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="/static/map.css?v=__ASSET_V__">
 <link rel="stylesheet" href="/static/watch.css?v=__ASSET_V__">
@@ -503,10 +503,10 @@
   </aside>
 </div>
 
-<script src="/static/vendor/leaflet.js"></script>
-<script src="/static/vendor/maplibre-gl-csp.js"></script>
-<script src="/static/vendor/pmtiles.js"></script>
-<script src="/static/vendor/leaflet-maplibre-gl.js"></script>
+<script src="/static/vendor/leaflet.js?v=__ASSET_V__"></script>
+<script src="/static/vendor/maplibre-gl-csp.js?v=__ASSET_V__"></script>
+<script src="/static/vendor/pmtiles.js?v=__ASSET_V__"></script>
+<script src="/static/vendor/leaflet-maplibre-gl.js?v=__ASSET_V__"></script>
 <script src="/static/basemap.js?v=__ASSET_V__"></script>
 <script src="/static/units.js?v=__ASSET_V__"></script>
 <script src="/static/plugin-badges.js?v=__ASSET_V__"></script>

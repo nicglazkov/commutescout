@@ -1,7 +1,9 @@
 /* Service worker: receives watch-area push alerts and opens /watch on
    tap. No fetch interception - the page works identically without it. */
 
-const ASSET_CACHE = 'ca-roads-assets-v3';
+// v4: vendor files are cached by their versioned address (?v=), so a
+// deploy that upgrades one is fetched fresh; v3 held them unversioned.
+const ASSET_CACHE = 'ca-roads-assets-v4';
 const SNAP_CACHE = 'ca-roads-snap-v1';
 const SNAP_HOST = 'data.commutescout.com';
 // The same host serves the base map's files under /map/: byte-range
@@ -17,7 +19,6 @@ self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const cache = await caches.open(ASSET_CACHE);
     await cache.addAll([
-      '/static/vendor/leaflet.js', '/static/vendor/leaflet.css',
       '/static/fonts/fonts.css',
       '/static/icon-192.png', '/static/icon-512.png',
     ]).catch(() => {});
@@ -78,7 +79,14 @@ self.addEventListener('fetch', (e) => {
     const hit = await cache.match(e.request);
     if (hit) return hit;
     const res = await fetch(e.request);
-    if (res.ok) cache.put(e.request, res.clone());
+    if (res.ok) {
+      // A new version replaces the old ones of the same file.
+      for (const old of await cache.keys()) {
+        const u = new URL(old.url);
+        if (u.pathname === url.pathname && u.search !== url.search) await cache.delete(old);
+      }
+      cache.put(e.request, res.clone());
+    }
     return res;
   })());
 });

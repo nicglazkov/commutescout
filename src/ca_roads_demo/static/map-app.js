@@ -979,7 +979,9 @@ const GL = { on: false, deck: null, dirty: false, index: [],
       L.DomUtil.setTransform(pane, offset, scale);
     });
     const sc = document.createElement('script');
-    sc.src = '/static/vendor/deck-slim.min.js';
+    // The page's preload carries the deploy's version; load that address.
+    const pre = document.querySelector('link[rel="preload"][href^="/static/vendor/deck-slim"]');
+    sc.src = (pre && pre.getAttribute('href')) || '/static/vendor/deck-slim.min.js';
     sc.onload = () => {
       GL.deck = new deckSlim.Deck({
         canvas: 'glcanvas', controller: false,
