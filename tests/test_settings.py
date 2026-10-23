@@ -183,6 +183,11 @@ async def test_phone_tokens_register_and_receive_pushes(store, monkeypatch):  # 
     assert len(subs) == 2
     await watch._push_to_subs(subs, {"title": "Hi", "body": "there"})
     assert len(await watch.get_store().list_push_subs("sam")) == 1, "dead token removed"
+    # Another account cannot forget this phone, and is not told it exists.
+    r = c.request("DELETE", "/api/me/devices", json={"token": "t" * 40, "platform": "android"},
+                  headers=auth("tok-admin"))
+    assert r.status_code == 200
+    assert len(await watch.get_store().list_push_subs("sam")) == 1
     r = c.request("DELETE", "/api/me/devices", json={"token": "t" * 40, "platform": "android"},
                   headers=auth())
     assert r.status_code == 200

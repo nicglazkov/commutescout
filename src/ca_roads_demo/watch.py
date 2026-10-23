@@ -615,11 +615,14 @@ async def api_me_devices(request: Request) -> JSONResponse:
         return _err("token and platform (ios or android) are required")
     store = get_store()
     sub_id = "fcm-" + hashlib.sha256(token.encode()).hexdigest()[:20]
-    if request.method == "DELETE":
-        with contextlib.suppress(Exception):
-            await store.delete_push_sub(sub_id)
-        return JSONResponse({"ok": True})
     subs = await store.list_push_subs(claims["sub"])
+    if request.method == "DELETE":
+        # Only this account's own phone; another account's token is
+        # answered the same way so the reply says nothing about it.
+        if any(s["id"] == sub_id for s in subs):
+            with contextlib.suppress(Exception):
+                await store.delete_push_sub(sub_id)
+        return JSONResponse({"ok": True})
     if len(subs) >= MAX_PUSH_SUBS and all(s["id"] != sub_id for s in subs):
         return _err("too many devices registered", 403)
     await store.upsert_push_sub(sub_id, {
