@@ -89,6 +89,12 @@ MAX_SEEN_IDS = 1500
 # same event on every flap. A genuine reopen after the grace window
 # still alerts.
 SEEN_GRACE_SECONDS = 6 * 3600
+# When every channel tried for a watch fails (FCM or Resend down), its
+# alerts are held back and tried again next cycle, this many times,
+# before they are given up as seen. Kept in process: a restart only
+# allows a few more tries.
+MAX_DELIVERY_RETRIES = 3
+_delivery_retries: dict[tuple[str, str], int] = {}
 CA_LAT = (31.0, 43.5)
 CA_LON = (-126.5, -112.5)
 # Simplified California outline for watch geometry: generous into the
@@ -1807,10 +1813,12 @@ async def run_check_cycle() -> dict:
             else:
                 seen = {}
             fresh = [e for e in matched if e["id"] not in seen]
+            held: set[str] = set()
 
             if not first_run and fresh:
                 batch = fresh[:MAX_ALERTS_PER_WATCH_CYCLE]
                 overflow = len(fresh) - len(batch)
+                tried = delivered = 0
                 for event in batch:
                     stats["alerts"] += 1
                     title = f"{watch.get('name', 'Watch')}: {event['title']}"
@@ -1820,10 +1828,13 @@ async def run_check_cycle() -> dict:
                         click = (f"{DEMO_URL}/?focus={lat:.5f},{lon:.5f}"
                                  f"&k={event.get('kind', 'incident')}"
                                  if lat and lon else f"{DEMO_URL}/watch")
-                        stats["pushes"] += await _push_to_subs(subs, {
+                        sent = await _push_to_subs(subs, {
                             "title": title, "body": event["body"],
                             "url": click,
                         })
+                        stats["pushes"] += sent
+                        tried += 1 if subs else 0
+                        delivered += sent
                 # One email per watch per cycle: pushes are per event, but
                 # a busy cycle as eight separate emails reads as spam.
                 if watch.get("channels", {}).get("email"):
@@ -1832,6 +1843,27 @@ async def run_check_cycle() -> dict:
                     ok = await _email_alert(user.get("email") or "", subject,
                                             body_html, body_text)
                     stats["emails"] += 1 if ok else 0
+                    tried += 1
+                    delivered += 1 if ok else 0
+                if tried and not delivered:
+                    # Nothing reached the user: keep the batch unseen so
+                    # the next cycle tries again, a bounded number of times.
+                    if len(_delivery_retries) > 10_000:
+                        _delivery_retries.clear()
+                    for e in batch:
+                        key = (watch["id"], e["id"])
+                        n = _delivery_retries.get(key, 0)
+                        if n < MAX_DELIVERY_RETRIES:
+                            _delivery_retries[key] = n + 1
+                            held.add(e["id"])
+                    if held:
+                        stats["held"] = stats.get("held", 0) + len(held)
+                        log.warning("checker: watch %s: no channel delivered; "
+                                    "holding %d alerts for the next cycle",
+                                    watch["id"], len(held))
+                for e in batch:
+                    if e["id"] not in held:
+                        _delivery_retries.pop((watch["id"], e["id"]), None)
 
             # Union with a grace window instead of replacing: flapping
             # feeds (CHP mirrors disagree cycle to cycle) must not
@@ -1839,7 +1871,8 @@ async def run_check_cycle() -> dict:
             # absent longer than the grace window age out, so a genuine
             # reopen still alerts.
             for e in matched:
-                seen[e["id"]] = now_ts
+                if e["id"] not in held:
+                    seen[e["id"]] = now_ts
             pruned = {i: ts for i, ts in seen.items()
                       if now_ts - ts < SEEN_GRACE_SECONDS}
             await store.set_seen(watch["id"], pruned)

@@ -442,6 +442,7 @@ def checker(store, monkeypatch):
 
     monkeypatch.setattr(watch, "_collect_events", fake_events)
     monkeypatch.setattr(watch, "_push_to_subs", fake_push)
+    monkeypatch.setattr(watch, "_delivery_retries", {})
     return store, events, pushes
 
 
@@ -482,6 +483,51 @@ async def test_new_event_alerts_once(checker):
     stats = await watch.run_check_cycle()
     assert stats["alerts"] == 0
     assert len(pushes) == 1
+
+
+async def test_failed_delivery_is_retried_then_given_up(checker, monkeypatch):
+    """A push outage holds the alert back for a few cycles instead of
+    marking it seen; once the push works, it goes out once."""
+    store, events, pushes = checker
+    wid = await seed_watch(store)
+    await store.set_seen(wid, {"chp:0"})
+    events.append(EVENT)
+    attempts = []
+
+    async def down(subs, payload):
+        attempts.append(payload["title"])
+        return 0
+
+    monkeypatch.setattr(watch, "_push_to_subs", down)
+    stats = await watch.run_check_cycle()
+    assert stats["alerts"] == 1 and stats["held"] == 1
+    assert "chp:1" not in await store.get_seen(wid)
+    # Back up: the held alert is delivered, then never again.
+    async def up(subs, payload):
+        attempts.append(payload["title"])
+        return len(subs)
+
+    monkeypatch.setattr(watch, "_push_to_subs", up)
+    assert (await watch.run_check_cycle())["pushes"] == 1
+    assert (await watch.run_check_cycle())["alerts"] == 0
+    assert len(attempts) == 2
+    # A lasting outage gives up after MAX_DELIVERY_RETRIES tries.
+    monkeypatch.setattr(watch, "_push_to_subs", down)
+    events.append({**EVENT, "id": "chp:2"})
+    for _ in range(watch.MAX_DELIVERY_RETRIES + 3):
+        await watch.run_check_cycle()
+    assert len(attempts) == 2 + watch.MAX_DELIVERY_RETRIES + 1
+    assert "chp:2" in await store.get_seen(wid)
+
+
+async def test_a_user_with_no_device_does_not_hold_alerts(checker):
+    store, events, pushes = checker
+    wid = await seed_watch(store)
+    await store.delete_push_sub("dev1")
+    await store.set_seen(wid, {"chp:0"})
+    events.append(EVENT)
+    stats = await watch.run_check_cycle()
+    assert "held" not in stats and "chp:1" in await store.get_seen(wid)
 
 
 async def test_one_bad_watch_does_not_abort_the_cycle(checker, monkeypatch):
