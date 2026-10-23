@@ -267,6 +267,13 @@ class ApiKeyMiddleware:
         self.resolver = resolver or apikeys.KeyResolver()
         self.daily = DailyCounter()
         self.buckets: dict[str, TokenBucket] = {}
+        # A bad key is answered here, before the address limiter, and a
+        # fresh random key misses the resolver cache, so guessing used to
+        # cost one store read per request with no ceiling. Each address
+        # gets a small budget of bad keys; past it, a minute of 429s
+        # with no lookup at all.
+        self.bad_keys = RateLimiter(capacity=10, refill_per_second=10 / 60)
+        self.blocked: dict[str, float] = {}
         self.log = logging.getLogger("ca_roads.apikeys")
 
     async def _send_error(self, send, status, code, message, hint=None, headers=()):
@@ -284,6 +291,14 @@ class ApiKeyMiddleware:
         if not presented:
             await self.app(scope, receive, send)
             return
+        addr = limiter_key(RateLimitMiddleware._client_key(scope))
+        now = time.monotonic()
+        if self.blocked.get(addr, 0.0) > now:
+            await self._send_error(send, 429, "rate_limited",
+                                   "Too many invalid API keys from this address.",
+                                   "Check the key under Settings on commutescout.com/map.",
+                                   ((b"retry-after", b"60"),))
+            return
         try:
             info = await self.resolver.resolve(presented)
         except Exception:  # noqa: BLE001 - the key store is down
@@ -293,6 +308,10 @@ class ApiKeyMiddleware:
                                    "Retry in a minute, or call without a key.")
             return
         if not info:
+            if not self.bad_keys.allow(addr):
+                if len(self.blocked) > 10_000:
+                    self.blocked = {a: t for a, t in self.blocked.items() if t > now}
+                self.blocked[addr] = now + 60
             await self._send_error(send, 401, "invalid_key",
                                    "That API key is unknown or revoked.",
                                    "Create a key under Settings on commutescout.com/map.")
