@@ -67,3 +67,10 @@ def test_sitemap_xml_serves_the_real_export(monkeypatch):
     assert r.status_code == 200
     assert "commutescout.com/map" in r.text
     assert "commutescout.com/pricing" in r.text
+
+
+def test_robots_txt_points_at_the_sitemap():
+    r = TestClient(demo_app.app).get("/robots.txt")
+    assert r.status_code == 200
+    assert "Disallow: /api/" in r.text
+    assert "Sitemap: https://commutescout.com/sitemap.xml" in r.text

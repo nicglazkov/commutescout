@@ -104,3 +104,11 @@ def test_mcp_transport_still_mounted(client):
     r = client.get("/mcp", headers={"Accept": "application/json"})
     # 421 is the SDK's host check under the test client; main() turns it off.
     assert r.status_code in (400, 405, 406, 421)
+
+
+def test_robots_txt_keeps_crawlers_off_live_calls(client):
+    r = client.get("/robots.txt")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/plain")
+    assert "Disallow: /mcp" in r.text
+    assert f"Disallow: {PREFIX}/tools/" in r.text

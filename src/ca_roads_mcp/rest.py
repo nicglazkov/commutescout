@@ -170,6 +170,15 @@ def register(mcp) -> None:
     from mcp.server.mcpserver import Context
     from mcp.server.mcpserver.exceptions import ToolError
 
+    # The docs are worth indexing; the MCP endpoint and live tool calls
+    # are computation, not pages, so crawlers keep off them.
+    @mcp.custom_route("/robots.txt", methods=["GET"])
+    async def robots(_: Request) -> Response:
+        body = (f"User-agent: *\nDisallow: /mcp\nDisallow: {PREFIX}/tools/\n"
+                "Allow: /\n")
+        return Response(body, media_type="text/plain",
+                        headers={"Cache-Control": "public, max-age=3600"})
+
     @mcp.custom_route(f"{PREFIX}/openapi.json", methods=["GET"])
     async def openapi_doc(_: Request) -> Response:
         return JSONResponse(openapi(mcp), headers={**CORS, "Cache-Control": "public, max-age=300"})
