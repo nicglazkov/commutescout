@@ -254,7 +254,7 @@ catalog row as `tier`:
 | Tier | Manifest | What it means |
 |---|---|---|
 | `approved` | `visibility: public`, `trust: official` or `verified` | Reviewed by CommuteScout: the operator is known and the feed passed review. Drawn by default, may speak (`notify`), badged "approved". |
-| `unreviewed` | `visibility: public` or `unlisted`, `trust: community` | Anyone who passes the conformance check can be listed. Drawn and labelled "public, not reviewed"; never speaks unless the user turns voice on for that source. |
+| `unreviewed` | `visibility: public` or `unlisted`, `trust: community` | Anyone who passes the conformance check can be listed. Drawn and labelled "public, not reviewed"; its alerts are spoken like any other, and the user can turn voice off per alert type in the app's alert settings. |
 | `private` | `visibility: private` (added by URL on one device) | Direct from the phone to the plugin. Whatever the user wants, including voice; nothing leaves the user's own path. |
 
 Official agency data (the state feeds) is not a plugin and always
