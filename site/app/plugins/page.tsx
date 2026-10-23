@@ -272,8 +272,8 @@ export default function PluginsPage() {
               <p className="text-cs-ink/60 mt-1 font-mono text-xs">public or unlisted · community</p>
               <p className="text-cs-ink/70 mt-2 text-sm">
                 Anyone who passes the conformance check can be listed. Drawn on the map and
-                labelled &quot;public, not reviewed&quot;; it never speaks unless a person turns
-                voice on for that source. Unlisted plugins are the same tier, reachable by id
+                labelled &quot;public, not reviewed&quot;; its alerts are spoken like any other,
+                and a person can turn voice off in the app&apos;s alert settings. Unlisted plugins are the same tier, reachable by id
                 for a group that knows they exist.
               </p>
             </div>

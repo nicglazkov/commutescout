@@ -266,7 +266,8 @@ export function Marketplace() {
             )}
             {!approved && (
               <p className="text-cs-ink/50 mt-3 text-xs">
-                Use at your own risk. It never speaks unless you turn voice on for it.
+                Use at your own risk. Its alerts are spoken like any other; turn voice off in the
+                app&apos;s alert settings.
               </p>
             )}
           </article>
