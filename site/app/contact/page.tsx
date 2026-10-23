@@ -89,6 +89,7 @@ export default function ContactPage() {
                     type="text"
                     id="name"
                     name="name"
+                    autoComplete="name"
                     required
                     maxLength={80}
                     className="border-cs-line bg-cs-paper text-cs-ink placeholder:text-cs-ink/40 focus:ring-cs-sky mt-1.5 w-full rounded-lg border px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2"
@@ -103,6 +104,7 @@ export default function ContactPage() {
                     type="email"
                     id="email"
                     name="email"
+                    autoComplete="email"
                     required
                     placeholder="you@example.com"
                     className="border-cs-line bg-cs-paper text-cs-ink placeholder:text-cs-ink/40 focus:ring-cs-sky mt-1.5 w-full rounded-lg border px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2"
