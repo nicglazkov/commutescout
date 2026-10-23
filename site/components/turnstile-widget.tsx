@@ -61,7 +61,22 @@ export function TurnstileWidget({ sitekey }: { sitekey: string }) {
       // The default response field (hidden input named
       // cf-turnstile-response) is injected into the surrounding form,
       // which is what the server verifies.
-      widgetId.current = window.turnstile.render(el, { sitekey });
+      // Without these callbacks a widget that failed to load, or a token
+      // that expired while the visitor typed, left a form that looked
+      // fine but could only ever be rejected.
+      widgetId.current = window.turnstile.render(el, {
+        sitekey,
+        "expired-callback": freshToken,
+        "timeout-callback": freshToken,
+        "error-callback": () => {
+          setStatus({
+            kind: "error",
+            text:
+              "The bot check could not load. Allow challenges.cloudflare.com " +
+              "or reload the page, then try again.",
+          });
+        },
+      });
     }
 
     if (window.turnstile) {
@@ -88,6 +103,16 @@ export function TurnstileWidget({ sitekey }: { sitekey: string }) {
     async function onSubmit(e: Event) {
       if (!form) return;
       e.preventDefault();
+      // Posting without a token can only fail, so hold the message and
+      // say why instead of spending a request on a certain rejection.
+      const token = new FormData(form).get("cf-turnstile-response");
+      if (!token) {
+        setStatus({
+          kind: "error",
+          text: "The bot check is still running. Try again in a few seconds.",
+        });
+        return;
+      }
       // Disabled while in flight: tokens are single use, so a double
       // click would burn the token on a request the user never sees.
       const btn = submitButton();

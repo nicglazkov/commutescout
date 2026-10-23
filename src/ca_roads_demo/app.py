@@ -1944,7 +1944,11 @@ async def _turnstile_verify(secret: str, token: str, ip: str) -> bool:
     if resp.status_code != 200:
         log.warning("turnstile: siteverify HTTP %s", resp.status_code)
         return False
-    body = resp.json()
+    try:
+        body = resp.json()
+    except ValueError:
+        log.warning("turnstile: siteverify answered with a non-JSON body")
+        return False
     if not body.get("success"):
         log.warning("turnstile: token rejected (%s)",
                     body.get("error-codes"))
@@ -1972,8 +1976,19 @@ async def api_contact(request: Request):
     turnstile_secret = os.environ.get("TURNSTILE_SECRET_KEY", "").strip()
     if turnstile_secret:
         token = (form.get("cf-turnstile-response") or "").strip()[:2048]
-        if not token or not await _turnstile_verify(
-                turnstile_secret, token, client_ip(request)):
+        # Every rejection is logged: an empty token is what a visitor
+        # gets when the page script never ran (blocked, or submitted
+        # before it loaded), and that used to leave no trace at all.
+        if not token:
+            log.info("contact: no bot-check token, rejected (%s post)",
+                     "page" if _browser_form_post(request) else "script")
+            verified = False
+        else:
+            verified = await _turnstile_verify(
+                turnstile_secret, token, client_ip(request))
+            if not verified:
+                log.info("contact: bot check rejected the token")
+        if not verified:
             return answer("Human verification failed. Reload the page and try "
                           "again.", status=403, notice="verify")
     if not (name and message and "@" in email and "." in email.rsplit("@", 1)[-1]):
@@ -1996,10 +2011,12 @@ async def api_contact(request: Request):
     if not ok:
         # _email_alert logs the cause; this records that a real visitor
         # message was lost, which is the part worth alerting on.
-        log.error("contact: send failed, message from %s not delivered",
-                  email)
+        # The ref (also in the email) identifies the message without
+        # putting the visitor's address in the logs.
+        log.error("contact: send failed, message ref=%s not delivered", ref)
         return answer("Sending failed. Try again in a minute.", status=502,
                       notice="failed")
+    log.info("contact: sent ref=%s", ref)
     return answer("Thanks. Your message is on its way.", notice="sent")
 
 

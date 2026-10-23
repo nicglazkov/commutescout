@@ -236,3 +236,49 @@ def test_verify_fails_closed_on_http_error(monkeypatch):
 def test_verify_fails_closed_when_unreachable(monkeypatch):
     assert _verify_with(
         monkeypatch, exc=ConnectionError("boom")) is False
+
+
+def test_verify_fails_closed_on_non_json_body(monkeypatch):
+    class _Bad(_FakeResp):
+        def json(self):
+            raise ValueError("not json")
+    assert _verify_with(monkeypatch, resp=_Bad(200, None)) is False
+
+
+# Every outcome leaves a log line, so a lost message is never invisible:
+# a send that worked used to log nothing at all, and an empty-token
+# rejection (the common case for a visitor whose page script never ran)
+# was silent too. The visitor's address stays out of the logs.
+
+def test_every_outcome_is_logged_without_the_address(monkeypatch, caplog):
+    sent = []
+    c = _client(monkeypatch, sent)
+    monkeypatch.setenv("TURNSTILE_SECRET_KEY", "sk-test")
+
+    async def ok(secret, token, ip):
+        return token == "tok-good"
+    monkeypatch.setattr(demo_app, "_turnstile_verify", ok)
+    caplog.set_level("INFO", logger=demo_app.log.name)
+    c.post("/api/contact", data=GOOD)
+    c.post("/api/contact", data={**GOOD, "cf-turnstile-response": "tok-bad"})
+    c.post("/api/contact", data={**GOOD, "cf-turnstile-response": "tok-good"})
+    lines = [r.getMessage() for r in caplog.records
+             if r.getMessage().startswith("contact:")]
+    assert any("no bot-check token" in m for m in lines)
+    assert any("bot check rejected" in m for m in lines)
+    assert any(m.startswith("contact: sent ref=") for m in lines)
+    assert not any("a@b.co" in m for m in lines)
+
+
+def test_failed_send_log_omits_the_address(monkeypatch, caplog):
+    async def failing(to_email, subject, html, text, reply_to=None):
+        return False
+    monkeypatch.setattr(watch, "_email_alert", failing)
+    monkeypatch.setenv("CONTACT_EMAIL", "owner@example.com")
+    monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    caplog.set_level("INFO", logger=demo_app.log.name)
+    r = TestClient(demo_app.app).post("/api/contact", data=GOOD)
+    assert r.status_code == 502
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("not delivered" in m for m in msgs)
+    assert not any("a@b.co" in m for m in msgs)
