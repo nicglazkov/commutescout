@@ -1129,6 +1129,18 @@ SR_PATHS = {
     19: "/smarterRoads/weather/rwisWFS/current/rwis_wfs.xml",
 }
 _sr_tokens: dict[int, str] = {}
+# Logins are single-flight and at most one per SR_LOGIN_GAP_S. The four
+# datasets fetch in parallel, and when the gateway rejected the tokens
+# each one logged in on every refresh: thousands of logins a day, which
+# VDOT flagged. Between logins a rejected dataset serves its last copy.
+SR_LOGIN_GAP_S = 1800.0
+_sr_lock = asyncio.Lock()
+_sr_login_at = 0.0     # monotonic time of the last login attempt
+_sr_logins = 0         # successful logins; tells a waiter one just happened
+
+
+class SmarterRoadsBackoff(RuntimeError):
+    """A login is needed but the last one was under SR_LOGIN_GAP_S ago."""
 
 
 def _va_ready() -> str:
@@ -1156,14 +1168,33 @@ async def _sr_refresh_tokens(client) -> None:
         _sr_tokens[ds] = r.json()["data"]
 
 
-async def _sr_fetch(client, ds: int):
-    if ds not in _sr_tokens:
+async def _sr_login(client, seen: int) -> None:
+    """Log in, unless another fetch did since this one read `seen`."""
+    global _sr_login_at, _sr_logins
+    async with _sr_lock:
+        if _sr_logins != seen:
+            return
+        wait = SR_LOGIN_GAP_S - (time.monotonic() - _sr_login_at)
+        if _sr_login_at and wait > 0:
+            raise SmarterRoadsBackoff(f"next login in {wait:.0f}s")
+        _sr_login_at = time.monotonic()
+        print(json.dumps({"event": "smarterroads_login"}))
         await _sr_refresh_tokens(client)
+        _sr_logins += 1
+
+
+async def _sr_fetch(client, ds: int):
+    seen = _sr_logins
+    if ds not in _sr_tokens:
+        await _sr_login(client, seen)
+        seen = _sr_logins
     url = f"{SR_GATEWAY}{SR_PATHS[ds]}"
     r = await client.get(url, params={"token": _sr_tokens[ds]},
                          headers=UA, timeout=60.0)
     if r.status_code in (401, 403):
-        await _sr_refresh_tokens(client)
+        print(json.dumps({"event": "smarterroads_rejected",
+                          "dataset": ds, "status": r.status_code}))
+        await _sr_login(client, seen)
         r = await client.get(url, params={"token": _sr_tokens[ds]},
                              headers=UA, timeout=60.0)
     r.raise_for_status()
