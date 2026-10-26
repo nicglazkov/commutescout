@@ -1129,14 +1129,18 @@ SR_PATHS = {
     19: "/smarterRoads/weather/rwisWFS/current/rwis_wfs.xml",
 }
 _sr_tokens: dict[int, str] = {}
-# Logins are single-flight and at most one per SR_LOGIN_GAP_S. The four
-# datasets fetch in parallel, and when the gateway rejected the tokens
-# each one logged in on every refresh: thousands of logins a day, which
-# VDOT flagged. Between logins a rejected dataset serves its last copy.
+# Logins are single-flight and at most one per SR_LOGIN_GAP_S, doubling
+# after each failed login up to SR_LOGIN_GAP_MAX_S. From 2026-10-23 the
+# per-dataset token endpoint answered 500 after a good login, and the
+# four parallel fetches each logged in again on every refresh: thousands
+# of logins a day, which VDOT flagged. Between logins the cache serves
+# the last good copy.
 SR_LOGIN_GAP_S = 1800.0
+SR_LOGIN_GAP_MAX_S = 12 * 3600.0
 _sr_lock = asyncio.Lock()
 _sr_login_at = 0.0     # monotonic time of the last login attempt
 _sr_logins = 0         # successful logins; tells a waiter one just happened
+_sr_failures = 0       # failed logins in a row
 
 
 class SmarterRoadsBackoff(RuntimeError):
@@ -1170,16 +1174,26 @@ async def _sr_refresh_tokens(client) -> None:
 
 async def _sr_login(client, seen: int) -> None:
     """Log in, unless another fetch did since this one read `seen`."""
-    global _sr_login_at, _sr_logins
+    global _sr_login_at, _sr_logins, _sr_failures
     async with _sr_lock:
         if _sr_logins != seen:
             return
-        wait = SR_LOGIN_GAP_S - (time.monotonic() - _sr_login_at)
+        gap = min(SR_LOGIN_GAP_S * 2 ** max(_sr_failures - 1, 0),
+                  SR_LOGIN_GAP_MAX_S)
+        wait = gap - (time.monotonic() - _sr_login_at)
         if _sr_login_at and wait > 0:
             raise SmarterRoadsBackoff(f"next login in {wait:.0f}s")
         _sr_login_at = time.monotonic()
+        try:
+            await _sr_refresh_tokens(client)
+        except Exception as exc:
+            _sr_failures += 1
+            print(json.dumps({"event": "smarterroads_login_failed",
+                              "failures": _sr_failures,
+                              "error": f"{type(exc).__name__}: {exc}"[:200]}))
+            raise
         print(json.dumps({"event": "smarterroads_login"}))
-        await _sr_refresh_tokens(client)
+        _sr_failures = 0
         _sr_logins += 1
 
 
