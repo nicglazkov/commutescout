@@ -764,7 +764,7 @@ async def test_va_smarterroads_login_tokens_and_parsing(monkeypatch):
 
     monkeypatch.setenv("SMARTERROADS_USER", "u")
     monkeypatch.setenv("SMARTERROADS_PASS", "p")
-    states._sr_tokens.clear()
+    _sr_reset(monkeypatch)
     inc = [{"orci:type_event": "Vehicle Accident",
             "orci:route_name": "I-95N",
             "orci:public_free_text": "Crash near exit 84",
@@ -826,6 +826,91 @@ async def test_va_smarterroads_login_tokens_and_parsing(monkeypatch):
     assert sign["lines"] == ["EXIT 126", "40 MILES & 34 MIN"]
     wxm = next(m for m in out["markers"] if m["kind"] == "rwis")
     assert wxm["air_c"] == 22.1
+    # One login served all four parallel dataset fetches.
+    assert states._sr_logins == 1
+    states._sr_tokens.clear()
+
+
+def _sr_reset(monkeypatch):
+    states._sr_tokens.clear()
+    monkeypatch.setattr(states, "_sr_login_at", 0.0)
+    monkeypatch.setattr(states, "_sr_logins", 0)
+    monkeypatch.setattr(states, "_sr_failures", 0)
+
+
+async def test_va_token_endpoint_500_backs_off_and_doubles(monkeypatch):
+    import httpx
+    import pytest
+    import respx
+
+    monkeypatch.setenv("SMARTERROADS_USER", "u")
+    monkeypatch.setenv("SMARTERROADS_PASS", "p")
+    _sr_reset(monkeypatch)
+    errors = (httpx.HTTPStatusError, states.SmarterRoadsBackoff)
+    with respx.mock:
+        respx.get(url__regex=r".*services/auth/token").mock(
+            return_value=httpx.Response(
+                200, headers={"set-cookie": "XSRF-TOKEN=x"}))
+        login = respx.post(url__regex=r".*services/auth/login").mock(
+            return_value=httpx.Response(200, json={"user": {}}))
+        # What SmarterRoads did from 2026-10-23: a good login, then 500.
+        respx.get(url__regex=r".*services/users/token/\d+").mock(
+            return_value=httpx.Response(500, json={"success": False}))
+        async with httpx.AsyncClient() as client:
+            for _ in range(5):
+                with pytest.raises(errors):
+                    await states._fetch_va(client)
+            assert login.call_count == 1
+            # 31 minutes on: one more try, which fails too.
+            monkeypatch.setattr(states, "_sr_login_at",
+                                states._sr_login_at - 31 * 60)
+            for _ in range(3):
+                with pytest.raises(errors):
+                    await states._fetch_va(client)
+            assert login.call_count == 2
+            # Now the gap is an hour: 31 minutes is not enough.
+            monkeypatch.setattr(states, "_sr_login_at",
+                                states._sr_login_at - 31 * 60)
+            with pytest.raises(states.SmarterRoadsBackoff):
+                await states._fetch_va(client)
+            assert login.call_count == 2
+    states._sr_tokens.clear()
+
+
+async def test_va_rejected_tokens_log_in_once_then_back_off(monkeypatch):
+    import httpx
+    import pytest
+    import respx
+
+    monkeypatch.setenv("SMARTERROADS_USER", "u")
+    monkeypatch.setenv("SMARTERROADS_PASS", "p")
+    _sr_reset(monkeypatch)
+    with respx.mock:
+        respx.get(url__regex=r".*services/auth/token").mock(
+            return_value=httpx.Response(
+                200, headers={"set-cookie": "XSRF-TOKEN=x"}))
+        login = respx.post(url__regex=r".*services/auth/login").mock(
+            return_value=httpx.Response(200, json={"user": {}}))
+        respx.get(url__regex=r".*services/users/token/\d+").mock(
+            return_value=httpx.Response(200, json={"data": "tok"}))
+        # The gateway rejects every token, as it did from 2026-10-23.
+        respx.get(url__regex=r".*iteriscloud\.com.*").mock(
+            return_value=httpx.Response(401))
+        async with httpx.AsyncClient() as client:
+            for _ in range(5):
+                with pytest.raises((httpx.HTTPStatusError,
+                                    states.SmarterRoadsBackoff)):
+                    await states._fetch_va(client)
+            assert login.call_count == 1
+            # After the gap, one more login is allowed, still only one.
+            monkeypatch.setattr(
+                states, "_sr_login_at",
+                states._sr_login_at - states.SR_LOGIN_GAP_S - 1)
+            for _ in range(3):
+                with pytest.raises((httpx.HTTPStatusError,
+                                    states.SmarterRoadsBackoff)):
+                    await states._fetch_va(client)
+            assert login.call_count == 2
     states._sr_tokens.clear()
 
 
