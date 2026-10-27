@@ -39,6 +39,10 @@ body { background:var(--bg); color:var(--ink);
 .topbar nav a, .topbar .navcta { color:#b7c4d4; font-size:.85rem; padding:7px 12px;
   border-radius:8px; text-decoration:none; white-space:nowrap }
 .topbar nav a:hover, .topbar .navcta:hover { color:#fff }
+.topbar .navmenu { display:none; background:none; border:0; color:#b7c4d4;
+  width:40px; height:40px; border-radius:8px; align-items:center;
+  justify-content:center; cursor:pointer }
+.topbar .navmenu:hover { color:#fff; background:rgba(255,255,255,.08) }
 .topbar .navcta.live { background:var(--sky); color:#fff }
 main { max-width:1000px; margin:0 auto; padding:18px 14px 50px }
 h1 { font-size:1.15rem; margin:4px 0 2px }
@@ -71,11 +75,14 @@ details summary { cursor:pointer; font-weight:600; font-size:.9rem }
   .topbar a.brand { gap:8px }
   .topbar .navcta { flex:0 0 auto; margin-left:auto; min-height:36px;
     display:flex; align-items:center }
-  .topbar nav { order:3; flex:1 1 100%; margin-left:0;
-    display:grid; grid-template-columns:repeat(4, 1fr); gap:4px }
-  .topbar nav a { padding:2px 4px; font-size:.72rem; text-align:center;
-    white-space:normal; line-height:1.2; min-height:40px;
-    display:flex; align-items:center; justify-content:center }
+  /* One row on phones: the nav opens under the bar from the Menu
+     button (topbar.js), as on the site header. */
+  .topbar .navmenu { display:flex }
+  .topbar nav { order:3; flex:1 1 100%; margin-left:0; display:none;
+    grid-template-columns:repeat(2, 1fr); gap:4px; padding-bottom:4px }
+  .topbar.open nav { display:grid }
+  .topbar nav a { padding:0 12px; font-size:.88rem; min-height:44px;
+    display:flex; align-items:center }
 }
 </style>
 </head>
@@ -85,7 +92,7 @@ details summary { cursor:pointer; font-weight:600; font-size:.9rem }
     <img class="mark" src="/logo.svg" alt="">
     <span class="wordmark">CommuteScout</span>
   </a>
-  <nav>
+  <nav id="topnav">
     <a href="/watch">Watch areas</a>
     <a href="/data-sources">Data sources</a>
     <a href="/developers">Developers</a>
@@ -94,6 +101,7 @@ details summary { cursor:pointer; font-weight:600; font-size:.9rem }
     <a href="/pricing">Pricing</a>
   </nav>
   <a class="navcta live" href="/map">Live map</a>
+  <button type="button" class="navmenu" aria-expanded="false" aria-controls="topnav" aria-label="Menu"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
 </header>
 <main>
   <h1 id="head"></h1>
@@ -233,5 +241,6 @@ function nearRoute(lat, lon, km) {
 })();
 </script>
 <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d2d77aff6dfe4462b09ca501c9151de4"}'></script>
+<script src="/static/topbar.js?v=__ASSET_V__"></script>
 </body>
 </html>
