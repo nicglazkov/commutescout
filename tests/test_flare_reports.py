@@ -3,6 +3,7 @@ account, are capped, expire by kind, hide after three 'gone' votes,
 show on the map as CommuteScout's own source, and are forwarded to
 plugins that accept reports under a per-plugin pseudonym."""
 
+import asyncio
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -116,6 +117,42 @@ def test_report_needs_sign_in_validates_and_forwards(api):
     r2 = c.post("/api/flare/report", json={"kind": "OTHER", "lat": 37.5, "lon": -122.2},
                 headers=auth())
     assert r2.status_code == 429 and r2.headers["retry-after"] == "60"
+
+
+def test_reports_respect_the_reporters_plugin_switches(api, store):  # noqa: F811
+    c, plugin = api
+    flare_sources.poller.sources["private1"] = dict(MANIFEST, id="private1",
+                                                    visibility="private", enabled=True)
+    flare_sources.poller.sources["link1"] = dict(MANIFEST, id="link1",
+                                                 visibility="unlisted", enabled=True)
+    # Switched off on the device that reports: nothing leaves.
+    r = c.post("/api/flare/report", json={"kind": "OTHER", "lat": 37.5, "lon": -122.2,
+                                          "plugins_off": ["sabreplus"]}, headers=auth())
+    assert r.status_code == 201 and r.json()["forwarded"] == []
+    assert not any(k.startswith("new-") for k in plugin.alerts)
+    # Switched off in the account: nothing leaves either.
+    flare_sources.reports._last.clear()
+    asyncio.run(store.upsert_user("sam", {"plugins": {"off": ["sabreplus"]}}))
+    r = c.post("/api/flare/report", json={"kind": "OTHER", "lat": 37.5, "lon": -122.2},
+               headers=auth())
+    assert r.status_code == 201 and r.json()["forwarded"] == []
+    # Nor does an unlisted plugin hear it unless this device installed it.
+    flare_sources.reports._last.clear()
+    asyncio.run(store.upsert_user("sam", {"plugins": {"off": []}}))
+    r = c.post("/api/flare/report", json={"kind": "OTHER", "lat": 37.5, "lon": -122.2,
+                                          "plugins_on": ["link1"]}, headers=auth())
+    assert sorted(r.json()["forwarded"]) == ["link1", "sabreplus"]
+
+
+def test_report_targets():
+    srcs = {"pub": {"visibility": "public"}, "link": {"visibility": "unlisted"},
+            "mine": {"visibility": "private"}}
+    ids = lambda *a: [s["visibility"] for s in flare_sources.report_targets(srcs, *a)]  # noqa: E731
+    assert ids([]) == ["public"]
+    assert ids(["pub"]) == []
+    assert ids([], ["pub"], ["link", "mine"]) == ["unlisted"]
+    assert ids([], "junk", [1, None, "link"]) == ["public", "unlisted"]
+    assert "plugins_off: sw.off, plugins_on: sw.on" in APP
 
 
 def test_confirm_routes_to_our_source_or_the_plugin(api):

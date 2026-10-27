@@ -16,6 +16,11 @@ import Link from "next/link";
 // tests/fixtures/privacy_text.txt was regenerated from this new content
 // with the same _visible() normalization so the content-preservation
 // test re-pins on the updated wording.
+//
+// Owner-approved edit 2026-10-27: brought up to date with what the
+// service stores now (shared trips, saved places, reports, plugin
+// choices, API keys, the apps, request logs). The fixture was
+// regenerated from the build the same way.
 export const metadata: Metadata = {
   title: "Privacy - CommuteScout",
   description:
@@ -44,7 +49,7 @@ export default function PrivacyPage() {
           Privacy
         </h1>
         <p className="text-cs-ink/70 mt-3 text-sm">
-          Effective October 3, 2026. Material changes will be posted here with
+          Effective October 27, 2026. Material changes will be posted here with
           a new effective date; account holders get an email when a change
           affects them.
         </p>
@@ -53,10 +58,11 @@ export default function PrivacyPage() {
           <p>
             CommuteScout is an independent, one-person project. The short
             version: the map and assistant work without an account and
-            store nothing that identifies you; if you create an account for
-            watch areas, we store your email and the areas you draw,
-            because that is what alerts are; nothing is sold, there are no
-            ads, and there is no cross-site tracking.
+            store nothing that identifies you; if you create an account,
+            we store your email and what you save to it (watch areas,
+            places, reports, plugin choices, API keys), because that is
+            what those features are; nothing is sold, there are no ads,
+            and there is no cross-site tracking.
           </p>
 
           <div>
@@ -80,16 +86,75 @@ export default function PrivacyPage() {
                 It is never stored or logged, and no location permission is
                 requested. If that lookup is unavailable, your
                 browser&apos;s timezone (read locally, never sent to us)
-                picks a region instead. No cookies are set and nothing
-                about your map activity is kept on your device.
+                picks a region instead. To show conditions, the map sends
+                us the area or route on screen; our request logs drop
+                precise positions, except for requests that failed with a
+                server error, which we keep to fix the failure. No cookies
+                are set. Your browser keeps a few settings in local
+                storage: the base map you picked, the plugins you switched
+                on or off, and the email you typed to sign in. They stay
+                on your device, except that the plugin switches travel
+                with a report you post, so it reaches only the plugins you
+                use.
               </li>
               <li>
-                <strong>With an account</strong> (watch areas): your email
-                address, your sign-in identity from Google or the email
-                link you used, the watch areas you draw (names, shapes,
-                alert settings), and, if you enable notifications, the push
-                subscription for each device. Alert emails we send you are
-                delivered through Resend.
+                <strong>If you share a trip</strong>: the trip you share
+                (the start and end names, the route, and its directions) is
+                stored so the link works, and anyone with the link can open
+                it. It is not tied to an account and is deleted after 180
+                days.
+              </li>
+              <li>
+                <strong>With an account</strong>: your email address, your
+                sign-in identity from Google, Apple, or the email link you
+                used, and what you save:
+                <ul className="mt-3 list-[circle] space-y-3 pl-5">
+                  <li>
+                    Watch areas you draw (names, shapes, alert settings)
+                    and, if you enable notifications, the push subscription
+                    for each device. Alert emails are delivered through
+                    Resend.
+                  </li>
+                  <li>
+                    Places you save or go to (Home, Work, favorites, and
+                    recent destinations), so they follow you between
+                    devices.
+                  </li>
+                  <li>
+                    Your plugin choices: the plugins you switched off, and
+                    any private plugin you added by address, with the access
+                    token you gave it.
+                  </li>
+                  <li>
+                    Reports you post on the map (what you saw, where, which
+                    way you were heading, and any note), linked to your
+                    account so daily limits and votes work. Others see the
+                    report on the map without your identity until it
+                    expires, between 20 minutes and a day depending on the
+                    kind. It is also sent to the public plugins you have
+                    switched on that accept reports, under a separate
+                    pseudonym for each plugin, never your account or email.
+                  </li>
+                  <li>
+                    API keys: the name you give each key, a one-way hash of
+                    its secret, and when it was created and last used. Each
+                    keyed request is logged with the key id, the tool, and
+                    the result, to count it against the daily allowance.
+                  </li>
+                </ul>
+              </li>
+              <li>
+                <strong>The CommuteScout Drive apps</strong> (iPhone and
+                Android): your device&apos;s location is used on the phone
+                to guide you and to ask us for alerts along your route,
+                which reach us the same way map requests do. Downloaded
+                maps and voices, and the drive log, stay on the phone; the
+                drive log leaves it only if you share it from Settings. The
+                apps contain no analytics or advertising code. Some plugins
+                answer the app directly: when you switch one on, it sees
+                the area you are driving through, and a plugin that shows
+                alerts meant for you also receives a sign-in token that
+                proves which account is asking.
               </li>
               <li>
                 <strong>If you write to us</strong> (the contact form): the
@@ -136,7 +201,16 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Cloudflare</strong> provides the cookieless visit
-                counts.
+                counts and serves the downloadable map files.
+              </li>
+              <li>
+                <strong>Apple and Google</strong> distribute the apps and
+                deliver their push notifications.
+              </li>
+              <li>
+                <strong>Plugin operators</strong> receive reports and
+                votes under a pseudonym, as described above, and the
+                requests of apps that use their plugin directly.
               </li>
               <li>
                 <strong>TomTom</strong> provides live traffic speeds; the
@@ -189,8 +263,10 @@ export default function PrivacyPage() {
               </Link>
               , edit or delete any of them, and delete the whole account
               with the &quot;Delete my account&quot; button there - that
-              removes the account record, all watch areas, alert state,
-              and push subscriptions immediately. Anything else, or any
+              immediately removes the account record (with your saved
+              places and plugin choices), all watch areas, alert state,
+              push subscriptions, and API keys. Reports you posted expire
+              on their own within two days. Anything else, or any
               question about data we hold: email{" "}
               <a
                 href="mailto:privacy@commutescout.com"
@@ -220,8 +296,11 @@ export default function PrivacyPage() {
             </h2>
             <p className="mt-4">
               Data lives in Google Cloud&apos;s us-west1 region.
-              Anonymized question logs age out with normal log retention
-              (about 30 days). Account data stays until you delete it.
+              Anonymized question logs and request logs age out with
+              normal log retention (about 30 days). Account data stays
+              until you delete it. Reports are deleted from storage two
+              days after they are posted, and shared trips after 180
+              days.
               Push subscriptions are dropped automatically when a device
               unsubscribes. Contact messages stay in our email until we
               have dealt with them. A waitlist email stays until Pro

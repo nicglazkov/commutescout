@@ -77,6 +77,20 @@ async def test_spent_day_and_burst_answer_429(stack, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_keys_on_one_account_share_the_day(stack, monkeypatch):
+    store, mw, c = stack
+    monkeypatch.setitem(apikeys.TIERS, "free", {"daily": 3, "burst": 10, "per_second": 1})
+    first, _ = await apikeys.create_key(store, "sam", "sam@example.com", "a")
+    second, _ = await apikeys.create_key(store, "sam", "sam@example.com", "b")
+    other, _ = await apikeys.create_key(store, "pat", "pat@example.com", "c")
+    for full in (first, first, second):
+        assert c.get("/v1/tools/x", headers={"X-API-Key": full}).status_code == 200
+    r = c.get("/v1/tools/x", headers={"X-API-Key": second})
+    assert r.status_code == 429 and r.json()["error"]["code"] == "daily_limit"
+    assert c.get("/v1/tools/x", headers={"X-API-Key": other}).status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_every_keyed_request_logs_one_metering_line(stack, caplog):
     store, mw, c = stack
     full, view = await apikeys.create_key(store, "sam", "sam@example.com", "t")

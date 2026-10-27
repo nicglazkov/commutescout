@@ -255,9 +255,10 @@ class ApiKeyMiddleware:
     """Resolves an API key and applies its tier's limits.
 
     Keyless requests pass straight through to the per-address limiter
-    behind this one. A keyed request is limited per key instead (its
-    tier's bucket and daily count), marked in ``scope["state"]`` so the
-    inner limiter steps aside, answered with ``RateLimit-*`` headers,
+    behind this one. A keyed request is limited per account instead (its
+    tier's bucket and daily count, shared by every key on the account so
+    revoking and minting keys never buys a fresh allowance), marked in
+    ``scope["state"]`` so the inner limiter steps aside, answered with ``RateLimit-*`` headers,
     and logged as one JSON line for metering. A bad key is a 401 with
     the API's error envelope, never a silent fall back to keyless.
     """
@@ -317,28 +318,29 @@ class ApiKeyMiddleware:
                                    "Create a key under Settings on commutescout.com/map.")
             return
         limits = apikeys.tier_limits(info["tier"])
-        bucket = self.buckets.get(info["id"])
+        who = f"acct:{info['uid']}" if info.get("uid") else info["id"]
+        bucket = self.buckets.get(who)
         if bucket is None:
             if len(self.buckets) > 10_000:
                 self.buckets.clear()
-            bucket = self.buckets[info["id"]] = TokenBucket(
+            bucket = self.buckets[who] = TokenBucket(
                 limits["burst"], limits["per_second"])
         if not bucket.allow():
             await self._send_error(send, 429, "rate_limited",
-                                   "Too many requests at once for this key.",
+                                   "Too many requests at once for this account.",
                                    "Slow to the sustained rate for your tier.",
                                    ((b"retry-after", b"2"),))
             return
-        if not self.daily.allow(info["id"], limits["daily"]):
+        if not self.daily.allow(who, limits["daily"]):
             await self._send_error(
                 send, 429, "daily_limit",
-                f"This key has used its {limits['daily']} requests for today (UTC).",
+                f"This account's keys have used {limits['daily']} requests today (UTC).",
                 "Pro keys get 10,000 a day; ask for more from the contact page.",
                 ((b"retry-after", b"3600"),
                  (b"ratelimit-limit", str(limits["daily"]).encode()),
                  (b"ratelimit-remaining", b"0")))
             return
-        remaining = max(0, limits["daily"] - self.daily.used(info["id"]))
+        remaining = max(0, limits["daily"] - self.daily.used(who))
         scope.setdefault("state", {})["api_key"] = info
         status_seen = {"status": 0}
 

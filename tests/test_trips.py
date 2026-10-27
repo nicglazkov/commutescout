@@ -58,6 +58,7 @@ def test_create_and_fetch_trip(client):
     r = client.post("/api/trip", json=ROUTE)
     assert r.status_code == 200
     trip_id = r.json()["id"]
+    assert len(trip_id) == 16  # 96 random bits: links name places
     assert r.json()["url"].endswith("/trip/" + trip_id)
     got = client.get("/api/trip/" + trip_id).json()
     assert got["from_name"] == "San Jose"

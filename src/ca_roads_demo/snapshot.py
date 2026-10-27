@@ -131,9 +131,11 @@ def build_payload(markers, *, degraded: bool = False) -> dict:
     the only honest signal during an outage: when the publisher stops,
     the timestamp ages visibly instead of the map silently freezing.
     """
+    from ca_roads_mcp.server import app_version
+
     return {
         "schema": SCHEMA,
-        "build": os.environ.get("APP_VERSION", ""),
+        "build": app_version(),
         "published": datetime.now(UTC).isoformat(timespec="seconds"),
         "degraded": degraded,
         "markers": markers,

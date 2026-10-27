@@ -64,12 +64,12 @@ def test_merge_drops_same_fire_and_keeps_new_ones():
                              "Latitude": 40.02, "Longitude": -121.02}])[0],
         # Different name far away: genuinely new.
         parse_calfire_json([{**ITEM, "UniqueId": "new1",
-                             "Name": "Kestrel Fire",
+                             "Name": "Cedar Fire",
                              "Latitude": 37.2, "Longitude": -119.5}])[0],
     ], source="calfire")
     merged = merge_with_wfigs(wfigs, calfire)
     names = [f.name for f in merged.records]
-    assert names == ["RIDGE", "Kestrel Fire"]
+    assert names == ["RIDGE", "Cedar Fire"]
     assert any("1 additional fire" in n for n in merged.notes)
 
 

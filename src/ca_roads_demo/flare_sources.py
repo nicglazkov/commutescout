@@ -982,6 +982,32 @@ def _all_markers_for_bbox(box, near=None, corridor=None) -> list[dict]:
             + reports.markers_for_bbox(box))
 
 
+def _str_ids(v) -> set[str]:
+    if not isinstance(v, list):
+        return set()
+    return {x for x in v[:200] if isinstance(x, str) and 0 < len(x) <= 64}
+
+
+def report_targets(sources: dict, account_off, client_off=None, client_on=None) -> list[dict]:
+    """The plugins a report may go to: the reporter's own switches decide.
+
+    A listed plugin is on until the person switches it off, in their
+    account or on the device that sent the report. An unlisted plugin
+    gets reports only when that device says it installed it, and a
+    private one never does: nobody here chose it for them.
+    """
+    off = _str_ids(account_off) | _str_ids(client_off)
+    on = _str_ids(client_on)
+    out = []
+    for sid, src in sources.items():
+        if sid in off:
+            continue
+        vis = src.get("visibility")
+        if vis == "public" or (vis == "unlisted" and sid in on):
+            out.append(src)
+    return out
+
+
 async def _forward_report(src: dict, pub: dict, uid: str, client) -> str | None:
     """Send a report to one plugin under a per-plugin pseudonym."""
     try:
@@ -1039,9 +1065,12 @@ async def api_flare_report(request: Request) -> JSONResponse:
     with contextlib.suppress(Exception):
         from ca_roads_mcp import server as tools
 
+        user = await watch.get_store().get_user(uid) or {}
+        targets = report_targets(poller.sources, watch._plugins_of(user)["off"],
+                                 body.get("plugins_off"), body.get("plugins_on"))
         client = tools.get_road().client
         results = await asyncio.gather(*(
-            _forward_report(src, pub, uid, client) for src in poller.sources.values()))
+            _forward_report(src, pub, uid, client) for src in targets))
         forwarded = [r for r in results if r]
     return JSONResponse({"id": f"{REPORTS_SOURCE['id']}:{pub['id']}", "alert": pub,
                          "forwarded": forwarded}, status_code=201)

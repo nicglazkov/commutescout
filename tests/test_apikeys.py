@@ -62,6 +62,18 @@ async def test_create_resolve_revoke_and_cap():
 
 
 @pytest.mark.asyncio
+async def test_revoke_and_mint_is_capped_per_day():
+    store = apikeys.MemoryKeyStore()
+    for i in range(apikeys.MAX_NEW_KEYS_PER_DAY):
+        _, view = await apikeys.create_key(store, "pat", "pat@example.com", f"k{i}")
+        await store.put(view["id"], {"revoked": True})
+    with pytest.raises(ValueError, match="a day"):
+        await apikeys.create_key(store, "pat", "pat@example.com", "churn")
+    # Another account is unaffected.
+    await apikeys.create_key(store, "sam", "sam@example.com", "fine")
+
+
+@pytest.mark.asyncio
 async def test_resolver_caches_reads():
     store = apikeys.MemoryKeyStore()
     full, view = await apikeys.create_key(store, "sam", "sam@example.com", "x")
