@@ -3764,8 +3764,10 @@ function openReportForm(latlng, exact) {
   box.querySelector('.send').addEventListener('click', async () => {
     if (!kind) { note.textContent = 'Pick what you see first.'; return; }
     note.textContent = 'Sending\u2026';
+    const sw = pluginSwitches();
     const r = await flarePost('/api/flare/report', { kind, lat: latlng.lat, lon: latlng.lng,
-      description: box.querySelector('input').value.trim() });
+      description: box.querySelector('input').value.trim(),
+      plugins_off: sw.off, plugins_on: sw.on });
     if (r.error === 'signin') {
       note.innerHTML = 'Sign in to report. <button type="button" class="detbtn" id="reportsignin">Open Watch</button>';
       note.querySelector('#reportsignin').addEventListener('click', () => {

@@ -4,7 +4,7 @@ A key belongs to a signed-in account (no accountless keys) and carries a
 tier. The secret is stored hashed; the public key id is the document id,
 so a lookup is one read and never a scan. Both services resolve keys
 through ``KeyResolver`` with a short in-memory cache, and count usage
-per key per UTC day with the same ``DailyCounter`` the other budgets use.
+per account per UTC day with the same ``DailyCounter`` the other budgets use.
 
 Key format: ``cs_live_<id>_<secret>`` where ``id`` is 8 hex characters
 and ``secret`` is 32 URL-safe characters. Shown once at creation.
@@ -22,8 +22,10 @@ from datetime import UTC, datetime
 
 PREFIX = "cs_live_"
 MAX_KEYS_PER_ACCOUNT = 5
+# Revoked keys still count here, so revoke-and-mint cannot churn keys.
+MAX_NEW_KEYS_PER_DAY = 10
 
-# Requests per key per UTC day, and the short-term bucket (burst, then
+# Requests per account per UTC day (all its keys together), and the short-term bucket (burst, then
 # sustained per second). Free is the default on creation; Pro is set by
 # an admin; more than Pro is a conversation (the contact page).
 TIERS: dict[str, dict] = {
@@ -160,10 +162,17 @@ def public_view(key_id: str, rec: dict) -> dict:
 
 async def create_key(store, uid: str, email: str, name: str) -> tuple[str, dict]:
     """Mint a key for an account. Returns (full key, public view)."""
-    existing = [k for k in await store.list_for(uid) if not k.get("revoked")]
+    mine = await store.list_for(uid)
+    existing = [k for k in mine if not k.get("revoked")]
     if len(existing) >= MAX_KEYS_PER_ACCOUNT:
         raise ValueError(f"an account can hold {MAX_KEYS_PER_ACCOUNT} active keys; "
                          "revoke one first")
+    today = datetime.now(UTC).date().isoformat()
+    minted = [k for k in mine
+              if str(k.get("created_at") or "").startswith(today)]
+    if len(minted) >= MAX_NEW_KEYS_PER_DAY:
+        raise ValueError(f"an account can create {MAX_NEW_KEYS_PER_DAY} keys a day; "
+                         "try again tomorrow (UTC)")
     key_id, secret, full = new_key()
     rec = {
         "uid": uid, "email": (email or "").lower(), "name": (name or "")[:40],

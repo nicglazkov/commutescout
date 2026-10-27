@@ -122,7 +122,7 @@ async def test_search_rejects_token_mismatched_fuzzy_hits():
             37.3437, -121.8663,
             "South 23rd Street, San Jose, CA, USA", layer="street")]))
     async with httpx.AsyncClient() as client:
-        assert await geo.geocode(client, "175 Kestrel Rd") is None
+        assert await geo.geocode(client, "200 Juniper Rd") is None
 
 
 @respx.mock
@@ -166,15 +166,15 @@ async def test_candidates_recover_when_ca_suffix_misleads():
 async def test_candidates_surface_ambiguity():
     respx.get(geo.STADIA_SEARCH_URL).mock(
         return_value=pelias([
-            feature(37.3720944, -122.1103216,
-                    "175 Kestrel Road, Los Altos, CA, USA"),
-            feature(37.1259, -122.1222,
-                    "Kestrel Road, Boulder Creek, CA, USA", layer="street"),
+            feature(40.5865, -122.3917,
+                    "200 Juniper Road, Redding, CA, USA"),
+            feature(37.3635, -118.3951,
+                    "Juniper Road, Bishop, CA, USA", layer="street"),
         ]))
     async with httpx.AsyncClient() as client:
-        cands = await geo.geocode_candidates(client, "175 Kestrel Rd")
+        cands = await geo.geocode_candidates(client, "200 Juniper Rd")
     assert len(cands) == 2
-    assert "Los Altos" in cands[0][2]
+    assert "Redding" in cands[0][2]
 
 
 @respx.mock

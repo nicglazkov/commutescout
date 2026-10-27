@@ -340,7 +340,11 @@ export default function DevelopersPage() {
               with what you are building and the volume you expect. Nothing is billed
               yet; that comes with the Pro tier later.
             </li>
-            <li>An account holds up to five active keys. Revoking a key stops it within a minute.</li>
+            <li>
+              The daily allowance belongs to the account: all of its keys share one count.
+              An account holds up to five active keys and creates up to ten a day. Revoking
+              a key stops it within a minute.
+            </li>
           </ul>
         </div>
       </section>

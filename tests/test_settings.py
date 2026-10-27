@@ -117,7 +117,7 @@ def test_places_merge_across_devices(store):  # noqa: F811 - fixture
     assert c.get("/api/me/places", headers=auth()).json()["places"] == []
     phone = [{"id": "h", "kind": "home", "name": "Home", "lat": 37.3, "lon": -121.9,
               "used_at": 100},
-             {"id": "r1", "kind": "recent", "name": "Los Altos", "lat": 37.37, "lon": -122.11,
+             {"id": "r1", "kind": "recent", "name": "Davis", "lat": 38.54, "lon": -121.74,
               "used_at": 90}]
     r = c.put("/api/me/places", json={"places": phone}, headers=auth())
     assert r.status_code == 200 and [p["id"] for p in r.json()["places"]] == ["h", "r1"]

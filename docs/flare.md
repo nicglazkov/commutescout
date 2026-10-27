@@ -36,7 +36,10 @@ cell, validates and caps what comes back, and serves it through the same
 snapshot the map and apps already read. User reports and confirmations go
 to the backend, which forwards them to the plugin under CommuteScout's own
 identity. The plugin never sees a user, a device, an address or an exact
-position. Abuse control is CommuteScout's.
+position. A report goes only to the plugins the reporter has on: a listed
+plugin unless they switched it off (in their account or on the device that
+sent it), an unlisted one only if that device installed it, never a
+private one. Abuse control is CommuteScout's.
 
 **Direct.** The app calls the plugin itself. This is for private plugins
 only: something a person runs on their own network for their own devices.

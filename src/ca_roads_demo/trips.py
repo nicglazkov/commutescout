@@ -161,7 +161,9 @@ async def api_trip_create(request: Request) -> JSONResponse:
         "created_at": datetime.now(UTC).isoformat(),
         "expire_at": datetime.now(UTC) + timedelta(days=TRIP_TTL_DAYS),
     }
-    trip_id = pysecrets.token_urlsafe(6)
+    # 96 random bits: a shared trip names its places, so its link must
+    # not be guessable.
+    trip_id = pysecrets.token_urlsafe(12)
     store = watch_mod.get_store()
     await store.create_trip(trip_id, trip)
     return JSONResponse({"id": trip_id, "url": f"{DEMO_URL}/trip/{trip_id}"})

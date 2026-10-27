@@ -1293,7 +1293,10 @@ async def api_admin_code(request: Request) -> JSONResponse:
         await store.upsert_code(code, {"active": False})
         return JSONResponse({"code": code, "active": False})
     max_uses = min(max(int(body.get("max_uses") or 1), 1), 100)
-    code = "ROADS-" + pysecrets.token_hex(3).upper()
+    # 64 random bits: accounts are free to make, so the per-account
+    # redeem throttle alone cannot stop guessing a short code.
+    raw = pysecrets.token_hex(8).upper()
+    code = "ROADS-" + "-".join(raw[i:i + 4] for i in range(0, 16, 4))
     await store.upsert_code(code, {
         "active": True,
         "max_uses": max_uses,

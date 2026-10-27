@@ -328,8 +328,8 @@ def gazetteer_suggest(q: str, limit: int = 3) -> list[dict]:
     return [e for _, _, e in (starts + contains)[:limit]]
 
 
-# The geocoder prefix-matches literally, so "kestrel rd" can miss
-# "Kestrel Road"; expand common abbreviations before the request.
+# The geocoder prefix-matches literally, so "juniper rd" can miss
+# "Juniper Road"; expand common abbreviations before the request.
 _ABBREV = {
     "rd": "road", "st": "street", "ave": "avenue", "av": "avenue",
     "blvd": "boulevard", "dr": "drive", "hwy": "highway", "ln": "lane",

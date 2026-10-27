@@ -171,7 +171,7 @@ EOF
 | `DEMO_DAILY_DOLLARS` | Global daily model-spend cap | `1.5` |
 | `DEMO_PER_IP_DAILY` | Questions per visitor per day | `20` |
 | `SNAPSHOT_BUCKET` | GCS bucket the map snapshots publish to. Unset disables the publisher and the map falls back to `/api/mapdata` | unset |
-| `APP_VERSION` | Stamped into each snapshot as `build`; informational | unset |
+| `APP_VERSION` | Fallback version for a source checkout that was never installed; the image reads its own package version, so leave it unset there | unset |
 | `ROUTE_PER_CLIENT_DAILY` | Server-side route plans per visitor per day (`/api/route`); the page falls back to keyless routing past it | `300` |
 | `STADIA_ROUTE_DAILY` | Global daily cap on server-side route plans (20 Stadia credits each) | `200` |
 | `MAP_EXTRACT_DAILY` | Global daily cap on map corridor cuts (`POST /api/map/extract`), each tens of megabytes of egress | `300` |

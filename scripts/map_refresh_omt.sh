@@ -65,8 +65,9 @@ echo "us extract exit \$? after \$(( \$(date +%s) - T0 )) s: \$(ls -la us.pmtile
 gcloud storage cp us.pmtiles "$BUCKET/us-\$BUILD.pmtiles" --cache-control="public, max-age=86400" && echo "uploaded us-\$BUILD"
 python3 map_states.py us-states.json us.pmtiles "\$BUILD"
 gcloud storage cp states/*.pmtiles "$BUCKET/states/" --cache-control="public, max-age=86400" && echo "states uploaded"
-# The stable names last, so a client never sees a half-replaced set.
-gcloud storage cp "$BUCKET/us-\$BUILD.pmtiles" "$BUCKET/us.pmtiles" && echo "us.pmtiles now \$BUILD"
+# The stable names last, so a client never sees a half-replaced set. A move,
+# not a copy: nothing reads the dated name, and a copy left 13 GB behind.
+gcloud storage mv "$BUCKET/us-\$BUILD.pmtiles" "$BUCKET/us.pmtiles" && echo "us.pmtiles now \$BUILD"
 gcloud storage cp index.json "$BUCKET/index.json" --cache-control="public, max-age=600" && echo "index uploaded"
 # Cloudflare R2 is what the site and the apps read from (maps.commutescout.com,
 # no egress charge); GCS keeps a copy. The same files go there, the stable
@@ -82,7 +83,7 @@ R2=r2:commutescout-maps/omt
 PM="--header-upload=Cache-Control: public, max-age=86400"
 rclone copyto us.pmtiles "\$R2/us-\$BUILD.pmtiles" --s3-chunk-size 64M --s3-upload-concurrency 8 "\$PM" && echo "r2: uploaded us-\$BUILD"
 rclone copy states "\$R2/states" --transfers 8 --s3-chunk-size 64M "\$PM" && echo "r2: states uploaded"
-rclone copyto "\$R2/us-\$BUILD.pmtiles" "\$R2/us.pmtiles" "\$PM" && echo "r2: us.pmtiles now \$BUILD"
+rclone moveto "\$R2/us-\$BUILD.pmtiles" "\$R2/us.pmtiles" "\$PM" && echo "r2: us.pmtiles now \$BUILD"
 rclone copyto index.json "\$R2/index.json" "--header-upload=Cache-Control: public, max-age=600" && echo "r2: index uploaded"
 rclone check . "\$R2" --one-way --size-only --include "us.pmtiles" --include "index.json" --include "states/**" 2>&1 | tail -2
 echo "done \$(date -u +%FT%TZ)"

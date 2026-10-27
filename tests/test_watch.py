@@ -6,6 +6,7 @@ without credentials or network.
 """
 
 import asyncio
+import re
 
 import pytest
 from starlette.applications import Starlette
@@ -400,6 +401,7 @@ def test_admin_creates_and_disables_codes(client, store):
                     headers=auth("tok-admin"))
     code = r.json()["code"]
     assert code.startswith("ROADS-") and store.codes[code]["max_uses"] == 10
+    assert re.fullmatch(r"ROADS(-[0-9A-F]{4}){4}", code)  # 64 bits, not 24
     client.post("/api/admin/code", json={"action": "disable", "code": code},
                 headers=auth("tok-admin"))
     assert store.codes[code]["active"] is False
@@ -737,7 +739,7 @@ def test_email_single_event_subject_and_body():
 
 def test_email_multi_event_counts_and_overflow():
     events = [EVENT, {**EVENT, "id": "fire:2", "kind": "fire",
-                      "title": "Wildfire: KESTREL", "body": "310 acres"}]
+                      "title": "Wildfire: CEDAR", "body": "310 acres"}]
     subject, html, text = watch.render_alert_email("Tahoe", events, more=3)
     assert subject == "CommuteScout: 5 new events in Tahoe"
     assert "and 3 more" in html and "3 more" in text

@@ -274,22 +274,22 @@ async def test_check_route_asks_when_destination_is_ambiguous(scenario, monkeypa
 
     async def two_towns(client, place, limit=4, near=None):
         return [
-            (37.3721, -122.1103, "175, Kestrel Road, Los Altos, Santa Clara County"),
-            (37.1259, -122.1222, "Kestrel Road, Boulder Creek, Santa Cruz County"),
+            (40.5865, -122.3917, "200, Juniper Road, Redding, Shasta County"),
+            (37.3635, -118.3951, "Juniper Road, Bishop, Inyo County"),
         ]
 
     monkeypatch.setattr(srv, "geocode_candidates", two_towns)
     out = await srv.check_route(
-        "San Jose", "175 Kestrel Rd", from_coords="37.3382,-121.8863"
+        "San Jose", "200 Juniper Rd", from_coords="37.3382,-121.8863"
     )
     assert out.get("needs_clarification") is True
-    assert any("Los Altos" in o for o in out["options"])
-    assert any("Boulder Creek" in o for o in out["options"])
+    assert any("Redding" in o for o in out["options"])
+    assert any("Bishop" in o for o in out["options"])
 
     # A comma-qualified destination means the user already chose: even with
     # far-apart candidates, take the nearest instead of re-asking.
     out2 = await srv.check_route(
-        "San Jose", "175 Kestrel Rd, Los Altos", from_coords="37.3382,-121.8863"
+        "San Jose", "200 Juniper Rd, Redding", from_coords="37.3382,-121.8863"
     )
     assert "needs_clarification" not in out2
 
