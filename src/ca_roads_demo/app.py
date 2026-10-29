@@ -1539,15 +1539,18 @@ async def api_leave_later(request: Request):
         return JSONResponse({"error": f"trips up to {leavelater.MAX_TRIP_KM} km only"},
                             status_code=400)
     whens = leavelater.slots(datetime.now(UTC), window, step)[:leavelater.MAX_SLOTS]
-    cost = leavelater.uncached(origin, dest, whens)
-    # Charged per route the ask will actually buy, not per request.
-    if cost and not paid_use.allow_n(f"leavelater:{client_key(request)}",
-                                     PAID_PER_CLIENT_DAILY["leavelater"], cost):
+    who = f"leavelater:{client_key(request)}"
+    limit = PAID_PER_CLIENT_DAILY["leavelater"]
+    # Quick refusal when the ask cannot be paid for at all. The real
+    # charge is per route, at the moment of each cache miss (below).
+    if leavelater.uncached(origin, dest, whens) and (
+            paid_use.used(who) >= limit or leavelater.budget_left() < 1):
         return _daily_cap_response()
-    if cost and not leavelater.take_budget(cost):
-        return JSONResponse({"error": "leave later is busy today; try again tomorrow"},
-                            status_code=429, headers={"Retry-After": "3600"})
-    body = await leavelater.plan(tools.get_road().client, origin, dest, whens=whens)
+    charge = leavelater.make_charge(lambda: paid_use.allow(who, limit))
+    body = await leavelater.plan(tools.get_road().client, origin, dest, whens=whens,
+                                 charge=charge)
+    if body is None and charge.refused:
+        return _daily_cap_response()
     if body is None:
         return JSONResponse({"error": "traffic routing is unavailable right now"},
                             status_code=503, headers={"Retry-After": "600"})

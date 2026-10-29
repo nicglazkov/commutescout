@@ -39,15 +39,6 @@ class DailyCounter:
         self._roll()
         return self.counts.get(key, 0)
 
-    def allow_n(self, key: str, limit: int, n: int) -> bool:
-        """Charge ``n`` units at once, all or nothing."""
-        self._roll()
-        if self.counts.get(key, 0) + n > limit:
-            return False
-        for _ in range(n):
-            self.allow(key, limit)
-        return True
-
     def allow(self, key: str, limit: int) -> bool:
         """Count one use of ``key``; False once ``limit`` is reached."""
         self._roll()

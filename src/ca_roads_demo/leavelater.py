@@ -97,18 +97,27 @@ def uncached(origin, destination, whens) -> int:
                for w in whens)
 
 
-def take_budget(n: int) -> bool:
-    """Charge ``n`` routes to leave later's own daily share."""
-    if UPSTREAM.used("tomtom-route-leavelater") + n > DAILY_ROUTES:
-        return False
-    for _ in range(n):
-        UPSTREAM.allow("tomtom-route-leavelater", DAILY_ROUTES)
-    return True
+def budget_left() -> int:
+    return max(0, DAILY_ROUTES - UPSTREAM.used("tomtom-route-leavelater"))
+
+
+def make_charge(client_allow):
+    """A per-route charge for route_times: leave later's own daily share
+    first, then the caller's per-address cap (``client_allow()``).
+    ``charge.refused`` counts the routes it would not pay for."""
+    def charge() -> bool:
+        if budget_left() < 1 or not client_allow():
+            charge.refused += 1
+            return False
+        return UPSTREAM.allow("tomtom-route-leavelater", DAILY_ROUTES)
+    charge.refused = 0
+    return charge
 
 
 async def plan(client, origin: tuple[float, float], destination: tuple[float, float],
                *, window: int = WINDOW_MIN, step: int = STEP_MIN,
-               now: datetime | None = None, whens: list | None = None) -> dict | None:
+               now: datetime | None = None, whens: list | None = None,
+               charge=None) -> dict | None:
     """Drive times for each departure, or None when traffic routing is
     not available (no key, or the day's routing budget is spent)."""
     now = now or datetime.now(UTC)
@@ -118,7 +127,7 @@ async def plan(client, origin: tuple[float, float], destination: tuple[float, fl
     async def one(when):
         async with sem:
             return await tomtom_feed.route_times(client, origin, destination,
-                                                 _depart_arg(when))
+                                                 _depart_arg(when), charge=charge)
 
     results = await asyncio.gather(*(one(w) for w in whens))
     if not results or results[0] is None:

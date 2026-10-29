@@ -87,10 +87,13 @@ def test_endpoint_unavailable(monkeypatch):
 
 
 def _fake_routes(monkeypatch, calls):
-    async def fake(client, origin, dest, depart_at=None, **k):
+    async def fake(client, origin, dest, depart_at=None, *, charge=None, **k):
+        if charge is not None and not charge():
+            return None
         calls.append(depart_at)
         return {"travel_s": 1800, "delay_s": 0}
     monkeypatch.setattr(leavelater.tomtom_feed, "route_times", fake)
+    monkeypatch.setattr(leavelater, "UPSTREAM", demo_app.DailyCounter())
 
 
 def test_slot_count_and_trip_length_are_bounded(monkeypatch):
@@ -120,8 +123,11 @@ def test_charged_per_route_not_per_request(monkeypatch):
     q = {"from": "37.442,-122.143", "to": "37.39,-122.08"}
     first = c.get("/api/leave-later", params=q)                 # 6 or 7 routes
     assert first.status_code == 200
-    assert c.get("/api/leave-later", params=q).status_code == 429   # as many again > 10
-    assert len(calls) == len(first.json()["departures"])
+    n = len(first.json()["departures"])
+    second = c.get("/api/leave-later", params=q)    # only 10 - n routes left
+    assert len(calls) == 10
+    assert sum(d["drive_min"] is not None for d in second.json()["departures"]) == 10 - n
+    assert c.get("/api/leave-later", params=q).status_code == 429   # spent
 
 
 def test_cached_departures_cost_nothing(monkeypatch):
@@ -133,12 +139,58 @@ def test_cached_departures_cost_nothing(monkeypatch):
 
 def test_own_share_of_the_routing_budget(monkeypatch):
     monkeypatch.setattr(leavelater, "UPSTREAM", demo_app.DailyCounter())
-    monkeypatch.setattr(leavelater, "DAILY_ROUTES", 10)
-    assert leavelater.take_budget(7)
-    assert not leavelater.take_budget(7)     # all or nothing
-    assert leavelater.take_budget(3)
+    monkeypatch.setattr(leavelater, "DAILY_ROUTES", 2)
+    charge = leavelater.make_charge(lambda: True)
+    assert charge() and charge() and not charge()
+    assert charge.refused == 1
 
 
-def test_allow_n_is_all_or_nothing():
-    d = demo_app.DailyCounter()
-    assert d.allow_n("k", 5, 3) and not d.allow_n("k", 5, 3) and d.used("k") == 3
+def test_route_times_charges_only_real_misses(monkeypatch):
+    from ca_roads.feeds import tomtom
+
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return {"routes": [{"summary": {"travelTimeInSeconds": 600}}]}
+
+    class Client:
+        n = 0
+
+        async def get(self, *a, **k):
+            Client.n += 1
+            return Resp()
+
+    monkeypatch.setattr(tomtom, "api_key", lambda: "k")
+    monkeypatch.setattr(tomtom, "_route_cache", {})
+    paid = []
+    ok = lambda: paid.append(1) or True  # noqa: E731
+    run = lambda c: asyncio.run(tomtom.route_times(  # noqa: E731
+        Client(), (37.442, -122.143), (37.39, -122.08), "2026-10-29T16:00:00+00:00", charge=c))
+    assert run(ok)["travel_s"] == 600 and paid == [1]
+    assert run(ok)["travel_s"] == 600 and paid == [1]     # cache hit: free
+    monkeypatch.setattr(tomtom, "_route_cache", {})
+    assert run(lambda: False) is None and Client.n == 1   # refused: no call
+
+
+def test_cache_expiring_between_check_and_plan_is_still_paid(monkeypatch):
+    """The pre-check saw every slot cached, then the entries expired:
+    each real call is charged, and calls past the cap never happen."""
+    upstream = []
+
+    async def route_times(client, origin, dest, depart_at=None, *, charge=None, **k):
+        if charge is not None and not charge():   # a miss, as in tomtom.route_times
+            return None
+        upstream.append(depart_at)
+        return {"travel_s": 1800, "delay_s": 0}
+
+    monkeypatch.setattr(leavelater.tomtom_feed, "route_times", route_times)
+    monkeypatch.setattr(leavelater.tomtom_feed, "route_cached", lambda *a, **k: True)
+    monkeypatch.setitem(demo_app.PAID_PER_CLIENT_DAILY, "leavelater", 3)
+    monkeypatch.setattr(demo_app, "paid_use", demo_app.DailyCounter())
+    monkeypatch.setattr(leavelater, "UPSTREAM", demo_app.DailyCounter())
+    r = TestClient(demo_app.app).get("/api/leave-later",
+                                     params={"from": "37.442,-122.143", "to": "37.39,-122.08"})
+    assert len(upstream) == 3                     # never more than were paid for
+    assert r.status_code == 200
+    assert sum(d["drive_min"] is not None for d in r.json()["departures"]) == 3
