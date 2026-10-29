@@ -1,5 +1,13 @@
 """Place-name geocoding via Stadia Maps (Pelias).
 
+Two scopes. ``scope="ca"`` (the default) is the California corridor
+tools' resolver: a California search rectangle, a ", California" query
+ladder and the offline California gazetteer first. ``scope="us"`` is
+everything else - the site and app search boxes, the address check and
+the nationwide MCP tools: the whole country, ranked toward a focus point
+when the caller has one, with the gazetteer used only for places that
+say they are in California.
+
 check_route used to trust the coordinates the calling model recalled for a
 place. For cities that works; for landmarks it can be miles off (a request
 for Alice's Restaurant once pinned a spot deep in the Saratoga hills). Names
@@ -53,7 +61,9 @@ def _auth(key: str) -> dict[str, str]:
     return auth_headers(key, USER_AGENT)
 
 
-def _rect_params() -> dict:
+def _rect_params(scope: str = "ca") -> dict:
+    if scope == "us":
+        return {"boundary.country": "US"}
     return {
         "boundary.country": "US",
         "boundary.rect.min_lon": _RECT[0],
@@ -133,14 +143,28 @@ _BORDER_TOWNS = ("reno", "sparks", "las vegas", "vegas", "carson city",
                  "primm", "stateline", "minden", "gardnerville")
 
 
-def _plausible(hit: dict) -> bool:
-    """Reject matches outside California and its border cities: a
-    wrong-state hit is worse than no hit."""
+# The 50 states, DC and Puerto Rico: lat_min, lat_max, lon_min, lon_max.
+# Generous on purpose (Alaska's Aleutians, Hawaii, Puerto Rico).
+_US_BOUNDS = (17.5, 71.6, -179.9, -64.5)
+
+
+def _plausible(hit: dict, scope: str = "ca") -> bool:
+    """Reject matches outside the scope: California and its border
+    cities, or the United States. A wrong-state hit is worse than no
+    hit."""
     try:
         lat, lon = float(hit["lat"]), float(hit["lon"])
     except (KeyError, TypeError, ValueError):
         return False
+    if scope == "us":
+        lat_lo, lat_hi, lon_lo, lon_hi = _US_BOUNDS
+        return lat_lo <= lat <= lat_hi and lon_lo <= lon <= lon_hi
     return 32.0 <= lat <= 42.5 and -125.0 <= lon <= -113.5
+
+
+def _names_california(query: str) -> bool:
+    key = _norm(query)
+    return key.endswith(" california") or key.endswith(" ca")
 
 
 async def _search_stadia(
@@ -148,8 +172,9 @@ async def _search_stadia(
     q: str,
     near: tuple[float, float] | None = None,
     limit: int = 1,
+    scope: str = "ca",
 ) -> list[tuple[float, float, str]] | None:
-    """Stadia (Pelias) search inside the California rectangle.
+    """Stadia (Pelias) search inside the scope (see the module notes).
 
     Returns (lat, lon, label) hits, [] for a clean miss, or None for
     network trouble or a missing key (callers must not cache None-shaped
@@ -157,7 +182,7 @@ async def _search_stadia(
     key = _api_key()
     if not key or not UPSTREAM.allow("stadia-geocode", STADIA_GEOCODE_DAILY):
         return None
-    params = {"text": q, "size": limit, **_rect_params()}
+    params = {"text": q, "size": limit, **_rect_params(scope)}
     if near:
         params["focus.point.lat"], params["focus.point.lon"] = near
     try:
@@ -183,7 +208,7 @@ async def _search_stadia(
         if len(coords) < 2:
             continue
         lon, lat = coords[:2]
-        if not _plausible({"lat": lat, "lon": lon}):
+        if not _plausible({"lat": lat, "lon": lon}, scope):
             continue
         props = f.get("properties", {})
         label = props.get("label") or props.get("name") or ""
@@ -194,7 +219,8 @@ async def _search_stadia(
 
 
 async def geocode(
-    client: httpx.AsyncClient, place: str
+    client: httpx.AsyncClient, place: str, *, scope: str = "ca",
+    near: tuple[float, float] | None = None,
 ) -> tuple[float, float, str] | None:
     """Resolve a place name to (lat, lon, display_name), or None.
 
@@ -207,6 +233,10 @@ async def geocode(
     query = place.strip()
     if not query:
         return None
+    if scope == "us":
+        cands = await geocode_candidates(client, query, limit=1, near=near,
+                                         scope="us")
+        return cands[0] if cands else None
     key = query.lower()
     if key in _cache:
         _cache.move_to_end(key)
@@ -250,6 +280,7 @@ async def geocode_candidates(
     place: str,
     limit: int = 4,
     near: tuple[float, float] | None = None,
+    scope: str = "ca",
 ) -> list[tuple[float, float, str]]:
     """Like geocode(), but returns the distinct plausible matches so the
     caller can detect ambiguity ("Main St" exists in half the state).
@@ -262,6 +293,8 @@ async def geocode_candidates(
     query = place.strip()
     if not query:
         return []
+    if scope == "us":
+        return await _us_candidates(client, query, limit, near)
     offline = gazetteer_lookup(query)
     if offline:
         return [offline]
@@ -287,6 +320,41 @@ async def geocode_candidates(
     if near:
         distinct.sort(key=lambda c: _rough_km(c[0], c[1], near[0], near[1]))
     return distinct[:limit]
+
+
+_US_CACHE_KEY = "us:"
+
+
+async def _us_candidates(
+    client: httpx.AsyncClient, query: str, limit: int,
+    near: tuple[float, float] | None,
+) -> list[tuple[float, float, str]]:
+    """Nationwide candidates. "Columbia" is a California town in the
+    gazetteer and a city in five other states, so the gazetteer only
+    answers for queries that name California, and otherwise only when
+    the network has nothing (no key, budget spent, or an outage)."""
+    offline = gazetteer_lookup(query)
+    if offline and _names_california(query):
+        return [offline]
+    cache_key = f"{_US_CACHE_KEY}{query.lower()}|{limit}|" + (
+        f"{near[0]:.1f},{near[1]:.1f}" if near else "")
+    if cache_key in _cache:
+        _cache.move_to_end(cache_key)
+        hit = _cache[cache_key]
+        return list(hit) if hit else []
+    raw = await _search_stadia(client, query, near=near, limit=max(limit, 4),
+                               scope="us")
+    if raw is None:
+        return [offline] if offline else []
+    distinct: list[tuple[float, float, str]] = []
+    for cand in raw:
+        if all(_rough_km(cand[0], cand[1], d[0], d[1]) > 2 for d in distinct):
+            distinct.append(cand)
+    if not distinct and offline:
+        distinct = [offline]
+    out = distinct[:limit]
+    _cache_put(cache_key, tuple(out))
+    return out
 
 
 def _rough_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -345,24 +413,27 @@ def _expand_abbrev(q: str) -> str:
 async def stadia_suggest(
     client: httpx.AsyncClient,
     q: str,
-    bias_lat: float,
-    bias_lon: float,
+    bias_lat: float | None,
+    bias_lon: float | None,
     limit: int = 6,
+    scope: str = "us",
 ) -> list[dict]:
+    """Search-as-you-type rows, nationwide by default, ranked toward the
+    bias point when the caller has one (the map's view, the phone's
+    position)."""
     key = _api_key()
     if not key or not UPSTREAM.allow("stadia-geocode", STADIA_GEOCODE_DAILY):
         return []
     q = _expand_abbrev(q)
+    params: dict = {"text": q, "size": limit, **_rect_params(scope)}
+    if bias_lat is not None and bias_lon is not None:
+        params["focus.point.lat"] = bias_lat
+        params["focus.point.lon"] = bias_lon
     try:
         async with _suggest_sem:
             resp = await client.get(
                 STADIA_AUTOCOMPLETE_URL,
-                params={
-                    "text": q, "size": limit,
-                    "focus.point.lat": bias_lat,
-                    "focus.point.lon": bias_lon,
-                    **_rect_params(),
-                },
+                params=params,
                 headers=_auth(key),
                 timeout=4.0,
             )
@@ -371,7 +442,7 @@ async def stadia_suggest(
         number_match = re.match(r"^(\d+[a-zA-Z]?)\s+(.+)", q)
         for feature in resp.json().get("features", []):
             lon, lat = feature["geometry"]["coordinates"][:2]
-            if not _plausible({"lat": lat, "lon": lon}):
+            if not _plausible({"lat": lat, "lon": lon}, scope):
                 continue
             props = feature.get("properties", {})
             primary = props.get("name") or " ".join(
