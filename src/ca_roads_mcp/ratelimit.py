@@ -268,6 +268,8 @@ class ApiKeyMiddleware:
         self.app = app
         self.resolver = resolver or apikeys.KeyResolver()
         self.daily = DailyCounter()
+        # Same store the keys come from, so tests never reach Firestore.
+        self.usage = apikeys.UsageMirror(lambda: self.resolver.store)
         self.buckets: dict[str, TokenBucket] = {}
         # A bad key is answered here, before the address limiter, and a
         # fresh random key misses the resolver cache, so guessing used to
@@ -342,6 +344,9 @@ class ApiKeyMiddleware:
                  (b"ratelimit-remaining", b"0")))
             return
         remaining = max(0, limits["daily"] - self.daily.used(who))
+        if info.get("uid"):
+            self.usage.note(info["uid"], self.daily.day, self.daily.used(who),
+                            limits["daily"], info["tier"])
         scope.setdefault("state", {})["api_key"] = info
         status_seen = {"status": 0}
 

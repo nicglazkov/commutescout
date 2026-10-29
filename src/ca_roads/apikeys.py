@@ -12,6 +12,7 @@ and ``secret`` is 32 URL-safe characters. Shown once at creation.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import hmac
@@ -78,6 +79,7 @@ class MemoryKeyStore:
 
     def __init__(self) -> None:
         self.keys: dict[str, dict] = {}
+        self.usage: dict[str, dict] = {}
 
     async def get(self, key_id: str) -> dict | None:
         return dict(self.keys[key_id]) if key_id in self.keys else None
@@ -93,6 +95,13 @@ class MemoryKeyStore:
         for k in gone:
             del self.keys[k]
         return len(gone)
+
+    async def get_usage(self, uid: str) -> dict | None:
+        rec = self.usage.get(uid)
+        return dict(rec) if rec else None
+
+    async def put_usage(self, uid: str, data: dict) -> None:
+        self.usage[uid] = dict(data)
 
 
 class FirestoreKeyStore:
@@ -127,7 +136,16 @@ class FirestoreKeyStore:
         async for snap in self._col().where("uid", "==", uid).stream():
             await snap.reference.delete()
             n += 1
+        with contextlib.suppress(Exception):
+            await self.db.collection("api_usage").document(uid).delete()
         return n
+
+    async def get_usage(self, uid: str) -> dict | None:
+        snap = await self.db.collection("api_usage").document(uid).get()
+        return snap.to_dict() if snap.exists else None
+
+    async def put_usage(self, uid: str, data: dict) -> None:
+        await self.db.collection("api_usage").document(uid).set(data)
 
 
 _store = None
@@ -144,6 +162,74 @@ def get_key_store():
 def set_key_store(store) -> None:
     global _store
     _store = store
+
+
+# The API service counts each account's requests in memory; the
+# account page runs in another service, so the count is mirrored to the
+# store at most this often per account (and once more after a burst).
+USAGE_FLUSH_S = 60.0
+
+
+class UsageMirror:
+    """Writes an account's request count for the UTC day to the key
+    store (``api_usage/{uid}``), throttled, never on the request path."""
+
+    def __init__(self, store_getter=None, flush_s: float = USAGE_FLUSH_S) -> None:
+        self._store_getter = store_getter or get_key_store
+        self.flush_s = flush_s
+        self.latest: dict[str, dict] = {}
+        self.written_at: dict[str, float] = {}
+        self.pending: set[str] = set()
+
+    @property
+    def store(self):
+        return self._store_getter()
+
+    def note(self, uid: str, day: str, requests: int, limit: int, tier: str) -> None:
+        if not uid:
+            return
+        if len(self.latest) > 10_000:
+            self.latest.clear()
+            self.written_at.clear()
+        self.latest[uid] = {"day": day, "requests": requests, "limit": limit,
+                            "tier": tier}
+        if uid in self.pending:
+            return
+        self.pending.add(uid)
+        wait = max(0.0, self.written_at.get(uid, 0.0) + self.flush_s - time.monotonic())
+        try:
+            asyncio.get_running_loop().create_task(self._flush(uid, wait))
+        except RuntimeError:  # no loop (sync caller): skip the mirror
+            self.pending.discard(uid)
+
+    async def _flush(self, uid: str, wait: float) -> None:
+        try:
+            if wait:
+                await asyncio.sleep(wait)
+            rec = dict(self.latest.get(uid) or {})
+            if rec:
+                rec["updated_at"] = datetime.now(UTC).isoformat()
+                await self.store.put_usage(uid, rec)
+            self.written_at[uid] = time.monotonic()
+        except Exception:  # noqa: BLE001 - a mirror miss is not an outage
+            pass
+        finally:
+            self.pending.discard(uid)
+
+
+async def usage_today(store, uid: str, tier: str | None) -> dict:
+    """Requests today (UTC) against the account's daily limit, as the
+    account page shows it."""
+    day = datetime.now(UTC).date().isoformat()
+    rec = None
+    with contextlib.suppress(Exception):
+        rec = await store.get_usage(uid)
+    limit = tier_limits(tier)["daily"]
+    if rec and rec.get("day") == day:
+        return {"day": day, "requests": int(rec.get("requests") or 0),
+                "limit": int(rec.get("limit") or limit),
+                "as_of": rec.get("updated_at")}
+    return {"day": day, "requests": 0, "limit": limit, "as_of": None}
 
 
 def public_view(key_id: str, rec: dict) -> dict:

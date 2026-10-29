@@ -74,6 +74,30 @@ def test_sources_status(monkeypatch):
     nws = next(s for s in d["sources"] if s["agency"] == "NWS")
     assert nws.get("on_demand") is True
     assert d["checked_at"]
+    # The data-source screen's fields ride on every entry.
+    assert nws["status"] == "live" and nws["group"] == "national"
+    assert chp["group"] == "state" and chp["state_code"] == "CA"
+    assert chp["status"] in ("fresh", "stale")
+    assert all(s["status"] in ("fresh", "stale", "down", "live", "off") for s in d["sources"])
+    assert set(d["summary"]) == {"fresh", "stale", "down", "live", "off", "states"}
+    assert sum(v for k, v in d["summary"].items() if k != "states") == len(d["sources"])
+
+
+def test_source_health_classes():
+    from datetime import UTC, datetime, timedelta
+    now = datetime(2026, 10, 29, 16, 0, tzinfo=UTC)
+    ago = lambda m: (now - timedelta(minutes=m)).isoformat()  # noqa: E731
+    h = demo_app.source_health
+    assert h({"state": "Ohio", "ok": True, "as_of": ago(5)}, now)["status"] == "fresh"
+    assert h({"state": "Ohio", "ok": True, "as_of": ago(5)}, now)["age_s"] == 300
+    assert h({"state": "Ohio", "ok": True, "as_of": ago(120)}, now)["status"] == "stale"
+    assert h({"state": "California", "ok": True, "as_of": ago(25),
+              "stale_after_s": 1200}, now)["status"] == "stale"
+    assert h({"state": "Ohio", "ok": True, "stale": True, "as_of": ago(1)}, now)["status"] == "stale"
+    assert h({"state": "Ohio", "ok": False, "as_of": ago(1)}, now)["status"] == "down"
+    assert h({"state": "Nevada", "enabled": False}, now)["status"] == "off"
+    entry = h({"state": "Maine", "on_demand": True}, now)
+    assert entry["status"] == "live" and entry["state_code"] == "ME"
 
 
 def test_incident_not_found_and_bad_id(monkeypatch):
