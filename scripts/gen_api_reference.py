@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "site" / "lib" / "api-reference.json"
+CLIENTS_OUT = ROOT / "site" / "lib" / "mcp-clients.json"
 
 # What each parameter means, in the words a developer needs. Keys are
 # tool name, then parameter name. Every schema parameter must appear.
@@ -383,18 +384,32 @@ def build() -> dict:
     return {"base": PUBLIC_BASE, "prefix": PREFIX, "tools": tools}
 
 
+def clients_text() -> str:
+    """site/lib/mcp-clients.json: per-client setup for the /mcp page,
+    from the same source as /llms.txt (ca_roads_mcp/connect.py)."""
+    from ca_roads_mcp import connect
+
+    return json.dumps(connect.clients_json(), indent=2, ensure_ascii=False) + "\n"
+
+
 def main() -> int:
     data = build()
-    text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+    outputs = [(OUT, json.dumps(data, indent=2, ensure_ascii=False) + "\n"),
+               (CLIENTS_OUT, clients_text())]
     if "--check" in sys.argv:
-        current = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
-        if current != text:
-            print("site/lib/api-reference.json is stale; run scripts/gen_api_reference.py")
+        stale = [path for path, text in outputs
+                 if (path.read_text(encoding="utf-8") if path.exists() else "") != text]
+        for path in stale:
+            print(f"{path.relative_to(ROOT).as_posix()} is stale; "
+                  "run scripts/gen_api_reference.py")
+        if stale:
             return 1
-        print("api-reference.json is current")
+        print("api-reference.json and mcp-clients.json are current")
         return 0
-    OUT.write_text(text, encoding="utf-8", newline="\n")
-    print(f"wrote {OUT.relative_to(ROOT)} ({len(data['tools'])} tools)")
+    for path, text in outputs:
+        path.write_text(text, encoding="utf-8", newline="\n")
+    print(f"wrote {OUT.relative_to(ROOT)} ({len(data['tools'])} tools) and "
+          f"{CLIENTS_OUT.relative_to(ROOT)}")
     return 0
 
 

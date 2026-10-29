@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CircleCheck, MessageCircleQuestion, Plug } from "lucide-react";
 import { CopyField } from "@/components/copy-field";
+// Per-client setup, generated from src/ca_roads_mcp/connect.py by
+// scripts/gen_api_reference.py. The same source renders /llms.txt, so the
+// steps people read here and the steps agents read there cannot drift.
+import setup from "@/lib/mcp-clients.json";
 
 // MCP page takes its own metadata, matching the shape every other
 // marketing page uses (title/description/canonical/openGraph/twitter).
@@ -42,17 +46,17 @@ const STEPS = [
     icon: Plug,
     title: "Add the connector",
     body:
-      "Add a custom connector with the URL above (streamable HTTP), or " +
-      "run the server locally over stdio for Claude Desktop or Claude " +
-      "Code. No key or account needed either way.",
+      "Paste the URL above into your assistant's MCP or connector " +
+      "settings; the steps for each client are below. No key or account " +
+      "needed.",
   },
   {
     icon: MessageCircleQuestion,
     title: "Ask about a drive",
     body:
-      "Ask about a route or region in plain English. The assistant " +
-      "already knows 17 curated corridors, from I-80 Sacramento to " +
-      "Reno to the Bay Area freeways.",
+      'Ask in plain English: "When should I leave for the airport ' +
+      'tomorrow?", "Is I-80 open over Donner?", "What’s going on near ' +
+      'Pike Place Market?"',
   },
   {
     icon: CircleCheck,
@@ -222,8 +226,11 @@ export default function McpPage() {
             <Link href="/" prefetch={false} className="underline underline-offset-2 hover:text-white">
               commutescout.com
             </Link>
-            , with the same live feeds. Not running an MCP client? Every tool is
-            also a plain HTTP GET at{" "}
+            , with the same live feeds.{" "}
+            <Link href="#connect" prefetch={false} className="underline underline-offset-2 hover:text-white">
+              Setup for your client
+            </Link>{" "}
+            is below. Not running an MCP client? Every tool is also a plain HTTP GET at{" "}
             <Link
               href="https://mcp.commutescout.com/v1/docs"
               prefetch={false}
@@ -231,8 +238,11 @@ export default function McpPage() {
             >
               mcp.commutescout.com/v1
             </Link>
-            , with an OpenAPI reference. Need more than the per-address limits? Sign
-            in on the live map and create a key under Settings.
+            , with an OpenAPI reference. Agents can read the same setup as plain text at{" "}
+            <Link href="/llms.txt" prefetch={false} className="underline underline-offset-2 hover:text-white">
+              commutescout.com/llms.txt
+            </Link>
+            .
           </p>
 
           <Link
@@ -264,6 +274,90 @@ export default function McpPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section id="connect" className="bg-cs-bg scroll-mt-20 py-16 md:py-20" aria-labelledby="connect-heading">
+        <div className="mx-auto max-w-7xl px-6">
+          <h2
+            id="connect-heading"
+            className="text-cs-ink text-balance text-3xl font-medium tracking-tight md:text-4xl"
+          >
+            Connect your client
+          </h2>
+          <p className="text-cs-ink/60 mt-4 max-w-3xl text-balance">
+            The endpoint is <code className="bg-cs-paper text-cs-ink rounded px-1.5 py-0.5 text-sm">{setup.endpoint}</code>{" "}
+            (streamable HTTP, stateless). It works without a key; the key lines
+            are optional and turn on your saved places.
+          </p>
+          <div className="mt-10 grid gap-4 lg:grid-cols-2">
+            {setup.clients.map((client) => (
+              <div
+                key={client.id}
+                id={client.id}
+                className="ring-cs-line bg-cs-paper flex scroll-mt-20 flex-col gap-3 rounded-xl p-5 ring-1"
+              >
+                <h3 className="text-cs-ink font-medium">{client.name}</h3>
+                {client.steps.map((step, i) =>
+                  "code" in step ? (
+                    <pre
+                      key={i}
+                      className="bg-cs-navy2 overflow-x-auto rounded-lg p-4 text-xs text-white/90"
+                    >
+                      <code>{step.code}</code>
+                    </pre>
+                  ) : (
+                    <p key={i} className="text-cs-ink/70 text-sm">
+                      {step.text}
+                    </p>
+                  ),
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="saved-places" className="scroll-mt-20 py-16 md:py-20" aria-labelledby="places-heading">
+        <div className="mx-auto max-w-3xl px-6">
+          <h2
+            id="places-heading"
+            className="text-cs-ink text-balance text-3xl font-medium tracking-tight md:text-4xl"
+          >
+            Your places: home, work and favorites
+          </h2>
+          <p className="text-cs-ink/60 mt-4 text-balance">
+            With an API key, &ldquo;home&rdquo;, &ldquo;work&rdquo; and the names
+            of your saved places work in every trip tool, and a trip with no
+            starting point starts from Home. The places are the ones you save on
+            the map and in the app, and they are only ever read for your own
+            account.
+          </p>
+          <ol className="text-cs-ink/70 mt-6 list-decimal space-y-2 pl-5 text-sm">
+            <li>
+              Open the{" "}
+              <Link href="/map" prefetch={false} className="text-cs-sky hover:underline">
+                live map
+              </Link>
+              , choose Settings, and sign in.
+            </li>
+            <li>Under API keys, create a key. It is shown once, so copy it then.</li>
+            <li>
+              Add it to your client as the header{" "}
+              <code className="bg-cs-bg text-cs-ink rounded px-1.5 py-0.5">{setup.key_header}</code>, using
+              the key lines in your client&rsquo;s steps above.
+            </li>
+          </ol>
+          <p className="text-cs-ink/60 mt-6 text-sm text-balance">
+            A key also gives your client its own limits: 2,000 requests a day on
+            the free tier, against 10,000 a day per address without one. No MCP
+            server can see your device&rsquo;s location, so for &ldquo;from
+            here&rdquo; the assistant uses a place you name or asks you.{" "}
+            <Link href="/developers#keys" prefetch={false} className="text-cs-sky hover:underline">
+              Keys and limits in detail
+            </Link>
+            .
+          </p>
         </div>
       </section>
 
@@ -305,8 +399,15 @@ export default function McpPage() {
             Run it locally
           </h2>
           <p className="text-cs-ink/60 mt-4 text-balance">
-            The server is a single Python package with zero required keys.
-            Config for Claude Desktop or Claude Code:
+            The hosted server above is the easy path. To run your own copy, the
+            server is a single Python package with no required keys (the trip
+            tools use <code className="bg-cs-bg text-cs-ink rounded px-1.5 py-0.5 text-sm">STADIA_API_KEY</code>{" "}
+            and <code className="bg-cs-bg text-cs-ink rounded px-1.5 py-0.5 text-sm">TOMTOM_API_KEY</code> when
+            set). A stdio config for Claude Desktop or Claude Code (needs{" "}
+            <Link href="https://docs.astral.sh/uv/" prefetch={false} className="text-cs-sky hover:underline">
+              uv
+            </Link>
+            ):
           </p>
 
           <pre className="bg-cs-navy2 mt-6 overflow-x-auto rounded-xl p-5 text-sm text-white/90">

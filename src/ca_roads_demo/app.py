@@ -1702,6 +1702,8 @@ Disallow: /api/
 Allow: /
 
 Sitemap: https://commutescout.com/sitemap.xml
+
+# Agents: setup for the MCP server is at https://commutescout.com/llms.txt
 """
 
 
@@ -2255,6 +2257,23 @@ async def security_txt(_: Request):
     return PlainTextResponse(body)
 
 
+async def llms_txt(_: Request):
+    """How to connect the MCP server, for agents handed this site's URL
+    (llmstxt.org). The same text is the root of mcp.commutescout.com."""
+    from ca_roads_mcp import connect  # noqa: PLC0415
+
+    return PlainTextResponse(connect.guide(),
+                             headers={"Cache-Control": "public, max-age=3600"})
+
+
+async def mcp_server_card(_: Request):
+    from ca_roads_mcp import connect  # noqa: PLC0415
+
+    return JSONResponse(connect.server_card(VERSION), headers={
+        "Cache-Control": "public, max-age=3600",
+        "Access-Control-Allow-Origin": "*"})
+
+
 async def not_found(request: Request, exc: HTTPException):
     """Branded 404 for page navigations; APIs keep a plain JSON 404. The
     site's own 404.html carries the header, footer, and a link home."""
@@ -2490,6 +2509,9 @@ app = Starlette(
         # reaches the container; /health gets through.
         Route("/health", health),
         Route("/.well-known/security.txt", security_txt),
+        Route("/llms.txt", llms_txt),
+        Route("/.well-known/mcp.json", mcp_server_card),
+        Route("/.well-known/mcp/server-card.json", mcp_server_card),
         Route("/api/ask", ask, methods=["POST"]),
         Route("/api/event", track, methods=["POST"]),
         Route("/api/stats", stats, methods=["GET"]),

@@ -17,7 +17,7 @@ how much to trust the answer.
 | **WFIGS** | Active wildfires (name, size, containment), flagged within ~10 miles of major highways; perimeter edges refine distances for big fires | 5-minute cache |
 | **CAL FIRE** | CAL FIRE's own incident postings, merged into the wildfire layer for fires WFIGS does not list yet | 5-minute cache |
 | **Caltrans CMS** | What changeable message signs display right now (blank signs filtered) | 2-minute cache |
-| **Caltrans CCTV** | Roadside camera snapshots, image-verified live before return | per query |
+| **Caltrans CCTV** | Roadside camera snapshots, image-verified live before return | Camera list hourly; each image fetched live |
 | **Caltrans RWIS** | Road-weather stations: pavement temperature, gusts, visibility on the passes | 5-minute cache |
 | **NWS alerts** | Winter storm, wind, flood, fog, and fire-weather warnings along the route | 5-minute cache |
 | **USGS quakes** | M4.5+ earthquakes near a corridor in the last 24 hours | 5-minute cache |
@@ -28,6 +28,27 @@ how much to trust the answer.
 Caches are stale-while-revalidate: an expired feed is served from
 memory instantly while one background task refreshes it, so requests
 never wait on an upstream agency server.
+
+## Sources behind the trip tools
+
+`plan_trip`, `best_time_to_go`, `get_weather`, `get_traffic` and
+`get_area_history` work for any two US places. They add these sources
+to the agency feeds above:
+
+| Source | Data | Refresh |
+|--------|------|---------|
+| **Stadia Maps** (optional key) | Routing (the route line and its drive time) and geocoding (turning a typed place into coordinates) | Per request |
+| **TomTom** (optional key) | Live traffic flow against free-flow speed, and drive times for a chosen departure time | Live within the hour; historical profiles beyond it |
+| **NWS hourly forecast** | Hourly forecasts at the origin and destination, including driving hazards such as snow and ice, from the National Weather Service | About hourly |
+| **NWS alerts** | Active warnings and advisories along the route | 5-minute cache |
+| **OpenStreetMap cameras** | Speed and red-light cameras mapped in OpenStreetMap, served as the first-party `osm-cameras` plugin layer | Published with the live snapshot |
+| **CommuteScout event archive** | Every event the map has seen since 2026-07-12, stored in BigQuery, for "what usually happens here at this hour" | Appended every checker cycle |
+
+Without a Stadia Maps key, `plan_trip` routes through TomTom instead
+and says that known full closures were not avoided. Without either key
+it cannot draw a route. Camera images, unlike the camera list, are
+always fetched live: the list refreshes hourly, and each image is
+checked for freshness before it is returned.
 
 ## The closure taxonomy
 

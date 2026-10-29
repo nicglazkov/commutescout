@@ -67,18 +67,26 @@ export default function Home() {
                 Bring live roads to your assistant.
               </h2>
               <p className="text-white/70 mt-4 max-w-md text-balance">
-                Connect any MCP-compatible assistant to the same live feeds the map
-                reads from.
+                Ask Claude, ChatGPT, Cursor or any MCP client when to leave, what is
+                on the road, and what the weather will be, from the same live feeds
+                the map reads.
               </p>
             </div>
             <div className="space-y-4">
               <CopyField value={MCP_URL} />
               <Link
-                href="/mcp"
+                href="/mcp#connect"
                 prefetch={false}
                 className="inline-flex items-center gap-1.5 text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
               >
-                View the MCP docs
+                Set up your assistant
+              </Link>
+              <Link
+                href="/developers"
+                prefetch={false}
+                className="ml-5 inline-flex items-center gap-1.5 text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
+              >
+                REST API and keys
               </Link>
             </div>
           </div>

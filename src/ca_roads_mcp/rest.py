@@ -24,6 +24,8 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
+from ca_roads_mcp import connect
+
 PREFIX = "/v1"
 PUBLIC_BASE = "https://mcp.commutescout.com"
 CORS = {"Access-Control-Allow-Origin": "*",
@@ -108,10 +110,12 @@ def openapi(mcp) -> dict:
             "title": "CommuteScout API",
             "version": _version(),
             "description": (
-                "Live US road conditions: incidents, closures, chain controls, "
-                "wildfires, cameras and message signs, California in the most "
-                "depth and live events across every covered state. The same ten "
-                "tools the MCP server exposes, as plain HTTP GET. Works without a "
+                "Trip planning, the best time to leave, and live US road "
+                "conditions: incidents, closures, chain controls, wildfires, "
+                "cameras, message signs, traffic, weather and event history, "
+                "California in the most depth and live events across every "
+                "covered state. Every tool the MCP server exposes "
+                "(https://mcp.commutescout.com/mcp), as plain HTTP GET. Works without a "
                 "key at per-address limits; a key from Settings on commutescout.com/map "
                 "gives 2,000 requests a day (Pro: 10,000). Attribution to CommuteScout "
                 "and the agencies named in each response is required."),
@@ -179,7 +183,23 @@ def register(mcp) -> None:
         return Response(body, media_type="text/plain",
                         headers={"Cache-Control": "public, max-age=3600"})
 
+    # An agent handed this host should not need HTML to find the way in:
+    # the root and /llms.txt are the setup guide in plain text, and the
+    # server card is the same as data (ca_roads_mcp/connect.py).
+    @mcp.custom_route("/", methods=["GET"])
+    @mcp.custom_route("/llms.txt", methods=["GET"])
+    async def guide(_: Request) -> Response:
+        return Response(connect.guide(), media_type="text/plain; charset=utf-8",
+                        headers={**CORS, "Cache-Control": "public, max-age=3600"})
+
+    @mcp.custom_route("/.well-known/mcp/server-card.json", methods=["GET"])
+    @mcp.custom_route("/.well-known/mcp.json", methods=["GET"])
+    async def server_card(_: Request) -> Response:
+        return JSONResponse(connect.server_card(_version()),
+                            headers={**CORS, "Cache-Control": "public, max-age=3600"})
+
     @mcp.custom_route(f"{PREFIX}/openapi.json", methods=["GET"])
+    @mcp.custom_route("/openapi.json", methods=["GET"])
     async def openapi_doc(_: Request) -> Response:
         return JSONResponse(openapi(mcp), headers={**CORS, "Cache-Control": "public, max-age=300"})
 
@@ -188,6 +208,7 @@ def register(mcp) -> None:
         return HTMLResponse(DOCS_HTML, headers={"Cache-Control": "public, max-age=300"})
 
     @mcp.custom_route(PREFIX, methods=["GET"])
+    @mcp.custom_route(f"{PREFIX}/tools", methods=["GET"])
     async def index(_: Request) -> Response:
         tools = [{"name": s["name"], "url": f"{PUBLIC_BASE}{PREFIX}/tools/{s['name']}",
                   "summary": s["description"].split("\n", 1)[0][:120]}

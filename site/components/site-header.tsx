@@ -31,6 +31,7 @@ const navLinks = [
   { href: "/watch", label: "Watch areas" },
   { href: "/data-sources", label: "Data sources" },
   { href: "/developers", label: "Developers" },
+  { href: "/mcp", label: "MCP server" },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/app", label: "Get the app" },
   { href: "/pricing", label: "Pricing" },

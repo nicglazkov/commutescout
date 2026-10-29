@@ -7,7 +7,7 @@ across every covered state.
 
 ## Connect to the hosted server
 
-Add a custom connector with this URL (streamable HTTP):
+The endpoint is streamable HTTP and stateless:
 
 ```
 https://mcp.commutescout.com/mcp
@@ -16,14 +16,41 @@ https://mcp.commutescout.com/mcp
 No key or account needed. It is the same server behind
 [commutescout.com](https://commutescout.com), with the same live feeds.
 
+| Client | How to add it |
+|--------|---------------|
+| Claude Code | `claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp`, then `/mcp` to confirm |
+| claude.ai and Claude Desktop | Customize > Connectors > + Add > Add custom connector, with the URL above and no sign-in |
+| Cursor | `~/.cursor/mcp.json`: `{"mcpServers": {"commutescout": {"url": "https://mcp.commutescout.com/mcp"}}}` |
+| VS Code (Copilot) | `.vscode/mcp.json`: `{"servers": {"commutescout": {"type": "http", "url": "https://mcp.commutescout.com/mcp"}}}` |
+| Windsurf | `mcp_config.json`: `{"mcpServers": {"commutescout": {"serverUrl": "https://mcp.commutescout.com/mcp"}}}` |
+| OpenAI Codex CLI | `codex mcp add commutescout --url https://mcp.commutescout.com/mcp` |
+| Gemini CLI | `gemini mcp add --transport http commutescout https://mcp.commutescout.com/mcp` |
+| ChatGPT | Plugins > + > Add custom MCP server, authentication none (plan and workspace settings permitting) |
+| stdio-only clients | `npx mcp-remote https://mcp.commutescout.com/mcp --transport http-only` |
+
+The full steps, including where each client takes the optional key, are
+on [commutescout.com/mcp](https://commutescout.com/mcp#connect). The same
+steps as plain text for agents are served at
+[commutescout.com/llms.txt](https://commutescout.com/llms.txt) and
+[mcp.commutescout.com/llms.txt](https://mcp.commutescout.com/llms.txt),
+and as a server card at
+[`/.well-known/mcp/server-card.json`](https://mcp.commutescout.com/.well-known/mcp/server-card.json).
+All of them render from [`connect.py`](../src/ca_roads_mcp/connect.py).
+
+Check the connection with a question such as "When should I leave Union
+Station in Denver for Red Rocks tomorrow?". The assistant should call
+`best_time_to_go`.
+
 ### Your places
 
 To let the trip tools read "home", "work" and your saved places, connect
 with an API key from Settings on [the map](https://commutescout.com/map):
 
+```sh
+claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp   --header "Authorization: Bearer cs_live_..."
 ```
-claude mcp add --transport http commutescout https://mcp.commutescout.com/mcp   --header "Authorization: Bearer cs_live_..."
-```
+
+Other clients take the same header; `X-API-Key: cs_live_...` works too.
 
 Then "When should I leave for the airport?" starts from your Home, and
 "from work to the gym" uses your saved Work and the favorite named Gym.
@@ -71,8 +98,11 @@ revoked or unknown key answers 401 rather than falling back to keyless.
 
 ## Run it locally (stdio)
 
-The server is a single Python package with zero required keys. Config
-for Claude Desktop or Claude Code:
+The server is a single Python package. Live events need no keys; the
+trip tools (`plan_trip`, `best_time_to_go`, `find_place`) need
+`STADIA_API_KEY` for routing and geocoding, and `get_traffic` and the
+traffic-aware drive times need `TOMTOM_API_KEY`. Config for Claude
+Desktop or Claude Code (needs [uv](https://docs.astral.sh/uv/)):
 
 ```json
 {
@@ -106,10 +136,10 @@ checks off), so bind it to localhost when running it on your machine:
 | `rank_routes(by?, limit?)` | All 17 corridors ranked by live events or measured congestion, with reasons; answers "what are the busiest routes right now" |
 | `get_nearby_events(center or place, radius_km?, kinds?)` | Live road events near a point across every covered state, 37 states, not just California (California's own feeds are included), plus speed and red-light cameras; the tool for locations outside California or near a state border |
 | `plan_trip(origin, destination, depart_at?, preference?)` | One drive between any two US places: drive time with traffic for that departure, alternatives, everything on the route in mile order, alerts and the arrival forecast |
-| `best_time_to_go(origin, destination, day?, earliest?, latest?, arrive_by?)` | Up to 16 departures compared on drive time, arrival weather and how often incidents start on the route that hour; a pick and the full curve |
+| `best_time_to_go(origin, destination, day?, earliest?, latest?, arrive_by?, step_minutes?)` | Up to 16 departures compared on drive time, arrival weather and how often incidents start on the route that hour; a pick and the full curve |
 | `find_place(query, near?, limit?)` | What a typed place resolves to, with alternatives |
 | `get_weather(place or center, hours?)` | NWS alerts and the hourly forecast, with driving hazards flagged |
-| `get_traffic(place, center or points)` | Live speed against free-flow around a point |
+| `get_traffic(points, place or center)` | Live speed against free-flow around a point |
 | `get_area_history(place or center, radius_km?, days?)` | When incidents usually happen near a place, by hour and day, from the event archive |
 | `get_my_places()` | Your Home, Work, favorites and recent destinations (needs an API key) |
 | `get_coverage()` | Which states and feeds are covered |
@@ -117,8 +147,25 @@ checks off), so bind it to localhost when running it on your machine:
 Every trip tool takes `"home"`, `"work"` or a saved place's name, and a
 trip with no origin starts from Home.
 
+The `check_route`, `check_region`, `rank_routes`, `get_incidents`,
+`get_lane_closures`, `get_chain_controls`, `get_wildfires`, `get_cameras`
+and `get_road_signs` tools read California's feeds and corridors. For a
+drive or a place in another state, use `plan_trip`, `best_time_to_go` or
+`get_nearby_events`.
+
 Parameter notes: `center` is `"lat,lon"`; `radius_km` caps at 160 on
-`get_nearby_events`; `get_cameras` returns at most 10 verified cameras
+`get_nearby_events`, whose `kinds` is a comma list from `incident`,
+`closure`, `chain` and `fire` (all four by default); `plan_trip`'s
+`preference` is one of `fastest` (default), `shortest`, `no_highways`,
+`no_tolls` or `avoid_chains`; `depart_at`, `day`, `earliest`, `latest`
+and `arrive_by` take plain times such as `"tomorrow 8am"` or `"friday"`
+in the origin's local time, and `day` reaches up to 60 days out; `best_time_to_go`'s
+`step_minutes` runs 10 to 180 (the default fits the window into 16
+departures); `get_weather` takes `hours` from 1 to 156; `get_traffic`
+takes up to 10 `points` as `"lat,lon|lat,lon"`; `get_area_history` takes
+`radius_km` from 0.2 to 25 (default 3) and `days` from 7 to 365 (default
+90; the archive began 2026-07-12); `find_place` returns 1 to 8 matches
+(default 5); `get_cameras` returns at most 10 verified cameras
 per call; `get_lane_closures` returns at most 200 closures and says
 when it truncates; pass `from_coords` and `to_coords` to `check_route`
 whenever you have them (they skip geocoding). The hosted server allows
@@ -134,6 +181,14 @@ cameras along the way, and live speeds when a TomTom key is set. Route
 names are normalized ("17", "hwy 50", "I80" all work), and docstrings
 are written for the LLM consumer: what the data is, its refresh
 cadence, and its limits.
+
+## Resources and prompts
+
+Two resources: `commutescout://coverage` (the states and feeds, as JSON)
+and `commutescout://about` (what the data is and its limits, as
+Markdown). Three prompts: `best_time` ("Best time to visit"),
+`trip_check` ("Plan a trip") and `road_trip_check` (a California
+corridor check).
 
 ## How good are the answers?
 

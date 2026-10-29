@@ -7,7 +7,7 @@
 // matching rows here in the same PR.
 
 // docs/state-coverage.md's own "Updated" line.
-export const STATE_COVERAGE_UPDATED = "2026-07-20 (v2.32.0)";
+export const STATE_COVERAGE_UPDATED = "2026-10-29 (v2.131.0)";
 
 export type StateRow = {
   state: string;
