@@ -573,26 +573,28 @@ def _perim_cache_put(key: tuple, perims: list) -> None:
 async def api_suggest(request: Request):
     """Search-as-you-type suggestions for the route planner.
 
-    The Google-style recipe: instant offline matches from the CA place
-    gazetteer, merged with Stadia's autocomplete endpoint (typo-tolerant
-    prefix search, biased toward the caller's position, restricted to a
-    California bounding box). The precise search ladder stays the
-    backstop when a freeform entry is validated on selection."""
+    The Google-style recipe: Stadia's autocomplete endpoint
+    (typo-tolerant prefix search over the whole country, biased toward
+    the caller's position), with instant offline matches from the
+    California place gazetteer mixed in only near California. The
+    precise search ladder stays the backstop when a freeform entry is
+    validated on selection."""
     q = (request.query_params.get("q") or "").strip()
     if len(q) < 2 or len(q) > 120:
         return JSONResponse({"suggestions": []})
     if _client_over_daily(request, "suggest"):
         return _daily_cap_response()
-    try:
-        bias_lat = float(request.query_params.get("lat", 37.4))
-        bias_lon = float(request.query_params.get("lon", -120.9))
-    except ValueError:
-        bias_lat, bias_lon = 37.4, -120.9
-
-    local = gazetteer_suggest(q, limit=3)
+    bias = _bias_point(request)
+    bias_lat, bias_lon = bias if bias else (None, None)
     remote = await stadia_suggest(
         tools.get_road().client, q, bias_lat, bias_lon, limit=6
     )
+    # The gazetteer only knows California. Far from it, its rows
+    # would push "Columbia, California" above Columbia, Missouri, so
+    # they join only near the state, or when the network had nothing.
+    local = gazetteer_suggest(q, limit=3)
+    if remote and not (bias and _near_california(*bias)):
+        local = []
     merged: list[dict] = []
     for cand in local + remote:
         dup = any(
@@ -925,17 +927,35 @@ async def api_staticmap(request: Request):
                     headers={"Cache-Control": "public, max-age=21600"})
 
 
+def _bias_point(request: Request) -> tuple[float, float] | None:
+    """The caller's optional lat/lon focus point, or None."""
+    try:
+        lat = float(request.query_params["lat"])
+        lon = float(request.query_params["lon"])
+    except (KeyError, ValueError):
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    return lat, lon
+
+
+def _near_california(lat: float, lon: float) -> bool:
+    return 30.5 <= lat <= 44.0 and -126.5 <= lon <= -112.0
+
+
 async def api_geocode(request: Request):
     """Address validation for the route planner. Returns the resolved
     candidates so the page can confirm one address or offer a choice when
-    the name exists in several places."""
+    the name exists in several places. Searches the whole country, ranked
+    toward an optional lat/lon focus point."""
     q = (request.query_params.get("q") or "").strip()
     if not q or len(q) > 200:
         return JSONResponse({"error": "provide q (max 200 chars)"}, status_code=400)
     if _client_over_daily(request, "geocode"):
         return _daily_cap_response()
     road = tools.get_road()
-    cands = await geocode_candidates(road.client, q)
+    cands = await geocode_candidates(road.client, q, near=_bias_point(request),
+                                     scope="us")
     return JSONResponse({
         "query": q,
         "candidates": [
