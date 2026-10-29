@@ -1,8 +1,17 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
   - name: Use CommuteScout
     url: https://commutescout.com
-    about: The hosted app. Live map, route planner, and assistant; no account needed.
+    about: The live map, trip planning and assistant. No account needed.
+  - name: Connect an AI assistant
+    url: https://commutescout.com/mcp#connect
+    about: Step-by-step MCP setup for Claude, ChatGPT, Cursor, VS Code and other clients.
+  - name: API documentation
+    url: https://commutescout.com/developers
+    about: REST API reference, keys, rate limits and the error envelope.
+  - name: Mobile app issue?
+    url: https://github.com/nicglazkov/commutescout-app/issues
+    about: The iOS and Android apps have their own repository.
   - name: Security issue?
     url: https://github.com/nicglazkov/commutescout/security/advisories/new
     about: Please report vulnerabilities privately, not as a public issue.

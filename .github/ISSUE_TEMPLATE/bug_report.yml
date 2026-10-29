@@ -8,8 +8,9 @@ body:
       label: Where did this happen?
       options:
         - Hosted app (commutescout.com)
-        - Hosted MCP server (mcp.commutescout.com)
-        - Self-hosted / local
+        - Hosted MCP server (mcp.commutescout.com/mcp)
+        - REST API (mcp.commutescout.com/v1)
+        - Self-hosted or local
     validations:
       required: true
   - type: textarea
