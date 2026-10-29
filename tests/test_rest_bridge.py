@@ -22,7 +22,7 @@ def client():
 
 def test_every_tool_has_a_route_and_the_index_lists_them(client):
     names = [s["name"] for s in tool_specs(server.mcp)]
-    assert len(names) == 10 and "check_route" in names and "get_nearby_events" in names
+    assert len(names) == 18 and "check_route" in names and "plan_trip" in names
     r = client.get(PREFIX)
     assert r.status_code == 200 and r.headers["access-control-allow-origin"] == "*"
     assert [t["name"] for t in r.json()["tools"]] == names
@@ -80,7 +80,7 @@ def test_semantic_errors_are_400_in_the_one_envelope(client):
 def test_openapi_is_generated_from_the_tool_schemas(client):
     doc = openapi(server.mcp)
     assert doc["openapi"].startswith("3.1")
-    assert len(doc["paths"]) == 10
+    assert len(doc["paths"]) == 18
     op = doc["paths"][f"{PREFIX}/tools/check_route"]["get"]
     params = {p["name"]: p for p in op["parameters"]}
     assert params["from_place"]["required"] is True

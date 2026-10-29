@@ -14,7 +14,7 @@ flowchart LR
         D["cross-source dedupe"]
     end
     subgraph srv["ca_roads_mcp"]
-        T["10 MCP tools<br/>corridors + regions<br/>closure taxonomy<br/>gazetteer geocoding"]
+        T["18 MCP tools<br/>nationwide trip planning<br/>corridors + regions<br/>closure taxonomy"]
     end
     CHP & CT & WF & WX & OPT --> F --> D --> T
     T -->|"stdio / streamable HTTP"| MCP["Claude & MCP clients"]

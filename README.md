@@ -64,7 +64,8 @@ it as a tool instead of guessing about traffic.
 - **Watch areas:** draw a circle, polygon, or route corridor and get a
   push or email alert when an incident, closure, chain control, or
   wildfire appears inside it.
-- **An MCP server:** ten tools over curated corridors and regions, with
+- **An MCP server:** 18 tools. Plan any US drive, find the best
+  time to leave, and read live events, weather and history, with
   a [closure taxonomy](docs/data-sources.md#the-closure-taxonomy) that
   keeps a closed on-ramp from reading as a closed highway.
 - **Turn-by-turn navigation on your phone:** native iOS and Android
@@ -78,7 +79,7 @@ it as a tool instead of guessing about traffic.
   Plugins appear in a marketplace, are labelled by how far they have
   been vetted, and an unreviewed one can never close a road for a
   driver. A reference plugin and its conformance tests live in this repo.
-- **A public API:** the same ten tools over plain HTTP, with an OpenAPI
+- **A public API:** the same 18 tools over plain HTTP, with an OpenAPI
   document, one error envelope, and keys with published rate limits.
   Nothing to sign up for to try it.
 - **Public evals:** 91 golden questions on recorded fixtures, scored by
@@ -95,7 +96,7 @@ it as a tool instead of guessing about traffic.
   </tr>
   <tr>
     <td width="34%"><img src="docs/shots/marketplace.png" alt="The plugin marketplace, one card per plugin, with coverage, what it reports, and how far it has been vetted"><br><sub><b>Add a plugin.</b> Each card says what it covers, what it reports, and whether anyone has reviewed it.</sub></td>
-    <td width="34%"><img src="docs/shots/developers.png" alt="The developer page: the ten tools, the error envelope, and the rate limits"><br><sub><b>Or build on it.</b> Ten tools over plain HTTP, one error envelope, published rate limits.</sub></td>
+    <td width="34%"><img src="docs/shots/developers.png" alt="The developer page: the tools, the error envelope, and the rate limits"><br><sub><b>Or build on it.</b> 18 tools over plain HTTP, one error envelope, published rate limits.</sub></td>
     <td width="32%"></td>
   </tr>
 </table>

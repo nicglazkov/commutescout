@@ -1,6 +1,6 @@
 """A REST bridge over the MCP tools: ``GET /v1/tools/{name}?param=...``.
 
-Developers who are not running an MCP client get the same ten tools as
+Developers who are not running an MCP client get the same tools as
 plain HTTP with an OpenAPI document generated from the tools' own JSON
 schemas, so the two surfaces cannot drift. The MCP transport at ``/mcp``
 is untouched and the rate limiter wraps both.

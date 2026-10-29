@@ -81,11 +81,65 @@ PARAM_DOCS: dict[str, dict[str, str]] = {
         "radius_km": "Radius around center in kilometers.",
     },
     "get_nearby_events": {
-        "center": "\"lat,lon\". Required.",
+        "center": "\"lat,lon\". Required unless place is given.",
         "radius_km": "Radius in kilometers, capped at 160.",
         "kinds": "Comma list from incident, closure, chain, fire, sign, rwis, camera, "
-                 "toll. Omit for everything.",
+                 "toll, enforcement (speed and red-light cameras). Default: incident, "
+                 "closure, chain, fire.",
+        "place": "An address or place name instead of center.",
     },
+    "find_place": {
+        "query": "An address, business, landmark or town.",
+        "near": "Optional \"lat,lon\" to prefer matches near.",
+        "limit": "At most 8 matches. Default 5.",
+    },
+    "plan_trip": {
+        "origin": "Start: an address, landmark or place anywhere in the US "
+                  "(\"Pike Place Market\", \"1600 Pennsylvania Ave NW, DC\").",
+        "destination": "End of the drive, same forms as origin.",
+        "origin_coords": "Start as \"lat,lon\". Wins over origin.",
+        "destination_coords": "End as \"lat,lon\". Wins over destination.",
+        "depart_at": "Departure in the origin's local time: \"now\" (default), "
+                     "\"tomorrow 8am\", \"17:30\", \"friday 7:15am\" or ISO "
+                     "\"2026-11-02T08:00\".",
+        "preference": "fastest (default), shortest, no_highways, no_tolls or "
+                      "avoid_chains.",
+    },
+    "best_time_to_go": {
+        "origin": "Start: an address, landmark or place anywhere in the US "
+                  "(\"Pike Place Market\", \"1600 Pennsylvania Ave NW, DC\").",
+        "destination": "End of the drive, same forms as origin.",
+        "origin_coords": "Start as \"lat,lon\". Wins over origin.",
+        "destination_coords": "End as \"lat,lon\". Wins over destination.",
+        "day": "\"today\" (default), \"tomorrow\", a weekday name or YYYY-MM-DD, "
+               "up to 60 days out.",
+        "earliest": "Earliest departure, local time (\"7am\", \"07:00\"). Default "
+                    "6:00 AM.",
+        "latest": "Latest departure. Default 9:00 PM.",
+        "arrive_by": "Instead of a window: when the trip must arrive, destination "
+                     "local time. Returns the latest safe departure.",
+        "step_minutes": "Minutes between departures checked, 10 to 180. Default fits "
+                        "the window into 16 checks.",
+    },
+    "get_weather": {
+        "place": "An address or place name.",
+        "center": "\"lat,lon\" instead of place.",
+        "hours": "Hours of hourly forecast, 1 to 156. Default 24.",
+    },
+    "get_traffic": {
+        "points": "Up to 10 points as \"lat,lon|lat,lon\".",
+        "place": "An address or place name instead of points.",
+        "center": "One \"lat,lon\" instead of points.",
+    },
+    "get_area_history": {
+        "place": "An address or place name.",
+        "center": "\"lat,lon\" instead of place.",
+        "radius_km": "Radius in kilometers, 0.2 to 25. Default 3.",
+        "days": "Look-back window in days, 7 to 365. Default 90; history began "
+                "2026-07-12.",
+    },
+    "get_coverage": {},
+    "get_my_places": {},
 }
 
 # Per-tool facts a developer plans around: what it reads, how fresh it
@@ -214,6 +268,98 @@ TOOL_META: dict[str, dict] = {
                 "detail.",
         "poll_s": 60,
         "example": "get_nearby_events?center=39.53,-119.81&radius_km=40&kinds=incident,closure",
+    },
+    "find_place": {
+        "title": "Find a place",
+        "summary": "Resolve a US address or place to coordinates, best match first.",
+        "reads": "Stadia Maps autocomplete and search (Pelias over OpenStreetMap, "
+                 "OpenAddresses and Who's On First), with an offline gazetteer when "
+                 "the network is down.",
+        "refresh": "Static data; cached per query.",
+        "caps": "United States only. At most 8 matches.",
+        "poll_s": 3600,
+        "example": "find_place?query=Pike%20Place%20Market",
+    },
+    "plan_trip": {
+        "title": "Plan a trip",
+        "summary": "Everything about one drive between any two US places: route, "
+                   "drive time for the departure, every live event on the line by "
+                   "mile, weather alerts and the forecast on arrival.",
+        "reads": "Stadia Maps routing with full closures excluded, TomTom travel "
+                 "times (historical profiles, live within the hour), every state "
+                 "feed the map shows, NWS alerts and hourly forecasts.",
+        "refresh": "Live events 30 seconds to 5 minutes; answers cache for 5 minutes.",
+        "caps": "Trips up to 2,500 km. Each on-route list is capped and notes says "
+                "when one was trimmed.",
+        "poll_s": 300,
+        "example": "plan_trip?origin=San%20Jose%2C%20CA&destination=SFO"
+                   "&depart_at=tomorrow%208am",
+    },
+    "best_time_to_go": {
+        "title": "Best time to go",
+        "summary": "When to leave: up to 16 departures compared on drive time, "
+                   "weather on arrival and the route's incident history, with a "
+                   "recommendation.",
+        "reads": "TomTom travel times by departure, NWS hourly forecasts at both "
+                 "ends, and the CommuteScout event archive along the route.",
+        "refresh": "Typical times are stable; forecasts refresh about hourly.",
+        "caps": "One day per call, up to 60 days out; trips up to 2,500 km.",
+        "poll_s": 900,
+        "example": "best_time_to_go?origin=Union%20Station%2C%20Denver"
+                   "&destination=Red%20Rocks%20Amphitheatre&day=saturday",
+    },
+    "get_weather": {
+        "title": "Weather for drivers",
+        "summary": "Hourly forecast, active alerts and nearby road-weather stations "
+                   "for any US place, with driving hazards flagged.",
+        "reads": "National Weather Service (api.weather.gov) and state DOT "
+                 "road-weather stations.",
+        "refresh": "Forecast about hourly; alerts and stations every few minutes.",
+        "caps": "NWS covers the US and its territories only.",
+        "poll_s": 900,
+        "example": "get_weather?place=Denver%2C%20CO&hours=12",
+    },
+    "get_traffic": {
+        "title": "Traffic speeds",
+        "summary": "Live speed against free-flow speed on the road nearest each "
+                   "point.",
+        "reads": "TomTom traffic flow.",
+        "refresh": "About a minute.",
+        "caps": "Up to 10 points per call.",
+        "poll_s": 120,
+        "example": "get_traffic?points=37.8199,-122.4783",
+    },
+    "get_area_history": {
+        "title": "Area history",
+        "summary": "What usually happens around a place: incidents and closures by "
+                   "local hour and weekday, common types and typical duration.",
+        "reads": "The CommuteScout event archive, every state, since 2026-07-12.",
+        "refresh": "Cached for 6 hours.",
+        "caps": "Radius up to 25 km, window up to 365 days. Counts what official "
+                "feeds published, not a crash database.",
+        "poll_s": 21600,
+        "example": "get_area_history?place=Ohio%20Stadium&radius_km=2",
+    },
+    "get_coverage": {
+        "title": "Coverage",
+        "summary": "Which states and sources are covered, with each feed's freshness.",
+        "reads": "The live source registry.",
+        "refresh": "Live.",
+        "caps": "None.",
+        "poll_s": 300,
+        "example": "get_coverage",
+    },
+    "get_my_places": {
+        "title": "My saved places",
+        "summary": "The key owner's Home, Work, favorites and recent destinations, "
+                   "synced from the site and apps. Every trip tool also takes "
+                   "\"home\", \"work\" or a saved place's name directly.",
+        "reads": "The account that owns the API key.",
+        "refresh": "Within a minute of a change on any device.",
+        "caps": "Needs an API key; without one the answer says how to connect. "
+                "Places are returned only to their owner.",
+        "poll_s": 300,
+        "example": "get_my_places",
     },
 }
 

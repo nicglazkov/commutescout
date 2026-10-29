@@ -16,6 +16,22 @@ https://mcp.commutescout.com/mcp
 No key or account needed. It is the same server behind
 [commutescout.com](https://commutescout.com), with the same live feeds.
 
+### Your places
+
+To let the trip tools read "home", "work" and your saved places, connect
+with an API key from Settings on [the map](https://commutescout.com/map):
+
+```
+claude mcp add --transport http commutescout https://mcp.commutescout.com/mcp   --header "Authorization: Bearer cs_live_..."
+```
+
+Then "When should I leave for the airport?" starts from your Home, and
+"from work to the gym" uses your saved Work and the favorite named Gym.
+Places are read only for the account that owns the key. A self-hosted
+server can set `MCP_HOME` and `MCP_WORK` ("lat,lon" or an address)
+instead. No MCP server can see your device's location: for "from here",
+the model passes coordinates it already has or asks you.
+
 ## Plain HTTP, no MCP client
 
 The full developer documentation (base URL, keys and limits, the error
@@ -88,7 +104,18 @@ checks off), so bind it to localhost when running it on your machine:
 | `get_cameras(center?, route?, radius_km?, limit?)` | Roadside camera snapshots, each verified live before it is returned (offline placeholder frames are filtered by image freshness) |
 | `get_road_signs(route?, center?, radius_km?)` | What changeable message signs are displaying right now, verbatim |
 | `rank_routes(by?, limit?)` | All 17 corridors ranked by live events or measured congestion, with reasons; answers "what are the busiest routes right now" |
-| `get_nearby_events(center, radius_km?, kinds?)` | Live road events near a point across every covered state, 37 states, not just California (California's own feeds are included); the tool for locations outside California or near a state border |
+| `get_nearby_events(center or place, radius_km?, kinds?)` | Live road events near a point across every covered state, 37 states, not just California (California's own feeds are included), plus speed and red-light cameras; the tool for locations outside California or near a state border |
+| `plan_trip(origin, destination, depart_at?, preference?)` | One drive between any two US places: drive time with traffic for that departure, alternatives, everything on the route in mile order, alerts and the arrival forecast |
+| `best_time_to_go(origin, destination, day?, earliest?, latest?, arrive_by?)` | Up to 16 departures compared on drive time, arrival weather and how often incidents start on the route that hour; a pick and the full curve |
+| `find_place(query, near?, limit?)` | What a typed place resolves to, with alternatives |
+| `get_weather(place or center, hours?)` | NWS alerts and the hourly forecast, with driving hazards flagged |
+| `get_traffic(place, center or points)` | Live speed against free-flow around a point |
+| `get_area_history(place or center, radius_km?, days?)` | When incidents usually happen near a place, by hour and day, from the event archive |
+| `get_my_places()` | Your Home, Work, favorites and recent destinations (needs an API key) |
+| `get_coverage()` | Which states and feeds are covered |
+
+Every trip tool takes `"home"`, `"work"` or a saved place's name, and a
+trip with no origin starts from Home.
 
 Parameter notes: `center` is `"lat,lon"`; `radius_km` caps at 160 on
 `get_nearby_events`; `get_cameras` returns at most 10 verified cameras
