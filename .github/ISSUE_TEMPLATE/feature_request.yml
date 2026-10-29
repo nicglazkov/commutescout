@@ -21,8 +21,10 @@ body:
     attributes:
       label: Which part of CommuteScout?
       options:
-        - Web app (map / planner / assistant)
-        - Watch areas & alerts
-        - MCP server / tools
-        - Data sources
+        - Web app (map, trip planning, assistant)
+        - Watch areas and alerts
+        - MCP server
+        - REST API
+        - Plugins and Flare
+        - Data sources and coverage
         - Other
