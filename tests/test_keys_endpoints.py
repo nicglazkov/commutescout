@@ -81,3 +81,20 @@ def test_settings_pane_has_the_keys_card_once():
     assert "async function renderKeys()" in WATCH_JS
     assert "api('/api/keys', { method: 'POST'," in WATCH_JS
     assert "if ($('keycard')) { $('keycard').hidden = false; renderKeys(); }" in WATCH_JS
+
+
+def test_keys_list_reports_todays_usage(keys):
+    from datetime import UTC, datetime
+    c = TestClient(_app())
+    c.post("/api/keys", json={"name": "a"}, headers=auth())
+    usage = c.get("/api/keys", headers=auth()).json()["usage"]
+    today = datetime.now(UTC).date().isoformat()
+    assert usage == {"day": today, "requests": 0, "limit": 2000, "as_of": None}
+    keys.usage["sam"] = {"day": today, "requests": 1284, "limit": 2000,
+                         "tier": "free", "updated_at": "2026-10-29T15:41:00+00:00"}
+    body = c.get("/api/keys", headers=auth()).json()
+    assert body["usage"]["requests"] == 1284 and body["usage"]["as_of"]
+    assert body["keyless_daily"] == 10000
+    # Yesterday's count is not today's.
+    keys.usage["sam"]["day"] = "2000-01-01"
+    assert c.get("/api/keys", headers=auth()).json()["usage"]["requests"] == 0

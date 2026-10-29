@@ -53,6 +53,8 @@ from ca_roads_demo import (
     event_status,
     flare_sources,
     freshness,
+    lanecount,
+    leavelater,
     mapfiles,
     nav,
     roadsnap,
@@ -174,6 +176,9 @@ PAID_PER_CLIENT_DAILY = {
     # The speedometer's posted limit, once a minute at most while moving.
     "speedlimit": int(os.environ.get("SPEEDLIMIT_PER_CLIENT_DAILY", "200")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
+    # Leave later, in traffic routes (up to ten an ask; cached ones are
+    # free): about ten fresh asks a day.
+    "leavelater": int(os.environ.get("LEAVE_LATER_PER_CLIENT_DAILY", "100")),
     # A map corridor cut for a trip: tens of megabytes read upstream each.
     "map-extract": int(os.environ.get("MAP_EXTRACT_PER_CLIENT_DAILY", "20")),
 }
@@ -1143,6 +1148,7 @@ async def build_markers(box, want, *, geo_only: bool = False, near=None,
                     # Lets the popup offer "Show dispatch log" only when
                     # the feed actually shared timeline entries.
                     "log_n": len(i.details) + len(i.units),
+                    "lane_layout": lanecount.chp_layout(i),
                 })
     if "closure" in want:
         # One marker per stretch: Caltrans lists each scheduled window
@@ -1175,6 +1181,7 @@ async def build_markers(box, want, *, geo_only: bool = False, near=None,
                 "dir": (c.direction or "").strip() or None,
                 "route": c.route, "county": c.county,
                 "lanes": lcs_feed.lanes_summary(c),
+                "lane_layout": lanecount.lcs_layout(c),
                 "work": c.type_of_work or None,
                 "facility": c.facility or None,
                 "delay_min": c.estimated_delay_minutes or None,
@@ -1305,6 +1312,7 @@ async def build_markers(box, want, *, geo_only: bool = False, near=None,
             road.client, box, want,
             budget_seconds=(feed_budget if feed_budget is not None
                             else 2.5 if ready0 < total0 else None)))
+    lanecount.text_layouts(markers)
     warm_ready, warm_total = states.warm_progress()
     # A whole-world response with almost nothing in it means the feed
     # layer is degraded (a starved connection pool once served only the
@@ -1449,6 +1457,106 @@ async def api_mapdata(request: Request):
                     headers=common)
 
 
+US_STATE_CODES = {
+    "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR",
+    "California": "CA", "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE",
+    "District of Columbia": "DC", "Florida": "FL", "Georgia": "GA", "Hawaii": "HI",
+    "Idaho": "ID", "Illinois": "IL", "Indiana": "IN", "Iowa": "IA", "Kansas": "KS",
+    "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
+    "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN", "Mississippi": "MS",
+    "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
+    "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
+    "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK",
+    "Oregon": "OR", "Pennsylvania": "PA", "Rhode Island": "RI",
+    "South Carolina": "SC", "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX",
+    "Utah": "UT", "Vermont": "VT", "Virginia": "VA", "Washington": "WA",
+    "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY",
+}
+
+
+def source_health(src: dict, now: datetime) -> dict:
+    """Add the fields the apps' data-source screen shows to one
+    /api/sources entry, in place: ``status`` (fresh, stale, down, live
+    for sources asked on demand, off when not configured), ``age_s``
+    since the last good copy, ``group`` (national or state) and
+    ``state_code``. Existing fields are left as they are."""
+    state = src.get("state") or ""
+    src["group"] = "national" if state == "Nationwide" else "state"
+    src["state_code"] = US_STATE_CODES.get(state)
+    src["age_s"] = None
+    if src.get("enabled") is False:
+        src["status"] = "off"
+        return src
+    if "ok" not in src:
+        src["status"] = "live"
+        return src
+    if src.get("as_of"):
+        with contextlib.suppress(ValueError):
+            src["age_s"] = max(0, int((now - datetime.fromisoformat(
+                src["as_of"])).total_seconds()))
+    limit = src.get("stale_after_s") or freshness.STATE_STALE_S
+    if not src.get("ok"):
+        src["status"] = "down"
+    elif src.get("stale") or (src["age_s"] is not None and src["age_s"] > limit):
+        src["status"] = "stale"
+    else:
+        src["status"] = "fresh"
+    return src
+
+
+def _lat_lon(raw: str | None) -> tuple[float, float] | None:
+    try:
+        lat, lon = (float(x) for x in (raw or "").split(","))
+    except ValueError:
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    return lat, lon
+
+
+async def api_leave_later(request: Request):
+    """Drive time if you leave now or at each ten-minute mark in the
+    next hour, and the departure that saves the most (the trip screen's
+    leave-later bars). ``from`` and ``to`` are "lat,lon"; optional
+    ``window`` (minutes, 20 to 90) and ``step`` (5, 10, 15 or 30)."""
+    q = request.query_params
+    origin, dest = _lat_lon(q.get("from")), _lat_lon(q.get("to"))
+    if not origin or not dest:
+        return JSONResponse({"error": "from and to must be lat,lon"}, status_code=400)
+    try:
+        window = int(q.get("window") or leavelater.WINDOW_MIN)
+        step = int(q.get("step") or leavelater.STEP_MIN)
+    except ValueError:
+        return JSONResponse({"error": "window and step are minutes"}, status_code=400)
+    if not (20 <= window <= leavelater.MAX_WINDOW_MIN) or step not in (5, 10, 15, 30):
+        return JSONResponse({"error": "window is 20 to 90 minutes; step is 5, 10, 15 or 30"},
+                            status_code=400)
+    if window > step * (leavelater.MAX_SLOTS - 1):
+        return JSONResponse({"error": f"at most {leavelater.MAX_SLOTS} departures: "
+                                      "use a shorter window or a longer step"},
+                            status_code=400)
+    if leavelater.trip_km(origin, dest) > leavelater.MAX_TRIP_KM:
+        return JSONResponse({"error": f"trips up to {leavelater.MAX_TRIP_KM} km only"},
+                            status_code=400)
+    whens = leavelater.slots(datetime.now(UTC), window, step)[:leavelater.MAX_SLOTS]
+    who = f"leavelater:{client_key(request)}"
+    limit = PAID_PER_CLIENT_DAILY["leavelater"]
+    # Quick refusal when the ask cannot be paid for at all. The real
+    # charge is per route, at the moment of each cache miss (below).
+    if leavelater.uncached(origin, dest, whens) and (
+            paid_use.used(who) >= limit or leavelater.budget_left() < 1):
+        return _daily_cap_response()
+    charge = leavelater.make_charge(lambda: paid_use.allow(who, limit))
+    body = await leavelater.plan(tools.get_road().client, origin, dest, whens=whens,
+                                 charge=charge)
+    if body is None and charge.refused:
+        return _daily_cap_response()
+    if body is None:
+        return JSONResponse({"error": "traffic routing is unavailable right now"},
+                            status_code=503, headers={"Retry-After": "600"})
+    return JSONResponse(body, headers={"Cache-Control": "no-store"})
+
+
 async def api_sources(request: Request):
     """Live health of every data source, for the topbar status panel.
     All feeds are cache-backed, so this is cheap to serve."""
@@ -1459,23 +1567,26 @@ async def api_sources(request: Request):
         road.road_weather(),
     )
 
-    def one(name: str, agency: str, r) -> dict:
+    limits = dict(freshness.CALIFORNIA.values())
+
+    def one(name: str, agency: str, r, method: str) -> dict:
         return {
             "name": name, "agency": agency, "state": "California",
             "ok": bool(r.ok), "stale": bool(getattr(r, "stale", False)),
             "as_of": r.data_as_of.isoformat() if r.data_as_of else None,
             "count": len(r.records),
             "error": (str(r.error)[:160] if r.error else None),
+            "stale_after_s": limits.get(method),
         }
 
     sources = [
-        one("Incidents", "CHP", chp),
-        one("Lane closures", "Caltrans LCS", lcs),
-        one("Chain controls", "Caltrans", cc),
-        one("Wildfires", "WFIGS + CAL FIRE", wf),
-        one("Cameras", "Caltrans CCTV", cams),
-        one("Message signs", "Caltrans CMS", signs),
-        one("Road weather", "Caltrans RWIS", wx),
+        one("Incidents", "CHP", chp, "incidents"),
+        one("Lane closures", "Caltrans LCS", lcs, "lane_closures"),
+        one("Chain controls", "Caltrans", cc, "chain_controls"),
+        one("Wildfires", "WFIGS + CAL FIRE", wf, "wildfires"),
+        one("Cameras", "Caltrans CCTV", cams, "cameras"),
+        one("Message signs", "Caltrans CMS", signs, "message_signs"),
+        one("Road weather", "Caltrans RWIS", wx, "road_weather"),
         {"name": "Weather alerts", "agency": "NWS", "state": "Nationwide",
          "on_demand": True},
         {"name": "Earthquakes", "agency": "USGS", "state": "Nationwide",
@@ -1490,8 +1601,16 @@ async def api_sources(request: Request):
          "enabled": bool(os.environ.get("NVROADS_API_KEY"))},
     ]
     sources.extend(states.source_status())
+    now = datetime.now(UTC)
+    summary = {"fresh": 0, "stale": 0, "down": 0, "live": 0, "off": 0}
+    for src in sources:
+        source_health(src, now)
+        summary[src["status"]] += 1
+    summary["states"] = len({s["state_code"] for s in sources
+                             if s.get("state_code") and s["status"] != "off"})
     return JSONResponse({
-        "checked_at": datetime.now(UTC).isoformat(),
+        "checked_at": now.isoformat(),
+        "summary": summary,
         "sources": sources,
     })
 
@@ -1535,6 +1654,7 @@ async def api_incident(request: Request):
                 # per unit: what the apps show without a copy of the
                 # shorthand table.
                 "dispatch": event_status.dispatch_log(i.details, i.units),
+                "lane_layout": lanecount.chp_layout(i),
                 "data_as_of": (chp.data_as_of.isoformat()
                                if chp.data_as_of else None),
             })
@@ -2376,6 +2496,9 @@ async def _prewarm() -> None:
         roadsnap.apply(tollprices.cached_toll_markers())
     with contextlib.suppress(Exception):
         roadsnap.start_worker(lambda: tools.get_road().client)
+    # Lane counts for lane drawings (CHP never gives one).
+    with contextlib.suppress(Exception):
+        lanecount.start_worker(lambda: tools.get_road().client)
 
 
 # Closure stretch geometry is owned entirely by roadsnap: mapdata
@@ -2605,6 +2728,7 @@ app = Starlette(
         Route("/api/admin/feedback", analytics.api_admin_feedback,
               methods=["GET"]),
         Route("/api/sources", api_sources, methods=["GET"]),
+        Route("/api/leave-later", api_leave_later, methods=["GET"]),
         Route("/privacy", privacy_page),
         Route("/terms", terms_page),
         Route("/pricing", site_pricing),

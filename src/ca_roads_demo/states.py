@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from ca_roads import lanes as lane_parse
 from ca_roads.cache import TTLCache
 
 NEC_URL = "https://nec-por.ne-compass.com/NEC.XmlDataPortal/api/c2c"
@@ -166,6 +167,12 @@ def _closure_cls(el) -> str:
     return "lane" if blocked else "other"
 
 
+def _lane_rows(el) -> list[dict]:
+    """NE Compass laneDetails attributes, in document order."""
+    return [{"type": d.get("type"), "status": d.get("status"), "index": d.get("index")}
+            for d in el.iter() if _strip_ns(d.tag) == "laneDetails"]
+
+
 def _parse_nec_bundle(data: bytes, code: str, agency: str) -> list[dict]:
     """One state's incidents, closures, signs, weather, and camera
     locations (cctvStatusData), as map markers."""
@@ -189,6 +196,7 @@ def _parse_nec_bundle(data: bytes, code: str, agency: str) -> list[dict]:
             "dir": _text(loc, "direction") or None,
             "reported": _nec_reported(inc),
             "detail": _text(inc, "desc")[:300] or None,
+            "lane_layout": lane_parse.from_lane_details(_lane_rows(inc)),
         })
 
     for clo in _iter_records(data, "laneClosure"):
@@ -206,6 +214,7 @@ def _parse_nec_bundle(data: bytes, code: str, agency: str) -> list[dict]:
             "county": _text(loc, "county"), "src": agency,
             "lanes": None, "work": None, "facility": None,
             "delay_min": None, "since": None, "until": None,
+            "lane_layout": lane_parse.from_lane_details(_lane_rows(clo)),
         }
         end = clo.find(".//{*}endLocation")
         if end is not None:
@@ -403,6 +412,7 @@ def _parse_ia_wzdx(payload: dict, src: str = "Iowa DOT",
             "county": None, "src": src,
             "dir": direction or None,
             "lanes": None,
+            "lane_layout": lane_parse.from_wzdx(props.get("lanes")),
             "work": (props.get("types_of_work") or [{}])[0].get("type_name")
                     if props.get("types_of_work") else None,
             "facility": None, "delay_min": None,
@@ -1077,7 +1087,8 @@ async def _fetch_co(client) -> dict:
         m2 = {
             "kind": "lane_closure", "lat": lat, "lon": lon, "cls": cls,
             "label": (label or p.get("type") or "Roadwork")[:220],
-            "route": p.get("routeName"), "src": "CDOT"}
+            "route": p.get("routeName"), "src": "CDOT",
+            "lane_layout": lane_parse.from_cdot(p.get("laneImpacts"))}
         geom2 = f.get("geometry") or {}
         pts2 = geom2.get("coordinates") or []
         if (geom2.get("type") == "MultiPoint" and len(pts2) > 1
@@ -1896,13 +1907,14 @@ async def _fetch_fl(client) -> dict:
             markers.append({
                 "kind": "lane_closure", "lat": lat, "lon": lon,
                 "cls": cls, "label": (desc or etype)[:220],
-                "route": a.get("highway"), "src": "FDOT"})
+                "route": a.get("highway"), "src": "FDOT",
+                "lanes": lanes or None})
         else:
             markers.append({
                 "kind": "incident", "lat": lat, "lon": lon,
                 "type": etype or "Incident",
                 "label": (desc or etype or "Incident")[:220],
-                "src": "FDOT"})
+                "src": "FDOT", "lanes": lanes or None})
     for f in cams:
         geom, a = f.get("geometry") or {}, f.get("attributes") or {}
         lat, lon = geom.get("y"), geom.get("x")

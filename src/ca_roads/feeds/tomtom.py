@@ -133,6 +133,20 @@ def _route_summary(route: dict, with_points: bool) -> dict:
     return out
 
 
+def _route_key(origin, destination, depart_at, with_points) -> tuple:
+    return (round(origin[0], 4), round(origin[1], 4),
+            round(destination[0], 4), round(destination[1], 4),
+            depart_at or "now", with_points)
+
+
+def route_cached(origin, destination, depart_at: str | None = None, *,
+                 with_points: bool = False) -> bool:
+    """True when route_times would answer from its cache (no upstream
+    call), so a caller can charge budgets only for real requests."""
+    hit = _route_cache.get(_route_key(origin, destination, depart_at, with_points))
+    return bool(hit) and time.monotonic() - hit[0] < hit[1]
+
+
 async def route_times(
     client: httpx.AsyncClient,
     origin: tuple[float, float],
@@ -140,6 +154,7 @@ async def route_times(
     depart_at: str | None = None,
     *,
     with_points: bool = False,
+    charge=None,
 ) -> dict | None:
     """Drive time from origin to destination leaving at ``depart_at``
     (ISO 8601 with a UTC offset; None means now), or None.
@@ -153,13 +168,15 @@ async def route_times(
     key = api_key()
     if not key:
         return None
-    ck = (round(origin[0], 4), round(origin[1], 4),
-          round(destination[0], 4), round(destination[1], 4),
-          depart_at or "now", with_points)
+    ck = _route_key(origin, destination, depart_at, with_points)
     now = time.monotonic()
     hit = _route_cache.get(ck)
     if hit and now - hit[0] < hit[1]:
         return hit[2]
+    # A caller with its own budgets pays here, on the real cache miss,
+    # so nothing upstream happens unpaid; refused means no answer.
+    if charge is not None and not charge():
+        return None
     if not UPSTREAM.allow("tomtom-route", TOMTOM_ROUTE_DAILY):
         return None
     locs = f"{origin[0]},{origin[1]}:{destination[0]},{destination[1]}"

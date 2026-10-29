@@ -134,3 +134,35 @@ def test_store_outage_is_a_503_not_a_free_pass():
                           resolver=apikeys.KeyResolver(Broken()))
     r = TestClient(mw).get("/v1/tools/x", headers={"X-API-Key": "cs_live_deadbeef_x"})
     assert r.status_code == 503 and r.json()["error"]["code"] == "keys_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_usage_is_mirrored_for_the_account_page(stack, monkeypatch):
+    import asyncio
+    store, mw, c = stack
+    full, _ = await apikeys.create_key(store, "sam", "sam@example.com", "t")
+    mw.usage.flush_s = 0
+    for _ in range(3):
+        assert c.get("/v1/tools/x", headers={"X-API-Key": full}).status_code == 200
+    for _ in range(20):
+        if (store.usage.get("sam") or {}).get("requests") == 3:
+            break
+        await asyncio.sleep(0.01)
+    rec = await store.get_usage("sam")
+    assert rec["limit"] == 2000 and rec["tier"] == "free" and rec["updated_at"]
+    assert rec["requests"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_usage_mirror_throttles_and_keeps_the_latest():
+    import asyncio
+    store = apikeys.MemoryKeyStore()
+    mirror = apikeys.UsageMirror(lambda: store, flush_s=0.05)
+    mirror.note("sam", "2026-10-29", 1, 2000, "free")
+    await asyncio.sleep(0.01)
+    assert store.usage["sam"]["requests"] == 1
+    mirror.note("sam", "2026-10-29", 2, 2000, "free")
+    mirror.note("sam", "2026-10-29", 3, 2000, "free")
+    assert store.usage["sam"]["requests"] == 1      # inside the window
+    await asyncio.sleep(0.1)
+    assert store.usage["sam"]["requests"] == 3      # one write, the latest

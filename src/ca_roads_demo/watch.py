@@ -36,7 +36,7 @@ from starlette.responses import JSONResponse
 
 from ca_roads import apikeys
 from ca_roads.feeds import lcs as lcs_feed
-from ca_roads_demo import staticmap_sig
+from ca_roads_demo import lanecount, staticmap_sig
 from ca_roads_mcp import server as tools
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "ca-roads-mcp")
@@ -654,6 +654,14 @@ def _fcm_access_token() -> str | None:
         return None
 
 
+def _fcm_value(v) -> str:
+    """FCM data values must be strings: objects ride as compact JSON
+    (event_lane_layout), scalars as their text."""
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, separators=(",", ":"))
+    return str(v)
+
+
 def _fcm_send(token: str, platform: str, payload: dict) -> bool:
     """One message to one phone; raises _GonePush when the token is dead."""
     bearer = _fcm_access_token()
@@ -665,8 +673,8 @@ def _fcm_send(token: str, platform: str, payload: dict) -> bool:
                          "body": payload.get("body") or ""},
         # FCM data values must be strings.
         "data": {"url": str(payload.get("url") or ""),
-                 **{f"event_{k}": str(v) for k, v in (payload.get("event") or {}).items()
-                    if v is not None}},
+                 **{f"event_{k}": _fcm_value(v)
+                    for k, v in (payload.get("event") or {}).items() if v is not None}},
         "android": {"priority": "high", "notification": {"channel_id": "alerts"}},
         "apns": {"payload": {"aps": {"sound": "default"}}},
     }
@@ -808,8 +816,13 @@ async def api_keys_list(request: Request) -> JSONResponse:
     store = apikeys.get_key_store()
     keys = [apikeys.public_view(k["id"], k) for k in await store.list_for(claims["sub"])]
     keys.sort(key=lambda k: k.get("created_at") or "", reverse=True)
+    # The account's tier is its best active key's (limits are per account).
+    tiers = [k["tier"] for k in keys if not k["revoked"]]
+    tier = "pro" if "pro" in tiers else apikeys.DEFAULT_TIER
     return JSONResponse({"keys": keys, "max_active": apikeys.MAX_KEYS_PER_ACCOUNT,
-                         "tiers": {t: v["daily"] for t, v in apikeys.TIERS.items()}})
+                         "tiers": {t: v["daily"] for t, v in apikeys.TIERS.items()},
+                         "usage": await apikeys.usage_today(store, claims["sub"], tier),
+                         "keyless_daily": int(os.environ.get("MCP_PER_CLIENT_DAILY", "10000"))})
 
 
 async def api_keys_create(request: Request) -> JSONResponse:
@@ -1344,6 +1357,9 @@ async def _collect_events() -> list[dict]:
                 "units": [list(u) for u in i.units],
                 "location_desc": i.location_desc,
             },
+            # Rides the push so the alert can draw the lanes; never
+            # archived (it is derived, and can change as lookups land).
+            "lane_layout": lanecount.chp_layout(i),
         })
     for c in lcs.records:
         lanes = lcs_feed.lanes_summary(c)
@@ -1361,6 +1377,7 @@ async def _collect_events() -> list[dict]:
                 "facility": c.facility or None,
                 "delay_min": c.estimated_delay_minutes or None,
             },
+            "lane_layout": lanecount.lcs_layout(c),
         })
     for c in cc.records:
         if c.status and c.status != "R-0":
@@ -1851,6 +1868,7 @@ async def run_check_cycle() -> dict:
                                 "body": event["body"],
                                 "watch": watch.get("name", "Watch"),
                                 "sent_at": int(time.time()),
+                                "lane_layout": event.get("lane_layout"),
                             },
                         })
                         stats["pushes"] += sent
