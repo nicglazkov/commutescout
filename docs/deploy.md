@@ -9,6 +9,12 @@ The MCP server runs as a single Cloud Run service using the streamable
 HTTP transport. Scale-to-zero is fine: cold starts are a few seconds
 and the data is fetched fresh anyway.
 
+The commands below document the hosted deployment, so they name its
+project, `ca-roads-mcp`, and its service account. When you self-host,
+substitute your own project ID everywhere `ca-roads-mcp` appears as a
+project, and your own project number in the Compute Engine service
+account.
+
 ## Runtime identity (least privilege)
 
 Both Cloud Run services run as a dedicated service account
@@ -50,9 +56,15 @@ gcloud projects remove-iam-policy-binding ca-roads-mcp   --member "serviceAccoun
 
 ```sh
 gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
+  --project YOUR_PROJECT_ID
 ```
+
+Pass `--project` on every `gcloud` command instead of running
+`gcloud config set project`. The global gcloud config is shared by
+every shell on the machine, so a project set there can send a deploy to
+the wrong place. The commands on this page omit `--project` for
+brevity; add it to each one that does not show it.
 
 ## Deploy
 
@@ -60,12 +72,14 @@ Cloud Build does the container build, so no local Docker is needed:
 
 ```sh
 gcloud run deploy ca-roads-mcp \
+  --project ca-roads-mcp \
   --source . \
   --region us-west1 \
   --allow-unauthenticated \
   --service-account ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com \
   --memory 1Gi \
   --cpu 1 \
+  --cpu-boost \
   --min-instances 0 \
   --max-instances 1 \
   --concurrency 40
@@ -81,6 +95,7 @@ silently double the per-IP and daily-dollar caps.
 
 ```sh
 gcloud run deploy ca-roads-demo \
+  --project ca-roads-mcp \
   --source . \
   --command ca-roads-demo \
   --region us-west1 \
@@ -88,6 +103,7 @@ gcloud run deploy ca-roads-demo \
   --service-account ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com \
   --memory 4Gi \
   --cpu 1 \
+  --cpu-boost \
   --no-cpu-throttling \
   --min-instances 1 \
   --max-instances 1 \
@@ -124,24 +140,47 @@ code change, set `REQUIRE_CLOUDFLARE=0`.
 
 ## Cold starts
 
-The MCP service runs with `--min-instances 0` (scale to zero); the
-demo runs with `--min-instances 1` so visitors never pay a cold start,
-at roughly five to ten dollars a month of idle time.
-Two mitigations ship by default: `--cpu-boost` (faster container boot,
-free) and a startup prewarm in the demo that fills all feed caches in
-the background while the page is still loading. If the remaining first
-load bothers you, `--min-instances 1` on the demo removes cold starts
-entirely at roughly ten to fifteen dollars a month of idle instance
-time.
+The MCP service runs with `--min-instances 0` (scale to zero), so its
+first request after an idle spell waits a few seconds for a cold start.
+The demo runs with `--min-instances 1` and `--no-cpu-throttling`, so
+visitors never wait for one. That instance is always on and bills for
+idle time, roughly seventy dollars a month at list price for the 1 vCPU
+and 4 GiB above. Lower `--min-instances` to 0 to trade that cost for
+cold starts.
+
+Both deploy commands pass `--cpu-boost`, which gives a starting
+container extra CPU so it boots faster, at no extra charge. The demo
+also prewarms at startup: it fills every feed cache in the background
+while the first page loads.
 
 ## Notes
 
-- The MCP service needs only the optional `STADIA_API_KEY` (network
-  geocoding); every upstream data feed is free and public.
-- Rate limiting is per-IP in process (token bucket, 20 burst / 30 per
-  minute sustained), which is also why `--max-instances 1` matters.
-- Costs: requests are tiny and infrequent; with scale-to-zero this should
-  stay pennies per day.
+- The MCP service runs with no keys at all: every upstream data feed it
+  needs is free and public. Optional settings add features:
+  - The trip tools (`plan_trip`, `best_time_to_go`) use
+    `STADIA_API_KEY` for routing and geocoding and `TOMTOM_API_KEY` for
+    live traffic and drive times by departure time.
+  - History (`get_area_history`, and the "what usually happens here"
+    part of the trip tools) needs the runtime service account to hold
+    `roles/bigquery.jobUser` and `roles/bigquery.dataEditor`. See
+    [MCP trip tools](#mcp-trip-tools).
+  - API keys and saved places ("from home") need Firestore and
+    `roles/datastore.user`. See [Watch areas](#watch-areas-optional-demo-service)
+    for the Firestore setup.
+- Requests without an API key are limited per client address, in
+  process: a token bucket of 20 requests burst and 0.5 a second
+  (about 30 a minute) sustained, plus `MCP_PER_CLIENT_DAILY` requests a
+  UTC day (default 10,000). This is why `--max-instances 1` matters.
+- Requests with an API key are limited per account instead, by the
+  key's tier (`TIERS` in `src/ca_roads/apikeys.py`):
+
+  | Tier | Requests a day | Burst | Sustained |
+  |---|---|---|---|
+  | `free` (the default) | 2,000 | 30 | 0.5 a second |
+  | `pro` (set by an admin) | 10,000 | 60 | 2 a second |
+
+- Costs: requests are tiny and infrequent; with scale-to-zero the MCP
+  service stays at pennies a day.
 
 ## Verify
 
@@ -163,16 +202,19 @@ EOF
 
 ## Environment variables (demo service)
 
+Every `*_PER_CLIENT_DAILY` and `*_DAILY` variable is a cap with a safe
+default, so you only set one to raise or lower that limit.
+
 | Variable | Purpose | Default |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Model access; mount from Secret Manager | required |
 | `TELEMETRY_SALT` | Random 32+ chars; salts the daily visitor hashes so they can't be brute-forced back to IPs | required in production |
-| `DEMO_MODEL` | Answering model | `claude-sonnet-5` |
+| `DEMO_MODEL` | Answering model | `claude-sonnet-5-5` |
 | `DEMO_DAILY_DOLLARS` | Global daily model-spend cap | `1.5` |
 | `DEMO_PER_IP_DAILY` | Questions per visitor per day | `20` |
 | `SNAPSHOT_BUCKET` | GCS bucket the map snapshots publish to. Unset disables the publisher and the map falls back to `/api/mapdata` | unset |
 | `APP_VERSION` | Fallback version for a source checkout that was never installed; the image reads its own package version, so leave it unset there | unset |
-| `ROUTE_PER_CLIENT_DAILY` | Server-side route plans per visitor per day (`/api/route`); the page falls back to keyless routing past it | `300` |
+| `ROUTE_PER_CLIENT_DAILY` | Server-side route plans per visitor per day (`/api/route`); the page falls back to keyless routing past it | `100` |
 | `STADIA_ROUTE_DAILY` | Global daily cap on server-side route plans (20 Stadia credits each) | `200` |
 | `MAP_EXTRACT_DAILY` | Global daily cap on map corridor cuts (`POST /api/map/extract`), each tens of megabytes of egress | `300` |
 | `STADIA_LIMIT_DAILY` | Global daily cap on posted speed limit lookups (`/api/speedlimit`, 20 credits each) | `200` |
@@ -183,6 +225,9 @@ EOF
 | `NAV_PER_CLIENT_DAILY` | App navigation routes per client per day | `150` |
 | `STATICMAP_SIGNING_KEY` | Random 32+ chars; signs the `/api/staticmap` URLs minted for alert emails and trip pages so nobody else can spend map tiles through that endpoint. Unset disables the check. Rotating it breaks the images in emails already sent | unset |
 | `MCP_PER_CLIENT_DAILY` | Requests per client address per UTC day on the MCP service, on top of the per-second bucket. Hosted MCP clients can share an egress address, so keep this well above one office's daily use | `10000` |
+| `ARCHIVE_ENABLED` | Appends event lifecycle rows and toll price changes to BigQuery each checker cycle. Set `0` or `false` to turn both off | `1` |
+| `ARCHIVE_DATASET` | BigQuery dataset that holds the event archive and the `toll_prices` table; the MCP history tools read the same name | `events` |
+| `ARCHIVE_TABLE` | Archive table inside `ARCHIVE_DATASET`; the MCP history tools read the same name | `event_log` |
 
 ## Map snapshots (optional, demo service)
 
@@ -304,10 +349,14 @@ rules):
 
 ```sh
 # once, and whenever firestore.rules changes
-gcloud firestore databases update --project ca-roads-mcp   # or via the Firebase Rules API / console: publish firestore.rules
+firebase deploy --only firestore:rules --project <project>
 ```
-The repo's `firestore.rules` is the source of truth; it is currently
-released to `cloud.firestore`.
+The Firebase CLI reads the rules path from `firebase.json`, which the
+repo does not ship, so create one at the repo root first:
+`{"firestore": {"rules": "firestore.rules"}}`.
+Or paste `firestore.rules` into the Rules tab of the Firestore page in
+the Firebase console and select **Publish**. The repo's
+`firestore.rules` is the source of truth.
 
 ## Optional data-source keys (both services)
 
@@ -331,9 +380,9 @@ gcloud secrets add-iam-policy-binding tomtom-api-key \
 
 # attach to a service; --update-secrets adds to what is mounted, while
 # --set-secrets would drop every secret not listed
-gcloud run services update ca-roads-mcp --region us-west1 \
+gcloud run services update ca-roads-mcp --project ca-roads-mcp --region us-west1 \
   --update-secrets TOMTOM_API_KEY=tomtom-api-key:latest,BAY511_API_KEY=bay511-api-key:latest,NVROADS_API_KEY=nvroads-api-key:latest
-gcloud run services update ca-roads-demo --region us-west1 \
+gcloud run services update ca-roads-demo --project ca-roads-mcp --region us-west1 \
   --update-secrets TOMTOM_API_KEY=tomtom-api-key:latest,BAY511_API_KEY=bay511-api-key:latest,NVROADS_API_KEY=nvroads-api-key:latest
 ```
 
@@ -370,7 +419,9 @@ fallback:
 
 `plan_trip`, `best_time_to_go` and `get_area_history` read the event
 archive in BigQuery for "what usually happens here". The runtime service
-account needs to run query jobs:
+account needs `roles/bigquery.dataEditor` on the archive (granted in
+[Runtime identity](#runtime-identity-least-privilege)) and the right to
+run query jobs:
 
 ```sh
 gcloud projects add-iam-policy-binding ca-roads-mcp \
@@ -378,7 +429,10 @@ gcloud projects add-iam-policy-binding ca-roads-mcp \
   --role="roles/bigquery.jobUser"
 ```
 
-Without it the tools still answer and say history is unavailable.
+Without these roles the tools still answer and say history is
+unavailable. Routing in `plan_trip` uses `STADIA_API_KEY`, and drive
+times by departure time use `TOMTOM_API_KEY`; without them the tools
+answer with what they have.
 Daily caps, all in-process: `MCP_STADIA_ROUTE_DAILY` (default 300),
 `TOMTOM_ROUTE_DAILY` (500) and `MCP_HISTORY_DAILY` (300).
 

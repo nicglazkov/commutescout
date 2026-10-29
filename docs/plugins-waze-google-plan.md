@@ -1,13 +1,17 @@
-# Plan: an unofficial Waze (and Google) plugin for Flare
+# Design notes: the Waze relay plugin
 
-A rough plan and wireframe for pulling crowd-sourced reports from Waze
-(and what is and is not possible from Google Maps) into CommuteScout as
-a Flare plugin. It is written so the plugin can be built as a separate
-service later, without touching the map, the apps or the backend, which
-already speak Flare. Reference implementation for the shape of the work:
-highway-radar-sabre-plus, which does the same for a radar app.
+These are the design notes written before the Waze relay plugin was
+built. They planned how to pull crowd-sourced reports from Waze (and
+what was and was not possible from Google Maps) into CommuteScout as a
+Flare plugin. The plan kept the plugin a separate service, so building
+it touched neither the map, the apps nor the backend, which already
+spoke Flare. The reference implementation for the shape of the work
+was highway-radar-sabre-plus, which did the same for a radar app.
 
-## Now live
+The plugin now exists. The next section says what shipped and where it
+differs from the plan; the rest of the page is the original plan.
+
+## What shipped
 
 The plugin is built, deployed and listed. It is
 [`waze-relay`](https://github.com/nicglazkov/commutescout-plugins/tree/main/waze-relay), running on Cloud

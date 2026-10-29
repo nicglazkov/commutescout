@@ -1,5 +1,9 @@
 # Multi-state expansion audit
 
+> **Historical note.** This page is a research snapshot from July 2026
+> and is no longer updated. CommuteScout now covers 37 states. For what
+> each state has today, see [state-coverage.md](state-coverage.md).
+
 Researched 2026-07-18 across all 50 states plus DC; statuses re-probed
 live and updated 2026-07-20. Goal: rank every state by how turn-key
 its road data is against the California baseline (live incidents,

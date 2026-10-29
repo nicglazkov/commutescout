@@ -6,15 +6,26 @@ and the workflow below keeps it that way.
 
 ## Dev setup
 
+You need Python 3.12 or later (`requires-python` in `pyproject.toml`).
+CI runs on Python 3.12 and installs with pip, pinned by
+`constraints.txt`. Use the same command to match it:
+
 ```sh
 python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
+pip install -e ".[dev,demo]" -c constraints.txt
 pytest        # fixture-based, no network access needed
 ruff check .
 ```
 
+You can use [uv](https://docs.astral.sh/uv/) instead, for example
+`uv run pytest`. uv writes a local `uv.lock`, which is gitignored:
+`constraints.txt` is the only pin file the repo and CI use, so bump a
+version there, not in `uv.lock`.
+
 The test suite runs entirely from recorded fixtures. If your change
 needs the network to test, that's a sign it needs a fixture instead.
+Some tests read the built site in `site/out`; they skip with a reason
+when it is missing. Build the site (below) to run them.
 
 Use the stdio transport for local MCP work (`ca-roads-mcp`). The http
 transport is tuned for Cloud Run and binds 0.0.0.0 with host-header
@@ -25,6 +36,25 @@ Running the web app locally: `pip install -e ".[demo]"` then
 `ca-roads-demo` with `ANTHROPIC_API_KEY` set. Watch areas, trips, and
 analytics need GCP services and will 500 locally; the map, planner,
 and assistant work without them.
+
+## Working on site/
+
+`site/` holds the commutescout.com marketing and docs pages. It is a
+Next.js static export: `npm run build` writes plain HTML to `site/out`,
+and the Python web app (`src/ca_roads_demo/app.py`) serves those files.
+There is no Node server in production. CI uses Node 22.
+
+```sh
+cd site
+npm ci              # install the locked dependencies
+npm run dev         # local dev server with hot reload
+npm run lint        # ESLint; CI runs it
+npx tsc --noEmit    # type check
+npm run build       # static export to site/out
+```
+
+See [site/README.md](site/README.md) for the page list and where the
+counts live.
 
 ## Pull requests
 

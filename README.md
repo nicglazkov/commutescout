@@ -111,7 +111,8 @@ what is missing rather than showing an empty region.
 
 **California is the deepest.** It is the only state with CHP dispatch
 logs, per-lane closure detail, chain-control levels, and CAL FIRE
-perimeters. The assistant and the MCP tools answer for every covered
+perimeters (Washington's mountain passes report their restrictions
+too). The assistant and the MCP tools answer for every covered
 state, but a California question gets that richer detail, while
 elsewhere they answer from the normalized state DOT feeds.
 
@@ -126,19 +127,44 @@ Open **[commutescout.com](https://commutescout.com)**. Nothing to run,
 nothing to sign up for, feeds already warm. The phone apps are in
 [commutescout-app](https://github.com/nicglazkov/commutescout-app).
 
-Watch areas and the assistant are free on the hosted app; watch-area
-accounts need approval for now, because each one polls on your behalf.
+Watch areas and the assistant are free on the hosted app. Watch areas
+need an approved account for now (an invite code, or approval on
+request), because each area polls the feeds on your behalf.
 
-### Add to Claude
+### Connect your AI assistant
 
-Give Claude live road data with a custom connector:
+The MCP server is hosted, public, and needs no key:
 
 ```
 https://mcp.commutescout.com/mcp
 ```
 
-See it on the site: [commutescout.com/mcp](https://commutescout.com/mcp).
-Local stdio setup and the full tool reference: [docs/mcp.md](docs/mcp.md).
+In Claude Code:
+
+```sh
+claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp
+```
+
+In claude.ai or Claude Desktop, add it under Customize > Connectors >
+Add custom connector. Step-by-step setup for Cursor, VS Code, Windsurf,
+Codex, Gemini CLI, ChatGPT and other clients is at
+[commutescout.com/mcp](https://commutescout.com/mcp#connect), and the
+same steps as plain text for agents are at
+[commutescout.com/llms.txt](https://commutescout.com/llms.txt).
+
+An optional API key (Settings on [the live map](https://commutescout.com/map),
+after sign-in) gives your client its own limits and lets "home", "work"
+and your saved places work in every trip tool. The tool reference is in
+[docs/mcp.md](docs/mcp.md).
+
+### Use the REST API
+
+Every MCP tool is also a plain HTTP GET at
+`https://mcp.commutescout.com/v1/tools/{tool}`, with an interactive
+reference at [mcp.commutescout.com/v1/docs](https://mcp.commutescout.com/v1/docs)
+and an [OpenAPI document](https://mcp.commutescout.com/v1/openapi.json).
+Keys, limits and the error envelope:
+[commutescout.com/developers](https://commutescout.com/developers).
 
 ### Running it yourself
 

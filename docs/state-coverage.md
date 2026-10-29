@@ -1,9 +1,9 @@
 # State coverage matrix
 
 What each live state actually has on the map, and why the gaps exist.
-Updated 2026-07-20 (v2.32.0). See
-[state-expansion-audit.md](state-expansion-audit.md) for states not yet
-integrated.
+Updated 2026-10-29 (v2.131.0). CommuteScout covers the 37 states
+below. [state-expansion-audit.md](state-expansion-audit.md) is the
+July 2026 research snapshot that led to most of them.
 
 Legend: Y = live on the map, "-" = the state's public feeds do not
 offer it keylessly (reason noted), (wz) = closures come from the

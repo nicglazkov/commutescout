@@ -10,7 +10,16 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://mcp.commutescout.com/mcp"
+      "url": "https://mcp.commutescout.com/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Optional CommuteScout API key as 'Bearer cs_live_...', from Settings on commutescout.com/map. Enables saved places (home, work) and per-key limits.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
     }
-  ]
+  ],
+  "websiteUrl": "https://commutescout.com/mcp"
 }

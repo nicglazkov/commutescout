@@ -190,10 +190,16 @@ export default function DevelopersPage() {
           </h1>
           <p className="text-white/70 mt-4 max-w-2xl text-balance md:text-lg">
             One REST API and one MCP server over the same live data as the map:
-            incidents, closures, chain controls, wildfires, cameras and message
-            signs, California in the most depth and live events across every
-            covered state. This page is the whole contract. Nothing here needs
-            guessing.
+            trip planning and the best time to leave anywhere in the US, plus
+            incidents, closures, chain controls, wildfires, cameras, message
+            signs, traffic, weather and event history, California in the most
+            depth and live events across every covered state. This page is the
+            whole contract. Nothing here needs guessing. Connecting an assistant?
+            The{" "}
+            <Link href="/mcp#connect" prefetch={false} className="underline underline-offset-2 hover:text-white">
+              MCP setup for each client
+            </Link>{" "}
+            is one click away.
           </p>
           <div className="mt-8 max-w-xl">
             <CopyField value={`${API_ROOT}/tools/{tool}`} />
@@ -512,17 +518,24 @@ export default function DevelopersPage() {
           <H2 id="mcp">MCP server</H2>
           <p className="text-cs-ink/70 mt-4 text-balance">
             The same 18 tools for Claude and any other MCP client, over streamable
-            HTTP. Add it as a custom connector; no key is needed, and a key works the
-            same way as on {code("/v1")} when you want your own limits.
+            HTTP. No key is needed. A key works the same way as on {code("/v1")}: it
+            gives your client its own limits, and it lets {code('"home"')},{" "}
+            {code('"work"')} and your saved places work in every trip tool.
           </p>
           <div className="mt-5 max-w-xl">
             <CopyField value={MCP_URL} />
           </div>
           <p className="text-cs-ink/70 mt-5 text-balance">
-            Local stdio setup, the registry entry and the eval scorecard are on the{" "}
-            <Link href="/mcp" prefetch={false} className="text-cs-sky hover:underline">
+            Step-by-step setup for Claude Code, claude.ai, Cursor, VS Code,
+            Windsurf, Codex, Gemini CLI and ChatGPT, plus local stdio, the registry
+            entry and the eval scorecard, is on the{" "}
+            <Link href="/mcp#connect" prefetch={false} className="text-cs-sky hover:underline">
               MCP server page
             </Link>
+            . Agents can read the same steps as plain text at{" "}
+            <a href="/llms.txt" className="text-cs-sky hover:underline">
+              /llms.txt
+            </a>
             . The server is open source; the tool docstrings there are written for the
             model reading them and say the same things this page says.
           </p>

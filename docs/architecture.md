@@ -46,6 +46,33 @@ The layering is strict: the web app and the MCP server both sit on
 `ca_roads`, so a fix to a parser or cache benefits every surface at
 once.
 
+## The MCP request path
+
+The hosted MCP service at mcp.commutescout.com serves two surfaces
+from one tool registry:
+
+- `/mcp` is the MCP streamable HTTP transport, for MCP clients.
+- `/v1/tools/{name}` is the REST bridge: the same tools as plain
+  HTTP GET requests, with an OpenAPI document generated from the tools'
+  own schemas, so the two surfaces cannot drift.
+
+A request passes through these layers, outermost first:
+
+1. Security headers.
+2. The API-key middleware. A request with a valid key
+   (`Authorization: Bearer cs_live_...`) is limited by the key's tier
+   and carries the key's account, so tools can read that account's
+   saved places. An unknown or revoked key gets a 401; there is no
+   silent fallback to keyless.
+3. The per-address rate limiter, for requests without a key.
+4. The tool itself.
+
+The nationwide tools (the trip tools and `get_nearby_events`) read
+live data from the map snapshots that the web app publishes to
+data.commutescout.com, the same edge-cached files the map boots from.
+They fetch the feeds directly only when a snapshot is missing or stale.
+The California tools read the feed layer directly.
+
 ## Design choices worth knowing
 
 - **The map's read path never touches compute.** A background publisher
@@ -68,9 +95,12 @@ once.
   `visibilitychange`/`online` because browsers throttle hidden-tab
   timers, and soft-reloads itself when a deploy changes the payload
   schema out from under it.
-- **Everything is stateless and in-process.** The hosted demo runs a
-  single Cloud Run instance; every rate and cost guard lives in process
-  memory, which is why the service deploys with `--max-instances 1`.
+- **Request handling is stateless; the guards are in-process.** No
+  request depends on an earlier one. Every rate and cost guard lives in
+  process memory, which is why both services deploy with
+  `--max-instances 1`. Durable state lives outside the process:
+  Firestore holds accounts, API keys, saved places and watch areas, and
+  BigQuery holds the event archive and toll price history.
 - **Feeds fail loudly, serve quietly.** Upstream failures never blank a
   layer: the last good data is served, flagged stale, with the error
   attached and surfaced all the way to the UI and the MCP response.

@@ -1,11 +1,12 @@
 # Querying the event archive
 
-Every incident, closure, chain control, and wildfire statewide is
-archived to BigQuery as append-only lifecycle rows: `appear` when an
+Every incident, closure, chain control, and wildfire in all 37 covered
+states is archived to BigQuery as append-only lifecycle rows: `appear` when an
 event first shows up (full state in `payload`), `update` when something
 changes (only the new dispatch entries or changed fields), `clear` when
-it leaves the feed. Recording started 2026-07-12; dispatch-timeline
-payloads exist from 2026-07-18 (v2.25.0) onward.
+it leaves the feed. Recording started 2026-07-12 with California; each
+other state's events start from the day its feed joined the map.
+Dispatch-timeline payloads exist from 2026-07-18 (v2.25.0) onward.
 
 Console: <https://console.cloud.google.com/bigquery?project=ca-roads-mcp>,
 table `ca-roads-mcp.events.event_log`. The table is a few MB, far below

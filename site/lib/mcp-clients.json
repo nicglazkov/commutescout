@@ -1,0 +1,153 @@
+{
+  "endpoint": "https://mcp.commutescout.com/mcp",
+  "key_header": "Authorization: Bearer cs_live_...",
+  "clients": [
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "key": true,
+      "steps": [
+        {
+          "lang": "sh",
+          "code": "claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp"
+        },
+        {
+          "text": "With a key, for saved places:"
+        },
+        {
+          "lang": "sh",
+          "code": "claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp \\\n  --header \"Authorization: Bearer cs_live_...\""
+        },
+        {
+          "text": "Run /mcp inside Claude Code to confirm it connected."
+        }
+      ]
+    },
+    {
+      "id": "claude-ai",
+      "name": "claude.ai and Claude Desktop",
+      "key": true,
+      "steps": [
+        {
+          "text": "Customize > Connectors > + Add > Add custom connector. Name: CommuteScout. URL: https://mcp.commutescout.com/mcp. Sign-in: No sign in."
+        },
+        {
+          "text": "For saved places, add a request header named Authorization with the value Bearer cs_live_..."
+        },
+        {
+          "text": "On Team and Enterprise plans, an owner adds it first under Organization settings > Connectors. The connector also appears in Claude Desktop and the mobile apps."
+        }
+      ]
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "key": true,
+      "steps": [
+        {
+          "text": "Add to ~/.cursor/mcp.json, or .cursor/mcp.json in a project:"
+        },
+        {
+          "lang": "json",
+          "code": "{\n  \"mcpServers\": {\n    \"commutescout\": {\n      \"url\": \"https://mcp.commutescout.com/mcp\",\n      \"headers\": { \"Authorization\": \"Bearer ${env:COMMUTESCOUT_API_KEY}\" }\n    }\n  }\n}"
+        },
+        {
+          "text": "Leave out headers to connect without a key."
+        }
+      ]
+    },
+    {
+      "id": "vscode",
+      "name": "VS Code (GitHub Copilot)",
+      "key": true,
+      "steps": [
+        {
+          "text": "Add to .vscode/mcp.json:"
+        },
+        {
+          "lang": "json",
+          "code": "{\n  \"servers\": {\n    \"commutescout\": {\n      \"type\": \"http\",\n      \"url\": \"https://mcp.commutescout.com/mcp\",\n      \"headers\": { \"Authorization\": \"Bearer ${input:commutescout-key}\" }\n    }\n  },\n  \"inputs\": [\n    { \"type\": \"promptString\", \"id\": \"commutescout-key\",\n      \"description\": \"CommuteScout API key\", \"password\": true }\n  ]\n}"
+        },
+        {
+          "text": "Leave out headers and inputs to connect without a key."
+        }
+      ]
+    },
+    {
+      "id": "windsurf",
+      "name": "Windsurf",
+      "key": true,
+      "steps": [
+        {
+          "text": "Add to its mcp_config.json (MCP settings > view raw config):"
+        },
+        {
+          "lang": "json",
+          "code": "{\n  \"mcpServers\": {\n    \"commutescout\": {\n      \"serverUrl\": \"https://mcp.commutescout.com/mcp\",\n      \"headers\": { \"Authorization\": \"Bearer ${env:COMMUTESCOUT_API_KEY}\" }\n    }\n  }\n}"
+        }
+      ]
+    },
+    {
+      "id": "codex",
+      "name": "OpenAI Codex CLI",
+      "key": true,
+      "steps": [
+        {
+          "lang": "sh",
+          "code": "codex mcp add commutescout --url https://mcp.commutescout.com/mcp"
+        },
+        {
+          "text": "With a key, in ~/.codex/config.toml:"
+        },
+        {
+          "lang": "toml",
+          "code": "[mcp_servers.commutescout]\nurl = \"https://mcp.commutescout.com/mcp\"\nbearer_token_env_var = \"COMMUTESCOUT_API_KEY\""
+        }
+      ]
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini CLI",
+      "key": true,
+      "steps": [
+        {
+          "lang": "sh",
+          "code": "gemini mcp add --transport http commutescout https://mcp.commutescout.com/mcp"
+        },
+        {
+          "text": "Add --header \"Authorization: Bearer cs_live_...\" for saved places."
+        }
+      ]
+    },
+    {
+      "id": "chatgpt",
+      "name": "ChatGPT",
+      "key": false,
+      "steps": [
+        {
+          "text": "On chatgpt.com: Plugins > + > Add custom MCP server. URL: https://mcp.commutescout.com/mcp. Authentication: none."
+        },
+        {
+          "text": "Custom MCP servers depend on your plan and workspace settings. ChatGPT offers sign-in (OAuth) rather than a key field, so use addresses instead of \"home\" and \"work\" there."
+        }
+      ]
+    },
+    {
+      "id": "other",
+      "name": "Any other MCP client",
+      "key": true,
+      "steps": [
+        {
+          "text": "Streamable HTTP at https://mcp.commutescout.com/mcp: stateless, no sign-in, optional Authorization: Bearer cs_live_... (or X-API-Key)."
+        },
+        {
+          "text": "A client that only speaks stdio can bridge with:"
+        },
+        {
+          "lang": "sh",
+          "code": "npx mcp-remote https://mcp.commutescout.com/mcp --transport http-only"
+        }
+      ]
+    }
+  ]
+}
