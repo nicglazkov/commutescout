@@ -18,14 +18,14 @@ import { CopyField } from "@/components/copy-field";
 export const metadata: Metadata = {
   title: "MCP server - CommuteScout",
   description:
-    "Connect Claude or any MCP client to CommuteScout's live road data: ten tools over curated corridors and regions, no key required.",
+    "Connect Claude or any MCP client to CommuteScout: plan any US drive, find the best time to leave, and read live road data, weather and history. No key required.",
   alternates: {
     canonical: "https://commutescout.com/mcp",
   },
   openGraph: {
     title: "MCP server - CommuteScout",
     description:
-      "Connect Claude or any MCP client to CommuteScout's live road data: ten tools over curated corridors and regions, no key required.",
+      "Connect Claude or any MCP client to CommuteScout: plan any US drive, find the best time to leave, and read live road data, weather and history. No key required.",
     url: "https://commutescout.com/mcp",
     images: ["/static/shots/og.png"],
   },
@@ -66,6 +66,49 @@ const STEPS = [
 type Tool = { signature: string; description: string };
 
 const TOOLS: Tool[] = [
+  {
+    signature: "plan_trip(origin, destination, depart_at?, preference?)",
+    description:
+      "Any two US places: the closure-aware route, drive time for the " +
+      "departure, every live event on the line by mile, weather alerts " +
+      "and the forecast on arrival",
+  },
+  {
+    signature: "best_time_to_go(origin, destination, day?, earliest?, latest?, arrive_by?)",
+    description:
+      'Up to 16 departures compared on drive time, weather and the ' +
+      'route\'s incident history; answers "when should I leave"',
+  },
+  {
+    signature: "find_place(query, near?)",
+    description: "Resolve any US address or landmark to coordinates",
+  },
+  {
+    signature: "get_weather(place | center, hours?)",
+    description:
+      "Hourly NWS forecast, alerts and road-weather stations, with " +
+      "driving hazards flagged by hour",
+  },
+  {
+    signature: "get_traffic(points | place | center)",
+    description: "Live speed against free flow on the nearest road, anywhere in the US",
+  },
+  {
+    signature: "get_area_history(place | center, radius_km?, days?)",
+    description:
+      "What usually happens around a place, by local hour and weekday, " +
+      "from the event archive",
+  },
+  {
+    signature: "get_my_places()",
+    description:
+      "Your Home, Work and favorites, with an API key; every trip tool " +
+      'also takes "home", "work" or a saved name directly',
+  },
+  {
+    signature: "get_coverage()",
+    description: "Which states and sources are covered, with each feed's freshness",
+  },
   {
     signature: "check_route(from_place, to_place, from_coords?, to_coords?)",
     description:
@@ -119,7 +162,7 @@ const TOOLS: Tool[] = [
       'with reasons; answers "what are the busiest routes right now"',
   },
   {
-    signature: "get_nearby_events(center, radius_km?, kinds?)",
+    signature: "get_nearby_events(center | place, radius_km?, kinds?)",
     description:
       "Live road events near a point across every covered state, 37 states, " +
       "not just California; the fallback for locations outside " +
@@ -230,7 +273,7 @@ export default function McpPage() {
             id="tools-heading"
             className="text-cs-ink text-balance text-3xl font-medium tracking-tight md:text-4xl"
           >
-            Ten tools, one live data spine
+            18 tools, one live data spine
           </h2>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

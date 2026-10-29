@@ -15,6 +15,7 @@ import time
 
 from ca_roads import apikeys
 from ca_roads.budget import DailyCounter
+from ca_roads_mcp import account
 
 # Cloudflare's published edge ranges (cloudflare.com/ips, vendored
 # 2026-07-27). They change rarely; refresh from the same URLs if
@@ -353,9 +354,13 @@ class ApiKeyMiddleware:
                 ]
             await send(message)
 
+        # The trip tools read "home" and "work" from this account
+        # (ca_roads_mcp.account); the variable lives for this request only.
+        token = account.CURRENT.set(info)
         try:
             await self.app(scope, receive, send_with_headers)
         finally:
+            account.CURRENT.reset(token)
             self.log.info(json.dumps({
                 "log_type": "api_use", "key": info["id"], "tier": info["tier"],
                 "path": scope.get("path", ""), "status": status_seen["status"]}))

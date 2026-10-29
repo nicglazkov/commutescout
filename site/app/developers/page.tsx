@@ -453,7 +453,7 @@ export default function DevelopersPage() {
         <div className="mx-auto max-w-3xl px-6">
           <H2 id="tools">Tool reference</H2>
           <p className="text-cs-ink/70 mt-4 text-balance">
-            Ten tools. Each one lists every parameter it accepts, what it reads, how
+            18 tools. Each one lists every parameter it accepts, what it reads, how
             fresh that is, and what it caps. The examples are complete URLs relative to{" "}
             {code(BASE)}. Optional parameters combine; leave them out for everything.
           </p>
@@ -511,7 +511,7 @@ export default function DevelopersPage() {
         <div className="mx-auto max-w-3xl px-6">
           <H2 id="mcp">MCP server</H2>
           <p className="text-cs-ink/70 mt-4 text-balance">
-            The same ten tools for Claude and any other MCP client, over streamable
+            The same 18 tools for Claude and any other MCP client, over streamable
             HTTP. Add it as a custom connector; no key is needed, and a key works the
             same way as on {code("/v1")} when you want your own limits.
           </p>

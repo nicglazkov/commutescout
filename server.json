@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.nicglazkov/commutescout",
-  "description": "Live road conditions in 37 US states: incidents, closures, chain controls, cameras, wildfires.",
+  "description": "Trip planning and best time to leave, with live road data from 37 US states, traffic, weather.",
   "repository": {
     "url": "https://github.com/nicglazkov/commutescout",
     "source": "github"

@@ -19,9 +19,9 @@ def test_committed_reference_matches_the_tool_schemas():
     built = _generator()["build"]()
     committed = json.loads(JSON_PATH.read_text(encoding="utf-8"))
     assert committed == built, "run scripts/gen_api_reference.py"
-    assert len(built["tools"]) == 10
+    assert len(built["tools"]) == 18
     for tool in built["tools"]:
-        assert tool["params"], tool["name"]
+        assert tool["params"] or tool["name"] in ("get_coverage", "get_my_places"), tool["name"]
         assert tool["example"].startswith(tool["name"] + "?") or tool["example"] == tool["name"]
         assert tool["poll_s"] >= 60
         for p in tool["params"]:

@@ -15,6 +15,14 @@ def fixture_bytes():
 
 
 @pytest.fixture(autouse=True)
+def _no_snapshots(monkeypatch):
+    """The MCP tools read the map's published snapshots from the CDN
+    first. Tests use the feeds they stub; a test of the snapshot reader
+    sets MCP_SNAPSHOT_BASE itself."""
+    monkeypatch.setenv("MCP_SNAPSHOT_BASE", "")
+
+
+@pytest.fixture(autouse=True)
 def _fresh_rate_limiter(monkeypatch):
     """Give the process-shared rate buckets a fresh, generous limiter for
     every test.

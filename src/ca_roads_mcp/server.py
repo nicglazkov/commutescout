@@ -1,8 +1,11 @@
-"""MCP server: live US road conditions, California in the most depth.
+"""MCP server: nationwide US road conditions, trip planning and timing.
 
-Ten tools over the ca_roads feed layer, served over stdio (local dev) or
-streamable HTTP (hosted). Docstrings are written for the LLM consuming the
-tools: they say what the data is, how fresh it is, and where it falls short.
+Trip tools for any two US places (route, drive time by departure hour,
+everything live on the line, weather, history; ca_roads_mcp.planning)
+sit next to the California highway tools over the ca_roads feed layer.
+Served over stdio (local dev) or streamable HTTP (hosted). Docstrings
+are written for the LLM consuming the tools: they say what the data
+is, how fresh it is, and where it falls short.
 """
 
 from __future__ import annotations
@@ -11,15 +14,18 @@ import argparse
 import asyncio
 import contextlib
 import ipaddress
+import json
 import logging
 import os
 import time
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from typing import Annotated, Literal
 from urllib.parse import urlparse
 
-from mcp.server.mcpserver import MCPServer
-from mcp.types import ToolAnnotations
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.types import Icon, ToolAnnotations
+from pydantic import Field
 
 from ca_roads.dedupe import dedupe
 from ca_roads.feeds import bay511 as bay511_feed
@@ -34,6 +40,7 @@ from ca_roads.feeds import wildfire as wildfire_feed
 from ca_roads.geo import haversine_meters
 from ca_roads.roaddata import RoadData
 from ca_roads_mcp import corridors as corr
+from ca_roads_mcp import planning, snapshots
 from ca_roads_mcp import regions as reg
 from ca_roads_mcp.geocode import geocode, geocode_candidates
 from ca_roads_mcp.routes import matches_route, normalize_route
@@ -49,17 +56,37 @@ from ca_roads_mcp.serialize import (
 )
 from ca_roads_mcp.telemetry import log_event
 
-INSTRUCTIONS = """\
-Live road conditions. California in depth: CHP incidents, Caltrans lane
-closures and chain controls, cameras and message signs, WFIGS wildfires,
-and TomTom traffic on 17 curated corridors. Everywhere else CommuteScout
-covers (37 US states) through get_nearby_events. All data is official,
-public, and read-only. Every response carries a `sources` list with a
-`data_as_of` timestamp per source - always relay meaningful staleness or
-feed errors to the user. This service reports CURRENT conditions only; it
-cannot forecast. Remind users to verify before they drive (dial 511 or check
-their state DOT site; quickmap.dot.ca.gov in California). Not affiliated with
-any government agency.
+INSTRUCTIONS = """CommuteScout: live, official US road data with routing, traffic, weather
+and history, nationwide.
+
+For trips between any two US places use the trip tools:
+- plan_trip: the route, drive time for a departure (with traffic,
+  typical, free-flow), and everything live on the line by mile
+  (incidents, closures, chain controls, cameras, signs, tolls, speed and
+  red-light cameras, road weather, wildfires) plus NWS alerts and the
+  forecast on arrival.
+- best_time_to_go: when to leave or visit; up to 16 departures compared
+  on drive time, weather and the route's incident history.
+- find_place: resolve an address when it is ambiguous.
+Around one place: get_nearby_events, get_weather, get_traffic,
+get_area_history. Coverage: get_coverage.
+
+The user's places: pass "home", "work" or a saved place's name as any
+origin, destination or place; omit origin to start from Home
+(get_my_places lists them, when the server is connected with the
+user's CommuteScout API key). This server cannot see the user's device:
+for "from here" or "near me", pass coordinates or a city you already
+know from the conversation, or ask.
+
+California has extra depth in check_route, check_region, get_incidents
+(CHP logs), get_lane_closures, get_chain_controls, get_wildfires,
+get_cameras, get_road_signs and rank_routes.
+
+Lead with each tool's `summary` when it has one. Relay `notes`, stale
+`data_as_of` times and source errors. Speak in the user's local time
+(tools return local times). Never guess between far-apart places with
+the same name: ask. Remind users to verify before driving (511 or the
+state DOT site). Not affiliated with any government agency.
 """
 
 def app_version() -> str:
@@ -96,7 +123,13 @@ class _CountedServer(MCPServer):
 
 # The version goes in serverInfo on `initialize`, so a client can tell
 # which CommuteScout it is talking to rather than which MCP SDK.
-mcp = _CountedServer("CommuteScout", instructions=INSTRUCTIONS, version=app_version())
+mcp = _CountedServer(
+    "CommuteScout", title="CommuteScout", instructions=INSTRUCTIONS,
+    version=app_version(), website_url="https://commutescout.com",
+    icons=[Icon(src="https://commutescout.com/static/icon-512.png",
+                mime_type="image/png", sizes=["512x512"]),
+           Icon(src="https://commutescout.com/static/logo.svg",
+                mime_type="image/svg+xml", sizes=["any"])])
 
 # The server's constructor configures logging at INFO for the whole
 # process (both services import this module). httpx then logs every
@@ -1403,12 +1436,13 @@ async def get_road_signs(
 
 @mcp.tool(annotations=_read_only("Nearby events (nationwide)"))
 async def get_nearby_events(
-    center: str,
+    center: str | None = None,
     radius_km: float = 40,
     kinds: str = "incident,closure,chain,fire",
+    place: str | None = None,
 ) -> dict:
     """Live road events near a point anywhere CommuteScout covers, not
-    just California: 37 states today, growing.
+    just California: 37 states today (get_coverage lists them).
 
     Data: the same multi-state feeds the live map shows, normalized -
     state DOT incidents, roadwork and closures, chain and traction
@@ -1422,13 +1456,20 @@ async def get_nearby_events(
     for any location outside California, near a state border, or as a
     supplement when a California tool comes back empty.
 
-    center is "lat,lon". kinds is a comma list from: incident, closure,
-    chain, fire, sign, rwis, camera, toll (toll adds live and fixed
-    toll prices where agencies publish them). radius_km caps at 160.
+    center is "lat,lon"; or pass place (an address or place name)
+    instead. kinds is a comma list from: incident, closure, chain, fire,
+    sign, rwis, camera, toll (toll adds live and fixed toll prices where
+    agencies publish them), enforcement (speed and red-light cameras
+    from OpenStreetMap). radius_km caps at 160.
     """
     import math
 
-    point = parse_center(center)
+    if not center and place:
+        found = await planning.point_from(get_road().client, place, None)
+        if "lat" not in found:
+            return found
+        center = f"{found['lat']:.5f},{found['lon']:.5f}"
+    point = parse_center(center or "")
     if point is None:
         return {"error": CENTER_FORMAT_ERROR}
     notes: list[str] = []
@@ -1442,29 +1483,45 @@ async def get_nearby_events(
     dlon = radius_km / max(20.0, 111.0 * math.cos(math.radians(lat)))
     box = (lat - dlat, lon - dlon, lat + dlat, lon + dlon)
     want = {k.strip() for k in kinds.split(",") if k.strip()}
-    from ca_roads_demo import states as expansion
+    # The map's published snapshot first: it is every state the map
+    # shows, California included, built by the service that holds every
+    # state key. The direct feeds are the fallback.
+    snap = await snapshots.markers(get_road().client, box, want)
+    if snap is not None:
+        markers = snap[0]
+    else:
+        from ca_roads_demo import states as expansion
 
-    markers = await expansion.markers_for_bbox(get_road().client, box, want)
+        markers = await expansion.markers_for_bbox(get_road().client, box, want)
     events = []
     for m in markers:
         dist = haversine_meters(lat, lon, m["lat"], m["lon"])
         if dist > radius_km * 1000:
             continue
+        kind = m.get("kind")
+        if kind == "plugin":  # snapshots pass only public OSM cameras
+            kind = "enforcement_camera"
         events.append({
-            "kind": m.get("kind"),
+            "kind": kind,
             "lat": round(m["lat"], 4), "lon": round(m["lon"], 4),
             "miles_away": round(dist * MILES_PER_METER, 1),
             "type": m.get("type"),
             "summary": m.get("label") or m.get("name")
-            or m.get("message"),
+            or m.get("message") or ": ".join(
+                str(x) for x in (m.get("type"), m.get("location"),
+                                 m.get("area")) if x) or None,
             "route": m.get("route"),
             "closure_class": m.get("cls"),
-            "source": m.get("src"),
+            "source": m.get("src") or (
+                "OpenStreetMap" if kind == "enforcement_camera"
+                else "Caltrans / CHP"),
         })
     # The multi-state feeds do not carry California (the dedicated tools
     # own it), so this tool used to answer "quiet" for the Bay Area. The
-    # same four California feeds ride along in the same event shape.
-    events.extend(await _california_events(lat, lon, radius_km, want))
+    # same four California feeds ride along in the same event shape. A
+    # snapshot already holds them.
+    if snap is None:
+        events.extend(await _california_events(lat, lon, radius_km, want))
     events.sort(key=lambda e: e["miles_away"])
     trimmed = events[:80]
     if len(events) > 80:
@@ -1562,6 +1619,300 @@ async def _california_events(lat: float, lon: float, radius_km: float,
                                      summary=f"{f.name} wildfire, {size}{pct}",
                                      source="WFIGS"))
     return out
+
+
+# ── Trip tools (nationwide) ──────────────────────────────────────────────────
+# Thin wrappers over ca_roads_mcp.planning, which holds the logic and the
+# tests' seams. Parameter descriptions are what a model reads to fill
+# the call, so they carry the formats and the defaults.
+
+Place = Annotated[str | None, Field(
+    description="An address, landmark or place anywhere in the US, e.g. "
+                "'1600 Pennsylvania Ave, Washington DC' or 'Pike Place "
+                "Market'. Include city and state when you have them. "
+                "'home', 'work' or a saved place's name use the user's "
+                "saved places (see get_my_places). Leave origin out to "
+                "start from the user's Home.")]
+Coords = Annotated[str | None, Field(
+    description="Exact 'lat,lon' instead of a place name, e.g. "
+                "'47.6097,-122.3421'. Wins over the place name.")]
+
+
+@mcp.tool(annotations=_read_only("My saved places"))
+async def get_my_places() -> dict:
+    """The user's saved places: Home, Work, favorites and recent
+    destinations, synced from the CommuteScout site and apps.
+
+    Available when this server is connected with the user's CommuteScout
+    API key; otherwise `connected` is false and `message` says how to
+    connect. The trip tools already accept 'home', 'work' or a place's
+    name directly, so call this only to show or choose among them.
+
+    These belong to the user who connected: never repeat them to anyone
+    else.
+    """
+    return await planning.my_places()
+
+
+@mcp.tool(annotations=_read_only("Find a place"))
+async def find_place(
+    query: Annotated[str, Field(description="What to look up: an address, "
+                                            "business, landmark or town.")],
+    near: Annotated[str | None, Field(
+        description="Optional 'lat,lon' to prefer matches near.")] = None,
+    limit: Annotated[int, Field(ge=1, le=8)] = 5,
+) -> dict:
+    """Look up a US address or place and get its coordinates.
+
+    Use it to confirm which place the user means before planning, or
+    when a trip tool answers needs_clarification. Returns up to `limit`
+    matches with a ready-to-pass `coords` string for the *_coords
+    arguments of the trip tools.
+    """
+    return await planning.find_place(get_road().client, query, near, limit)
+
+
+@mcp.tool(annotations=_read_only("Plan a trip"))
+async def plan_trip(
+    origin: Place = None,
+    destination: Place = None,
+    origin_coords: Coords = None,
+    destination_coords: Coords = None,
+    depart_at: Annotated[str | None, Field(
+        description="When the user leaves, in the origin's local time: "
+                    "'now' (default), 'tomorrow 8am', '17:30', 'friday "
+                    "7:15am' or ISO '2026-11-02T08:00'.")] = None,
+    preference: Annotated[Literal["fastest", "shortest", "no_highways",
+                                  "no_tolls", "avoid_chains"], Field(
+        description="Route preference.")] = "fastest",
+) -> dict:
+    """Everything about one drive between any two US places, in one call.
+
+    Use this for "how's the drive to X", "how long to get to Y at 5",
+    "anything on the way to Z". It returns:
+
+    - the route (miles, main roads, alternatives) from the closure-aware
+      planner the CommuteScout map uses: fully closed roads are avoided
+      and routes are ranked by what is on them;
+    - drive time for that departure: with traffic, typical for that
+      weekday and hour, and with no traffic (TomTom historical speed
+      profiles; live traffic too when leaving within the hour);
+    - every live event ON the route, ordered by mile: incidents,
+      closures, chain controls, message signs, cameras (with image URLs),
+      road-weather stations, tolls, speed and red-light cameras, and
+      wildfires near it;
+    - NWS weather alerts along the route and the forecast at the
+      destination for the arrival hour;
+    - a one-paragraph `summary` to lead the answer with, and `notes`
+      for anything missing or degraded.
+
+    Lead with `summary`, then the items that change the user's plan.
+    For WHEN to leave, call best_time_to_go instead. If the answer has
+    needs_clarification, ask the user which option they meant.
+    """
+    return await planning.plan_trip(
+        get_road().client, origin, destination, origin_coords,
+        destination_coords, depart_at, preference)
+
+
+@mcp.tool(annotations=_read_only("Best time to go"))
+async def best_time_to_go(
+    origin: Place = None,
+    destination: Place = None,
+    origin_coords: Coords = None,
+    destination_coords: Coords = None,
+    day: Annotated[str | None, Field(
+        description="'today' (default), 'tomorrow', a weekday name, or "
+                    "YYYY-MM-DD, up to 60 days out.")] = None,
+    earliest: Annotated[str | None, Field(
+        description="Earliest departure to consider, local time, e.g. "
+                    "'7am' or '07:00'. Default 6:00 AM.")] = None,
+    latest: Annotated[str | None, Field(
+        description="Latest departure to consider, e.g. '8pm'. Default "
+                    "9:00 PM.")] = None,
+    arrive_by: Annotated[str | None, Field(
+        description="Instead of a window: the time the user must arrive, "
+                    "destination local time ('9am', 'tomorrow 9:00'). "
+                    "Returns the latest safe departure.")] = None,
+    step_minutes: Annotated[int | None, Field(
+        ge=10, le=180, description="Spacing between departures checked. "
+                                   "Default fits the window into 16.")] = None,
+    ctx: Context | None = None,
+) -> dict:
+    """When to leave (or visit) to beat traffic and weather, for any US
+    trip.
+
+    Answers "what's a good time to visit X", "when should I leave for
+    the airport", "is 5 PM bad". It checks up to 16 departures across
+    the window and returns, for each: drive minutes for that weekday and
+    hour (TomTom historical traffic; live too within the hour), arrival
+    time, the NWS forecast for the arrival hour with driving hazards
+    flagged (snow, ice, fog, thunder), and how many incidents usually
+    start on the route that hour (CommuteScout history since July 2026).
+
+    `recommended` is the pick: quickest without severe weather, or with
+    arrive_by, the latest departure that still arrives on time.
+    `summary` states it in one or two sentences; `departures` has the
+    whole curve if the user wants options. Times are in the origin's
+    local time zone (`time_zone`).
+
+    Pair with plan_trip for what is on the road right now.
+    """
+    return await planning.best_time_to_go(
+        get_road().client, origin, destination, origin_coords,
+        destination_coords, day, earliest, latest, arrive_by, step_minutes,
+        ctx=ctx)
+
+
+@mcp.tool(annotations=_read_only("Weather for drivers"))
+async def get_weather(
+    place: Place = None,
+    center: Coords = None,
+    hours: Annotated[int, Field(ge=1, le=156, description="Hours of hourly "
+                                                         "forecast.")] = 24,
+) -> dict:
+    """Hourly NWS forecast, active alerts and nearby road-weather
+    stations for any US place, with driving hazards flagged by hour.
+
+    Road-weather stations are state DOT sensors: pavement and air
+    temperature, wind gusts and visibility, where a state publishes them.
+    """
+    return await planning.get_weather(get_road().client, place, center, hours)
+
+
+@mcp.tool(annotations=_read_only("Traffic speeds"))
+async def get_traffic(
+    points: Annotated[str | None, Field(
+        description="Up to 10 points as 'lat,lon|lat,lon'.")] = None,
+    place: Place = None,
+    center: Coords = None,
+) -> dict:
+    """Live traffic speed against free-flow speed on the road nearest
+    each point, anywhere in the US (TomTom). Use it for "is the bridge
+    backed up right now"; for a whole drive, plan_trip is better.
+    """
+    return await planning.get_traffic(get_road().client, points, place, center)
+
+
+@mcp.tool(annotations=_read_only("Area history"))
+async def get_area_history(
+    place: Place = None,
+    center: Coords = None,
+    radius_km: Annotated[float, Field(ge=0.2, le=25)] = 3.0,
+    days: Annotated[int, Field(ge=7, le=365, description="Look-back window. "
+                                                        "History began "
+                                                        "2026-07-12.")] = 90,
+) -> dict:
+    """What usually happens around a place: incidents and closures that
+    started within the radius, by local hour and weekday, the common
+    incident types and how long they typically last.
+
+    Use it for "is this intersection bad at rush hour" or "when is it
+    quietest around the stadium". These are counts CommuteScout saw in
+    official feeds, not a crash database.
+    """
+    return await planning.get_area_history(
+        get_road().client, place, center, radius_km, days)
+
+
+@mcp.tool(annotations=_read_only("Coverage"))
+def get_coverage() -> dict:
+    """Which states and sources CommuteScout covers right now, with each
+    feed's freshness. Check it when an answer is unexpectedly empty.
+    """
+    return planning.get_coverage()
+
+
+@mcp.resource("commutescout://coverage", name="coverage",
+              title="CommuteScout coverage", mime_type="application/json",
+              description="States, sources and feed freshness.")
+def coverage_resource() -> str:
+    return json.dumps(planning.get_coverage())
+
+
+@mcp.resource("commutescout://about", name="about",
+              title="About CommuteScout data", mime_type="text/markdown",
+              description="What each tool is for and how fresh it is.")
+def about_resource() -> str:
+    return ABOUT
+
+
+ABOUT = """\
+# CommuteScout data
+
+Nationwide, official, public road data plus routing, traffic and
+weather. Which tool:
+
+| Question | Tool |
+| --- | --- |
+| How is the drive from A to B (now or at a given time)? | plan_trip |
+| When should I leave? When is a good time to visit X? | best_time_to_go |
+| What is happening near a place? | get_nearby_events |
+| Weather where I am going? | get_weather |
+| Is this road backed up right now? | get_traffic |
+| Is this area usually bad at 5 PM? | get_area_history |
+| Which address did they mean? | find_place |
+| Where are home, work and my favorites? | get_my_places |
+| California highway detail (CHP logs, chain levels) | check_route, |
+| | check_region, get_incidents, get_lane_closures, get_chain_controls, |
+| | get_wildfires, get_cameras, get_road_signs, rank_routes |
+
+Freshness: live events 30 s to 5 min; cameras hourly inventory with
+live images; travel times from TomTom (historical profiles, live within
+the hour); weather from the National Weather Service; history from the
+CommuteScout archive since 2026-07-12.
+
+## Your places
+
+Connect with a CommuteScout API key (Settings on commutescout.com/map)
+sent as `Authorization: Bearer cs_live_...`. "home", "work" and the
+names of saved places then work in every trip tool, and a trip with no
+origin starts from Home. For example, in Claude Code (one line):
+
+    claude mcp add --transport http commutescout https://mcp.commutescout.com/mcp
+      --header "Authorization: Bearer cs_live_..."
+
+A self-hosted server can set fixed places instead: `MCP_HOME` and
+`MCP_WORK`, each "lat,lon" or an address.
+
+Not affiliated with any government agency. Verify before driving: 511
+or the state DOT site.
+"""
+
+
+@mcp.prompt(title="Best time to visit")
+def best_time(origin: str, destination: str, day: str = "today") -> str:
+    """Find a good time to drive somewhere and what to expect on the way."""
+    return f"""\
+I want to go from {origin} to {destination} ({day}). When is a good time?
+
+1. Call best_time_to_go with origin="{origin}", destination="{destination}",
+   day="{day}". If it answers needs_clarification, ask me which place.
+2. Tell me the recommended departure, the drive time then, and the times
+   to avoid, in my local time.
+3. Call plan_trip for the recommended departure and tell me anything on
+   the route that changes the plan: closures, chain controls, crashes,
+   weather alerts, snow or ice at arrival.
+4. Keep it short. Mention how fresh the data is, and remind me to check
+   511 before driving.
+"""
+
+
+@mcp.prompt(title="Plan a trip")
+def trip_check(origin: str, destination: str, depart_at: str = "now") -> str:
+    """Check a drive between any two US places."""
+    return f"""\
+I'm driving from {origin} to {destination}, leaving {depart_at}.
+
+1. Call plan_trip with origin="{origin}", destination="{destination}",
+   depart_at="{depart_at}".
+2. Lead with its summary. Then list, in order along the route, anything
+   that could change my drive: full closures, chain controls, crashes,
+   lane closures with delays, wildfires, weather alerts.
+3. If traffic adds more than 10 minutes, say whether leaving earlier or
+   later helps (best_time_to_go can check).
+4. Close with how fresh the data is and a reminder to verify with 511.
+"""
 
 
 @mcp.prompt()

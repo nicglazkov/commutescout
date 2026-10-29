@@ -324,23 +324,32 @@ gcloud secrets create tomtom-api-key --data-file=-
 gcloud secrets create bay511-api-key --data-file=-
 gcloud secrets create nvroads-api-key --data-file=-
 
-# grant Cloud Run access (once per secret)
-gcloud secrets add-iam-policy-binding tomtom-api-key   --member="serviceAccount:15002631928-compute@developer.gserviceaccount.com"   --role="roles/secretmanager.secretAccessor"
+# grant the runtime service account access (once per secret)
+gcloud secrets add-iam-policy-binding tomtom-api-key \
+  --member="serviceAccount:ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
 
-# attach to a service (repeat --set-secrets values you already use)
-gcloud run services update ca-roads-mcp --region us-west1   --set-secrets TOMTOM_API_KEY=tomtom-api-key:latest,BAY511_API_KEY=bay511-api-key:latest,NVROADS_API_KEY=nvroads-api-key:latest
-gcloud run services update ca-roads-demo --region us-west1   --set-secrets ANTHROPIC_API_KEY=anthropic-api-key:latest,TOMTOM_API_KEY=tomtom-api-key:latest,BAY511_API_KEY=bay511-api-key:latest,NVROADS_API_KEY=nvroads-api-key:latest
+# attach to a service; --update-secrets adds to what is mounted, while
+# --set-secrets would drop every secret not listed
+gcloud run services update ca-roads-mcp --region us-west1 \
+  --update-secrets TOMTOM_API_KEY=tomtom-api-key:latest,BAY511_API_KEY=bay511-api-key:latest,NVROADS_API_KEY=nvroads-api-key:latest
+gcloud run services update ca-roads-demo --region us-west1 \
+  --update-secrets TOMTOM_API_KEY=tomtom-api-key:latest,BAY511_API_KEY=bay511-api-key:latest,NVROADS_API_KEY=nvroads-api-key:latest
 ```
 
 | Variable | Source | Get a key at | Enables |
 |---|---|---|---|
-| `TOMTOM_API_KEY` | TomTom Traffic | developer.tomtom.com (free, 2,500 req/day) | Live speeds vs free-flow in check_route |
+| `TOMTOM_API_KEY` | TomTom Traffic and Routing | developer.tomtom.com (free, 2,500 req/day) | Live speeds vs free-flow in check_route and get_traffic; drive times by departure in plan_trip and best_time_to_go |
 | `BAY511_API_KEY` | 511 SF Bay | 511.org/open-data/token (free) | Bay Area events in check_region |
 | `NVROADS_API_KEY` | Nevada DOT | nvroads.com developer signup (free) | I-80/US-50/I-15 continuations past the state line |
 
-Keyed state feeds (demo service). Each one replaces or extends that
-state's keyless feed when its credential is set, and stays off
-otherwise:
+Keyed state feeds. Each one replaces or extends that state's keyless
+feed when its credential is set, and stays off otherwise. The demo
+service needs them: it builds the map snapshots. The MCP service reads
+those snapshots (`MCP_SNAPSHOT_BASE`, default
+`https://data.commutescout.com`) and only falls back to the feeds when
+a snapshot is missing or stale, so mount the keys there too for that
+fallback:
 
 | Variable | State (agency) |
 |---|---|
@@ -356,4 +365,20 @@ otherwise:
 | `ID511_API_KEY` | Idaho (ITD, Travel-IQ) |
 | `NV511_API_KEY` | Nevada (NDOT, Travel-IQ; from the same nvroads.com signup as `NVROADS_API_KEY`) |
 | `NC511_API_KEY` | North Carolina (NCDOT, Travel-IQ) |
+
+### MCP trip tools
+
+`plan_trip`, `best_time_to_go` and `get_area_history` read the event
+archive in BigQuery for "what usually happens here". The runtime service
+account needs to run query jobs:
+
+```sh
+gcloud projects add-iam-policy-binding ca-roads-mcp \
+  --member="serviceAccount:ca-roads-run@ca-roads-mcp.iam.gserviceaccount.com" \
+  --role="roles/bigquery.jobUser"
+```
+
+Without it the tools still answer and say history is unavailable.
+Daily caps, all in-process: `MCP_STADIA_ROUTE_DAILY` (default 300),
+`TOMTOM_ROUTE_DAILY` (500) and `MCP_HISTORY_DAILY` (300).
 
