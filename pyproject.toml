@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ca-roads-mcp"
-version = "2.130.1"
+version = "2.131.0"
 description = "Trip planning, the best time to leave, and live road conditions for 37 US states, for AI assistants over MCP and a REST API."
 readme = "README.md"
 requires-python = ">=3.12"
