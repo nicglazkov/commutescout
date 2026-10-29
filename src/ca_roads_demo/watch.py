@@ -663,7 +663,10 @@ def _fcm_send(token: str, platform: str, payload: dict) -> bool:
         "token": token,
         "notification": {"title": payload.get("title") or "CommuteScout",
                          "body": payload.get("body") or ""},
-        "data": {"url": str(payload.get("url") or "")},
+        # FCM data values must be strings.
+        "data": {"url": str(payload.get("url") or ""),
+                 **{f"event_{k}": str(v) for k, v in (payload.get("event") or {}).items()
+                    if v is not None}},
         "android": {"priority": "high", "notification": {"channel_id": "alerts"}},
         "apns": {"payload": {"aps": {"sound": "default"}}},
     }
@@ -1767,6 +1770,10 @@ async def run_check_cycle() -> dict:
     # backfilled. Failures are swallowed inside observe().
     from ca_roads_demo import archive, tollprices
     archive_stats = await archive.observe(events)
+    # What is live and what just cleared, for a phone asking about an
+    # alert it was sent (/api/event-status).
+    from ca_roads_demo import event_status
+    event_status.note_cycle(events)
     # Toll price history rides the same cycle: cached prices only, one
     # row per changed (corridor, entry, destination). Never raises.
     await tollprices.observe()
@@ -1834,6 +1841,17 @@ async def run_check_cycle() -> dict:
                         sent = await _push_to_subs(subs, {
                             "title": title, "body": event["body"],
                             "url": click,
+                            # What the apps need to open this very event
+                            # and ask what became of it (/api/event-status).
+                            "event": {
+                                "id": event["id"],
+                                "kind": event.get("kind", "incident"),
+                                "lat": lat, "lon": lon,
+                                "title": event["title"],
+                                "body": event["body"],
+                                "watch": watch.get("name", "Watch"),
+                                "sent_at": int(time.time()),
+                            },
                         })
                         stats["pushes"] += sent
                         tried += 1 if subs else 0

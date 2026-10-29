@@ -50,6 +50,7 @@ from ca_roads.feeds import wildfire as wildfire_feed
 from ca_roads.stadia import auth_headers
 from ca_roads_demo import (
     analytics,
+    event_status,
     flare_sources,
     freshness,
     mapfiles,
@@ -1530,11 +1531,75 @@ async def api_incident(request: Request):
                              if i.reported_at else None),
                 "details": [list(d) for d in i.details],
                 "units": [list(u) for u in i.units],
+                # The same log, newest first, translated, with one story
+                # per unit: what the apps show without a copy of the
+                # shorthand table.
+                "dispatch": event_status.dispatch_log(i.details, i.units),
                 "data_as_of": (chp.data_as_of.isoformat()
                                if chp.data_as_of else None),
             })
     return JSONResponse({"error": "not found"}, status_code=404)
 
+
+async def api_event_status(request: Request):
+    """What became of an event a watch alert named: still active, changed
+    (a chain control at another level), cleared, or gone from the map.
+    The phone asks when an alert is tapped, so it can open the event as
+    it is now, or say plainly that it has ended.
+
+    id is the watch event id the push carried; kind, lat and lon are
+    what the alert said, used when the id is no longer known."""
+    q = request.query_params
+    eid = (q.get("id") or "").strip()[:80]
+    kind = (q.get("kind") or "").strip()
+    # Either naming: the watch's (closure) or the map's (lane_closure).
+    kind = {v: k for k, v in event_status.MARKER_KIND.items()}.get(kind, kind)
+    if kind not in event_status.WANT_KIND:
+        return JSONResponse({"error": "kind must be incident, closure, chain or fire"},
+                            status_code=400)
+    try:
+        lat, lon = float(q.get("lat", "")), float(q.get("lon", ""))
+    except ValueError:
+        return JSONResponse({"error": "lat and lon required"}, status_code=400)
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return JSONResponse({"error": "lat and lon out of range"}, status_code=400)
+    known = event_status.lookup(eid) if eid else {"state": "unknown"}
+    ev = known.get("event") or {}
+    # A changed event can sit somewhere else: look where it is now.
+    at_lat = ev.get("lat") if known["state"] in ("active", "changed") and ev.get("lat") else lat
+    at_lon = ev.get("lon") if known["state"] in ("active", "changed") and ev.get("lon") else lon
+    pad = 0.01
+    box = (at_lat - pad, at_lon - pad, at_lat + pad, at_lon + pad)
+    try:
+        markers, _ready, _total, _deg = await build_markers(
+            box, {event_status.WANT_KIND[kind]})
+        markers = shape_markers(markers)
+    except Exception:  # noqa: BLE001 - the state still answers without the marker
+        log.exception("event-status: marker build failed")
+        markers = []
+    chp_id = eid[4:] if eid.startswith("chp:") else None
+    marker = event_status.nearest_marker(
+        markers, event_status.MARKER_KIND[kind], at_lat, at_lon, chp_id)
+    state = known["state"]
+    out: dict = {"id": eid or None, "kind": event_status.MARKER_KIND[kind],
+                 "checked_at": datetime.now(UTC).isoformat()}
+    if state == "unknown":
+        # Not seen since the last restart: the map data decides.
+        state = "active" if marker else "gone"
+    if state == "cleared":
+        out["cleared_at"] = datetime.fromtimestamp(known["cleared_at"], UTC).isoformat()
+        # The same kind of event still reported at the spot (another
+        # closure window, a new CHP call) is offered, never passed off
+        # as the one in the alert.
+        if marker and not (chp_id and marker.get("id") == chp_id):
+            out["nearby"] = marker
+        marker = None
+    out["state"] = state
+    if ev:
+        out["event"] = {k: ev.get(k) for k in ("title", "body", "lat", "lon")}
+    if marker:
+        out["marker"] = marker
+    return JSONResponse(out, headers={"Cache-Control": "no-store"})
 
 async def warmup(request: Request):
     """Feed-cache warm-up progress, answered instantly (no upstream
@@ -2531,6 +2596,7 @@ app = Starlette(
         Route("/api/staticmap", api_staticmap, methods=["GET"]),
         Route("/api/mapdata", api_mapdata, methods=["GET"]),
         Route("/api/incident/{incident_id}", api_incident, methods=["GET"]),
+        Route("/api/event-status", api_event_status, methods=["GET"]),
         Route("/api/stcam/{state}/{cam_id:path}", api_stcam, methods=["GET"]),
         Route("/watch", watch_page),
         Route(ADMIN_PAGE_PATH, admin_page),
@@ -2920,7 +2986,7 @@ app = RateLimitMiddleware(
     exempt_prefixes=("/static/", "/logo.svg", "/health", "/favicon",
                      "/api/mapdata", "/api/stats", "/api/warmup",
                      "/api/geocode",
-                     "/api/incident/", "/api/sources", "/api/stcam/",
+                     "/api/incident/", "/api/event-status", "/api/sources", "/api/stcam/",
                      "/api/suggest", "/api/flow", "/api/traffictile",
                      # Watch pages + public bootstrap config are as cheap
                      # as static files; the mutating watch APIs stay
