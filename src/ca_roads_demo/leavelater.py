@@ -9,8 +9,11 @@ shows a handful of bars, not a timetable.
 from __future__ import annotations
 
 import asyncio
+import math
+import os
 from datetime import UTC, datetime, timedelta
 
+from ca_roads.budget import UPSTREAM
 from ca_roads.feeds import tomtom as tomtom_feed
 
 WINDOW_MIN = 60
@@ -18,6 +21,13 @@ STEP_MIN = 10
 MAX_WINDOW_MIN = 90
 # A departure has to save this much before it is worth suggesting.
 MIN_SAVING_MIN = 3
+# Every slot is one traffic route, so an ask is bounded: at most this
+# many departures (leave now included), trips no longer than this, and
+# a share of the day's TomTom routes of its own so leave later can never
+# spend the routing the trip tools need.
+MAX_SLOTS = 10
+MAX_TRIP_KM = 800
+DAILY_ROUTES = int(os.environ.get("LEAVE_LATER_ROUTES_DAILY", "150"))
 
 
 def slots(now: datetime, window: int = WINDOW_MIN, step: int = STEP_MIN) -> list[datetime | None]:
@@ -70,20 +80,45 @@ def summarize(now: datetime, rows: list[tuple[datetime | None, dict | None]],
     }
 
 
+def trip_km(origin: tuple[float, float], destination: tuple[float, float]) -> float:
+    la1, lo1, la2, lo2 = map(math.radians, (*origin, *destination))
+    h = (math.sin((la2 - la1) / 2) ** 2
+         + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2)
+    return 12_742 * math.asin(math.sqrt(h))
+
+
+def _depart_arg(when: datetime | None) -> str | None:
+    return when.isoformat(timespec="seconds") if when else None
+
+
+def uncached(origin, destination, whens) -> int:
+    """How many of these departures would cost an upstream route."""
+    return sum(not tomtom_feed.route_cached(origin, destination, _depart_arg(w))
+               for w in whens)
+
+
+def take_budget(n: int) -> bool:
+    """Charge ``n`` routes to leave later's own daily share."""
+    if UPSTREAM.used("tomtom-route-leavelater") + n > DAILY_ROUTES:
+        return False
+    for _ in range(n):
+        UPSTREAM.allow("tomtom-route-leavelater", DAILY_ROUTES)
+    return True
+
+
 async def plan(client, origin: tuple[float, float], destination: tuple[float, float],
                *, window: int = WINDOW_MIN, step: int = STEP_MIN,
-               now: datetime | None = None) -> dict | None:
+               now: datetime | None = None, whens: list | None = None) -> dict | None:
     """Drive times for each departure, or None when traffic routing is
     not available (no key, or the day's routing budget is spent)."""
     now = now or datetime.now(UTC)
-    whens = slots(now, window, step)
+    whens = (whens if whens is not None else slots(now, window, step))[:MAX_SLOTS]
     sem = asyncio.Semaphore(3)
 
     async def one(when):
         async with sem:
-            return await tomtom_feed.route_times(
-                client, origin, destination,
-                when.isoformat(timespec="seconds") if when else None)
+            return await tomtom_feed.route_times(client, origin, destination,
+                                                 _depart_arg(when))
 
     results = await asyncio.gather(*(one(w) for w in whens))
     if not results or results[0] is None:

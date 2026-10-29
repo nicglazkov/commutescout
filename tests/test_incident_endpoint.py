@@ -93,7 +93,8 @@ def test_source_health_classes():
     assert h({"state": "Ohio", "ok": True, "as_of": ago(120)}, now)["status"] == "stale"
     assert h({"state": "California", "ok": True, "as_of": ago(25),
               "stale_after_s": 1200}, now)["status"] == "stale"
-    assert h({"state": "Ohio", "ok": True, "stale": True, "as_of": ago(1)}, now)["status"] == "stale"
+    stale = {"state": "Ohio", "ok": True, "stale": True, "as_of": ago(1)}
+    assert h(stale, now)["status"] == "stale"
     assert h({"state": "Ohio", "ok": False, "as_of": ago(1)}, now)["status"] == "down"
     assert h({"state": "Nevada", "enabled": False}, now)["status"] == "off"
     entry = h({"state": "Maine", "on_demand": True}, now)

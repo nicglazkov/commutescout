@@ -176,8 +176,9 @@ PAID_PER_CLIENT_DAILY = {
     # The speedometer's posted limit, once a minute at most while moving.
     "speedlimit": int(os.environ.get("SPEEDLIMIT_PER_CLIENT_DAILY", "200")),
     "traffictile": int(os.environ.get("TILE_PER_CLIENT_DAILY", "3000")),
-    # Leave later: up to ten traffic routes per ask (cached per route).
-    "leavelater": int(os.environ.get("LEAVE_LATER_PER_CLIENT_DAILY", "30")),
+    # Leave later, in traffic routes (up to ten an ask; cached ones are
+    # free): about ten fresh asks a day.
+    "leavelater": int(os.environ.get("LEAVE_LATER_PER_CLIENT_DAILY", "100")),
     # A map corridor cut for a trip: tens of megabytes read upstream each.
     "map-extract": int(os.environ.get("MAP_EXTRACT_PER_CLIENT_DAILY", "20")),
 }
@@ -1530,10 +1531,23 @@ async def api_leave_later(request: Request):
     if not (20 <= window <= leavelater.MAX_WINDOW_MIN) or step not in (5, 10, 15, 30):
         return JSONResponse({"error": "window is 20 to 90 minutes; step is 5, 10, 15 or 30"},
                             status_code=400)
-    if _client_over_daily(request, "leavelater"):
+    if window > step * (leavelater.MAX_SLOTS - 1):
+        return JSONResponse({"error": f"at most {leavelater.MAX_SLOTS} departures: "
+                                      "use a shorter window or a longer step"},
+                            status_code=400)
+    if leavelater.trip_km(origin, dest) > leavelater.MAX_TRIP_KM:
+        return JSONResponse({"error": f"trips up to {leavelater.MAX_TRIP_KM} km only"},
+                            status_code=400)
+    whens = leavelater.slots(datetime.now(UTC), window, step)[:leavelater.MAX_SLOTS]
+    cost = leavelater.uncached(origin, dest, whens)
+    # Charged per route the ask will actually buy, not per request.
+    if cost and not paid_use.allow_n(f"leavelater:{client_key(request)}",
+                                     PAID_PER_CLIENT_DAILY["leavelater"], cost):
         return _daily_cap_response()
-    body = await leavelater.plan(tools.get_road().client, origin, dest,
-                                 window=window, step=step)
+    if cost and not leavelater.take_budget(cost):
+        return JSONResponse({"error": "leave later is busy today; try again tomorrow"},
+                            status_code=429, headers={"Retry-After": "3600"})
+    body = await leavelater.plan(tools.get_road().client, origin, dest, whens=whens)
     if body is None:
         return JSONResponse({"error": "traffic routing is unavailable right now"},
                             status_code=503, headers={"Retry-After": "600"})
