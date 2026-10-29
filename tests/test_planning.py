@@ -129,6 +129,30 @@ async def test_landmark_beats_a_nearer_namesake_and_hotels_sink(monkeypatch):
     assert "Hyatt" in cands[-1][2]
 
 
+async def test_the_typed_words_in_order_beat_a_scattered_match(monkeypatch):
+    def rows(lat):
+        return [{"name": "San Francisco Bay at San Mateo Bridge, Foster City, CA",
+                 "lat": 37.584, "lon": -122.251},
+                {"name": "San Francisco–Oakland Bay Bridge East Span, "
+                         "San Francisco, CA", "lat": 37.818, "lon": -122.350}]
+    _fake_places(monkeypatch, rows)
+    cands = await planning.place_candidates(None, "Bay Bridge, San Francisco", None)
+    assert "Oakland Bay Bridge" in cands[0][2]
+    # A street address keeps the geocoder's order.
+    cands = await planning.place_candidates(None, "1 Bay Bridge Rd", None)
+    assert "San Mateo" in cands[0][2]
+
+
+async def test_a_match_inside_the_first_pick_does_not_replace_it(monkeypatch):
+    def rows(lat):
+        return [{"name": "John F. Kennedy International Airport, Queens, NY",
+                 "lat": 40.6413, "lon": -73.7781},
+                {"name": "USO - JFK Airport, Queens, NY", "lat": 40.6446, "lon": -73.7823}]
+    _fake_places(monkeypatch, rows)
+    cands = await planning.place_candidates(None, "JFK Airport", None)
+    assert cands[0][2].startswith("John F. Kennedy International Airport")
+
+
 async def test_coords_win_and_bad_coords_explain(monkeypatch):
     out = await planning.resolve(None, "home", "37.1,-122.2", None, "origin")
     assert (out["lat"], out["lon"], out["name"]) == (37.1, -122.2, "home")

@@ -392,8 +392,27 @@ async def place_candidates(client, query: str, near, limit: int = 5
     for c in out:
         if all(haversine_meters(c[0], c[1], d[0], d[1]) > 300 for d in deduped):
             deduped.append(c)
-    if not _LODGING.search(query):
-        deduped.sort(key=lambda c: 1 if _LODGING.search(c[2].split(",")[0]) else 0)
+    # A name that holds the typed words in order beats one that only
+    # holds them all: "Bay Bridge" is the San Francisco-Oakland Bay
+    # Bridge, not "San Francisco Bay at San Mateo Bridge". Street
+    # addresses are left alone (the number already pins them), and so is
+    # a first pick the match sits inside: "USO - JFK Airport" is in JFK,
+    # and the airport is the better answer.
+    phrase = _name_key(query)
+    ranked = len(phrase.split()) >= 2 and not phrase[:1].isdigit()
+    lodging_ok = bool(_LODGING.search(query))
+
+    def lodging(c):
+        return 0 if lodging_ok or not _LODGING.search(c[2].split(",")[0]) else 1
+
+    first = deduped[0] if deduped else None
+    deduped.sort(key=lambda c: (
+        lodging(c), 0 if not ranked or phrase in _name_key(c[2]) else 1))
+    top = deduped[0] if deduped else None
+    if (first is not None and top is not first and lodging(first) == 0
+            and haversine_meters(first[0], first[1], top[0], top[1]) < 3000):
+        deduped.remove(first)
+        deduped.insert(0, first)
     return deduped[:limit]
 
 
