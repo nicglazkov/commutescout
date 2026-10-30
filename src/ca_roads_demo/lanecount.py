@@ -28,7 +28,21 @@ from ca_roads_mcp.serialize import direction_hint
 
 log = logging.getLogger("lanecount")
 
-OVERPASS_URL = os.environ.get("OVERPASS_URL", "https://overpass-api.de/api/interpreter")
+# Overpass servers tried in turn: one that fails cools off and the next
+# takes over. OVERPASS_URLS (comma-separated) replaces the list; the
+# daily cap below covers all of them together.
+DEFAULT_MIRRORS = ("https://overpass-api.de/api/interpreter,"
+                   "https://z.overpass-api.de/api/interpreter,"
+                   "https://lz4.overpass-api.de/api/interpreter")
+MIRRORS = [u.strip() for u in os.environ.get(
+    "OVERPASS_URLS", os.environ.get("OVERPASS_URL", DEFAULT_MIRRORS)).split(",") if u.strip()]
+# A mirror that failed sits out for this long, doubling per failure in a
+# row (up to the max); a point that failed goes back in the queue, up to
+# MAX_TRIES attempts.
+COOL_S = 30
+COOL_MAX_S = 600
+MAX_TRIES = 6
+TIMEOUT_S = 90
 USER_AGENT = "commutescout.com lane lookup (https://commutescout.com)"
 # Overpass asks for no more than about 10,000 queries a day and a
 # couple at a time; one at a time under this cap stays well inside it.
@@ -53,6 +67,14 @@ _cache: OrderedDict[tuple, tuple[float, tuple | None]] = OrderedDict()
 _queue: OrderedDict[tuple, tuple[float, float, str | None]] = OrderedDict()
 _worker_task = None
 _sleep = asyncio.sleep
+_tries: dict[tuple, int] = {}
+# mirror -> (cool_until monotonic, failures in a row)
+_mirror_state: dict[str, tuple[float, int]] = {}
+
+
+class Busy(Exception):
+    """A transient Overpass failure (429, 5xx, timeout, connection):
+    try another mirror and keep the point."""
 
 
 def heading_letter(direction: str | None) -> str | None:
@@ -208,28 +230,84 @@ def query(lat: float, lon: float) -> str:
             f"out tags geom({lat - d:.5f},{lon - d:.5f},{lat + d:.5f},{lon + d:.5f});")
 
 
-async def lookup(client, lat: float, lon: float, direction: str | None = None):
-    """One Overpass query. Returns (total, types), None for no answer,
-    or raises on a transport failure (so the point is retried)."""
-    resp = await client.post(OVERPASS_URL, data={"data": query(lat, lon)},
-                             headers={"User-Agent": USER_AGENT}, timeout=60)
-    if resp.status_code in (429, 503, 504):
-        raise RuntimeError(f"overpass busy ({resp.status_code})")
+def mirror(now: float | None = None) -> tuple[str | None, float]:
+    """The first mirror not cooling off, or (None, seconds until one is)."""
+    now = time.monotonic() if now is None else now
+    waits = []
+    for url in MIRRORS:
+        until = _mirror_state.get(url, (0.0, 0))[0]
+        if until <= now:
+            return url, 0.0
+        waits.append(until - now)
+    return None, min(waits) if waits else COOL_S
+
+
+def _mirror_failed(url: str) -> None:
+    n = _mirror_state.get(url, (0.0, 0))[1] + 1
+    _mirror_state[url] = (time.monotonic() + min(COOL_MAX_S, COOL_S * 2 ** (n - 1)), n)
+
+
+def _mirror_ok(url: str) -> None:
+    _mirror_state.pop(url, None)
+
+
+async def lookup(client, lat: float, lon: float, direction: str | None = None,
+                 url: str | None = None):
+    """One Overpass query. Returns (total, types), None for no answer;
+    raises Busy on a transient failure (so the point is retried)."""
+    import httpx
+
+    try:
+        resp = await client.post(url or MIRRORS[0], data={"data": query(lat, lon)},
+                                 headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT_S)
+    except (httpx.TimeoutException, httpx.TransportError) as exc:
+        raise Busy(f"{type(exc).__name__}") from exc
+    if resp.status_code == 429 or resp.status_code >= 500:
+        raise Busy(f"HTTP {resp.status_code}")
     resp.raise_for_status()
     return pick(resp.json().get("elements"), lat, lon, direction)
 
 
+def _requeue(k: tuple, point: tuple) -> bool:
+    """Back of the queue for another try; False once it has had enough."""
+    n = _tries.get(k, 0) + 1
+    if n >= MAX_TRIES:
+        _tries.pop(k, None)
+        return False
+    _tries[k] = n
+    _queue[k] = point
+    if len(_tries) > QUEUE_MAX * 2:
+        _tries.clear()
+    return True
+
+
 async def _drain(get_client) -> None:
     while True:
-        if not _queue or not UPSTREAM.allow("overpass-lanes", DAILY_CAP):
-            await _sleep(30 if _queue else 5)
+        if not _queue:
+            await _sleep(5)
             continue
-        k, (lat, lon, direction) = _queue.popitem(last=False)
+        url, wait = mirror()
+        if url is None:
+            await _sleep(wait)
+            continue
+        if not UPSTREAM.allow("overpass-lanes", DAILY_CAP):
+            await _sleep(300)
+            continue
+        k, point = _queue.popitem(last=False)
         try:
-            _store(k, await lookup(get_client(), lat, lon, direction))
+            result = await lookup(get_client(), *point, url=url)
+        except Busy as exc:
+            _mirror_failed(url)
+            kept = _requeue(k, point)
+            log.info("lane lookup failed on %s: %s (%s)", url, exc,
+                     "will retry" if kept else "giving up")
         except Exception as exc:  # noqa: BLE001 - never kill the worker
+            _tries.pop(k, None)
             log.info("lane lookup failed: %s", exc)
-            await _sleep(60)
+        else:
+            _mirror_ok(url)
+            _tries.pop(k, None)
+            _store(k, result)
         await _sleep(PACE_SECONDS)
 
 
@@ -242,8 +320,11 @@ def start_worker(get_client) -> None:
 
 
 def stats() -> dict:
+    now = time.monotonic()
     return {"cached": len(_cache), "queued": len(_queue),
-            "today": UPSTREAM.used("overpass-lanes"), "cap": DAILY_CAP}
+            "today": UPSTREAM.used("overpass-lanes"), "cap": DAILY_CAP,
+            "mirrors": {u: max(0, round(_mirror_state.get(u, (0.0, 0))[0] - now))
+                        for u in MIRRORS}}
 
 
 # ---------------------------------------------------------------- layouts
