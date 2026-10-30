@@ -2879,6 +2879,8 @@ def source_status() -> list[dict]:
                   "idk": "ITD", "nvk": "NDOT",
                   "nck": "NCDOT"}.get(code, name)
         out.append(_status_entry(f"{code}:all", "All feeds", agency, name))
+    from ca_roads_demo import freshness
+
     for code, (st, _b, _f, ready, _ttl) in TOLL_SOURCES.items():
         if ready and not ready():
             continue
@@ -2886,5 +2888,8 @@ def source_status() -> list[dict]:
                   "baytoll": "511 SF Bay tolls", "ntta": "NTTA",
                   "hctra": "HCTRA",
                   "cabr": "Bay Area bridge tolls (posted)"}.get(code, code)
-        out.append(_status_entry(f"toll:{code}", "Toll pricing", agency, st))
+        entry = _status_entry(f"toll:{code}", "Toll pricing", agency, st)
+        # A daily schedule is not late at two hours old.
+        entry["stale_after_s"] = freshness.state_limit(f"toll:{code}")
+        out.append(entry)
     return out

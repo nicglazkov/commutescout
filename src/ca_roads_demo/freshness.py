@@ -68,7 +68,7 @@ def _clean(error: str | None) -> str:
     return f" ({_QUERY.sub('?...', error)[:160]})" if error else ""
 
 
-def _state_limit(key: str) -> float:
+def state_limit(key: str) -> float:
     """How old one state cache entry may get. Toll feeds refresh on their
     own intervals, up to once a day, so theirs scales with that."""
     from ca_roads_demo import states
@@ -106,7 +106,7 @@ async def find_stale() -> dict[str, str]:
     cache = states._cache
     for key, entry in list(cache._entries.items()):
         age = mono - entry.fetched_monotonic
-        if age > _state_limit(key):
+        if age > state_limit(key):
             stale[f"state feed {key}"] = (f"last good data {age / 60:.0f} min old"
                                           + _clean(cache._errors.get(key)))
     return stale
