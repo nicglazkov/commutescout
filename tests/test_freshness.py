@@ -46,9 +46,9 @@ async def test_cameras_are_allowed_hours_and_tolls_their_own_interval(monkeypatc
     from ca_roads_mcp import server
     monkeypatch.setattr(server, "get_road", lambda: FakeRoad({"cameras": 180}))
     assert await freshness.find_stale() == {}
-    assert freshness._state_limit("toll:cabr") >= 3 * 86400
-    assert freshness._state_limit("il:all") == freshness.STATE_STALE_S
-    assert freshness._state_limit("neccam:me") == freshness.CAMERA_STALE_S
+    assert freshness.state_limit("toll:cabr") >= 3 * 86400
+    assert freshness.state_limit("il:all") == freshness.STATE_STALE_S
+    assert freshness.state_limit("neccam:me") == freshness.CAMERA_STALE_S
 
 
 def test_one_outage_is_one_error_then_warnings_then_a_recovery(caplog):

@@ -109,3 +109,16 @@ def test_incident_not_found_and_bad_id(monkeypatch):
     assert client.get("/api/incident/bad.id.here").status_code == 400
     # isalnum() alone would accept non-ASCII letters; the check is ASCII-strict.
     assert client.get("/api/incident/%D0%B0%D0%B1%D0%B2%D0%B3%D0%B4%D0%B5").status_code == 400
+
+
+def test_daily_toll_schedule_is_not_stale_at_four_hours():
+    from datetime import UTC, datetime, timedelta
+
+    from ca_roads_demo import freshness
+
+    src = {"name": "Toll pricing", "ok": True, "stale": False,
+           "as_of": (datetime.now(UTC) - timedelta(hours=4)).isoformat(),
+           "stale_after_s": freshness.state_limit("toll:cabr")}
+    assert demo_app.source_health(src, datetime.now(UTC))["status"] == "fresh"
+    src["stale_after_s"] = freshness.state_limit("toll:baytoll")
+    assert demo_app.source_health(src, datetime.now(UTC))["status"] == "stale"
