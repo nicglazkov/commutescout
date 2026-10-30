@@ -31,11 +31,11 @@ FRONTAGE = way({"highway": "secondary", "lanes": "2", "lanes:forward": "1",
 
 @pytest.fixture(autouse=True)
 def clean():
-    lc._cache.clear()
-    lc._queue.clear()
+    for d in (lc._cache, lc._queue, lc._tries, lc._mirror_state):
+        d.clear()
     yield
-    lc._cache.clear()
-    lc._queue.clear()
+    for d in (lc._cache, lc._queue, lc._tries, lc._mirror_state):
+        d.clear()
 
 
 def test_pick_matches_direction_of_travel():
@@ -147,9 +147,96 @@ def test_lookup_parses_and_identifies_itself():
     assert "commutescout.com" in client.calls[0][2]["User-Agent"]
 
 
-def test_lookup_busy_raises():
-    with pytest.raises(RuntimeError):
-        asyncio.run(lc.lookup(FakeClient(FakeResp(429, {})), LAT, LON, "S"))
+@pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+def test_lookup_busy_raises(status):
+    with pytest.raises(lc.Busy):
+        asyncio.run(lc.lookup(FakeClient(FakeResp(status, {})), LAT, LON, "S"))
+
+
+def test_lookup_timeout_and_connect_errors_are_busy():
+    import httpx
+
+    for exc in (httpx.ReadTimeout("slow"), httpx.ConnectError("refused")):
+        class Raising(FakeClient):
+            async def post(self, url, data, headers, timeout, _e=exc):
+                raise _e
+        with pytest.raises(lc.Busy):
+            asyncio.run(lc.lookup(Raising(None), LAT, LON, "S"))
+
+
+class ScriptedClient(FakeClient):
+    """Answers per mirror: a status code or a body."""
+
+    def __init__(self, by_url):
+        super().__init__(None)
+        self.by_url = by_url
+
+    async def post(self, url, data, headers, timeout):
+        self.calls.append((url, data, headers))
+        got = self.by_url[url]
+        return FakeResp(got, {}) if isinstance(got, int) else FakeResp(200, got)
+
+
+def _run_drain(monkeypatch, client, steps):
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+        if len(sleeps) > steps:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(lc, "_sleep", fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(lc._drain(lambda: client))
+    return sleeps
+
+
+def test_502_keeps_the_point_and_rotates_to_the_next_mirror(monkeypatch):
+    a, b = "https://a.example/api/interpreter", "https://b.example/api/interpreter"
+    monkeypatch.setattr(lc, "MIRRORS", [a, b])
+    client = ScriptedClient({a: 502, b: {"elements": [NB]}})
+    lc.want(LAT, LON, "N")
+    _run_drain(monkeypatch, client, 3)
+    assert [c[0] for c in client.calls] == [a, b]
+    assert lc.known(LAT, LON, "N") == (4, {1: "hov"})
+    assert lc._mirror_state[a][1] == 1 and b not in lc._mirror_state
+
+
+def test_all_mirrors_down_waits_then_gives_up_after_max_tries(monkeypatch):
+    a = "https://a.example/api/interpreter"
+    monkeypatch.setattr(lc, "MIRRORS", [a])
+    monkeypatch.setattr(lc, "MAX_TRIES", 3)
+    clock = [1000.0]
+    monkeypatch.setattr(lc.time, "monotonic", lambda: clock[0])
+    client = ScriptedClient({a: 502})
+    lc.want(LAT, LON, "N")
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+        clock[0] += s            # time passes while the worker waits
+        if len(sleeps) > 12:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(lc, "_sleep", fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(lc._drain(lambda: client))
+    assert len(client.calls) == 3            # tried MAX_TRIES times, then dropped
+    assert not lc._queue and lc.known(LAT, LON, "N") is None
+    # Waits for the mirror's cool-off (less the pause already taken), doubling.
+    waits = [s for s in sleeps if s > lc.PACE_SECONDS]
+    assert waits[:2] == [lc.COOL_S - lc.PACE_SECONDS, lc.COOL_S * 2 - lc.PACE_SECONDS]
+
+
+def test_daily_cap_counts_every_mirror(monkeypatch):
+    a, b = "https://a.example/api/interpreter", "https://b.example/api/interpreter"
+    monkeypatch.setattr(lc, "MIRRORS", [a, b])
+    monkeypatch.setattr(lc, "DAILY_CAP", 1)
+    monkeypatch.setattr(lc, "UPSTREAM", lc.UPSTREAM.__class__())
+    client = ScriptedClient({a: 502, b: {"elements": [NB]}})
+    lc.want(LAT, LON, "N")
+    _run_drain(monkeypatch, client, 4)
+    assert len(client.calls) == 1 and lc._queue     # the retry waits for tomorrow
 
 
 def test_worker_drains_queue_under_cap(monkeypatch):
