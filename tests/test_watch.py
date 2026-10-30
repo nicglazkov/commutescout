@@ -81,6 +81,14 @@ class MemoryStore:
             raise ValueError("400 Nested arrays are not allowed")
         self.watches[watch_id].update(data)
 
+    async def update_watch_if_exists(self, watch_id, data):
+        if _firestore_would_reject(data):
+            raise ValueError("400 Nested arrays are not allowed")
+        if watch_id not in self.watches:
+            return False
+        self.watches[watch_id].update(data)
+        return True
+
     async def get_watch(self, watch_id):
         return (dict(self.watches[watch_id])
                 if watch_id in self.watches else None)

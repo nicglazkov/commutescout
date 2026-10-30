@@ -330,6 +330,18 @@ class FirestoreStore:
         await self.db.collection("watches").document(watch_id).set(
             data, merge=True)
 
+    async def update_watch_if_exists(self, watch_id: str, data: dict) -> bool:
+        """Merge ``data`` into a watch that still exists; False when it
+        is gone. The checker writes with this, never ``update_watch``:
+        set-with-merge would recreate a watch deleted mid-cycle."""
+        from google.api_core.exceptions import NotFound
+
+        try:
+            await self.db.collection("watches").document(watch_id).update(data)
+        except NotFound:
+            return False
+        return True
+
     async def delete_watch(self, watch_id: str) -> None:
         await self.db.collection("watches").document(watch_id).delete()
         await self.db.collection("watch_state").document(watch_id).delete()
@@ -583,6 +595,14 @@ async def api_watch_config(_: Request) -> JSONResponse:
     })
 
 
+# Checker bookkeeping on a watch document that the apps never need.
+_PRIVATE_WATCH_FIELDS = ("quiet_held", "alerted")
+
+
+def public_watch(w: dict) -> dict:
+    return {k: v for k, v in w.items() if k not in _PRIVATE_WATCH_FIELDS}
+
+
 async def api_watch_me(request: Request) -> JSONResponse:
     claims = await verify_user(request)
     if not claims:
@@ -590,7 +610,7 @@ async def api_watch_me(request: Request) -> JSONResponse:
     user = await _load_user(claims)
     watches = []
     if _approved(user):
-        watches = await get_store().list_watches(claims["sub"])
+        watches = [public_watch(w) for w in await get_store().list_watches(claims["sub"])]
     return JSONResponse({
         "email": user.get("email"),
         "status": user.get("status"),
@@ -872,20 +892,84 @@ async def api_admin_key(request: Request) -> JSONResponse:
     return JSONResponse({"id": key_id, "tier": tier})
 
 
+# Account-wide alert switches (all on unless turned off).
+PREF_BOOLS = ("alerts_push", "alerts_email", "notify_clears")
+QUIET_DEFAULT = {"enabled": False, "start": "22:00", "end": "06:00",
+                 "tz": "America/Los_Angeles", "summary": True}
+
+
+def _minutes(hhmm) -> int | None:
+    m = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)", str(hhmm or "").strip())
+    return int(m.group(1)) * 60 + int(m.group(2)) if m else None
+
+
+def clean_quiet_hours(raw) -> dict | str:
+    """A quiet-hours setting, or an error message. ``start`` and ``end``
+    are local "HH:MM" in ``tz``; a window may cross midnight."""
+    if not isinstance(raw, dict):
+        return "quiet_hours must be an object"
+    q = {**QUIET_DEFAULT, **{k: raw[k] for k in QUIET_DEFAULT if k in raw}}
+    if not isinstance(q["enabled"], bool) or not isinstance(q["summary"], bool):
+        return "quiet_hours enabled and summary are true or false"
+    if _minutes(q["start"]) is None or _minutes(q["end"]) is None:
+        return "quiet_hours start and end are HH:MM"
+    if q["start"] == q["end"]:
+        return "quiet_hours start and end must differ"
+    try:
+        ZoneInfo(str(q["tz"]))
+    except Exception:  # noqa: BLE001 - any bad zone name
+        return "quiet_hours tz must be an IANA time zone, like America/Denver"
+    q["start"] = f"{_minutes(q['start']) // 60:02d}:{_minutes(q['start']) % 60:02d}"
+    q["end"] = f"{_minutes(q['end']) // 60:02d}:{_minutes(q['end']) % 60:02d}"
+    q["tz"] = str(q["tz"])
+    return q
+
+
+def in_quiet_hours(prefs: dict | None, when: float | None = None) -> bool:
+    q = (prefs or {}).get("quiet_hours") or {}
+    if not q.get("enabled"):
+        return False
+    try:
+        local = datetime.fromtimestamp(when or time.time(), ZoneInfo(q["tz"]))
+    except Exception:  # noqa: BLE001
+        return False
+    start, end = _minutes(q.get("start")), _minutes(q.get("end"))
+    if start is None or end is None:
+        return False
+    now_m = local.hour * 60 + local.minute
+    return start <= now_m < end if start < end else (now_m >= start or now_m < end)
+
+
 async def api_watch_prefs(request: Request) -> JSONResponse:
-    """Per-account preferences (distance units today), so a choice made
-    on one device follows the account to the next."""
+    """Per-account preferences, so a choice made on one device follows
+    the account to the next. Any subset of: ``units`` (mi or km),
+    ``alerts_push``, ``alerts_email`` and ``notify_clears`` (true or
+    false), and ``quiet_hours`` {enabled, start, end, tz, summary}."""
     claims = await verify_user(request)
     if not claims:
         return _err("sign in required", 401)
     body = await _read_json(request)
     if body is None:
         return _err("JSON body required")
-    units = body.get("units")
-    if units not in UNITS:
+    updates: dict = {}
+    if "units" in body:
+        if body["units"] not in UNITS:
+            return _err("units must be mi or km")
+        updates["units"] = body["units"]
+    for key in PREF_BOOLS:
+        if key in body:
+            if not isinstance(body[key], bool):
+                return _err(f"{key} must be true or false")
+            updates[key] = body[key]
+    if "quiet_hours" in body:
+        q = clean_quiet_hours(body["quiet_hours"])
+        if isinstance(q, str):
+            return _err(q)
+        updates["quiet_hours"] = q
+    if not updates:
         return _err("units must be mi or km")
     user = await _load_user(claims)
-    prefs = {**(user.get("prefs") or {}), "units": units}
+    prefs = {**(user.get("prefs") or {}), **updates}
     await get_store().upsert_user(claims["sub"], {"prefs": prefs})
     return JSONResponse({"prefs": prefs})
 
@@ -990,6 +1074,8 @@ async def api_watch_create(request: Request) -> JSONResponse:
         "kinds": kinds,
         "channels": {"push": bool(channels.get("push", True)),
                      "email": bool(channels.get("email", False))},
+        # Follows the account's quiet hours unless turned off here.
+        "quiet_hours": bool(body.get("quiet_hours", True)),
         "active": True,
         "created_at": datetime.now(UTC).isoformat(),
     }
@@ -1120,6 +1206,8 @@ async def api_watch_update(request: Request) -> JSONResponse:
                                "email": bool(channels.get("email", False))}
     if "active" in body:
         updates["active"] = bool(body.get("active"))
+    if "quiet_hours" in body:
+        updates["quiet_hours"] = bool(body.get("quiet_hours"))
     if "buffer_km" in body:
         if watch.get("type") != "route":
             return _err("only route watches have a buffer")
@@ -1144,10 +1232,12 @@ async def api_watch_update(request: Request) -> JSONResponse:
         updates["points"] = points
     if not updates:
         return _err("nothing to update")
-    await store.update_watch(watch_id, updates)
+    # A real update: an edit racing a delete must not bring it back.
+    if not await store.update_watch_if_exists(watch_id, updates):
+        return _err("not found", 404)
     watch.update(updates)
     watch["id"] = watch_id
-    return JSONResponse(watch)
+    return JSONResponse(public_watch(watch))
 
 
 async def api_account_delete(request: Request) -> JSONResponse:
@@ -1775,6 +1865,41 @@ def render_signin_email(link: str) -> tuple[str, str, str]:
     return subject, html, text
 
 
+# "Tell me when it clears": an alerted event missing this many cycles in
+# a row has cleared (one miss is a CHP mirror blinking). Alerts older
+# than a day are no longer followed.
+CLEAR_MISSES = 2
+ALERTED_KEEP_S = 24 * 3600
+MAX_QUIET_HELD = 20
+_TOP_KIND = {"fire": 0, "chain": 1, "incident": 2, "closure": 3}
+
+
+def live_status(matched: list[dict], prev: dict | None, now_ts: float) -> dict:
+    """What a watch area has right now, for its line on the watches
+    screen ("Quiet since 6:10 AM", "1 crash now", "Chains required")."""
+    by_kind: dict[str, int] = {}
+    for e in matched:
+        by_kind[e["kind"]] = by_kind.get(e["kind"], 0) + 1
+    top = None
+    if matched:
+        e = min(matched, key=lambda e: _TOP_KIND.get(e["kind"], 9))
+        top = {"kind": e["kind"], "title": e.get("title") or "",
+               "body": e.get("body") or ""}
+    prev = prev or {}
+    quiet_since = None
+    if not matched:
+        if not prev.get("count") and prev.get("quiet_since"):
+            quiet_since = prev["quiet_since"]
+        else:
+            quiet_since = datetime.fromtimestamp(now_ts, UTC).isoformat(timespec="seconds")
+    return {"count": len(matched), "by_kind": by_kind, "top": top,
+            "quiet_since": quiet_since}
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
 async def run_check_cycle() -> dict:
     """One pass over every active watch: new matching events get pushed
     (and emailed when configured), then the seen-set advances. First run
@@ -1827,6 +1952,24 @@ async def run_check_cycle() -> dict:
             matched = [e for e in events
                        if e["kind"] in (watch.get("kinds") or [])
                        and watch_matches(watch, e["lat"], e["lon"])]
+            prefs = user.get("prefs") or {}
+            name = watch.get("name", "Watch")
+            push_on = (prefs.get("alerts_push", True)
+                       and watch.get("channels", {}).get("push", True))
+            email_on = (prefs.get("alerts_email", True)
+                        and watch.get("channels", {}).get("email"))
+            quiet = (watch.get("quiet_hours", True)
+                     and in_quiet_hours(prefs, time.time()))
+            follow = bool(prefs.get("notify_clears"))
+            doc: dict = {}
+            live = live_status(matched, watch.get("live"), time.time())
+            prev_live = {k: v for k, v in (watch.get("live") or {}).items()
+                         if k != "updated_at"}
+            if live != prev_live:
+                doc["live"] = {**live, "updated_at": datetime.now(UTC).isoformat(
+                    timespec="seconds")}
+            alerted = {k: dict(v) for k, v in (watch.get("alerted") or {}).items()}
+            held_quiet = list(watch.get("quiet_held") or [])
             raw_seen = await store.get_seen(watch["id"])
             first_run = raw_seen is None
             now_ts = time.time()
@@ -1842,6 +1985,31 @@ async def run_check_cycle() -> dict:
             fresh = [e for e in matched if e["id"] not in seen]
             held: set[str] = set()
 
+            if quiet and not first_run and fresh:
+                # Quiet hours: nothing goes out; the events wait for one
+                # summary when the window ends (if the account wants it).
+                for e in fresh:
+                    held_quiet.append({"id": e["id"], "kind": e.get("kind"),
+                                       "title": e.get("title") or ""})
+                held_quiet = held_quiet[-MAX_QUIET_HELD:]
+                doc["quiet_held"] = held_quiet
+                stats["quiet_held"] = stats.get("quiet_held", 0) + len(fresh)
+                fresh = []
+            if not quiet and held_quiet:
+                q = prefs.get("quiet_hours") or {}
+                if q.get("summary", True) and push_on:
+                    n = len(held_quiet)
+                    titles = "; ".join(h["title"] for h in held_quiet[:3] if h.get("title"))
+                    sent = await _push_to_subs(await push_subs_for(uid), {
+                        "title": f"{name}: {_plural(n, 'alert')} during quiet hours",
+                        "body": titles or "Open the app to see them.",
+                        "url": f"{DEMO_URL}/watch",
+                        "event": {"kind": "summary", "watch": name, "count": n,
+                                  "sent_at": int(time.time())},
+                    })
+                    stats["pushes"] += sent
+                doc["quiet_held"] = []
+
             if not first_run and fresh:
                 batch = fresh[:MAX_ALERTS_PER_WATCH_CYCLE]
                 overflow = len(fresh) - len(batch)
@@ -1849,7 +2017,7 @@ async def run_check_cycle() -> dict:
                 for event in batch:
                     stats["alerts"] += 1
                     title = f"{watch.get('name', 'Watch')}: {event['title']}"
-                    if watch.get("channels", {}).get("push", True):
+                    if push_on:
                         subs = await push_subs_for(uid)
                         lat, lon = event.get("lat"), event.get("lon")
                         click = (f"{DEMO_URL}/?focus={lat:.5f},{lon:.5f}"
@@ -1874,9 +2042,16 @@ async def run_check_cycle() -> dict:
                         stats["pushes"] += sent
                         tried += 1 if subs else 0
                         delivered += sent
+                        if sent and follow:
+                            alerted[event["id"]] = {
+                                "kind": event.get("kind"),
+                                "title": event.get("title") or "",
+                                "body": event.get("body") or "",
+                                "lat": event.get("lat"), "lon": event.get("lon"),
+                                "at": time.time(), "miss": 0}
                 # One email per watch per cycle: pushes are per event, but
                 # a busy cycle as eight separate emails reads as spam.
-                if watch.get("channels", {}).get("email"):
+                if email_on:
                     subject, body_html, body_text = render_alert_email(
                         watch.get("name", "Watch area"), batch, overflow)
                     ok = await _email_alert(user.get("email") or "", subject,
@@ -1915,6 +2090,40 @@ async def run_check_cycle() -> dict:
             pruned = {i: ts for i, ts in seen.items()
                       if now_ts - ts < SEEN_GRACE_SECONDS}
             await store.set_seen(watch["id"], pruned)
+
+            # Tell me when it clears: one follow-up per alerted event.
+            if alerted:
+                live_ids = {e["id"] for e in matched}
+                for eid, rec in list(alerted.items()):
+                    if now_ts - float(rec.get("at") or 0) > ALERTED_KEEP_S:
+                        del alerted[eid]
+                    elif eid in live_ids:
+                        rec["miss"] = 0
+                    elif rec.get("miss", 0) + 1 < CLEAR_MISSES:
+                        rec["miss"] = rec.get("miss", 0) + 1
+                    else:
+                        del alerted[eid]
+                        if quiet or not push_on or not follow:
+                            continue
+                        sent = await _push_to_subs(await push_subs_for(uid), {
+                            "title": f"{name}: cleared",
+                            "body": f"{rec.get('title') or 'The event'} has cleared",
+                            "url": f"{DEMO_URL}/watch",
+                            "event": {"id": eid, "kind": rec.get("kind") or "incident",
+                                      "lat": rec.get("lat"), "lon": rec.get("lon"),
+                                      "title": rec.get("title") or "",
+                                      "body": rec.get("body") or "",
+                                      "watch": name, "status": "cleared",
+                                      "sent_at": int(time.time())},
+                        })
+                        stats["pushes"] += sent
+                        stats["clears"] = stats.get("clears", 0) + 1
+            if alerted != (watch.get("alerted") or {}):
+                doc["alerted"] = alerted
+            if doc and not await store.update_watch_if_exists(watch["id"], doc):
+                # Deleted mid-cycle: drop the seen state written above too.
+                log.info("checker: watch %s was deleted mid-cycle", watch["id"])
+                await store.delete_watch(watch["id"])
         except Exception:  # noqa: BLE001 - isolate one bad watch
             stats["errors"] = stats.get("errors", 0) + 1
             log.exception("checker: watch %s failed; skipping",
