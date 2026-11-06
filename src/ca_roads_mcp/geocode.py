@@ -61,6 +61,31 @@ def _auth(key: str) -> dict[str, str]:
     return auth_headers(key, USER_AGENT)
 
 
+_RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+async def _stadia_get(client: httpx.AsyncClient, url: str, params: dict,
+                      key: str, timeout: float) -> httpx.Response:
+    """One GET with a single quick retry. A burst of trip calls (each
+    asks for several lookups at once) drew an occasional 429 or a
+    dropped connection, and that one blip read as "could not find
+    Reno, NV". The retry costs one more call of the daily budget."""
+    for attempt in (0, 1):
+        try:
+            resp = await client.get(url, params=params, headers=_auth(key),
+                                    timeout=timeout)
+        except (httpx.TimeoutException, httpx.TransportError):
+            if attempt:
+                raise
+        else:
+            if resp.status_code not in _RETRY_STATUS or attempt:
+                return resp
+        if not UPSTREAM.allow("stadia-geocode", STADIA_GEOCODE_DAILY):
+            raise httpx.HTTPError("stadia geocode budget spent")
+        await asyncio.sleep(0.6)
+    raise AssertionError("unreachable")
+
+
 def _rect_params(scope: str = "ca") -> dict:
     if scope == "us":
         return {"boundary.country": "US"}
@@ -186,9 +211,8 @@ async def _search_stadia(
     if near:
         params["focus.point.lat"], params["focus.point.lon"] = near
     try:
-        resp = await client.get(
-            STADIA_SEARCH_URL, params=params,
-            headers=_auth(key), timeout=TIMEOUT_SECONDS)
+        resp = await _stadia_get(client, STADIA_SEARCH_URL, params, key,
+                                 timeout=TIMEOUT_SECONDS)
         resp.raise_for_status()
         features = resp.json().get("features", [])
     except Exception:  # noqa: BLE001 - failure means "use the fallback"
@@ -431,12 +455,8 @@ async def stadia_suggest(
         params["focus.point.lon"] = bias_lon
     try:
         async with _suggest_sem:
-            resp = await client.get(
-                STADIA_AUTOCOMPLETE_URL,
-                params=params,
-                headers=_auth(key),
-                timeout=4.0,
-            )
+            resp = await _stadia_get(client, STADIA_AUTOCOMPLETE_URL, params,
+                                     key, timeout=4.0)
         resp.raise_for_status()
         out = []
         number_match = re.match(r"^(\d+[a-zA-Z]?)\s+(.+)", q)

@@ -50,7 +50,7 @@ async def test_closures_sorted_by_distance_before_the_cap(monkeypatch):
                                begin_lon=-121.95)
     monkeypatch.setattr(server, "get_road", lambda: FakeRoad(closures=[far, near]))
     monkeypatch.setattr(server, "_attach_scenery", _noop_attach)
-    res = await server.get_lane_closures(center="37.0,-121.9", radius_km=600)
+    res = await server.get_lane_closures(center="37.0,-121.9", radius_km=500)
     assert [c["index"] for c in res["closures"]] == ["near", "far"]
 
 

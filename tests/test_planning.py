@@ -230,7 +230,17 @@ async def test_arrive_by_returns_the_latest_safe_departure(monkeypatch):
     out = await planning.best_time_to_go(None, "a", "b", arrive_by="tomorrow 9am")
     leave = datetime.fromisoformat(out["recommended"]["leave_local"])
     assert leave + timedelta(minutes=65) <= leave.replace(hour=9, minute=0)
-    assert out["summary"].startswith("To arrive by 9:00 AM")
+    assert out["summary"].startswith("To arrive by 9:00 AM tomorrow")
+
+
+async def test_arrive_by_today_already_past_is_refused(monkeypatch):
+    _fake_ends(monkeypatch)
+    monkeypatch.setattr(tomtom_feed, "api_key", lambda: "k")
+    # 12:01 AM today has always passed by the time anyone asks; it used to
+    # roll silently to tonight's midnight.
+    out = await planning.best_time_to_go(None, "a", "b", day="today",
+                                         arrive_by="12:01am")
+    assert "12:01 AM) is in the past" in out["error"]
 
 
 async def test_best_time_without_traffic_key_says_so(monkeypatch):

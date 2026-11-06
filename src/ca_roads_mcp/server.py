@@ -16,6 +16,7 @@ import contextlib
 import ipaddress
 import json
 import logging
+import math
 import os
 import time
 from datetime import UTC, datetime
@@ -24,8 +25,9 @@ from typing import Annotated, Literal
 from urllib.parse import urlparse
 
 from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import Icon, ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from ca_roads.dedupe import dedupe
 from ca_roads.feeds import bay511 as bay511_feed
@@ -98,6 +100,19 @@ def app_version() -> str:
         return os.environ.get("APP_VERSION") or "dev"
 
 
+def argument_error(tool: str, exc: ValidationError) -> str:
+    """One readable line per bad argument, instead of pydantic's dump
+    (error codes, the rejected value echoed back, a docs URL) that a
+    model has to dig the fix out of."""
+    parts = []
+    for err in exc.errors()[:5]:
+        where = ".".join(str(p) for p in err.get("loc", ())) or "arguments"
+        msg = str(err.get("msg", "is invalid")).rstrip(".")
+        parts.append(f"{where}: {msg}")
+    return (f"Invalid arguments for {tool}: " + "; ".join(parts)
+            + ". Fix them and call again.")
+
+
 class _CountedServer(MCPServer):
     """Logs one ``mcp_tool`` event per call: the tool, whether it worked,
     and how long it took. Never the arguments, which can carry a place.
@@ -115,6 +130,10 @@ class _CountedServer(MCPServer):
             result = await super().call_tool(name, arguments, context)
             ok = not getattr(result, "is_error", False)
             return result
+        except ToolError as exc:
+            if isinstance(exc.__cause__, ValidationError):
+                raise ToolError(argument_error(name, exc.__cause__)) from exc.__cause__
+            raise
         finally:
             if self.count_calls:
                 log_event("mcp_tool", tool=str(name)[:64], ok=ok,
@@ -326,6 +345,36 @@ def parse_center(center: str) -> tuple[float, float] | None:
 MAX_RADIUS_KM = 500
 CENTER_FORMAT_ERROR = ("center must be 'lat,lon' (lat -90..90, lon -180..180), "
                        "e.g. '38.58,-121.49'")
+
+
+def _clean(text: str | None) -> str | None:
+    """A free-text filter with the whitespace trimmed; blank means unset."""
+    if text is None:
+        return None
+    return text.strip() or None
+
+
+def _route_filter(raw: str | None, param: str) -> tuple[str | None, dict | None]:
+    """(canonical route, None), or (None, error) for text that names no
+    highway. An unrecognized route used to be dropped silently, so
+    route='🚗' answered with every closure in the state as if they were
+    on it."""
+    raw = _clean(raw)
+    if raw is None:
+        return None, None
+    canonical = normalize_route(raw)
+    if canonical is None:
+        return None, {"error": f"{param} must be a highway such as 'I-80', "
+                               f"'US-50', 'SR-89' or '101'; got {raw[:40]!r}."}
+    return canonical, None
+
+
+def _radius_error(radius_km: float, cap: float = MAX_RADIUS_KM) -> dict | None:
+    """The one radius rule: finite, above zero, at most the cap. NaN and
+    infinity got through before and filtered everything or nothing."""
+    if not (math.isfinite(radius_km) and 0 < radius_km <= cap):
+        return {"error": f"radius_km must be greater than 0 and at most {cap:g}."}
+    return None
 # An unfiltered closures list is 600 KB and 670 records: more than any
 # model context wants. Callers narrow with route, district, or center.
 CLOSURES_CAP = 200
@@ -426,6 +475,13 @@ async def check_route(
             to_cands = await geocode_candidates(
                 road.client, to_place, near=from_point
             )
+            # The geocoder pads with fuzzy matches near the origin: "Lake
+            # Tahoe" from San Francisco came back as Alvord Lake, SF first.
+            # Matches that hold the whole typed name win when there are any.
+            phrase = planning._name_key(to_place)
+            whole = [c for c in to_cands if phrase and phrase in planning._name_key(c[2])]
+            if whole:
+                to_cands = whole
         # Multiple far-apart matches: the wrong guess sends someone across
         # the hills. Refuse and make the caller ask which one was meant.
         # A comma-qualified place ("Riverside Dr, San Jose") means the
@@ -479,10 +535,12 @@ async def check_route(
     if match is None:
         return {
             "error": (
-                f"No corridor found covering '{from_place}' to '{to_place}'. "
-                "This tool covers a curated set of major California "
-                "corridors. Pass from_coords/to_coords to snap nearby places "
-                "onto a corridor, or use the filtered tools with center=."
+                f"No corridor found covering {from_place[:80]!r} to "
+                f"{to_place[:80]!r}. This tool covers a curated set of major "
+                "California corridors. For any other drive call plan_trip "
+                "(every US route, with everything live on it). Or pass "
+                "from_coords/to_coords to snap nearby places onto a "
+                "corridor, or use the filtered tools with center=."
             ),
             "supported_corridors": corr.corridor_names(),
         }
@@ -886,10 +944,15 @@ async def get_incidents(
     Limits: locations are free-text from dispatchers; a few incidents lack
     usable coordinates and are omitted. No history - current logs only.
     """
+    canonical, bad = _route_filter(highway, "highway")
+    if bad:
+        return bad
+    area = _clean(area)
+    if center and (bad := _radius_error(radius_km)):
+        return bad
     result = await get_road().incidents()
     records = result.records
     warning = None
-    canonical = normalize_route(highway) if highway else None
     if canonical:
         records = [i for i in records if matches_route(i.location, canonical)]
     if area:
@@ -912,8 +975,6 @@ async def get_incidents(
         point = parse_center(center)
         if point is None:
             return {"error": CENTER_FORMAT_ERROR}
-        if not 0 < radius_km <= MAX_RADIUS_KM:
-            return {"error": f"radius_km must be greater than 0 and at most {MAX_RADIUS_KM}."}
         records = [
             i
             for i in records
@@ -970,10 +1031,14 @@ async def get_lane_closures(
     if district is not None and not 1 <= district <= 12:
         return {"error": "district must be a Caltrans district number 1 to 12 "
                          "(3 = Sacramento/Tahoe, 4 = Bay Area, 7 = Los Angeles)"}
+    canonical, bad = _route_filter(route, "route")
+    if bad:
+        return bad
+    if center and (bad := _radius_error(radius_km)):
+        return bad
     districts = [district] if district else None
     result = await get_road().lane_closures(districts=districts)
     records = result.records
-    canonical = normalize_route(route) if route else None
     if canonical:
         records = [c for c in records if c.route == canonical]
     if center:
@@ -1040,9 +1105,13 @@ async def get_chain_controls(
     Chain requirements can change hour to hour in storms - tell the user the
     data_as_of time and to carry chains anyway when snow is possible.
     """
+    canonical, bad = _route_filter(route, "route")
+    if bad:
+        return bad
+    if center and (bad := _radius_error(radius_km)):
+        return bad
     result = await get_road().chain_controls()
     records = result.records
-    canonical = normalize_route(route) if route else None
     if canonical:
         records = [c for c in records if c.route == canonical]
     if center:
@@ -1099,8 +1168,12 @@ async def get_wildfires(
     This tool does NOT know about road closures caused by fires - cross-check
     get_incidents and get_lane_closures for the affected area.
     """
+    canonical, bad = _route_filter(near_route, "near_route")
+    if bad:
+        return bad
+    if center and (bad := _radius_error(radius_km)):
+        return bad
     result = await get_road().wildfires()
-    canonical = normalize_route(near_route) if near_route else None
     route_corridors = (
         [c for c in corr.CORRIDORS if canonical in c.routes] if canonical else []
     )
@@ -1354,11 +1427,16 @@ async def get_cameras(
     user SEE conditions: fog on the pass, snow on the pavement, traffic
     density at an interchange.
     """
-    if not center and not route:
+    canonical, bad = _route_filter(route, "route")
+    if bad:
+        return bad
+    center = _clean(center)
+    if not center and not canonical:
         return {"error": "Pass center 'lat,lon' and/or route."}
+    if center and (bad := _radius_error(radius_km)):
+        return bad
     result = await get_road().cameras()
     records = result.records
-    canonical = normalize_route(route) if route else None
     if canonical:
         records = [c for c in records if normalize_route(c.route) == canonical]
     point = None
@@ -1410,9 +1488,13 @@ async def get_road_signs(
     Quote sign text verbatim to the user - it is the most current and
     most local signal this server has.
     """
+    canonical, bad = _route_filter(route, "route")
+    if bad:
+        return bad
+    if center and (bad := _radius_error(radius_km)):
+        return bad
     result = await get_road().message_signs()
     records = [s for s in result.records if s.text]
-    canonical = normalize_route(route) if route else None
     if canonical:
         records = [s for s in records if normalize_route(s.route) == canonical]
     if center:
@@ -1432,6 +1514,11 @@ async def get_road_signs(
         "signs": [sign_dict(s) for s in records[:25]],
         "sources": [source_status(result)],
     }
+
+
+NEARBY_DEFAULT_KINDS = ("incident", "closure", "chain", "fire")
+NEARBY_KINDS = frozenset(NEARBY_DEFAULT_KINDS + (
+    "sign", "rwis", "camera", "toll", "enforcement"))
 
 
 @mcp.tool(annotations=_read_only("Nearby events (nationwide)"))
@@ -1462,8 +1549,16 @@ async def get_nearby_events(
     agencies publish them), enforcement (speed and red-light cameras
     from OpenStreetMap). radius_km caps at 160.
     """
-    import math
-
+    if not math.isfinite(radius_km):
+        return {"error": "radius_km must be a number from 1 to 160."}
+    want = {k.strip().lower() for k in (kinds or "").split(",") if k.strip()}
+    want = {k[:-1] if k.endswith("s") and k[:-1] in NEARBY_KINDS else k
+            for k in want} or set(NEARBY_DEFAULT_KINDS)
+    if unknown := sorted(want - NEARBY_KINDS):
+        # An unknown kind used to drop out silently, so kinds='crashes'
+        # answered "nothing nearby" for a busy freeway.
+        return {"error": f"unknown kinds {', '.join(repr(k[:30]) for k in unknown[:5])}; "
+                         f"use a comma list from: {', '.join(sorted(NEARBY_KINDS))}."}
     if not center and place:
         found = await planning.point_from(get_road().client, place, None)
         if "lat" not in found:
@@ -1482,7 +1577,6 @@ async def get_nearby_events(
     dlat = radius_km / 111.0
     dlon = radius_km / max(20.0, 111.0 * math.cos(math.radians(lat)))
     box = (lat - dlat, lon - dlon, lat + dlat, lon + dlon)
-    want = {k.strip() for k in kinds.split(",") if k.strip()}
     # The map's published snapshot first: it is every state the map
     # shows, California included, built by the service that holds every
     # state key. The direct feeds are the fallback.
