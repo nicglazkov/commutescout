@@ -42,11 +42,11 @@ from zoneinfo import ZoneInfo
 from ca_roads.budget import UPSTREAM
 from ca_roads.feeds import nws as nws_feed
 from ca_roads.feeds import tomtom as tomtom_feed
-from ca_roads.geo import haversine_meters
+from ca_roads.geo import US_STATE_CODES, haversine_meters
 from ca_roads.stadia import auth_headers
 from ca_roads_mcp import account, snapshots
 from ca_roads_mcp import history as hist
-from ca_roads_mcp.geocode import geocode_candidates, stadia_suggest
+from ca_roads_mcp.geocode import _US_BOUNDS, geocode_candidates, stadia_suggest
 
 MILES_PER_METER = 1 / 1609.344
 STADIA_ROUTE_URL = "https://api.stadiamaps.com/route/v1"
@@ -374,6 +374,7 @@ async def place_candidates(client, query: str, near, limit: int = 5
     sink unless the query asks for one.
     """
     size = max(limit, 6)
+    city = city_state(query)
     if near:
         biased, plain = await asyncio.gather(
             stadia_suggest(client, query, near[0], near[1], limit=size),
@@ -383,6 +384,11 @@ async def place_candidates(client, query: str, near, limit: int = 5
         if top and haversine_meters(near[0], near[1], top[0][0],
                                     top[0][1]) <= LANDMARK_KM * 1000:
             out = top + out
+        if city:
+            # "Houston, TX" from Austin: the bias fills the list with
+            # Houston Elementary School in Austin, so the city itself has
+            # to come from the unbiased answer, however far it is.
+            out += [c for c in _rows(plain) if _is_city(c, city)]
     else:
         out = _rows(await stadia_suggest(client, query, None, None, limit=size))
     for c in await geocode_candidates(client, query, limit=limit, near=near,
@@ -407,6 +413,7 @@ async def place_candidates(client, query: str, near, limit: int = 5
 
     first = deduped[0] if deduped else None
     deduped.sort(key=lambda c: (
+        0 if not city or _is_city(c, city) else 1,
         lodging(c), 0 if not ranked or phrase in _name_key(c[2]) else 1))
     top = deduped[0] if deduped else None
     if (first is not None and top is not first and lodging(first) == 0
@@ -420,15 +427,74 @@ def _name_key(label: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", label.split(",")[0].lower()).strip()
 
 
+_STATES = {**{name.lower(): code for name, code in US_STATE_CODES.items()},
+           **{code.lower(): code for code in US_STATE_CODES.values()},
+           "puerto rico": "PR", "pr": "PR"}
+
+
+def city_state(query: str) -> tuple[str, str] | None:
+    """("houston", "TX") for "Houston, TX" or "Houston, Texas"; None for
+    anything that is not a bare place name and a US state."""
+    parts = [p.strip() for p in query.split(",")]
+    if len(parts) != 2 or not parts[0] or parts[0][:1].isdigit():
+        return None
+    code = _STATES.get(parts[1].lower().rstrip("."))
+    return (_name_key(parts[0]), code) if code else None
+
+
+def _is_city(cand: tuple[float, float, str], city: tuple[str, str]) -> bool:
+    """The candidate is the named place in the named state, not a
+    school, park or street that shares its name."""
+    name, code = city
+    parts = [p.strip() for p in cand[2].split(",")]
+    # Exactly "Houston, TX, USA": a street or venue named Vail inside
+    # Denver ("Vail, Colorado, Denver, CO") is not the town of Vail.
+    return len(parts) == 3 and _name_key(cand[2]) == name and parts[1] == code
+
+
+_ABROAD = re.compile(
+    r",\s*(canada|mexico|m[eé]xico|bc|b\.c\.|british columbia|alberta|ab|"
+    r"saskatchewan|manitoba|ontario|on|quebec|qu[eé]bec|qc|new brunswick|"
+    r"nova scotia|ns|newfoundland|yukon|baja california|bcn|sonora|"
+    r"chihuahua|coahuila|nuevo le[oó]n|tamaulipas)\s*$", re.IGNORECASE)
+
+
+def names_abroad(place: str) -> bool:
+    """'Vancouver, BC' or 'Tijuana, Mexico': the geocoder only knows US
+    places, so it answered with a Vancouver Avenue in Portland."""
+    return bool(_ABROAD.search(place))
+
+
+MAX_PLACE_CHARS = 300
+OUTSIDE_US = ("{param} is outside the United States; CommuteScout covers "
+              "US roads and weather only.")
+
+
+def in_us(lat: float, lon: float) -> bool:
+    """Inside the box around the 50 states, DC and Puerto Rico. Paris
+    once got an empty forecast labelled America/New_York."""
+    lat_lo, lat_hi, lon_lo, lon_hi = _US_BOUNDS
+    return lat_lo <= lat <= lat_hi and lon_lo <= lon <= lon_hi
+
+
+def coords_param_for(which: str) -> str:
+    return "center" if which == "place" else f"{which}_coords"
+
+
 async def resolve(client, place: str | None, coords: str | None,
                   near: tuple[float, float] | None, which: str) -> dict:
     """{"lat","lon","name"} for one trip end, or {"error": ...} /
     {"needs_clarification": ...} the tool returns as is."""
+    # The coordinates parameter's real name: "place" tools take center.
+    # Hints named place_coords once, a parameter no tool has.
+    coords_param = coords_param_for(which)
     if coords:
         point = parse_coords(coords)
         if point is None:
-            return {"error": f"{which}_coords must be 'lat,lon', "
+            return {"error": f"{coords_param} must be 'lat,lon', "
                              "e.g. '40.7128,-74.0060'"}
+        if not in_us(*point):
+            return {"error": OUTSIDE_US.format(param=coords_param)}
         name = (place or "").strip()[:120] or coords
         return {"lat": point[0], "lon": point[1], "name": name}
     if not place or not place.strip():
@@ -445,8 +511,18 @@ async def resolve(client, place: str | None, coords: str | None,
             hint = (account.CONNECT_HINT if source == "none" else
                     "No Home is saved on this account.")
             return {"error": f"give {which} (an address or place) or "
-                             f"{which}_coords, or ask the user. {hint}"}
-        return {"error": f"give {which} (an address or place) or {which}_coords"}
+                             f"{coords_param}, or ask the user. {hint}"}
+        return {"error": f"give {which} (an address or place) or {coords_param}"}
+    place = place.strip()
+    if names_abroad(place):
+        return {"error": f"{place[:80]!r} is outside the United States; "
+                         "CommuteScout covers US roads only. Plan to the "
+                         "border crossing instead."}
+    if len(place) > MAX_PLACE_CHARS:
+        # Never send a page of text to the geocoder or echo it back.
+        return {"error": f"{which} is {len(place)} characters; give a place "
+                         f"name or address under {MAX_PLACE_CHARS}, or "
+                         f"pass {coords_param}."}
     if account.wants_here(place):
         return {"needs_location": True, "which": which, "error": account.HERE_HINT}
     saved, source = await account.places()
@@ -462,9 +538,9 @@ async def resolve(client, place: str | None, coords: str | None,
                 "error": f"'{place}' means the user's saved {kind}. {hint}"}
     cands = await place_candidates(client, place, near, limit=4)
     if not cands:
-        return {"error": (f"could not find '{place}'. Ask for a fuller "
-                          "address (street, city, state), or pass "
-                          f"{which}_coords.")}
+        return {"error": (f"could not find {place[:120]!r}. Ask for a "
+                          "fuller address (street, city, state), or pass "
+                          f"{coords_param}.")}
     # Ask only when far-apart places share the top match's name
     # (Springfield, MO or IL); a lookalike ("Stafford Market Place" for
     # "Pike Place Market") is the geocoder padding its list.
@@ -879,18 +955,27 @@ async def best_time_to_go(client, origin: str | None, destination: str | None,
     tz_d = zone((info_d or {}).get("time_zone"), *b)
     now = datetime.now(UTC).astimezone(tz_o)
 
-    target_by: datetime | None = None
-    if arrive_by:
-        target_by = parse_local(arrive_by, tz_d, now.astimezone(tz_d))
-        if target_by is None:
-            return {"error": "arrive_by must be a time like '9:00', "
-                             "'tomorrow 9am' or '2026-10-30T09:00'"}
-        if target_by <= now:
-            return {"error": "arrive_by is in the past"}
     the_day = parse_day(day, now.date())
     if the_day is None:
         return {"error": "day must be 'today', 'tomorrow', a weekday name or "
                          "YYYY-MM-DD"}
+    target_by: datetime | None = None
+    if arrive_by:
+        bare = parse_hhmm(arrive_by.strip()) if day else None
+        if bare is not None:
+            # day="today", arrive_by="12:01am": that day's 12:01, not a
+            # silent roll to tonight's midnight.
+            target_by = datetime(the_day.year, the_day.month, the_day.day,
+                                 *bare, tzinfo=tz_d)
+        else:
+            target_by = parse_local(arrive_by, tz_d, now.astimezone(tz_d))
+        if target_by is None:
+            return {"error": "arrive_by must be a time like '9:00', "
+                             "'tomorrow 9am' or '2026-10-30T09:00'"}
+        if target_by <= now:
+            when = day_label(target_by.date(), now.astimezone(tz_d).date())
+            return {"error": f"arrive_by ({when} {clock(target_by)}) "
+                             "is in the past"}
     if target_by is not None:
         the_day = target_by.astimezone(tz_o).date()
     if the_day > now.date() + timedelta(days=60):
@@ -1035,8 +1120,9 @@ async def best_time_to_go(client, origin: str | None, destination: str | None,
     if severe(best) or any(severe(r) for r in rows):
         summary += " Snow or ice is in the forecast for part of the window."
     if target_by is not None:
-        summary = (f"To arrive by {clock(target_by)}, leave by {best['leave']} "
-                   f"(about {best['minutes']} min).")
+        when = day_label(target_by.date(), now.astimezone(tz_d).date())
+        summary = (f"To arrive by {clock(target_by)} {when}, leave by "
+                   f"{best['leave']} (about {best['minutes']} min).")
 
     out = {
         "summary": summary,
@@ -1087,7 +1173,10 @@ async def point_from(client, place: str | None, center: str | None) -> dict:
         p = parse_coords(center)
         if p is None:
             return {"error": "center must be 'lat,lon'"}
-        return {"lat": p[0], "lon": p[1], "name": place or center}
+        if not in_us(*p):
+            return {"error": OUTSIDE_US.format(param="center")}
+        return {"lat": p[0], "lon": p[1],
+                "name": ((place or "").strip()[:120] or center)}
     return await resolve(client, place, None, None, "place")
 
 
@@ -1149,12 +1238,22 @@ async def get_area_history(client, place: str | None = None,
 async def get_traffic(client, points: str | None = None, place: str | None = None,
                       center: str | None = None) -> dict:
     pairs: list[tuple[float, float]] = []
+    notes: list[str] = []
     if points:
-        for chunk in points.split("|")[:10]:
+        chunks = [c for c in points.split("|") if c.strip()]
+        if not chunks:
+            return {"error": "points must be 'lat,lon|lat,lon' (up to 10)"}
+        for chunk in chunks:
             p = parse_coords(chunk)
             if p is None:
-                return {"error": f"bad point '{chunk}': use 'lat,lon|lat,lon'"}
-            pairs.append(p)
+                return {"error": f"bad point {chunk[:40]!r}: use 'lat,lon|lat,lon'"}
+            if not in_us(*p):
+                return {"error": OUTSIDE_US.format(param=f"point {chunk[:40]!r}")}
+            if p not in pairs:  # each point is one paid lookup
+                pairs.append(p)
+        if len(pairs) > 10:
+            notes.append(f"{len(pairs)} points given; only the first 10 were read")
+            pairs = pairs[:10]
     else:
         p = await point_from(client, place, center)
         if "lat" not in p:
@@ -1177,9 +1276,12 @@ async def get_traffic(client, points: str | None = None, place: str | None = Non
         else:
             row["condition"] = "no reading"
         out.append(row)
-    return {"readings": out, "source": "TomTom traffic flow (nearest road "
-            "segment to each point)",
-            "data_as_of": datetime.now(UTC).isoformat(timespec="seconds")}
+    result = {"readings": out, "source": "TomTom traffic flow (nearest road "
+              "segment to each point)",
+              "data_as_of": datetime.now(UTC).isoformat(timespec="seconds")}
+    if notes:
+        result["notes"] = notes
+    return result
 
 
 def get_coverage() -> dict:

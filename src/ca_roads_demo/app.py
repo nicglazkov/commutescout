@@ -47,6 +47,7 @@ from ca_roads.feeds import calfire as calfire_feed
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
+from ca_roads.geo import US_STATE_CODES
 from ca_roads.stadia import auth_headers
 from ca_roads_demo import (
     analytics,
@@ -1455,23 +1456,6 @@ async def api_mapdata(request: Request):
         raw_body = _gzip.decompress(gz_body)
     return Response(raw_body, media_type="application/json",
                     headers=common)
-
-
-US_STATE_CODES = {
-    "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR",
-    "California": "CA", "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE",
-    "District of Columbia": "DC", "Florida": "FL", "Georgia": "GA", "Hawaii": "HI",
-    "Idaho": "ID", "Illinois": "IL", "Indiana": "IN", "Iowa": "IA", "Kansas": "KS",
-    "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
-    "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN", "Mississippi": "MS",
-    "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
-    "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
-    "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK",
-    "Oregon": "OR", "Pennsylvania": "PA", "Rhode Island": "RI",
-    "South Carolina": "SC", "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX",
-    "Utah": "UT", "Vermont": "VT", "Virginia": "VA", "Washington": "WA",
-    "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY",
-}
 
 
 def source_health(src: dict, now: datetime) -> dict:
