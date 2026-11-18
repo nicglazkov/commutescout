@@ -148,7 +148,23 @@ export default function DataSourcesPage() {
             {FRESHNESS_TEXT}
           </p>
 
-          <div className="ring-cs-line bg-cs-paper mt-10 overflow-x-auto rounded-xl ring-1">
+          {/* Phones: one card per feed, so nothing scrolls sideways. */}
+          <ul className="mt-10 grid gap-3 md:hidden">
+            {CA_FEEDS.map((feed) => (
+              <li
+                key={feed.source}
+                className="ring-cs-line bg-cs-paper flex flex-col gap-2 rounded-xl p-4 ring-1"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <span className="text-cs-ink text-sm font-medium">{feed.source}</span>
+                  <span className="text-cs-ink/60 text-xs">{feed.refresh}</span>
+                </div>
+                <p className="text-cs-ink/70 text-sm">{feed.data}</p>
+              </li>
+            ))}
+          </ul>
+
+          <div className="ring-cs-line bg-cs-paper mt-10 hidden overflow-x-auto rounded-xl ring-1 md:block">
             <table className="w-full min-w-[640px] border-collapse text-left text-sm">
               <thead>
                 <tr>
