@@ -51,7 +51,7 @@ export default function Pricing() {
           <h1 className="mt-4 text-cs-ink">
             Free today. Pro when it is ready.
           </h1>
-          <p className="mx-auto mt-3.5 max-w-[46ch] text-[1.05rem] leading-relaxed text-white/70">
+          <p className="mx-auto mt-3.5 max-w-[46ch] text-[1.05rem] leading-relaxed text-cs-muted">
             CommuteScout is free. You get the live map, the route planner, and
             watch areas that tell you what changed before you leave. Pro adds
             more room to watch and a record of what happened.
@@ -66,7 +66,7 @@ export default function Pricing() {
 
       {/* Plan cards, pulled up into the navy band. */}
       <section className="mx-auto -mt-[104px] grid max-w-[1080px] grid-cols-1 gap-6 px-6 pb-16 max-[420px]:-mt-[76px] lg:grid-cols-2">
-        <div className="border-cs-line bg-cs-paper flex flex-col rounded-[calc(var(--site-radius)+4px)] border p-6 shadow-[0_24px_48px_-12px_rgba(6,16,28,0.45),0_2px_4px_rgba(6,16,28,0.08)] sm:p-8">
+        <div className="border-cs-line bg-cs-paper flex flex-col rounded-[calc(var(--site-radius)+4px)] border p-6 shadow-[0_24px_48px_-12px_var(--cs-shadow),0_2px_4px_rgba(6,16,28,0.08)] sm:p-8">
           <p className="text-cs-sky text-[0.8rem] font-bold uppercase tracking-[0.08em]">
             Free
           </p>
@@ -101,7 +101,7 @@ export default function Pricing() {
           </Link>
         </div>
 
-        <div className="border-cs-sky/60 bg-cs-paper relative flex flex-col overflow-hidden rounded-[calc(var(--site-radius)+4px)] border p-6 shadow-[0_24px_48px_-12px_rgba(6,16,28,0.45),0_2px_4px_rgba(6,16,28,0.08)] sm:p-8">
+        <div className="border-cs-sky/60 bg-cs-paper relative flex flex-col overflow-hidden rounded-[calc(var(--site-radius)+4px)] border p-6 shadow-[0_24px_48px_-12px_var(--cs-shadow),0_2px_4px_rgba(6,16,28,0.08)] sm:p-8">
           <span className="border-cs-sky/30 bg-cs-sky/10 text-cs-sky mb-2.5 inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.72rem] font-bold uppercase tracking-[0.06em] before:size-1.5 before:rounded-full before:bg-cs-sky before:content-['']">
             Coming soon
           </span>
@@ -136,9 +136,9 @@ export default function Pricing() {
               behavior. */}
           <div
             id="waitlist"
-            className="bg-cs-navy -mx-6 -mb-6 mt-6 scroll-mt-6 px-6 pb-7 pt-6 text-white sm:-mx-8 sm:-mb-8 sm:px-8"
+            className="bg-cs-navy -mx-6 -mb-6 mt-6 scroll-mt-6 border-t border-cs-line px-6 pb-7 pt-6 text-cs-ink sm:-mx-8 sm:-mb-8 sm:px-8"
           >
-            <p className="flex items-center gap-2 text-[0.76rem] font-bold uppercase tracking-[0.08em] text-[color-mix(in_srgb,var(--cs-sky)_55%,white)]">
+            <p className="flex items-center gap-2 text-[0.76rem] font-bold uppercase tracking-[0.08em] text-cs-sky">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -160,7 +160,7 @@ export default function Pricing() {
               </svg>
               Be first to know
             </p>
-            <p className="mt-2 text-[1.05rem] font-semibold leading-snug text-white">
+            <p className="mt-2 text-[1.05rem] font-semibold leading-snug text-cs-ink">
               One email, the day Pro opens. Nothing before it.
             </p>
 
@@ -178,7 +178,7 @@ export default function Pricing() {
                 name="email"
                 required
                 placeholder="you@example.com"
-                className="text-cs-ink placeholder:text-cs-ink/40 focus:outline-cs-sky min-w-0 flex-[1_1_180px] rounded-[var(--site-radius)] border border-white/25 bg-cs-paper px-3.5 py-3 text-[0.94rem] focus:outline focus:outline-2 focus:outline-offset-1"
+                className="text-cs-ink placeholder:text-cs-ink/40 focus:outline-cs-sky min-w-0 flex-[1_1_180px] rounded-[var(--site-radius)] border border-cs-line bg-cs-paper px-3.5 py-3 text-[0.94rem] focus:outline focus:outline-2 focus:outline-offset-1"
               />
               {/* Honeypot: hidden from sighted users and assistive
                   tech, skipped in tab order. The handler rejects any
@@ -220,20 +220,20 @@ export default function Pricing() {
               }}
             />
 
-            <ul className="mt-4 flex flex-col gap-2 border-t border-white/15 pt-4 text-[0.84rem] leading-normal text-white/70">
+            <ul className="mt-4 flex flex-col gap-2 border-t border-cs-line pt-4 text-[0.84rem] leading-normal text-cs-muted">
               <li className="flex items-start gap-2">
-                <Check className="mt-0.5 size-3.5 shrink-0 text-[color-mix(in_srgb,var(--cs-sky)_55%,white)]" />
+                <Check className="mt-0.5 size-3.5 shrink-0 text-cs-sky" />
                 <span>
-                  <strong className="font-semibold text-white">
+                  <strong className="font-semibold text-cs-ink">
                     We will send:
                   </strong>{" "}
                   one message, on the day Pro opens.
                 </span>
               </li>
               <li className="flex items-start gap-2">
-                <Check className="mt-0.5 size-3.5 shrink-0 text-[color-mix(in_srgb,var(--cs-sky)_55%,white)]" />
+                <Check className="mt-0.5 size-3.5 shrink-0 text-cs-sky" />
                 <span>
-                  <strong className="font-semibold text-white">
+                  <strong className="font-semibold text-cs-ink">
                     We will not send:
                   </strong>{" "}
                   marketing email, or a price you have not agreed to.

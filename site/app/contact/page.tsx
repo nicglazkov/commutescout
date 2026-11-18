@@ -55,14 +55,14 @@ export default function ContactPage() {
   return (
     <>
       {/* Navy header band, matching the /mcp and homepage developer-band
-          treatment (bg-cs-navy text-white). Heading and subtitle text are
+          treatment (bg-cs-navy, theme ink). Heading and subtitle text are
           unchanged from the previous plain layout. */}
-      <section className="border-b border-cs-line bg-cs-navy/60 text-white">
+      <section className="border-b border-cs-line bg-cs-navy/60 text-cs-ink">
         <div className="mx-auto max-w-5xl px-6 py-14 md:py-20">
           <h1 className="text-balance text-4xl font-medium tracking-tight lg:text-5xl">
             Contact
           </h1>
-          <p className="text-white/70 mt-4 max-w-xl text-balance">
+          <p className="text-cs-muted mt-4 max-w-xl text-balance">
             Send a message and the CommuteScout team will get back to you.
           </p>
         </div>

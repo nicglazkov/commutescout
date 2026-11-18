@@ -248,7 +248,7 @@ export function Marketplace() {
               <span
                 className={
                   "rounded-full px-2.5 py-0.5 text-xs font-semibold " +
-                  (approved ? "bg-emerald-400/15 text-emerald-300" : "bg-amber-400/15 text-amber-300")
+                  (approved ? "bg-cs-ok/15 text-cs-ok" : "bg-cs-warn/15 text-cs-warn")
                 }
               >
                 {approved ? "Approved by CommuteScout" : "Public, not reviewed"}

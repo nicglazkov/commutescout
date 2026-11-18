@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Manrope } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
@@ -24,6 +24,10 @@ const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
 });
+
+// Browser chrome color on phones: Day Drive's page color. ThemeToggle
+// switches it to the night color when a visitor is on Night Drive.
+export const viewport: Viewport = { themeColor: "#f4f3ef" };
 
 export const metadata: Metadata = {
   // Needed for og:image/twitter:image to resolve to an absolute URL: pages
@@ -86,8 +90,24 @@ const SITE_SCHEMA = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${manrope.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${manrope.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
+      // The theme script below may set data-theme before React hydrates.
+      suppressHydrationWarning
+    >
       <head>
+        {/* Theme, before first paint. Light is the default for everyone;
+            only a stored choice from the header toggle switches to dark.
+            Blocking and inline on purpose: run later and a dark-mode
+            visitor would see a light flash. Wrapped in try because
+            storage access can throw (private mode, blocked site data). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{if(localStorage.getItem("nd-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}',
+          }}
+        />
         <script
           type="application/ld+json"
           // SITE_SCHEMA is a build-time literal, so nothing user-supplied

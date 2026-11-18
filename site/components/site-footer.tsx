@@ -52,7 +52,7 @@ const linkColumns = [
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-cs-line bg-cs-navy text-cs-ink">
+    <footer className="border-t border-cs-line [background:var(--cs-foot)] text-cs-ink">
       <div className="mx-auto max-w-7xl px-6 pb-10 pt-16">
         <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div className="col-span-2 sm:col-span-1">

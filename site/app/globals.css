@@ -19,6 +19,9 @@
   --color-cs-paper: var(--cs-paper);
   --color-cs-bg: var(--cs-bg);
   --color-cs-line: var(--cs-line);
+  --color-cs-ok: var(--cs-ok);
+  --color-cs-warn: var(--cs-warn);
+  --color-cs-err: var(--cs-err);
   --font-cs: var(--cs-font);
   /* Keyframes the vendored Tailark accordion block (components/ui/accordion.tsx)
      animates open/closed with. Defined here instead of pulling in the
@@ -36,14 +39,54 @@
    --cs-* names here, so every existing bg-cs-* / text-cs-* utility in
    the pages picks up the skin without touching the map.
 
-   Night Drive (default, marketing pages): blue-black night with a warm
-   headlight amber as the one accent.
+   Day Drive (default, marketing pages) and Night Drive (its dark
+   twin, picked with the header toggle): one road palette by day and by
+   night, the amber headlight as the one accent.
    Blueprint (developer, API, MCP and plugin protocol pages): engineering
    blue with a fine drafting grid. A page opts in by rendering a
    .skin-blueprint wrapper; body:has() then re-points the tokens for the
    header and footer too, so the whole page reads as one sheet.
    ------------------------------------------------------------------ */
+/* Day Drive (default): the light version of Night Drive, with the same
+   tokens as the road sites (SABRE Plus, ChainCheck, Brake Bedding). Sunlit
+   concrete, deep navy ink, the headlight amber darkened so text and
+   buttons pass WCAG AA (#a35200 is 5.0:1 on --cs-bg, 5.6:1 on white), and
+   a low sun where the night had headlights.
+   Every visitor starts here whatever the OS setting; the sun/moon toggle
+   in the header switches to Night Drive and remembers it (app/layout.tsx
+   sets data-theme="dark" before first paint, so there is no flash). */
 :root {
+  --cs-navy: #fdfcfa;   /* header, footer, bands */
+  --cs-navy2: #e9e7e1;  /* raised surfaces, code blocks */
+  --cs-sky: #a35200;    /* the amber: primary action, links */
+  --cs-on-sky: #ffffff; /* text on the accent */
+  --cs-ink: #0e1a33;    /* body text, deep navy */
+  --cs-muted: #3f4a63;  /* secondary text, 8.0:1 on --cs-bg */
+  --cs-paper: #ffffffd9;/* cards */
+  --cs-bg: #f4f3ef;     /* page */
+  --cs-line: #dddddc;   /* hairlines */
+  --cs-ok: #0f6e44;
+  --cs-warn: #a35200;
+  --cs-err: #b42318;
+  --cs-shadow: #0e1a3326; /* drop shadow under raised cards */
+  --cs-glow-o: 0.5;     /* hero glows: a soft sun, not headlights */
+  --cs-foot:            /* footer: a step deeper, sun in the corner */
+    radial-gradient(60% 120% at 100% 0%, #ffc46e38, transparent 60%), #ebe9e3;
+  --site-bg-image:
+    radial-gradient(60% 40% at 8% 0%, #6d9bff1f, transparent 60%),
+    radial-gradient(70% 55% at 92% 34rem, #ffb35c38, transparent 60%);
+  --tt-sun: none;       /* theme toggle shows the moon: go to night */
+  --tt-moon: block;
+  --site-font-body: var(--font-manrope);
+  --site-font-display: var(--font-manrope);
+  --site-radius: 10px;
+  color-scheme: light;
+  background: var(--cs-bg);
+}
+
+/* Night Drive: blue-black night with a warm headlight amber as the one
+   accent. Chosen with the header toggle. */
+:root[data-theme="dark"] {
   --cs-navy: #06080f;   /* header, footer, deep bands */
   --cs-navy2: #141a2b;  /* raised dark surfaces, code blocks */
   --cs-sky: #ffb35c;    /* the headlight: primary action, links */
@@ -53,11 +96,18 @@
   --cs-paper: #10152282;/* cards, translucent so the glow reads through */
   --cs-bg: #0a0d16;     /* page */
   --cs-line: #232b3e;   /* hairlines */
-  --site-font-body: var(--font-manrope);
-  --site-font-display: var(--font-manrope);
-  --site-radius: 10px;
+  --cs-ok: #6ee7b7;
+  --cs-warn: #fcd34d;
+  --cs-err: #fca5a5;
+  --cs-shadow: #00000073;
+  --cs-glow-o: 1;
+  --cs-foot: var(--cs-navy);
+  --site-bg-image:
+    radial-gradient(60% 40% at 8% 0%, #3a5cff1c, transparent 60%),
+    radial-gradient(70% 55% at 92% 34rem, #ff9a3c26, transparent 60%);
+  --tt-sun: block;
+  --tt-moon: none;
   color-scheme: dark;
-  background: var(--cs-bg);
 }
 
 :root:has(.skin-blueprint),
@@ -71,9 +121,29 @@ body:has(.skin-blueprint) {
   --cs-paper: #0c3477;
   --cs-bg: #0f3d8c;
   --cs-line: #2f5ea8;
+  --cs-ok: #6ee7b7;
+  --cs-warn: #fcd34d;
+  --cs-err: #fca5a5;
+  --cs-shadow: #00000073;
+  --cs-foot: var(--cs-navy);
   --site-font-body: var(--font-plex-sans);
   --site-font-display: var(--font-plex-sans);
   --site-radius: 3px;
+  color-scheme: dark;
+}
+
+/* Faded ink on the light page. The pages fade secondary text with
+   text-cs-ink/40 to /60, which reads fine on the night page but falls
+   under WCAG AA on the light one (/60 is 4.4:1, /50 is 3.3:1). By day
+   those steps all resolve to --cs-muted (8.0:1). Unlayered, so it sits
+   above Tailwind's utilities; Blueprint pages keep their own colors. */
+:root:not([data-theme="dark"]) body:not(:has(.skin-blueprint)) :is(.text-cs-ink\/40, .text-cs-ink\/50, .text-cs-ink\/60) {
+  color: var(--cs-muted);
+}
+
+/* Blueprint pages have one theme, so the toggle steps aside there. */
+body:has(.skin-blueprint) .theme-toggle {
+  display: none;
 }
 
 @keyframes accordion-down {
@@ -101,12 +171,10 @@ body {
   font-feature-settings: "ss01", "cv11";
 }
 
-/* Night Drive: the page sits under a faint cool sky with the warm
-   headlight glow pooled low on the right of the first screen. */
+/* The page sits under a faint cool sky with the warm glow pooled low
+   on the right of the first screen: low sun by day, headlights by night. */
 body {
-  background-image:
-    radial-gradient(60% 40% at 8% 0%, #3a5cff1c, transparent 60%),
-    radial-gradient(70% 55% at 92% 34rem, #ff9a3c26, transparent 60%);
+  background-image: var(--site-bg-image);
   background-repeat: no-repeat;
 }
 
@@ -139,7 +207,9 @@ h1 {
   letter-spacing: -0.035em;
   font-weight: 800;
 }
-h2 {
+/* Small card titles (a plugin tile, the contact card) are h2 for the
+   outline but sized text-base/text-lg on purpose; they keep their size. */
+h2:not([class*="text-base"], [class*="text-lg"]) {
   font-size: clamp(1.75rem, 1.35rem + 1.6vw, 2.6rem);
   line-height: 1.08;
   letter-spacing: -0.028em;
@@ -205,7 +275,7 @@ pre {
   outline-color: var(--cs-sky);
 }
 
-/* Form fields: dark wells on both skins. */
+/* Form fields: wells a step off the page in every theme. */
 input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
 textarea,
 select {

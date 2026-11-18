@@ -10,6 +10,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 // Global site chrome, rendered on every page from app/layout.tsx. A logo,
 // four nav links, and a primary CTA link are not interactive enough to need
@@ -67,10 +68,13 @@ export function SiteHeader() {
           </Link>
 
           <div className="flex items-center gap-2 sm:contents">
+            <div className="flex items-center sm:order-3 sm:-mr-2">
+              <ThemeToggle />
+            </div>
             <Link
               href="/map"
               prefetch={false}
-              className="shrink-0 rounded-[var(--site-radius)] bg-cs-sky px-4 py-2 text-sm font-bold text-cs-on-sky whitespace-nowrap shadow-[0_0_24px_-6px_var(--cs-sky)] transition-colors hover:bg-cs-sky/90 sm:order-3"
+              className="shrink-0 rounded-[var(--site-radius)] bg-cs-sky px-4 py-2 text-sm font-bold text-cs-on-sky whitespace-nowrap shadow-[0_0_24px_-6px_var(--cs-sky)] transition-colors hover:bg-cs-sky/90 sm:order-4"
             >
               Live map
             </Link>

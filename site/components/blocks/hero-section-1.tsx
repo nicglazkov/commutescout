@@ -105,11 +105,11 @@ export default function HeroSection() {
         {/* Headlight glow and road streaks behind the screenshot. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 -bottom-10 h-3/4 bg-[radial-gradient(60%_70%_at_70%_100%,#ff9a3c40,transparent_70%)]"
+          className="pointer-events-none absolute -bottom-10 left-1/2 h-3/4 w-screen -translate-x-1/2 opacity-(--cs-glow-o) bg-[radial-gradient(45%_70%_at_65%_100%,#ff9a3c40,transparent_70%)] [mask-image:linear-gradient(#000_40%,transparent_92%)]"
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-[repeating-linear-gradient(100deg,transparent_0_46px,#ffb35c1c_46px_48px)] [mask-image:linear-gradient(transparent,#000)]"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-40 opacity-(--cs-glow-o) bg-[repeating-linear-gradient(100deg,transparent_0_46px,#ffb35c1c_46px_48px)] [mask-image:linear-gradient(transparent,#000)]"
         />
         {/* The whole screenshot links to the live map, so a click
             anywhere on it opens /map. focus-visible + hover give it

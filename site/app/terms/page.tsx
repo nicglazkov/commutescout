@@ -42,7 +42,7 @@ export default function TermsPage() {
         </p>
 
         <div className="text-cs-ink/60 mt-8 space-y-8 md:text-lg">
-          <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-5 py-4 font-medium text-amber-200">
+          <p className="rounded-lg border border-cs-warn/30 bg-cs-warn/10 px-5 py-4 font-medium text-cs-warn">
             CommuteScout is informational only. Data can be delayed,
             incomplete, or wrong. Always verify with your state&apos;s
             official 511 service or DOT map (for California,{" "}
