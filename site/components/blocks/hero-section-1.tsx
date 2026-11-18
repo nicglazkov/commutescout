@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Smartphone } from "lucide-react";
+import { AGENCY_FEED_COUNT, STATE_COUNT } from "@/lib/stats";
 import { Button } from "@/components/ui/button";
 
 // Source: Tailark OSS registry, Dusk kit, dusk-hero-section-1
@@ -20,36 +21,53 @@ import { Button } from "@/components/ui/button";
 // - text-muted-foreground replaced with text-cs-ink/60; the rest of the
 //   text inherits the page's --cs-ink color from the body rule in
 //   app/globals.css, same as upstream relied on a global text-foreground.
+// - 2026-11 redesign (Night Drive skin): the centered stack became a
+//   left-aligned split. Headline on the left, the subhead and actions on
+//   the right, the real map screenshot full width underneath with the
+//   amber headlight glow pooled behind it. Same copy, same links.
 // - Copy and hrefs are the homepage's real copy and links (Task 7's brief
 //   copy is final and exact; this file owns it directly, not via props).
 export default function HeroSection() {
   return (
-    <section className="overflow-hidden">
-      <div className="relative pt-4 md:pt-6">
-        <div className="mx-auto max-w-7xl">
-          <div className="px-6 text-center sm:mx-auto lg:mr-auto lg:mt-0">
-            {/* The app announcement. It is the first thing on the page
-                after the header, so nobody has to scroll to learn the
-                phone apps exist. */}
-            <Link
-              href="/app"
-              prefetch={false}
-              className="group mx-auto inline-flex items-center gap-2 rounded-full border border-cs-line bg-cs-paper py-1 pl-1 pr-3 text-sm text-cs-ink shadow-sm transition-colors hover:border-cs-sky/50"
-            >
-              <span className="rounded-full bg-cs-sky px-2 py-0.5 text-xs font-semibold text-white">New</span>
-              <span>CommuteScout Drive is on iPhone and Android</span>
-              <ArrowRight className="size-4 text-cs-ink/50 transition-transform group-hover:translate-x-0.5" aria-hidden />
-            </Link>
-            <h1 className="mx-auto mt-4 max-w-4xl text-balance text-5xl font-medium tracking-tight md:text-6xl lg:mt-6 xl:text-7xl">
-              Live road conditions, straight from the source.
-            </h1>
-            <p className="text-cs-ink/60 mx-auto mt-4 max-w-2xl text-balance md:text-lg">
+    <section className="relative overflow-hidden">
+      <div className="mx-auto max-w-7xl px-6 pt-12 md:pt-20">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <p className="eyebrow flex items-center gap-2">
+            {/* The live dot: the one bit of motion on the page, because the
+                map behind it really is refreshing. Stops under reduced
+                motion (globals.css). */}
+            <span className="relative flex size-2" aria-hidden>
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-cs-sky opacity-60 [animation-duration:2.4s]" />
+              <span className="relative inline-flex size-2 rounded-full bg-cs-sky" />
+            </span>
+            Live &middot; {AGENCY_FEED_COUNT} feeds &middot; {STATE_COUNT} states
+          </p>
+          {/* The app announcement. It is the first thing on the page
+              after the header, so nobody has to scroll to learn the
+              phone apps exist. */}
+          <Link
+            href="/app"
+            prefetch={false}
+            className="group inline-flex items-center gap-2 text-sm text-cs-muted transition-colors hover:text-cs-ink"
+          >
+            <span className="rounded-[4px] border border-cs-line px-1.5 py-0.5 font-mono text-[0.68rem] font-medium uppercase tracking-[0.12em] text-cs-ink">New</span>
+            <span>CommuteScout Drive is on iPhone and Android</span>
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </Link>
+        </div>
+
+        <div className="mt-8 grid gap-8 lg:grid-cols-12 lg:items-end lg:gap-10">
+          <h1 className="display lg:col-span-8">
+            Live road conditions, <span className="text-cs-sky">straight from the source.</span>
+          </h1>
+          <div className="lg:col-span-4 lg:pb-2">
+            <p className="max-w-[46ch] text-lg leading-relaxed text-cs-muted">
               CommuteScout reads 53 official agency feeds across 37 states: incidents,
               closures, chain controls, cameras, and wildfires on one live map.
             </p>
-
-            <div className="mt-6 flex flex-col items-center justify-center gap-2 pb-8 md:flex-row">
+            <div className="mt-7 flex flex-wrap items-center gap-2.5">
               <Button
+                size="lg"
                 nativeButton={false}
                 render={
                   <Link href="/map" prefetch={false}>
@@ -58,6 +76,7 @@ export default function HeroSection() {
                 }
               />
               <Button
+                size="lg"
                 variant="secondary"
                 nativeButton={false}
                 render={
@@ -68,6 +87,7 @@ export default function HeroSection() {
                 }
               />
               <Button
+                size="lg"
                 variant="ghost"
                 nativeButton={false}
                 render={
@@ -77,29 +97,38 @@ export default function HeroSection() {
                 }
               />
             </div>
-
-            <div className="relative mx-auto mt-10 max-w-5xl pb-8 md:pb-10">
-              {/* The whole screenshot links to the live map, so a click
-                  anywhere on it opens /map. focus-visible + hover give it
-                  a clickable affordance; the alt text is the label. */}
-              <Link
-                href="/map"
-                prefetch={false}
-                aria-label="Open the live map"
-                className="focus-visible:ring-cs-sky block cursor-pointer overflow-hidden rounded-2xl shadow-2xl shadow-cs-navy/15 ring-1 ring-cs-line transition hover:shadow-cs-navy/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-              >
-                <Image
-                  src="/shots/hero-map.webp"
-                  alt="The CommuteScout live map showing incidents, closures, chain controls, and cameras across dozens of states"
-                  width={1440}
-                  height={900}
-                  className="h-auto w-full"
-                  priority
-                />
-              </Link>
-            </div>
           </div>
         </div>
+      </div>
+
+      <div className="relative mx-auto mt-14 max-w-7xl px-4 pb-16 sm:px-6 md:mt-16 md:pb-24">
+        {/* Headlight glow and road streaks behind the screenshot. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 -bottom-10 h-3/4 bg-[radial-gradient(60%_70%_at_70%_100%,#ff9a3c40,transparent_70%)]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-[repeating-linear-gradient(100deg,transparent_0_46px,#ffb35c1c_46px_48px)] [mask-image:linear-gradient(transparent,#000)]"
+        />
+        {/* The whole screenshot links to the live map, so a click
+            anywhere on it opens /map. focus-visible + hover give it
+            a clickable affordance; the alt text is the label. */}
+        <Link
+          href="/map"
+          prefetch={false}
+          aria-label="Open the live map"
+          className="relative block cursor-pointer overflow-hidden rounded-xl shadow-[0_40px_120px_-40px_#ff9a3c66,0_0_0_1px_var(--cs-line)] transition-shadow hover:shadow-[0_40px_120px_-30px_#ff9a3c99,0_0_0_1px_#ffb35c55] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cs-sky focus-visible:ring-offset-2 focus-visible:ring-offset-cs-bg"
+        >
+          <Image
+            src="/shots/hero-map.webp"
+            alt="The CommuteScout live map showing incidents, closures, chain controls, and cameras across dozens of states"
+            width={1440}
+            height={900}
+            className="h-auto w-full"
+            priority
+          />
+        </Link>
       </div>
     </section>
   );

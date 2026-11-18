@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CircleCheck, MessageCircleQuestion, Plug } from "lucide-react";
+import { BlueprintSchematic } from "@/components/blueprint-schematic";
 import { CopyField } from "@/components/copy-field";
 // Per-client setup, generated from src/ca_roads_mcp/connect.py by
 // scripts/gen_api_reference.py. The same source renders /llms.txt, so the
@@ -195,51 +196,55 @@ const STDIO_CONFIG = `{
 
 export default function McpPage() {
   return (
-    <>
+    // Blueprint skin: developer docs. globals.css re-points the site
+    // tokens (header and footer included) while this wrapper is on the page.
+    <div className="skin-blueprint">
       {/* Hero band. Not a vendored Tailark block: styled to match the
           homepage's own navy developer band, since this whole page is
           that band's expanded, full-page form. */}
-      <section className="bg-cs-navy text-white">
-        <div className="mx-auto max-w-4xl px-6 py-16 text-center md:py-24">
-          <h1 className="text-balance text-4xl font-medium tracking-tight md:text-5xl">
+      <section className="border-b border-cs-line bg-cs-navy/70 text-cs-ink">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-6 py-16 md:py-20 lg:grid-cols-12 lg:items-center">
+         <div className="min-w-0 lg:col-span-7">
+          <p className="eyebrow">MCP server &middot; no key needed</p>
+          <h1 className="mt-4">
             Bring live roads to your assistant.
           </h1>
-          <p className="text-white/70 mx-auto mt-4 max-w-2xl text-balance md:text-lg">
+          <p className="text-cs-muted mt-5 max-w-[62ch] text-[1.05rem] leading-relaxed">
             CommuteScout exposes its entire data layer as an MCP server, so
             Claude (or any MCP client) can answer questions about the
             roads in 37 states with live data instead of guesses.
           </p>
 
-          <div className="mx-auto mt-8 max-w-md">
+          <div className="mt-8 max-w-lg">
             <CopyField value={MCP_URL} />
           </div>
 
-          <p className="text-white/60 mt-4 text-sm text-balance">
+          <p className="text-cs-muted mt-4 max-w-[62ch] text-sm">
             Looking for the REST API, keys, limits and the full tool reference? See the{" "}
-            <Link href="/developers" prefetch={false} className="underline underline-offset-2 hover:text-white">
+            <Link href="/developers" prefetch={false} className="underline underline-offset-2 hover:text-cs-ink">
               developer documentation
             </Link>
             .
           </p>
-          <p className="text-white/60 mt-4 text-sm text-balance">
+          <p className="text-cs-muted mt-4 max-w-[62ch] text-sm">
             No key or account needed. It is the same server behind{" "}
-            <Link href="/" prefetch={false} className="underline underline-offset-2 hover:text-white">
+            <Link href="/" prefetch={false} className="underline underline-offset-2 hover:text-cs-ink">
               commutescout.com
             </Link>
             , with the same live feeds.{" "}
-            <Link href="#connect" prefetch={false} className="underline underline-offset-2 hover:text-white">
+            <Link href="#connect" prefetch={false} className="underline underline-offset-2 hover:text-cs-ink">
               Setup for your client
             </Link>{" "}
             is below. Not running an MCP client? Every tool is also a plain HTTP GET at{" "}
             <Link
               href="https://mcp.commutescout.com/v1/docs"
               prefetch={false}
-              className="underline underline-offset-2 hover:text-white"
+              className="underline underline-offset-2 hover:text-cs-ink"
             >
               mcp.commutescout.com/v1
             </Link>
             , with an OpenAPI reference. Agents can read the same setup as plain text at{" "}
-            <Link href="/llms.txt" prefetch={false} className="underline underline-offset-2 hover:text-white">
+            <Link href="/llms.txt" prefetch={false} className="underline underline-offset-2 hover:text-cs-ink">
               commutescout.com/llms.txt
             </Link>
             .
@@ -248,10 +253,12 @@ export default function McpPage() {
           <Link
             href="https://github.com/nicglazkov/commutescout/blob/main/docs/mcp.md"
             prefetch={false}
-            className="mt-6 inline-flex items-center gap-1.5 text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
+            className="mt-6 inline-flex items-center gap-1.5 text-sm text-cs-muted underline underline-offset-4 transition-colors hover:text-cs-ink"
           >
             View the full reference on GitHub
           </Link>
+         </div>
+          <BlueprintSchematic className="hidden w-full max-w-[460px] justify-self-end lg:col-span-5 lg:block" />
         </div>
       </section>
 
@@ -261,7 +268,7 @@ export default function McpPage() {
             {STEPS.map(({ icon: Icon, title, body }, index) => (
               <div
                 key={title}
-                className="ring-cs-line bg-cs-paper flex flex-col gap-3 rounded-xl p-6 shadow ring-1"
+                className="ring-cs-line bg-cs-paper flex flex-col gap-3 rounded-xl p-6 ring-1"
               >
                 <div className="flex items-center gap-2">
                   <span className="bg-cs-sky/15 text-cs-sky flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-medium">
@@ -472,6 +479,6 @@ export default function McpPage() {
           </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

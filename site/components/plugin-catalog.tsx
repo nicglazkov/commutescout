@@ -47,7 +47,7 @@ export function PluginCatalog() {
     );
   }
   return (
-    <ul className="mt-6 divide-y divide-cs-ink/10 rounded-2xl border border-cs-ink/10 bg-white">
+    <ul className="mt-6 divide-y divide-cs-ink/10 rounded-2xl border border-cs-ink/10 bg-cs-paper">
       {sources.map((s) => (
         <li key={s.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 py-4">
           <div>
@@ -57,8 +57,8 @@ export function PluginCatalog() {
                 className={
                   "ml-1 rounded-full px-2 py-0.5 text-[11px] font-semibold " +
                   (s.tier === "approved"
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-amber-100 text-amber-800")
+                    ? "bg-emerald-400/15 text-emerald-300"
+                    : "bg-amber-400/15 text-amber-300")
                 }
               >
                 {s.tier === "approved" ? "Approved" : "Public, not reviewed"}

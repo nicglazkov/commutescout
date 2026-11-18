@@ -42,7 +42,7 @@ export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <header className="bg-cs-navy">
+    <header className="border-b border-cs-line bg-cs-navy/80">
       {/* Below sm (640px) this is one row: brand left, then the Live map
           CTA and a Menu button that opens the nav underneath. At sm+ the
           inner div goes `contents` (removes itself from layout without
@@ -54,8 +54,8 @@ export function SiteHeader() {
           under the brand row. With six links that grid took two more
           rows and the header grew to about 190 px on a phone. The Menu
           button keeps every link one tap away for 56 px of header. */}
-      <div className="mx-auto flex max-w-7xl flex-col px-3 py-2.5 sm:flex-row sm:items-center sm:gap-6 sm:px-6 sm:py-3">
-        <div className="flex items-center justify-between gap-3 sm:contents">
+      <div className="mx-auto flex max-w-7xl flex-col px-4 sm:min-h-16 sm:flex-row sm:items-center sm:gap-6 sm:px-6">
+        <div className="flex h-16 items-center justify-between gap-3 sm:contents">
           <Link
             href="/"
             prefetch={false}
@@ -63,14 +63,14 @@ export function SiteHeader() {
             aria-label="CommuteScout home"
           >
             <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-md" />
-            <span className="text-base font-semibold text-white">CommuteScout</span>
+            <span className="font-display text-[1.05rem] font-extrabold tracking-[-0.02em] text-cs-ink">CommuteScout</span>
           </Link>
 
           <div className="flex items-center gap-2 sm:contents">
             <Link
               href="/map"
               prefetch={false}
-              className="shrink-0 rounded-full bg-cs-sky px-4 py-2 text-sm font-medium text-white whitespace-nowrap transition-colors hover:bg-cs-sky/90 sm:order-3"
+              className="shrink-0 rounded-[var(--site-radius)] bg-cs-sky px-4 py-2 text-sm font-bold text-cs-on-sky whitespace-nowrap shadow-[0_0_24px_-6px_var(--cs-sky)] transition-colors hover:bg-cs-sky/90 sm:order-3"
             >
               Live map
             </Link>
@@ -80,7 +80,7 @@ export function SiteHeader() {
               aria-expanded={menuOpen}
               aria-controls="site-nav"
               onClick={() => setMenuOpen((open) => !open)}
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/10 hover:text-white sm:hidden"
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-cs-ink/80 transition-colors hover:bg-cs-ink/10 hover:text-cs-ink sm:hidden"
             >
               <span className="sr-only">{menuOpen ? "Close menu" : "Menu"}</span>
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
@@ -102,7 +102,7 @@ export function SiteHeader() {
         <nav
           id="site-nav"
           aria-label="Site"
-          className={`${menuOpen ? "grid" : "hidden"} mt-2 grid-cols-2 gap-1 sm:order-2 sm:mt-0 sm:flex sm:min-w-0 sm:flex-1 sm:items-center sm:gap-1`}
+          className={`${menuOpen ? "grid" : "hidden"} mb-3 grid-cols-2 gap-1 sm:order-2 sm:mb-0 sm:mt-0 sm:flex sm:min-w-0 sm:flex-1 sm:items-center sm:gap-1`}
         >
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
@@ -112,8 +112,10 @@ export function SiteHeader() {
                 href={link.href}
                 prefetch={false}
                 aria-current={isActive ? "page" : undefined}
-                className={`flex min-h-11 items-center rounded-lg px-3 text-sm whitespace-nowrap transition-colors hover:bg-white/5 sm:min-h-0 sm:shrink-0 sm:py-2 sm:hover:bg-transparent ${
-                  isActive ? "text-white" : "text-white/70 hover:text-white"
+                className={`relative flex min-h-11 items-center rounded-lg px-3 text-sm font-medium whitespace-nowrap transition-colors hover:bg-cs-ink/5 sm:min-h-0 sm:shrink-0 sm:px-2.5 sm:py-2 sm:hover:bg-transparent ${
+                  isActive
+                    ? "text-cs-ink sm:after:absolute sm:after:inset-x-2.5 sm:after:-bottom-[13px] sm:after:h-px sm:after:bg-cs-sky"
+                    : "text-cs-muted hover:text-cs-ink"
                 }`}
               >
                 {link.label}

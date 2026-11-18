@@ -4,14 +4,18 @@
 @theme inline {
   --color-background: var(--cs-bg);
   --color-foreground: var(--cs-ink);
-  /* --font-inter comes from next/font/google in app/layout.tsx (self-hosted
-     Inter, matching the map app's self-hosted Inter). --cs-font is the
-     shared token sheet's generic fallback stack. */
-  --font-sans: var(--font-inter), var(--cs-font);
+  /* Font variables come from next/font/google in app/layout.tsx (all
+     self-hosted at build time). --font-display is the skin's headline
+     face; --font-sans is the body face. Both switch per skin below. */
+  --font-sans: var(--site-font-body), var(--cs-font);
+  --font-display: var(--site-font-display), var(--cs-font);
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-cs-navy: var(--cs-navy);
   --color-cs-navy2: var(--cs-navy2);
   --color-cs-sky: var(--cs-sky);
+  --color-cs-on-sky: var(--cs-on-sky);
   --color-cs-ink: var(--cs-ink);
+  --color-cs-muted: var(--cs-muted);
   --color-cs-paper: var(--cs-paper);
   --color-cs-bg: var(--cs-bg);
   --color-cs-line: var(--cs-line);
@@ -21,6 +25,55 @@
      tw-animate-css package, which the site otherwise has no use for. */
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
+}
+
+/* ------------------------------------------------------------------
+   Skins.
+
+   tokens.css (imported above) is shared with the live map app, and the
+   map keeps its own light look: it loads tokens.css directly and never
+   loads this stylesheet. The marketing and docs site re-points the same
+   --cs-* names here, so every existing bg-cs-* / text-cs-* utility in
+   the pages picks up the skin without touching the map.
+
+   Night Drive (default, marketing pages): blue-black night with a warm
+   headlight amber as the one accent.
+   Blueprint (developer, API, MCP and plugin protocol pages): engineering
+   blue with a fine drafting grid. A page opts in by rendering a
+   .skin-blueprint wrapper; body:has() then re-points the tokens for the
+   header and footer too, so the whole page reads as one sheet.
+   ------------------------------------------------------------------ */
+:root {
+  --cs-navy: #06080f;   /* header, footer, deep bands */
+  --cs-navy2: #141a2b;  /* raised dark surfaces, code blocks */
+  --cs-sky: #ffb35c;    /* the headlight: primary action, links */
+  --cs-on-sky: #1a1206; /* text on the accent */
+  --cs-ink: #eef1f7;    /* body text */
+  --cs-muted: #aab3c5;  /* secondary text */
+  --cs-paper: #10152282;/* cards, translucent so the glow reads through */
+  --cs-bg: #0a0d16;     /* page */
+  --cs-line: #232b3e;   /* hairlines */
+  --site-font-body: var(--font-manrope);
+  --site-font-display: var(--font-manrope);
+  --site-radius: 10px;
+  color-scheme: dark;
+  background: var(--cs-bg);
+}
+
+:root:has(.skin-blueprint),
+body:has(.skin-blueprint) {
+  --cs-navy: #0a2c66;
+  --cs-navy2: #0a2a5e;
+  --cs-sky: #a9c8ff;
+  --cs-on-sky: #08214d;
+  --cs-ink: #e9f0ff;
+  --cs-muted: #b9cbf3;
+  --cs-paper: #0c3477;
+  --cs-bg: #0f3d8c;
+  --cs-line: #2f5ea8;
+  --site-font-body: var(--font-plex-sans);
+  --site-font-display: var(--font-plex-sans);
+  --site-radius: 3px;
 }
 
 @keyframes accordion-down {
@@ -45,4 +98,133 @@ body {
   background: var(--cs-bg);
   color: var(--cs-ink);
   font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* Night Drive: the page sits under a faint cool sky with the warm
+   headlight glow pooled low on the right of the first screen. */
+body {
+  background-image:
+    radial-gradient(60% 40% at 8% 0%, #3a5cff1c, transparent 60%),
+    radial-gradient(70% 55% at 92% 34rem, #ff9a3c26, transparent 60%);
+  background-repeat: no-repeat;
+}
+
+/* Blueprint: a drafting grid, 60 px major lines over 12 px minor ones. */
+body:has(.skin-blueprint) {
+  background-image:
+    linear-gradient(#ffffff14 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff14 1px, transparent 1px),
+    linear-gradient(#ffffff08 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff08 1px, transparent 1px);
+  background-size: 60px 60px, 60px 60px, 12px 12px, 12px 12px;
+  background-position: -1px -1px;
+  background-repeat: repeat;
+}
+
+/* Shared type scale for every page on the site (the same steps the
+   sibling project sites use). Unlayered on purpose: it sits above
+   Tailwind's utility layer, so older pages that still carry
+   text-4xl/font-medium on their headings get the same scale without a
+   rewrite of each page. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+}
+h1 {
+  font-size: clamp(2.4rem, 1.6rem + 3.4vw, 4.25rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  font-weight: 800;
+}
+h2 {
+  font-size: clamp(1.75rem, 1.35rem + 1.6vw, 2.6rem);
+  line-height: 1.08;
+  letter-spacing: -0.028em;
+  font-weight: 750;
+}
+h3 {
+  letter-spacing: -0.012em;
+}
+.skin-blueprint h1,
+body:has(.skin-blueprint) h1 {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.skin-blueprint h2,
+body:has(.skin-blueprint) h2 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+/* Docs pages run long: a tighter section-heading step, square drafting
+   corners on panels and code. */
+.skin-blueprint h2 {
+  font-size: clamp(1.5rem, 1.25rem + 1vw, 2rem);
+}
+.skin-blueprint :is(pre, .rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-lg) {
+  border-radius: 4px;
+}
+.skin-blueprint pre {
+  background-color: #082251;
+  border-color: #2f5ea8;
+}
+/* A hero headline that wants to go larger than the page scale. */
+h1.display {
+  font-size: clamp(2.6rem, 1.2rem + 5.2vw, 5.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+pre,
+code,
+kbd {
+  font-family: var(--font-mono);
+}
+pre {
+  border: 1px solid var(--cs-line);
+}
+
+/* Mono eyebrow labels: section names and small metadata. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cs-muted);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--cs-sky) 40%, transparent);
+  color: var(--cs-ink);
+}
+
+:focus-visible {
+  outline-color: var(--cs-sky);
+}
+
+/* Form fields: dark wells on both skins. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+textarea,
+select {
+  background-color: color-mix(in srgb, var(--cs-navy) 70%, transparent);
+  color: var(--cs-ink);
+  border-color: var(--cs-line);
+}
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--cs-ink) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

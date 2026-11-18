@@ -36,22 +36,30 @@ const items = [
 
 export default function Features() {
   return (
-    <section className="pb-16 pt-6 md:pb-20 md:pt-8">
+    <section className="py-20 md:py-28">
       <div className="mx-auto max-w-7xl px-6">
-        <h2 className="text-cs-ink max-w-4xl text-balance text-4xl font-medium tracking-tight lg:text-5xl">
-          How it works
-        </h2>
-
-        <div className="max-sm:*:not-last:border-cs-line max-sm:*:not-last:border-b max-sm:*:not-last:pb-3 mt-12 grid gap-3 *:max-w-xs sm:grid-cols-2 md:mt-16 md:gap-y-6 lg:grid-cols-4 lg:gap-6">
-          {items.map(({ icon: Icon, lead, body }) => (
-            <p key={lead} className="text-cs-ink/60 text-balance">
-              <span className="text-cs-ink font-medium">
-                <Icon className="inline size-4 -translate-y-0.5" /> {lead}
-              </span>{" "}
-              {body}
-            </p>
-          ))}
+        <div className="grid gap-6 md:grid-cols-12">
+          <p className="eyebrow md:col-span-3 md:pt-3">How it works</p>
+          <h2 className="max-w-3xl md:col-span-9">
+            See it. Plan it. Ask it. Watch it.
+          </h2>
         </div>
+
+        <ol className="mt-12 grid border-t border-cs-line sm:grid-cols-2 lg:grid-cols-4">
+          {items.map(({ icon: Icon, lead, body }, index) => (
+            <li
+              key={lead}
+              className="border-b border-cs-line py-7 sm:pr-6 sm:even:pl-6 lg:border-b-0 lg:border-l lg:pl-6 lg:first:border-l-0 lg:first:pl-0"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs text-cs-muted">0{index + 1}</span>
+                <Icon className="size-5 text-cs-sky" aria-hidden />
+              </div>
+              <p className="mt-8 font-display text-xl font-bold tracking-tight text-cs-ink">{lead}</p>
+              <p className="mt-2 max-w-[34ch] leading-relaxed text-cs-muted">{body}</p>
+            </li>
+          ))}
+        </ol>
       </div>
     </section>
   );

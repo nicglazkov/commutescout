@@ -45,9 +45,10 @@ export default function Pricing() {
       {/* The navy band. The header above it is the same bg-cs-navy, so
           the two read as one surface; pb leaves room for the cards to
           overlap the seam via negative top margin. */}
-      <section className="bg-cs-navy [background-image:radial-gradient(circle_at_18%_0%,var(--cs-navy2)_0%,var(--cs-navy)_55%)] pb-36 max-[420px]:pb-28">
+      <section className="bg-[linear-gradient(to_bottom,color-mix(in_srgb,var(--cs-navy)_70%,transparent),transparent)] pb-36 max-[420px]:pb-28">
         <div className="mx-auto max-w-[1080px] px-6 pt-14 text-center max-[420px]:pt-10">
-          <h1 className="text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-[2.75rem] lg:leading-[1.15]">
+          <p className="eyebrow">Pricing</p>
+          <h1 className="mt-4 text-cs-ink">
             Free today. Pro when it is ready.
           </h1>
           <p className="mx-auto mt-3.5 max-w-[46ch] text-[1.05rem] leading-relaxed text-white/70">
@@ -65,7 +66,7 @@ export default function Pricing() {
 
       {/* Plan cards, pulled up into the navy band. */}
       <section className="mx-auto -mt-[104px] grid max-w-[1080px] grid-cols-1 gap-6 px-6 pb-16 max-[420px]:-mt-[76px] lg:grid-cols-2">
-        <div className="border-cs-line bg-cs-paper flex flex-col rounded-2xl border p-6 shadow-[0_24px_48px_-12px_rgba(6,16,28,0.45),0_2px_4px_rgba(6,16,28,0.08)] sm:p-8">
+        <div className="border-cs-line bg-cs-paper flex flex-col rounded-[calc(var(--site-radius)+4px)] border p-6 shadow-[0_24px_48px_-12px_rgba(6,16,28,0.45),0_2px_4px_rgba(6,16,28,0.08)] sm:p-8">
           <p className="text-cs-sky text-[0.8rem] font-bold uppercase tracking-[0.08em]">
             Free
           </p>
@@ -94,14 +95,14 @@ export default function Pricing() {
           <Link
             href="/map"
             prefetch={false}
-            className="bg-cs-sky hover:bg-cs-sky/90 mt-6 rounded-[10px] px-5 py-3 text-center text-[0.95rem] font-semibold text-white transition-colors"
+            className="bg-cs-sky hover:bg-cs-sky/90 mt-6 rounded-[var(--site-radius)] px-5 py-3 text-center text-[0.95rem] font-semibold text-cs-on-sky transition-colors"
           >
             Open the map
           </Link>
         </div>
 
-        <div className="border-cs-sky/60 bg-cs-paper relative flex flex-col overflow-hidden rounded-2xl border p-6 shadow-[0_24px_48px_-12px_rgba(6,16,28,0.45),0_2px_4px_rgba(6,16,28,0.08)] sm:p-8">
-          <span className="border-cs-sky/30 bg-cs-sky/10 text-cs-navy2 mb-2.5 inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.72rem] font-bold uppercase tracking-[0.06em] before:size-1.5 before:rounded-full before:bg-cs-sky before:content-['']">
+        <div className="border-cs-sky/60 bg-cs-paper relative flex flex-col overflow-hidden rounded-[calc(var(--site-radius)+4px)] border p-6 shadow-[0_24px_48px_-12px_rgba(6,16,28,0.45),0_2px_4px_rgba(6,16,28,0.08)] sm:p-8">
+          <span className="border-cs-sky/30 bg-cs-sky/10 text-cs-sky mb-2.5 inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.72rem] font-bold uppercase tracking-[0.06em] before:size-1.5 before:rounded-full before:bg-cs-sky before:content-['']">
             Coming soon
           </span>
           <p className="text-cs-sky text-[0.8rem] font-bold uppercase tracking-[0.08em]">
@@ -177,7 +178,7 @@ export default function Pricing() {
                 name="email"
                 required
                 placeholder="you@example.com"
-                className="text-cs-ink placeholder:text-cs-ink/40 focus:outline-cs-sky min-w-0 flex-[1_1_180px] rounded-[10px] border border-white/25 bg-white px-3.5 py-3 text-[0.94rem] focus:outline focus:outline-2 focus:outline-offset-1"
+                className="text-cs-ink placeholder:text-cs-ink/40 focus:outline-cs-sky min-w-0 flex-[1_1_180px] rounded-[var(--site-radius)] border border-white/25 bg-cs-paper px-3.5 py-3 text-[0.94rem] focus:outline focus:outline-2 focus:outline-offset-1"
               />
               {/* Honeypot: hidden from sighted users and assistive
                   tech, skipped in tab order. The handler rejects any
@@ -192,7 +193,7 @@ export default function Pricing() {
               />
               <button
                 type="submit"
-                className="bg-cs-sky inline-flex shrink-0 items-center gap-1.5 rounded-[10px] px-4.5 py-3 text-[0.94rem] font-semibold text-white transition-colors hover:bg-cs-sky/90"
+                className="bg-cs-sky inline-flex shrink-0 items-center gap-1.5 rounded-[var(--site-radius)] px-4.5 py-3 text-[0.94rem] font-semibold text-cs-on-sky transition-colors hover:bg-cs-sky/90"
               >
                 Notify me
                 <svg

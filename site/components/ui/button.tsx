@@ -10,15 +10,15 @@ import { cn } from "@/lib/utils";
 // The "destructive" variant was dropped; this is a marketing site with no
 // delete-style actions.
 const buttonVariants = cva(
-  "cursor-pointer inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cs-sky disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none active:scale-98 duration-200 [&_svg]:size-4 [&_svg]:shrink-0",
+  "cursor-pointer inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--site-radius)] text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cs-sky disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none active:scale-98 duration-200 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-cs-sky text-white shadow-sm shadow-cs-navy/10 hover:bg-cs-sky/90",
+        default: "bg-cs-sky text-cs-on-sky font-bold shadow-[0_0_32px_-8px_var(--cs-sky)] hover:bg-cs-sky/90",
         outline:
-          "bg-cs-ink/5 shadow-sm shadow-cs-navy/10 ring-1 ring-cs-line duration-200 hover:bg-cs-line/50",
-        secondary: "bg-cs-navy text-white hover:bg-cs-navy/90",
-        ghost: "hover:bg-cs-ink/6 hover:text-cs-navy",
+          "bg-cs-ink/5 ring-1 ring-cs-line duration-200 hover:bg-cs-ink/10",
+        secondary: "bg-cs-ink/[0.07] text-cs-ink ring-1 ring-cs-line hover:bg-cs-ink/[0.12]",
+        ghost: "text-cs-muted hover:bg-cs-ink/6 hover:text-cs-ink",
         link: "text-cs-sky underline-offset-4 hover:underline",
       },
       size: {
@@ -26,7 +26,7 @@ const buttonVariants = cva(
           "h-9 px-4 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5",
         xs: "h-6 px-2 text-xs has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         sm: "h-8 px-3 text-[0.8rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-10 px-5 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
+        lg: "h-11 px-5 text-[0.95rem] has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
         icon: "size-9",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3",
         "icon-sm": "size-8",

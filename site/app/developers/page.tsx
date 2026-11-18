@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BlueprintSchematic } from "@/components/blueprint-schematic";
 import { CopyField } from "@/components/copy-field";
 import reference from "@/lib/api-reference.json";
 
@@ -182,13 +183,17 @@ function H2({ id, children }: { id: string; children: React.ReactNode }) {
 
 export default function DevelopersPage() {
   return (
-    <>
-      <section className="bg-cs-navy text-white">
-        <div className="mx-auto max-w-4xl px-6 py-16 md:py-20">
-          <h1 className="text-balance text-4xl font-medium tracking-tight md:text-5xl">
+    // Blueprint skin: developer docs. globals.css re-points the site
+    // tokens (header and footer included) while this wrapper is on the page.
+    <div className="skin-blueprint">
+      <section className="border-b border-cs-line bg-cs-navy/70 text-cs-ink">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-6 py-16 md:py-20 lg:grid-cols-12 lg:items-center">
+         <div className="min-w-0 lg:col-span-7">
+          <p className="eyebrow">Developers &middot; REST API &middot; v1</p>
+          <h1 className="mt-4">
             Live roads, from your own code.
           </h1>
-          <p className="text-white/70 mt-4 max-w-2xl text-balance md:text-lg">
+          <p className="text-cs-muted mt-5 max-w-[62ch] text-[1.05rem] leading-relaxed">
             One REST API and one MCP server over the same live data as the map:
             trip planning and the best time to leave anywhere in the US, plus
             incidents, closures, chain controls, wildfires, cameras, message
@@ -204,13 +209,15 @@ export default function DevelopersPage() {
           <div className="mt-8 max-w-xl">
             <CopyField value={`${API_ROOT}/tools/{tool}`} />
           </div>
-          <nav aria-label="On this page" className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+          <nav aria-label="On this page" className="mt-8 flex flex-wrap gap-2 font-mono text-[0.78rem]">
             {SECTIONS.map((s) => (
-              <a key={s.id} href={`#${s.id}`} className="text-white/70 hover:text-white">
+              <a key={s.id} href={`#${s.id}`} className="rounded-[3px] border border-cs-line px-2.5 py-1 text-cs-muted transition-colors hover:border-cs-sky hover:text-cs-ink">
                 {s.label}
               </a>
             ))}
           </nav>
+         </div>
+          <BlueprintSchematic className="hidden w-full max-w-[460px] justify-self-end lg:col-span-5 lg:block" />
         </div>
       </section>
 
@@ -646,6 +653,6 @@ export default function DevelopersPage() {
           </ul>
         </div>
       </section>
-    </>
+    </div>
   );
 }

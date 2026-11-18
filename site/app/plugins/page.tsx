@@ -183,7 +183,7 @@ function code(text: string) {
 
 function Block({ text }: { text: string }) {
   return (
-    <pre className="mt-4 overflow-x-auto rounded-2xl bg-cs-navy p-5 text-[13px] leading-relaxed text-white/90">
+    <pre className="mt-4 overflow-x-auto rounded-2xl bg-cs-navy2 p-5 text-[13px] leading-relaxed text-white/90">
       <code>{text}</code>
     </pre>
   );
@@ -199,34 +199,38 @@ function H2({ id, children }: { id: string; children: React.ReactNode }) {
 
 export default function PluginsPage() {
   return (
-    <>
-      <section className="bg-cs-navy py-16 text-white md:py-24">
-        <div className="mx-auto max-w-5xl px-6">
-          <p className="text-sm font-medium uppercase tracking-wider text-white/60">Flare, version 1</p>
-          <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight md:text-5xl">
+    // Blueprint skin: developer docs. globals.css re-points the site
+    // tokens (header and footer included) while this wrapper is on the page.
+    <div className="skin-blueprint">
+      <section className="border-b border-cs-line bg-cs-navy/70 py-16 text-cs-ink md:py-20">
+        <div className="mx-auto max-w-7xl px-6">
+         <div className="max-w-4xl">
+          <p className="eyebrow">Flare, version 1</p>
+          <h1 className="mt-4">
             Plugins: your own road alerts, on the map and in the apps
           </h1>
-          <p className="mt-5 max-w-2xl text-balance text-lg text-white/75">
+          <p className="mt-5 max-w-[62ch] text-[1.05rem] leading-relaxed text-cs-muted">
             Flare is the open protocol CommuteScout uses to talk to third-party alert sources.
             A plugin is a small HTTPS server, not an app: it answers a handful of requests, so
             it works the same for the web map, the iOS app, the Android app, and anything else
             that speaks the protocol. Run one for yourself, for a group, or for everyone.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <a href="#start" className="rounded-full bg-cs-sky px-5 py-2.5 text-sm font-semibold text-white hover:bg-cs-sky/90">
+            <a href="#start" className="inline-flex h-11 items-center rounded-[3px] bg-cs-ink px-5 text-sm font-semibold text-cs-bg transition-colors hover:bg-white">
               Run one in five minutes
             </a>
-            <a href="#endpoints" className="rounded-full border border-white/30 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/10">
+            <a href="#endpoints" className="inline-flex h-11 items-center rounded-[3px] border border-dashed border-cs-sky px-5 text-sm font-semibold text-cs-ink transition-colors hover:bg-white/10">
               Read the protocol
             </a>
           </div>
-          <nav aria-label="On this page" className="mt-10 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/70">
+          <nav aria-label="On this page" className="mt-10 flex flex-wrap gap-2 font-mono text-[0.78rem]">
             {SECTIONS.map((s) => (
-              <a key={s.id} href={`#${s.id}`} className="hover:text-white">
+              <a key={s.id} href={`#${s.id}`} className="rounded-[3px] border border-cs-line px-2.5 py-1 text-cs-muted transition-colors hover:border-cs-sky hover:text-cs-ink">
                 {s.label}
               </a>
             ))}
           </nav>
+         </div>
         </div>
       </section>
 
@@ -240,7 +244,7 @@ export default function PluginsPage() {
           </p>
           <dl className="mt-6 grid gap-4 sm:grid-cols-2">
             {CAPABILITIES.map(([name, what]) => (
-              <div key={name} className="rounded-2xl border border-cs-ink/10 bg-white p-5">
+              <div key={name} className="rounded-2xl border border-cs-line bg-cs-paper p-5">
                 <dt className="font-mono text-sm font-semibold text-cs-ink">{name}</dt>
                 <dd className="text-cs-ink/70 mt-1 text-sm">{what}</dd>
               </div>
@@ -258,7 +262,7 @@ export default function PluginsPage() {
             and the apps can always say who is behind an alert.
           </p>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-emerald-200 bg-white p-5">
+            <div className="rounded-2xl border border-emerald-400/30 bg-cs-paper p-5">
               <h3 className="font-semibold text-cs-ink">Approved</h3>
               <p className="text-cs-ink/60 mt-1 font-mono text-xs">public · official or verified</p>
               <p className="text-cs-ink/70 mt-2 text-sm">
@@ -267,7 +271,7 @@ export default function PluginsPage() {
                 mediated: the plugin never sees a user, a device or an exact position.
               </p>
             </div>
-            <div className="rounded-2xl border border-amber-200 bg-white p-5">
+            <div className="rounded-2xl border border-amber-400/30 bg-cs-paper p-5">
               <h3 className="font-semibold text-cs-ink">Public, not reviewed</h3>
               <p className="text-cs-ink/60 mt-1 font-mono text-xs">public or unlisted · community</p>
               <p className="text-cs-ink/70 mt-2 text-sm">
@@ -277,7 +281,7 @@ export default function PluginsPage() {
                 for a group that knows they exist.
               </p>
             </div>
-            <div className="rounded-2xl border border-cs-ink/10 bg-white p-5">
+            <div className="rounded-2xl border border-cs-line bg-cs-paper p-5">
               <h3 className="font-semibold text-cs-ink">Private</h3>
               <p className="text-cs-ink/60 mt-1 font-mono text-xs">added by URL on one device</p>
               <p className="text-cs-ink/70 mt-2 text-sm">
@@ -404,7 +408,7 @@ export default function PluginsPage() {
           </p>
           <ul className="mt-6 flex flex-wrap gap-2">
             {KINDS.map((k) => (
-              <li key={k} className="rounded-full border border-cs-ink/10 bg-white px-3 py-1 font-mono text-xs text-cs-ink">
+              <li key={k} className="rounded-full border border-cs-line bg-cs-paper px-3 py-1 font-mono text-xs text-cs-ink">
                 {k}
               </li>
             ))}
@@ -416,7 +420,7 @@ export default function PluginsPage() {
         <div className="mx-auto max-w-3xl px-6">
           <H2 id="record">Alert record</H2>
           <Block text={RECORD} />
-          <div className="mt-6 overflow-x-auto rounded-2xl border border-cs-ink/10">
+          <div className="mt-6 overflow-x-auto rounded-2xl border border-cs-line">
             <table className="w-full text-sm">
               <thead className="bg-cs-bg text-left text-cs-ink/70">
                 <tr>
@@ -425,7 +429,7 @@ export default function PluginsPage() {
                   <th className="px-4 py-2 font-medium">Meaning</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-cs-ink/10 bg-white">
+              <tbody className="divide-y divide-cs-ink/10 bg-cs-paper">
                 {RECORD_FIELDS.map(([f, req, meaning]) => (
                   <tr key={f}>
                     <td className="px-4 py-2 font-mono text-xs text-cs-ink">{f}</td>
@@ -530,6 +534,6 @@ export default function PluginsPage() {
           </ul>
         </div>
       </section>
-    </>
+    </div>
   );
 }

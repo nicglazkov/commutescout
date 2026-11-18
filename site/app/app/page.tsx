@@ -97,23 +97,23 @@ export default function AppPage() {
   return (
     <>
       {/* Hero: the pitch and the two install links beside the app itself. */}
-      <section className="relative overflow-hidden bg-cs-navy text-white">
+      <section className="relative overflow-hidden border-b border-cs-line">
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-32 top-0 h-[48rem] w-[48rem] rounded-full bg-cs-sky/25 blur-3xl"
+          className="pointer-events-none absolute -right-32 top-0 h-[48rem] w-[48rem] rounded-full bg-[#ff9a3c]/15 blur-3xl"
         />
         <div className="relative mx-auto grid max-w-7xl gap-12 px-6 py-16 md:grid-cols-[1.1fr_1fr] md:items-center md:py-24">
           <div>
-            <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white/80 ring-1 ring-white/15">
+            <p className="eyebrow inline-flex items-center gap-2">
               <Smartphone className="size-3.5" aria-hidden />
               Early access
             </p>
-            <h1 className="mt-5 text-balance text-4xl font-medium tracking-tight md:text-6xl">
+            <h1 className="mt-5">
               CommuteScout Drive.
               <br />
-              The live map, with a voice.
+              <span className="text-cs-sky">The live map, with a voice.</span>
             </h1>
-            <p className="mt-5 max-w-xl text-balance text-lg text-white/70">
+            <p className="mt-5 max-w-[52ch] text-lg leading-relaxed text-cs-muted">
               Turn-by-turn navigation for iPhone and Android that reads the same official feeds as
               this site: closures, chain controls, crashes and community reports, spoken before you
               reach them. Same account, same plugins, one tap to report what you see.
@@ -121,25 +121,25 @@ export default function AppPage() {
             <div className="mt-8 flex flex-wrap gap-3">
               <a
                 href={TESTFLIGHT_PUBLIC}
-                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-cs-navy transition-colors hover:bg-white/90"
+                className="inline-flex h-11 items-center gap-2 rounded-[var(--site-radius)] bg-cs-sky px-5 text-sm font-bold text-cs-on-sky shadow-[0_0_32px_-8px_var(--cs-sky)] transition-colors hover:bg-cs-sky/90"
               >
                 <Apple className="size-4" aria-hidden />
                 iPhone: join the TestFlight beta
               </a>
               <a
                 href={ANDROID_RELEASES}
-                className="inline-flex items-center gap-2 rounded-full border border-white/30 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                className="inline-flex h-11 items-center gap-2 rounded-[var(--site-radius)] bg-cs-ink/[0.07] px-5 text-sm font-semibold text-cs-ink ring-1 ring-cs-line transition-colors hover:bg-cs-ink/[0.12]"
               >
                 <Smartphone className="size-4" aria-hidden />
                 Android: download the APK
               </a>
             </div>
-            <p className="mt-4 text-sm text-white/50">
+            <p className="mt-4 max-w-[60ch] text-sm text-cs-muted">
               Free while in beta. Open the link on your phone: TestFlight installs the iPhone build,
               and the Android build installs from the release page.
             </p>
             {TESTFLIGHT_IN_REVIEW && (
-              <p className="mt-2 text-sm text-white/70">{TESTFLIGHT_IN_REVIEW_NOTE}</p>
+              <p className="mt-2 text-sm text-cs-muted">{TESTFLIGHT_IN_REVIEW_NOTE}</p>
             )}
           </div>
 
@@ -161,19 +161,21 @@ export default function AppPage() {
       </section>
 
       {/* What it does. */}
-      <section className="py-16 md:py-20">
+      <section className="py-20 md:py-24">
         <div className="mx-auto max-w-7xl px-6">
-          <h2 className="text-balance text-3xl font-medium tracking-tight text-cs-ink md:text-4xl">
+          <p className="eyebrow">What it does</p>
+          <h2 className="mt-4 max-w-3xl">
             Everything the map knows, while you drive.
           </h2>
-          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {features.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="rounded-2xl border border-cs-line bg-cs-paper p-6">
-                <div className="inline-flex size-10 items-center justify-center rounded-xl bg-cs-sky/10 text-cs-sky">
-                  <Icon className="size-5" aria-hidden />
+          <div className="mt-12 grid gap-px overflow-hidden rounded-[var(--site-radius)] border border-cs-line bg-cs-line md:grid-cols-2 lg:grid-cols-3">
+            {features.map(({ icon: Icon, title, body }, index) => (
+              <div key={title} className="bg-cs-bg p-6 md:p-7">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-cs-muted">{String(index + 1).padStart(2, "0")}</span>
+                  <Icon className="size-5 text-cs-sky" aria-hidden />
                 </div>
-                <h3 className="mt-4 font-semibold text-cs-ink">{title}</h3>
-                <p className="mt-2 text-sm text-cs-ink/70">{body}</p>
+                <h3 className="mt-6 text-lg font-bold text-cs-ink">{title}</h3>
+                <p className="mt-2 text-[0.95rem] leading-relaxed text-cs-muted">{body}</p>
               </div>
             ))}
           </div>
@@ -182,12 +184,13 @@ export default function AppPage() {
 
       {/* Screens. A row of phones that scrolls sideways on a phone and
           fits four across on a desktop. */}
-      <section className="overflow-hidden bg-cs-bg py-16 md:py-20">
+      <section className="overflow-hidden border-y border-cs-line bg-cs-navy/60 py-20 md:py-24">
         <div className="mx-auto max-w-7xl px-6">
-          <h2 className="text-balance text-3xl font-medium tracking-tight text-cs-ink md:text-4xl">
+          <p className="eyebrow">Screens</p>
+          <h2 className="mt-4">
             On the road
           </h2>
-          <p className="mt-3 max-w-2xl text-cs-ink/70">
+          <p className="mt-4 max-w-2xl text-cs-muted">
             Screens from the apps, on a simulated drive. Alerts, times and distances are what the
             app showed at the time.
           </p>
@@ -196,20 +199,21 @@ export default function AppPage() {
           {gallery.map(({ src, alt, caption }) => (
             <figure key={src} className="snap-center shrink-0" style={{ width: 240 }}>
               <PhoneShot src={src} alt={alt} width={240} />
-              <figcaption className="mt-4 text-sm text-cs-ink/70">{caption}</figcaption>
+              <figcaption className="mt-4 text-sm text-cs-muted">{caption}</figcaption>
             </figure>
           ))}
         </div>
       </section>
 
       {/* Install. */}
-      <section className="py-16 md:py-20">
+      <section className="py-20 md:py-24">
         <div className="mx-auto max-w-7xl px-6">
-          <h2 className="text-balance text-3xl font-medium tracking-tight text-cs-ink md:text-4xl">
+          <p className="eyebrow">iPhone and Android</p>
+          <h2 className="mt-4">
             Install
           </h2>
           <div className="mt-8 grid gap-6 md:grid-cols-2">
-            <div className="rounded-2xl border border-cs-line bg-cs-paper p-6">
+            <div className="rounded-[var(--site-radius)] border border-cs-line bg-cs-paper p-6 md:p-7">
               <div className="flex items-center gap-2">
                 <Apple className="size-5 text-cs-ink" aria-hidden />
                 <h3 className="font-semibold text-cs-ink">iPhone</h3>
@@ -230,13 +234,13 @@ export default function AppPage() {
               )}
               <a
                 href={TESTFLIGHT_PUBLIC}
-                className="mt-5 inline-flex items-center gap-2 rounded-full bg-cs-navy px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cs-navy/90"
+                className="mt-6 inline-flex h-10 items-center gap-2 rounded-[var(--site-radius)] bg-cs-sky px-5 text-sm font-bold text-cs-on-sky shadow-[0_0_32px_-8px_var(--cs-sky)] transition-colors hover:bg-cs-sky/90"
               >
                 <Apple className="size-4" aria-hidden />
                 Join the TestFlight beta
               </a>
             </div>
-            <div className="rounded-2xl border border-cs-line bg-cs-paper p-6">
+            <div className="rounded-[var(--site-radius)] border border-cs-line bg-cs-paper p-6 md:p-7">
               <div className="flex items-center gap-2">
                 <Smartphone className="size-5 text-cs-ink" aria-hidden />
                 <h3 className="font-semibold text-cs-ink">Android</h3>
@@ -254,7 +258,7 @@ export default function AppPage() {
               </ol>
               <a
                 href={ANDROID_RELEASES}
-                className="mt-5 inline-flex items-center gap-2 rounded-full bg-cs-navy px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cs-navy/90"
+                className="mt-6 inline-flex h-10 items-center gap-2 rounded-[var(--site-radius)] bg-cs-sky px-5 text-sm font-bold text-cs-on-sky shadow-[0_0_32px_-8px_var(--cs-sky)] transition-colors hover:bg-cs-sky/90"
               >
                 <Smartphone className="size-4" aria-hidden />
                 Download the APK

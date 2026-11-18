@@ -19,7 +19,7 @@ function Line({ messages }: { messages: Record<string, Notice> }) {
       className={
         m.ok
           ? "border-cs-sky/40 bg-cs-sky/10 text-cs-ink mt-4 rounded-xl border px-4 py-3 text-sm"
-          : "mt-4 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+          : "mt-4 rounded-xl border border-red-400/40 bg-red-400/10 px-4 py-3 text-sm text-red-200"
       }
     >
       {m.text}

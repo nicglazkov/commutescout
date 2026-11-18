@@ -22,7 +22,7 @@ export function PhoneShot({ src, alt, width = 300, className = "", priority }: P
   const height = Math.round(width * 2.17);
   return (
     <div
-      className={`shrink-0 rounded-[2.4rem] bg-cs-navy p-[6px] shadow-2xl shadow-cs-navy/40 ring-1 ring-white/15 ${className}`}
+      className={`shrink-0 rounded-[2.4rem] bg-[#05070c] p-[6px] shadow-[0_30px_80px_-30px_#000,0_0_60px_-20px_#ff9a3c55] ring-1 ring-white/15 ${className}`}
       style={{ width }}
     >
       <div className="overflow-hidden rounded-[2rem] bg-cs-bg">

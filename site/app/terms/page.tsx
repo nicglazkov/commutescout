@@ -33,7 +33,8 @@ export default function TermsPage() {
   return (
     <section className="py-16 md:py-20">
       <div className="mx-auto max-w-3xl px-6">
-        <h1 className="text-cs-ink text-balance text-4xl font-medium tracking-tight lg:text-5xl">
+        <p className="eyebrow">Legal</p>
+          <h1 className="text-cs-ink mt-4">
           Terms of use
         </h1>
         <p className="text-cs-ink/70 mt-3 text-sm">
@@ -41,7 +42,7 @@ export default function TermsPage() {
         </p>
 
         <div className="text-cs-ink/60 mt-8 space-y-8 md:text-lg">
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 font-medium text-amber-900">
+          <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-5 py-4 font-medium text-amber-200">
             CommuteScout is informational only. Data can be delayed,
             incomplete, or wrong. Always verify with your state&apos;s
             official 511 service or DOT map (for California,{" "}

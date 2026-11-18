@@ -57,7 +57,7 @@ export default function ContactPage() {
       {/* Navy header band, matching the /mcp and homepage developer-band
           treatment (bg-cs-navy text-white). Heading and subtitle text are
           unchanged from the previous plain layout. */}
-      <section className="bg-cs-navy text-white">
+      <section className="border-b border-cs-line bg-cs-navy/60 text-white">
         <div className="mx-auto max-w-5xl px-6 py-14 md:py-20">
           <h1 className="text-balance text-4xl font-medium tracking-tight lg:text-5xl">
             Contact
@@ -151,7 +151,7 @@ export default function ContactPage() {
 
                 <button
                   type="submit"
-                  className="bg-cs-sky hover:bg-cs-sky/90 rounded-full px-5 py-2.5 text-sm font-medium text-white transition-colors"
+                  className="bg-cs-sky hover:bg-cs-sky/90 rounded-full px-5 py-2.5 text-sm font-medium text-cs-on-sky transition-colors"
                 >
                   Send message
                 </button>

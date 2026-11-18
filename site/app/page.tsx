@@ -54,40 +54,44 @@ export default function Home() {
       <Features />
       <StatsSection />
 
-      {/* Developer band. Not a vendored Tailark block: none of the six
-          required block types (hero, feature grid, stat band, pricing,
-          FAQ/content, footer) fit a one-off connector-URL callout, so this
-          is page-owned markup, styled to match the navy header/footer
-          bands. */}
-      <section className="bg-cs-navy text-white">
-        <div className="mx-auto max-w-7xl px-6 py-16 md:py-20">
-          <div className="grid gap-8 md:grid-cols-2 md:items-center md:gap-12">
-            <div>
-              <h2 className="text-balance text-3xl font-medium tracking-tight md:text-4xl">
+      {/* Developer band. Page-owned markup, drawn as a strip of the
+          Blueprint skin the developer and MCP pages use, so it reads as a
+          door into those pages. It sets the blueprint colors locally; it
+          does not use the .skin-blueprint class, which would re-skin the
+          whole homepage. */}
+      <section className="relative overflow-hidden border-y border-[#2f5ea8] bg-[#0f3d8c] text-[#e9f0ff] [background-image:linear-gradient(#ffffff14_1px,transparent_1px),linear-gradient(90deg,#ffffff14_1px,transparent_1px),linear-gradient(#ffffff08_1px,transparent_1px),linear-gradient(90deg,#ffffff08_1px,transparent_1px)] [background-size:60px_60px,60px_60px,12px_12px,12px_12px] [font-family:var(--font-plex-sans)]">
+        <div className="mx-auto max-w-7xl px-6 py-20 md:py-24">
+          <div className="grid gap-10 md:grid-cols-12 md:items-center">
+            <div className="md:col-span-6">
+              <p className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-[#9fc0ff]">For developers &middot; MCP and REST</p>
+              <h2 className="mt-4 [font-family:var(--font-plex-sans)] !font-semibold !tracking-[-0.02em]">
                 Bring live roads to your assistant.
               </h2>
-              <p className="text-white/70 mt-4 max-w-md text-balance">
+              <p className="mt-4 max-w-[46ch] text-lg leading-relaxed text-[#b9cbf3]">
                 Ask Claude, ChatGPT, Cursor or any MCP client when to leave, what is
                 on the road, and what the weather will be, from the same live feeds
                 the map reads.
               </p>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-5 md:col-span-6 md:pl-6">
+              <p className="font-mono text-[0.72rem] uppercase tracking-[0.14em] text-[#9fc0ff]">Connector URL</p>
               <CopyField value={MCP_URL} />
-              <Link
-                href="/mcp#connect"
-                prefetch={false}
-                className="inline-flex items-center gap-1.5 text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
-              >
-                Set up your assistant
-              </Link>
-              <Link
-                href="/developers"
-                prefetch={false}
-                className="ml-5 inline-flex items-center gap-1.5 text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
-              >
-                REST API and keys
-              </Link>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/mcp#connect"
+                  prefetch={false}
+                  className="inline-flex h-10 items-center rounded-[3px] bg-[#e9f0ff] px-4 text-sm font-semibold text-[#0f3d8c] transition-colors hover:bg-white"
+                >
+                  Set up your assistant
+                </Link>
+                <Link
+                  href="/developers"
+                  prefetch={false}
+                  className="inline-flex h-10 items-center rounded-[3px] border border-dashed border-[#9fc0ff] px-4 text-sm font-semibold text-[#e9f0ff] transition-colors hover:bg-white/10"
+                >
+                  REST API and keys
+                </Link>
+              </div>
             </div>
           </div>
         </div>

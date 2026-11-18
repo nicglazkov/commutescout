@@ -190,7 +190,7 @@ export function Marketplace() {
         return (
           <article
             key={s.id}
-            className="flex min-w-0 flex-col rounded-3xl border border-cs-ink/10 bg-white p-5 shadow-sm transition-shadow hover:shadow-md sm:p-6"
+            className="flex min-w-0 flex-col rounded-[calc(var(--site-radius)+4px)] border border-cs-line bg-cs-paper p-5 transition-colors hover:border-cs-sky/40 sm:p-6"
             data-plugin={s.id}
           >
             <div className="flex items-center gap-4">
@@ -211,10 +211,10 @@ export function Marketplace() {
                 type="button"
                 onClick={() => toggle(s)}
                 className={
-                  "inline-flex shrink-0 items-center gap-1 rounded-full px-5 py-2 text-sm font-semibold transition-colors " +
+                  "inline-flex shrink-0 items-center gap-1 rounded-[var(--site-radius)] px-5 py-2 text-sm font-bold transition-colors " +
                   (installed
                     ? "bg-cs-ink/5 text-cs-ink hover:bg-cs-ink/10"
-                    : "bg-cs-sky text-white hover:bg-cs-sky/90")
+                    : "bg-cs-sky text-cs-on-sky hover:bg-cs-sky/90")
                 }
                 aria-pressed={installed}
               >
@@ -237,7 +237,7 @@ export function Marketplace() {
               </ul>
             )}
 
-            <dl className="divide-cs-ink/10 border-cs-ink/10 mt-5 flex divide-x border-y py-3">
+            <dl className="divide-cs-line border-cs-line mt-5 flex divide-x border-y py-3">
               <Stat label="Alerts now" value={s.ok === false ? "Offline" : (s.count ?? 0).toLocaleString()} />
               <Stat label="Coverage" value={coverageLabel(s.coverage)} />
               <Stat label="Reports" value={s.capabilities?.report ? "Accepted" : "Read only"} />
@@ -248,7 +248,7 @@ export function Marketplace() {
               <span
                 className={
                   "rounded-full px-2.5 py-0.5 text-xs font-semibold " +
-                  (approved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")
+                  (approved ? "bg-emerald-400/15 text-emerald-300" : "bg-amber-400/15 text-amber-300")
                 }
               >
                 {approved ? "Approved by CommuteScout" : "Public, not reviewed"}

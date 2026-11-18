@@ -30,7 +30,8 @@ export default function AboutPage() {
     // short prose page, so this composes directly rather than forcing one.
     <section className="py-16 md:py-20">
       <div className="mx-auto max-w-3xl px-6">
-        <h1 className="text-cs-ink text-balance text-4xl font-medium tracking-tight lg:text-5xl">
+        <p className="eyebrow">About</p>
+          <h1 className="text-cs-ink mt-4">
           About
         </h1>
 

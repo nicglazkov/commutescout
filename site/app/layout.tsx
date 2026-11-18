@@ -1,16 +1,28 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Manrope } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 
-// Self-hosted by Next's font optimizer at build time. This is the same
-// Inter family the map app self-hosts from /static/fonts/Inter-normal.woff2,
-// loaded here through next/font instead so the site build and dev server
-// don't depend on the Python app's static routes being reachable.
-const inter = Inter({
-  variable: "--font-inter",
+// Self-hosted by Next's font optimizer at build time, so no page asks
+// Google for fonts at runtime. Manrope is the Night Drive face (marketing
+// pages); IBM Plex Sans and Mono are the Blueprint faces (developer, API
+// and MCP pages), and Plex Mono also sets code and the small mono labels
+// on every page. globals.css picks between them per skin.
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+});
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -74,7 +86,7 @@ const SITE_SCHEMA = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+    <html lang="en" className={`${manrope.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}>
       <head>
         <script
           type="application/ld+json"
@@ -106,7 +118,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             #main, the landmark below. */}
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-cs-navy focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cs-sky"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-cs-sky focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-cs-on-sky focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cs-sky"
         >
           Skip to main content
         </a>

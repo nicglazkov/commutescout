@@ -22,8 +22,8 @@ export function CopyField({ value }: { value: string }) {
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/15">
-      <code className="flex-1 overflow-x-auto text-sm whitespace-nowrap text-white/90">
+    <div className="flex items-center gap-2 rounded-[var(--site-radius)] bg-black/25 px-4 py-3 ring-1 ring-white/15">
+      <code className="flex-1 overflow-x-auto font-mono text-sm whitespace-nowrap text-white/90">
         {value}
       </code>
       <button
