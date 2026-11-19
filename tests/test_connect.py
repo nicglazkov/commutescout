@@ -53,7 +53,20 @@ def test_server_card_matches_server_json():
     card = connect.server_card(reg["version"])
     assert card["name"] == reg["name"]
     assert card["remotes"][0]["url"] == reg["remotes"][0]["url"] == connect.ENDPOINT
-    assert card["remotes"][0]["authentication"]["required"] is False
+    assert card["remotes"][0]["authentication"]["required"] is True
+    assert reg["remotes"][0]["headers"][0]["isRequired"] is True
+
+
+def test_every_header_capable_client_sends_the_key():
+    """The hosted server answers 401 without a key, so a client config
+    that can carry a header must carry one."""
+    for client in connect.CLIENTS:
+        steps = " ".join(s.get("code") or s.get("text") or "" for s in client["steps"])
+        if client["key"]:
+            assert "Authorization" in steps or "bearer" in steps.lower(), client["id"]
+        assert "without a key" not in steps, client["id"]
+    assert "no\n> key needed" not in connect.guide()
+    assert "missing_key" in connect.guide()
 
 
 @pytest.mark.parametrize("path", ["/", "/llms.txt"])

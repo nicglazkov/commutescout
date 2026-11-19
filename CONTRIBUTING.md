@@ -29,8 +29,10 @@ when it is missing. Build the site (below) to run them.
 
 Use the stdio transport for local MCP work (`ca-roads-mcp`). The http
 transport is tuned for Cloud Run and binds 0.0.0.0 with host-header
-checks off; bind it to localhost if you must run it locally:
-`ca-roads-mcp --transport http --host 127.0.0.1`.
+checks off, and it requires an API key (checked against Firestore) on
+`/mcp` and `/v1/tools/*`. To run it locally, bind it to localhost and
+turn the key check off:
+`MCP_REQUIRE_KEY=0 ca-roads-mcp --transport http --host 127.0.0.1`.
 
 Running the web app locally: `pip install -e ".[demo]"` then
 `ca-roads-demo` with `ANTHROPIC_API_KEY` set. Watch areas, trips, and

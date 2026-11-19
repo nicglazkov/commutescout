@@ -51,7 +51,10 @@ flagged as stale rather than hidden.
 
 ### Connect an AI assistant
 
-The hosted MCP server is public and works without a key:
+The hosted MCP server is public and needs a free API key. Create one at
+[commutescout.com/map](https://commutescout.com/map) (Settings, sign in,
+then API keys; 2,000 requests a day) and send it as
+`Authorization: Bearer cs_live_...`:
 
 ```
 https://mcp.commutescout.com/mcp
@@ -60,7 +63,8 @@ https://mcp.commutescout.com/mcp
 For example, in Claude Code:
 
 ```sh
-claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp
+claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp \
+  --header "Authorization: Bearer cs_live_..."
 ```
 
 Setup for every other client is at
@@ -71,8 +75,11 @@ can read the same steps as plain text at
 ### Call the REST API
 
 ```sh
-curl "https://mcp.commutescout.com/v1/tools/best_time_to_go?origin=Union%20Station%20Denver&destination=Red%20Rocks%20Amphitheatre&day=tomorrow"
+curl -H "X-API-Key: cs_live_..." \
+  "https://mcp.commutescout.com/v1/tools/best_time_to_go?origin=Union%20Station%20Denver&destination=Red%20Rocks%20Amphitheatre&day=tomorrow"
 ```
+
+Without a key, tool calls answer `401` with code `missing_key`.
 
 Keys, limits, errors and the full parameter reference are at
 **[commutescout.com/developers](https://commutescout.com/developers)**.
