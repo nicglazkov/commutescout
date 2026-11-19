@@ -2144,13 +2144,61 @@ TURNSTILE_VERIFY_URL = (
     "https://challenges.cloudflare.com/turnstile/v0/siteverify")
 
 
-async def _turnstile_verify(secret: str, token: str, ip: str) -> bool:
+def _is_production() -> bool:
+    """True on the deployed service. Follows the repo's convention
+    (flare_sources.warn_if_dev_salt): a snapshot bucket, or the
+    Cloudflare-only gate, is set only in production; local dev, tests
+    and self-hosters have neither."""
+    return bool(os.environ.get("SNAPSHOT_BUCKET", "").strip()
+                or _cloudflare_required())
+
+
+def _cloudflare_required() -> bool:
+    flag = os.environ.get("REQUIRE_CLOUDFLARE", "").strip().lower()
+    return flag not in ("", "0", "false", "no")
+
+
+TURNSTILE_HOSTNAME = "commutescout.com"
+# www and localhost are accepted only outside production.
+_TURNSTILE_DEV_HOSTNAMES = frozenset(
+    {"www.commutescout.com", "localhost", "127.0.0.1"})
+
+
+def _turnstile_hostname_ok(hostname) -> bool:
+    if not isinstance(hostname, str):
+        return False
+    hostname = hostname.strip().lower()
+    if hostname == TURNSTILE_HOSTNAME:
+        return True
+    return (not _is_production()) and hostname in _TURNSTILE_DEV_HOSTNAMES
+
+
+def _turnstile_misconfigured() -> bool:
+    """Production without TURNSTILE_SECRET_KEY: the contact form refuses
+    submissions (503) rather than silently running with no bot check."""
+    return _is_production() and not os.environ.get(
+        "TURNSTILE_SECRET_KEY", "").strip()
+
+
+def warn_if_turnstile_unset() -> None:
+    """Said once at startup, like staticmap_sig.warn_if_unset."""
+    if _turnstile_misconfigured():
+        log.error("TURNSTILE_SECRET_KEY is not set in production: "
+                  "/api/contact refuses submissions (503)")
+
+
+async def _turnstile_verify(secret: str, token: str, ip: str,
+                            expected_action: str | None = None) -> bool:
     """Ask Cloudflare whether a Turnstile token is genuine.
 
-    Fail closed: only an explicit success from siteverify passes. A
-    non-200 reply or an unreachable API rejects the submission rather
-    than waving bots through during an outage; the contact form is low
-    volume enough that availability loses to the zero-bot goal here.
+    Fail closed: only an explicit success from siteverify, for our own
+    hostname, passes. A non-200 reply or an unreachable API rejects the
+    submission rather than waving bots through during an outage; the
+    contact form is low volume enough that availability loses to the
+    zero-bot goal here. The hostname must be commutescout.com (www and
+    localhost only outside production), so a token minted for another
+    site using the same widget key does not pass. When the widget sets
+    an action, pass it as expected_action and it must match.
     """
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -2167,11 +2215,52 @@ async def _turnstile_verify(secret: str, token: str, ip: str) -> bool:
     except ValueError:
         log.warning("turnstile: siteverify answered with a non-JSON body")
         return False
-    if not body.get("success"):
+    if not isinstance(body, dict) or not body.get("success"):
         log.warning("turnstile: token rejected (%s)",
-                    body.get("error-codes"))
+                    body.get("error-codes") if isinstance(body, dict)
+                    else None)
+        return False
+    if not _turnstile_hostname_ok(body.get("hostname")):
+        log.warning("turnstile: token for unexpected hostname %r",
+                    str(body.get("hostname"))[:100])
+        return False
+    if expected_action is not None and body.get("action") != expected_action:
+        log.warning("turnstile: token for unexpected action %r",
+                    str(body.get("action"))[:50])
         return False
     return True
+
+
+# Contact-form cap per client: about 5 an hour, sliding window, in
+# process (max-instances 1 makes that authoritative).
+_CONTACT_PER_CLIENT_HOUR = 5
+_contact_hits: dict[str, list[float]] = {}
+_EMAIL_FORBIDDEN = frozenset(",; <>\t\r\n\"'()[]\\")
+
+
+def _contact_rate_ok(key: str) -> bool:
+    now = time.time()
+    if len(_contact_hits) > 5000:
+        _prune(_contact_hits, now)
+    hits = [t for t in _contact_hits.get(key, []) if now - t < 3600]
+    if len(hits) >= _CONTACT_PER_CLIENT_HOUR:
+        _contact_hits[key] = hits
+        return False
+    hits.append(now)
+    _contact_hits[key] = hits
+    return True
+
+
+def _single_email_ok(email: str) -> bool:
+    """Exactly one plain address: one @, a dotted domain, and none of
+    the characters that let a second recipient or a display name in."""
+    if not email or any(c in _EMAIL_FORBIDDEN or c.isspace() for c in email):
+        return False
+    if email.count("@") != 1:
+        return False
+    local, domain = email.split("@")
+    return bool(local and domain and "." in domain
+                and not domain.startswith(".") and not domain.endswith("."))
 
 
 async def api_contact(request: Request):
@@ -2180,8 +2269,8 @@ async def api_contact(request: Request):
     on a page. A filled honeypot returns success without sending, so
     bots get no signal to iterate on. With TURNSTILE_SECRET_KEY set,
     a submission also needs a Cloudflare-verified Turnstile token
-    before any mail goes out (unset means the check is off: local dev,
-    tests, and self-hosters without Cloudflare)."""
+    before any mail goes out (unset is allowed only outside production:
+    local dev, tests, and self-hosters; in production it is a 503)."""
     form = await _capped_form(request)
     if form is None:
         return PlainTextResponse("Message too large.", status_code=413)
@@ -2191,6 +2280,16 @@ async def api_contact(request: Request):
     if (form.get("website") or "").strip():
         return PlainTextResponse("Thanks. Your message is on its way.")
     answer = functools.partial(_form_answer, request, page="/contact")
+    if _turnstile_misconfigured():
+        log.error("contact: TURNSTILE_SECRET_KEY unset in production, "
+                  "submission refused")
+        return PlainTextResponse("Contact is not available right now.",
+                                 status_code=503)
+    if not _contact_rate_ok(client_key(request)):
+        log.info("contact: per-client hourly cap reached")
+        return JSONResponse(
+            {"error": "too many messages from your address; try again later"},
+            status_code=429, headers={"Retry-After": "3600"})
     turnstile_secret = os.environ.get("TURNSTILE_SECRET_KEY", "").strip()
     if turnstile_secret:
         token = (form.get("cf-turnstile-response") or "").strip()[:2048]
@@ -2209,7 +2308,7 @@ async def api_contact(request: Request):
         if not verified:
             return answer("Human verification failed. Reload the page and try "
                           "again.", status=403, notice="verify")
-    if not (name and message and "@" in email and "." in email.rsplit("@", 1)[-1]):
+    if not (name and message and _single_email_ok(email)):
         return answer("Name, a valid email, and a message are required.",
                       status=400, notice="invalid")
     dest = os.environ.get("CONTACT_EMAIL", "")
@@ -2516,6 +2615,7 @@ SNAP_LOAD_STARTUP_SECONDS = 150
 @contextlib.asynccontextmanager
 async def _lifespan(app_):
     staticmap_sig.warn_if_unset()
+    warn_if_turnstile_unset()
     flare_sources.warn_if_dev_salt()
     with contextlib.suppress(Exception):
         await asyncio.wait_for(roadsnap.load_persisted(),
