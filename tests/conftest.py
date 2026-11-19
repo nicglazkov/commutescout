@@ -52,3 +52,16 @@ def _fresh_rate_limiter(monkeypatch):
                 layer, "limiter",
                 RateLimiter(capacity=1000, refill_per_second=1000))
         layer = getattr(layer, "app", None)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_contact_cap():
+    """The contact form's per-client hourly cap is process-lifetime state
+    keyed on TestClient's fixed peer; clear it around every test so a
+    module's posts never 429 a later one."""
+    mod = sys.modules.get("ca_roads_demo.app")
+    if mod is not None:
+        mod._contact_hits.clear()
+    yield
+    if mod is not None:
+        mod._contact_hits.clear()

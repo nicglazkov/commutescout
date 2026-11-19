@@ -217,7 +217,8 @@ def _verify_with(monkeypatch, resp=None, exc=None):
 
 def test_verify_true_on_success(monkeypatch):
     assert _verify_with(
-        monkeypatch, resp=_FakeResp(200, {"success": True})) is True
+        monkeypatch, resp=_FakeResp(200, {"success": True,
+                             "hostname": "commutescout.com"})) is True
 
 
 def test_verify_false_on_rejection(monkeypatch):
@@ -282,3 +283,146 @@ def test_failed_send_log_omits_the_address(monkeypatch, caplog):
     msgs = [r.getMessage() for r in caplog.records]
     assert any("not delivered" in m for m in msgs)
     assert not any("a@b.co" in m for m in msgs)
+
+
+# --- Hardening: fail-closed config, hostname/action, rate cap, one email ---
+
+_OK_HOST = {"success": True, "hostname": "commutescout.com"}
+_PROD_ENV = ("SNAPSHOT_BUCKET", "REQUIRE_CLOUDFLARE")
+
+
+def _dev(monkeypatch):
+    for k in _PROD_ENV:
+        monkeypatch.delenv(k, raising=False)
+
+
+def test_production_without_secret_refuses_with_503(monkeypatch):
+    sent = []
+    c = _client(monkeypatch, sent)
+    monkeypatch.setenv("SNAPSHOT_BUCKET", "bucket")
+    monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    r = c.post("/api/contact", data=GOOD)
+    assert r.status_code == 503 and not sent
+
+
+def test_cloudflare_flag_also_counts_as_production(monkeypatch):
+    # (Not posted through the app: the Cloudflare gate would 403 first.)
+    monkeypatch.delenv("SNAPSHOT_BUCKET", raising=False)
+    monkeypatch.setenv("REQUIRE_CLOUDFLARE", "1")
+    monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    assert demo_app._turnstile_misconfigured() is True
+    monkeypatch.setenv("REQUIRE_CLOUDFLARE", "0")
+    assert demo_app._turnstile_misconfigured() is False
+
+
+def test_production_with_secret_is_not_misconfigured(monkeypatch):
+    monkeypatch.setenv("SNAPSHOT_BUCKET", "bucket")
+    monkeypatch.setenv("TURNSTILE_SECRET_KEY", "sk")
+    assert demo_app._turnstile_misconfigured() is False
+
+
+def test_dev_without_secret_still_works(monkeypatch):
+    sent = []
+    c = _client(monkeypatch, sent)
+    _dev(monkeypatch)
+    monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    assert c.post("/api/contact", data=GOOD).status_code == 200
+
+
+def test_startup_logs_error_when_secret_missing_in_production(
+        monkeypatch, caplog):
+    monkeypatch.setenv("SNAPSHOT_BUCKET", "bucket")
+    monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    caplog.set_level("ERROR", logger=demo_app.log.name)
+    demo_app.warn_if_turnstile_unset()
+    assert any("TURNSTILE_SECRET_KEY" in r.getMessage()
+               for r in caplog.records)
+    caplog.clear()
+    _dev(monkeypatch)
+    demo_app.warn_if_turnstile_unset()
+    assert not caplog.records
+
+
+def test_verify_rejects_wrong_or_missing_hostname(monkeypatch):
+    _dev(monkeypatch)
+    for body in ({"success": True},
+                 {"success": True, "hostname": "evil.example"},
+                 {"success": True, "hostname": "commutescout.com.evil.io"},
+                 {"success": True, "hostname": None}):
+        assert _verify_with(monkeypatch, resp=_FakeResp(200, body)) is False
+
+
+def test_verify_www_and_localhost_only_in_dev(monkeypatch):
+    for host in ("www.commutescout.com", "localhost"):
+        body = {"success": True, "hostname": host}
+        _dev(monkeypatch)
+        assert _verify_with(monkeypatch, resp=_FakeResp(200, body)) is True
+        monkeypatch.setenv("SNAPSHOT_BUCKET", "bucket")
+        assert _verify_with(monkeypatch, resp=_FakeResp(200, body)) is False
+    assert _verify_with(monkeypatch, resp=_FakeResp(200, _OK_HOST)) is True
+
+
+def test_verify_checks_action_when_expected(monkeypatch):
+    monkeypatch.setattr(
+        demo_app.httpx, "AsyncClient",
+        lambda **kw: _FakeClient(resp=_FakeResp(
+            200, {**_OK_HOST, "action": "contact"})))
+    run = lambda a: asyncio.run(  # noqa: E731
+        demo_app._turnstile_verify("sk", "tok", "203.0.113.9", a))
+    assert run("contact") is True
+    assert run("login") is False
+    assert run(None) is True
+
+
+def test_contact_rate_limit_is_five_per_hour_then_429(monkeypatch):
+    sent = []
+    c = _client(monkeypatch, sent)
+    _dev(monkeypatch)
+    monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    demo_app._contact_hits.clear()
+    codes = [c.post("/api/contact", data=GOOD).status_code for _ in range(7)]
+    assert codes == [200] * 5 + [429] * 2
+    assert len(sent) == 5
+    r = c.post("/api/contact", data=GOOD)
+    assert "error" in r.json() and r.headers["retry-after"]
+    demo_app._contact_hits.clear()
+
+
+def test_contact_rate_limit_is_per_client(monkeypatch):
+    _client(monkeypatch, [])
+    demo_app._contact_hits.clear()
+    for _ in range(5):
+        assert demo_app._contact_rate_ok("203.0.113.1")
+    assert not demo_app._contact_rate_ok("203.0.113.1")
+    assert demo_app._contact_rate_ok("203.0.113.2")
+    demo_app._contact_hits.clear()
+
+
+def test_email_must_be_exactly_one_address(monkeypatch):
+    sent = []
+    c = _client(monkeypatch, sent)
+    _dev(monkeypatch)
+    monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    demo_app._contact_hits.clear()
+    for bad in ("a@b.c, x@y.z", "a@b.co;x@y.zz", "a@b.co x@y.zz",
+                "Ada <a@b.co>", "a@b@c.co", "@b.co", "a@b", "a@.co",
+                "a@b.co,"):
+        demo_app._contact_hits.clear()
+        r = c.post("/api/contact", data={**GOOD, "email": bad})
+        assert r.status_code == 400, bad
+    assert not sent
+    demo_app._contact_hits.clear()
+
+
+def test_crlf_is_still_stripped_from_email(monkeypatch):
+    sent = []
+    c = _client(monkeypatch, sent)
+    _dev(monkeypatch)
+    monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    demo_app._contact_hits.clear()
+    c.post("/api/contact", data={**GOOD, "email": "a@b.co\r\nBcc: x@y.zz"})
+    # The injected header cannot survive as a second address.
+    assert not sent or ("\n" not in sent[0]["reply_to"]
+                        and "," not in sent[0]["reply_to"]
+                        and " " not in sent[0]["reply_to"])
+    demo_app._contact_hits.clear()
