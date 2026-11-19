@@ -1,229 +1,178 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AppWindow, Mail, Smartphone } from "lucide-react";
+import { Bell, Mail } from "lucide-react";
 import { FigureFrame } from "./frame";
 import { useInView, useReducedMotion } from "./hooks";
 
-// One watch area, three checks five minutes apart. Every rule below is in src/ca_roads_demo/watch.py:
-// - checks run every 5 minutes (Cloud Scheduler "*/5 * * * *", docs/deploy.md:325-330 -> api_check_watches, watch.py:2135)
-// - the first check of a watch seeds the seen-set silently: first_run = raw_seen is None (watch.py:1973-1974),
-//   alerts only `if not first_run and fresh` (watch.py:2013)
-// - later checks alert only on matched events not already seen (watch.py:1985); ids stay seen for 6 h after
-//   they vanish (SEEN_GRACE_SECONDS, watch.py:91) so a flapping event never re-alerts
-// - only incidents, closures, chain controls and fires can alert: WATCH_KINDS (watch.py:110); signs,
-//   cameras and weather are never collected for alerts (_collect_events, watch.py:1394-1495)
-// - "inside" is the event's point inside the drawn shape (watch_matches, watch.py:505-522)
-// - channels default push on, email off (watch.py:1075-1076); push reaches both the phone app (FCM) and
-//   browser web push subscriptions (_push_to_subs, watch.py:1549); email needs the account and watch
-//   both opted in (watch.py:1957-1960)
+// One watch area on one map, checked three times. Rules from src/ca_roads_demo/watch.py:
+// - the first check of a watch only records what is there (first_run), it never alerts
+// - later checks alert once per new matching event; an id already seen stays quiet
+// - only incidents, closures, chain controls and fires alert (WATCH_KINDS); signs, cameras and
+//   weather never do
+// - "inside" means the event's point is inside the drawn shape (watch_matches)
+// - push is on and email off by default
+// Calm autoplay through the three checks, no controls. Reduced motion and no JS show check 2,
+// the one that sends an alert.
 
-type Step = 0 | 1 | 2 | 3;
+type Step = 1 | 2 | 3;
 const CHECKS = [
-  { n: 1, at: "0 min", title: "First check", result: "Baseline: the incident inside is recorded as seen. Nothing is sent." },
-  { n: 2, at: "+5 min", title: "Second check", result: "A new incident inside: one alert. The closure outside and the sign are ignored." },
-  { n: 3, at: "+10 min", title: "Third check", result: "Nothing new since the last check. Nothing is sent." },
-] as const;
-
-const AREA = "M70 46 L188 30 L226 98 L176 150 L86 138 Z";
-const AREA_PTS: [number, number][] = [
-  [70, 46],
-  [188, 30],
-  [226, 98],
-  [176, 150],
-  [86, 138],
+  { n: 1 as Step, at: "First check", note: "Records what is already there. Nothing is sent." },
+  { n: 2 as Step, at: "A few minutes later", note: "A new crash inside the area. One alert." },
+  { n: 3 as Step, at: "Next check", note: "Nothing new. Nothing is sent." },
 ];
 
-function Incident({ x, y, isNew }: { x: number; y: number; isNew?: boolean }) {
-  return (
-    <g transform={`translate(${x} ${y})`}>
-      {isNew && <circle className="wc-ring" r={11} />}
-      <circle className="wc-pin" r={7.5} fill="var(--f-incident)" />
-      <path d="M0 -3.6 V0.8" className="wc-glyph" />
-      <circle cy={3.4} r={0.95} className="wc-glyph-dot" />
-    </g>
-  );
+// smooth closed shape through points (Catmull-Rom)
+function smooth(p: [number, number][]) {
+  const n = p.length;
+  let d = `M${p[0][0]} ${p[0][1]}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = p[(i - 1 + n) % n], p1 = p[i], p2 = p[(i + 1) % n], p3 = p[(i + 2) % n];
+    d += `C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)} ${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)} ${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0]} ${p2[1]}`;
+  }
+  return d + "Z";
 }
-function Closure({ x, y }: { x: number; y: number }) {
-  return (
-    <g transform={`translate(${x} ${y})`}>
-      <circle className="wc-pin" r={7.5} fill="var(--f-closure)" />
-      <path d="M-3.6 0 H3.6" className="wc-glyph" />
-    </g>
-  );
-}
-function Sign({ x, y }: { x: number; y: number }) {
-  return (
-    <g transform={`translate(${x} ${y})`}>
-      <path d="M0 6 V12" className="wc-post" />
-      <rect x={-9} y={-6} width={18} height={12} rx={2.2} className="wc-sign" />
-      <path d="M-5.5 -1.8 H5.5 M-5.5 1.8 H2.5" className="wc-sign-ink" />
-    </g>
-  );
-}
-function Tag({ x, y, text, tone, anchor = "start" }: { x: number; y: number; text: string; tone: "alert" | "quiet" | "seen"; anchor?: "start" | "end" }) {
-  const w = text.length * 5.1 + 12;
-  const x0 = anchor === "end" ? x - w : x;
-  return (
-    <g className="wc-tag" data-tone={tone}>
-      <rect x={x0} y={y - 8} width={w} height={16} rx={8} />
-      <text x={x0 + w / 2} y={y + 3.2} textAnchor="middle">
-        {text}
-      </text>
-    </g>
-  );
-}
+const AREA = smooth([
+  [150, 70], [262, 52], [356, 82], [380, 158], [318, 214], [196, 222], [128, 166],
+]);
+const HWY = "M-10 236 C 90 214, 160 196, 236 160 S 380 96, 470 74 S 560 58, 590 50";
+const ROADS = [
+  "M120 -10 C 140 60, 170 120, 236 160 S 300 250, 320 330",
+  "M410 -10 C 400 60, 390 110, 404 160 S 470 250, 520 330",
+  "M-10 110 C 60 116, 120 100, 170 118",
+];
+const RIVER = "M-10 290 C 80 270, 150 300, 240 282 S 400 250, 590 268";
 
-function MiniMap({ check }: { check: 1 | 2 | 3 }) {
+function Pin({ x, y, k, children }: { x: number; y: number; k: string; children?: React.ReactNode }) {
   return (
-    <svg viewBox="0 0 280 184" className="csf-svg wc-map" aria-hidden="true">
-      <rect x={0.5} y={0.5} width={279} height={183} rx={9} className="wc-paper" />
-      <g className="wc-streets">
-        <path d="M0 64 H280 M0 118 H280 M44 0 V184 M104 0 V184 M236 0 V184" />
-      </g>
-      <path d="M-6 150 C 50 140, 96 104, 140 98 S 230 52, 290 30" className="wc-road-o" />
-      <path d="M-6 150 C 50 140, 96 104, 140 98 S 230 52, 290 30" className="wc-road" />
-      <path d="M160 -6 C 150 52, 166 120, 150 190" className="wc-road-o" />
-      <path d="M160 -6 C 150 52, 166 120, 150 190" className="wc-road" />
-      <path d={AREA} className="wc-area" />
-      {AREA_PTS.map(([x, y]) => (
-        <circle key={`${x}-${y}`} cx={x} cy={y} r={3} className="wc-handle" />
-      ))}
-      <Sign x={128} y={58} />
-      <Incident x={106} y={113} />
-      {check >= 2 && <Incident x={190} y={78} isNew={check === 2} />}
-      {check >= 2 && <Closure x={258} y={36} />}
-      {check === 1 && <Tag x={120} y={136} text="seen, not sent" tone="seen" />}
-      {check === 2 && (
-        <>
-          <Tag x={176} y={104} text="new: alert" tone="alert" anchor="start" />
-          <Tag x={250} y={58} text="outside" tone="quiet" anchor="end" />
-          <Tag x={114} y={46} text="signs never alert" tone="quiet" anchor="end" />
-        </>
-      )}
-      {check === 3 && <Tag x={136} y={136} text="all seen" tone="seen" />}
-    </svg>
+    <g className="wcx-pin" data-k={k} transform={`translate(${x} ${y})`}>
+      <ellipse className="wcx-pin-shadow" cx={0} cy={1} rx={6} ry={2.2} />
+      <path className="wcx-pin-body" d="M0 0 C -2 -6, -10 -10, -10 -18 A 10 10 0 1 1 10 -18 C 10 -10, 2 -6, 0 0 Z" />
+      <g transform="translate(0 -18)">{children}</g>
+    </g>
   );
 }
+const Excl = () => (
+  <>
+    <path className="wcx-glyph" d="M0 -4.5 V1" />
+    <circle className="wcx-glyph-dot" cy={4} r={1.1} />
+  </>
+);
 
 export default function WatchChecks({ n = 3 }: { n?: number | string }) {
   const root = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
   const inView = useInView(root);
-  const [step, setStep] = useState<Step>(0);
-  const [email, setEmail] = useState(false);
-  const played = useRef(false);
+  const play = inView && !reduced;
+  const [tick, setTick] = useState<Step>(1);
+  const step: Step = play ? tick : 2;
 
-  // a single calm tour the first time the figure is seen; ends on the full picture
   useEffect(() => {
-    if (!inView || reduced || played.current) return;
-    played.current = true;
-    const seq: Step[] = [1, 2, 3, 0];
-    const timers = seq.map((s, i) => window.setTimeout(() => setStep(s), 400 + i * 2600));
-    return () => timers.forEach(clearTimeout);
-  }, [inView, reduced]);
-
-  const lit = step === 0 || step >= 2;
-  const channels = ["app push", "browser push", ...(email ? ["email"] : [])];
-  const readout =
-    step === 1
-      ? "Check 1 · 1 seen · 0 sent"
-      : step === 3
-        ? "Check 3 · 0 new · 0 sent"
-        : `Check 2 · 1 new inside · 1 alert to ${channels.join(", ")}`;
+    if (!play) return;
+    const id = window.setInterval(() => setTick((t) => ((t % 3) + 1) as Step), 3600);
+    return () => window.clearInterval(id);
+  }, [play]);
 
   return (
     <FigureFrame
       n={n}
-      title="One watch area, three checks"
+      title="A watch area, checked over time"
       className="csf-watch"
-      hint="Step through the checks, or switch email on"
-      readout={readout}
-      controls={
-        <div className="csf-controls" role="group" aria-label="Show a check">
-          {([0, 1, 2, 3] as Step[]).map((s) => (
-            <button key={s} type="button" className="csf-chip" aria-pressed={step === s} onClick={() => setStep(s)}>
-              {s === 0 ? "All three" : `Check ${s}`}
-            </button>
-          ))}
-        </div>
+      legend={
+        <ul className="csf-keys">
+          <li className="csf-key"><span className="csf-sw wcx-sw" data-k="area" /> Your watch area</li>
+          <li className="csf-key"><span className="csf-sw wcx-sw" data-k="incident" /> Crash</li>
+          <li className="csf-key"><span className="csf-sw wcx-sw" data-k="closure" /> Closure</li>
+          <li className="csf-key"><span className="csf-sw wcx-sw" data-k="sign" /> Road sign</li>
+        </ul>
       }
       caption={
         <>
-          An area is checked every five minutes. The <b>first check</b> only records what is already there, so a new area never
-          floods you with old news. After that, an alert goes out for each <b>new</b> incident, closure, chain control or wildfire
-          whose position is inside the shape. Signs, cameras and weather never alert, and an event already sent stays quiet even if
-          it drops out and comes back.
+          The first check only records what is already there, so a new watch never sends old news. After that you get one alert
+          for each <b>new</b> crash, closure, chain control or wildfire inside your area. Anything outside, and signs, cameras
+          and weather, never alert.
         </>
       }
     >
-      <div ref={root} className="wc" data-step={step}>
-        <div className="wc-axis" aria-hidden="true">
-          <span className="wc-axis-line" />
-          {CHECKS.map((c) => (
-            <span key={c.n} className="wc-axis-tick">
-              <span className="wc-axis-dot" />
-              {c.at}
-            </span>
-          ))}
-        </div>
-        <ol className="wc-checks">
-          {CHECKS.map((c) => (
-            <li key={c.n} className="wc-check" data-dim={step !== 0 && step !== c.n ? "" : undefined} data-alert={c.n === 2 ? "" : undefined}>
-              <div className="wc-check-head">
-                <span className="wc-check-n">{c.n}</span>
-                <span className="wc-check-title">{c.title}</span>
-                <span className="wc-check-at csf-mono">{c.at}</span>
-              </div>
-              <MiniMap check={c.n} />
-              <p className="wc-result">
-                <span className="wc-result-dot" data-sent={c.n === 2 ? "" : undefined} aria-hidden="true" />
-                {c.result}
-              </p>
-            </li>
-          ))}
-        </ol>
-        <div className="wc-fan" data-lit={lit ? "" : undefined}>
-          <div className="wc-bus" aria-hidden="true" data-email={email ? "" : undefined}>
-            <span className="wc-bus-stem" />
-            <span className="wc-bus-l" />
-            <span className="wc-bus-r" />
-            <span className="wc-bus-drop" data-at="1" />
-            <span className="wc-bus-drop" data-at="2" />
-            <span className="wc-bus-drop" data-at="3" />
+      <div ref={root} className="wcx" data-step={step}>
+        <svg viewBox="0 0 580 300" className="csf-svg wcx-map" role="img" aria-label="A map with a watch area drawn over a highway. One crash inside was already there, a new crash appears inside, a closure sits outside the area and a road sign sits inside.">
+          <defs>
+            <clipPath id="wcx-clip">
+              <rect x={0} y={0} width={580} height={300} rx={12} />
+            </clipPath>
+          </defs>
+          <g clipPath="url(#wcx-clip)">
+            <rect width={580} height={300} className="wcx-land" />
+            <path d="M440 180 C 500 170, 560 190, 600 180 L 600 320 L 430 320 C 420 260, 420 200, 440 180 Z" className="wcx-park" />
+            <path d={RIVER} className="wcx-river" />
+            {ROADS.map((d) => (
+              <g key={d}>
+                <path d={d} className="wcx-road-case" />
+                <path d={d} className="wcx-road" />
+              </g>
+            ))}
+            <path d={HWY} className="wcx-hwy-case" />
+            <path d={HWY} className="wcx-hwy" />
+            <path d={AREA} className="wcx-area" />
+            <path d={AREA} className="wcx-area-edge" />
+          </g>
+          <rect x={0.5} y={0.5} width={579} height={299} rx={12} className="wcx-frame" />
+
+          {/* the road sign, inside: never alerts */}
+          <g className="wcx-sign" transform="translate(280 136)">
+            <path d="M0 0 V12" className="wcx-sign-post" />
+            <rect x={-13} y={-10} width={26} height={12} rx={2} className="wcx-sign-board" />
+            <path d="M-8 -6 H8 M-8 -2.5 H4" className="wcx-sign-ink" />
+          </g>
+          {/* the closure, outside the area */}
+          <g className="wcx-out">
+            <Pin x={470} y={74} k="closure">
+              <path className="wcx-glyph" d="M-4.5 0 H4.5" />
+            </Pin>
+            <text x={470} y={98} textAnchor="middle" className="wcx-note">outside</text>
+          </g>
+          {/* the crash that was already there */}
+          <g className="wcx-old">
+            <Pin x={196} y={182} k="incident">
+              <Excl />
+            </Pin>
+            <text x={196} y={206} textAnchor="middle" className="wcx-note">already seen</text>
+          </g>
+          {/* the new crash */}
+          <g className="wcx-new" transform="translate(352 113)">
+            <circle className="wcx-ring" cx={0} cy={-18} r={14} />
+            <g className="wcx-drop">
+              <Pin x={0} y={0} k="incident">
+                <Excl />
+              </Pin>
+            </g>
+          </g>
+        </svg>
+
+        <div className="wcx-side">
+          <ol className="wcx-steps">
+            {CHECKS.map((c) => (
+              <li key={c.n} className="wcx-step" data-on={step === c.n ? "" : undefined} data-past={step > c.n ? "" : undefined}>
+                <span className="wcx-dot" aria-hidden="true" />
+                <span className="wcx-step-at">{c.at}</span>
+                <span className="wcx-step-note">{c.note}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="wcx-card" aria-hidden={step !== 2}>
+            <div className="wcx-card-head">
+              <span className="wcx-card-app">CommuteScout</span>
+              <span className="wcx-card-time">now</span>
+            </div>
+            <b>New crash in Commute</b>
+            <span>Right lane blocked on the highway, inside your watch area.</span>
           </div>
-          <p className="wc-fan-label">The alert from check 2 goes to</p>
-          <ul className="wc-channels">
-            <li className="wc-channel" data-on="">
-              <Smartphone className="wc-ch-icon" aria-hidden="true" />
-              <span className="wc-ch-text">
-                <b>App push</b>
-                <span>On by default</span>
-              </span>
+          <ul className="wcx-ch" aria-label="Where alerts go">
+            <li data-on="">
+              <Bell size={13} aria-hidden="true" /> Push on
             </li>
-            <li className="wc-channel" data-on="">
-              <AppWindow className="wc-ch-icon" aria-hidden="true" />
-              <span className="wc-ch-text">
-                <b>Browser push</b>
-                <span>Same push setting</span>
-              </span>
-            </li>
-            <li className="wc-channel" data-on={email ? "" : undefined}>
-              <Mail className="wc-ch-icon" aria-hidden="true" />
-              <span className="wc-ch-text">
-                <b>Email</b>
-                <span>{email ? "On: one email per area per check" : "Off by default"}</span>
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={email}
-                aria-label="Email alerts"
-                className="wc-switch csf-focus"
-                onClick={() => setEmail((v) => !v)}
-              >
-                <span />
-              </button>
+            <li>
+              <Mail size={13} aria-hidden="true" /> Email off
             </li>
           </ul>
         </div>

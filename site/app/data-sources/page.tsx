@@ -3,13 +3,13 @@ import {
   CA_FEEDS,
   CAMERA_SUBSET_NOTE,
   CLOSURE_CLASSES,
-  GAP_REASONS,
   OVERLAY_NOTE,
-  PARSING_RULES,
   STATE_COVERAGE,
   STATE_COVERAGE_UPDATED,
   WILDFIRE_NOTE,
+  type StateRow,
 } from "@/lib/state-coverage";
+import { AGENCY_FEED_COUNT } from "@/lib/stats";
 import { StateCoverageTable } from "@/components/state-coverage-table";
 import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
 import { C } from "@/components/docs/code-block";
@@ -17,20 +17,22 @@ import { DocFigure } from "@/components/docs/doc-figure";
 
 // Data sources page. Source for every factual claim: docs/data-sources.md
 // and docs/state-coverage.md (through lib/state-coverage.ts), with cache
-// times checked against src/ca_roads/feeds/* and the stale limits against
-// src/ca_roads_demo/freshness.py. The "53 official agency feeds" phrase is
-// pinned by tests/test_snapshot.py::test_feed_counts_are_current.
+// times checked against src/ca_roads/feeds/*. The "53 official agency
+// feeds" phrase in the dek is pinned by
+// tests/test_snapshot.py::test_feed_counts_are_current.
+//
+// Kept off this page on purpose (owner review, 2026-11-19): per-gap
+// reasons that name keys and access arrangements, parsing internals, and
+// how sources are monitored.
 export const metadata: Metadata = {
   title: "Data sources - CommuteScout",
-  description:
-    "Every official feed behind CommuteScout, how fresh each one is, and what is live in every state it covers, with the reason for every gap.",
+  description: "The official feeds behind CommuteScout, what each state publishes, and how fresh the data is.",
   alternates: {
     canonical: "https://commutescout.com/data-sources",
   },
   openGraph: {
     title: "Data sources - CommuteScout",
-    description:
-      "Every official feed behind CommuteScout, how fresh each one is, and what is live in every state it covers, with the reason for every gap.",
+    description: "The official feeds behind CommuteScout, what each state publishes, and how fresh the data is.",
     url: "https://commutescout.com/data-sources",
     images: ["/static/shots/og.png"],
   },
@@ -40,13 +42,18 @@ export const metadata: Metadata = {
   },
 };
 
+// The five live layers a state's own feeds can publish. Chains are
+// seasonal and wildfires are national, so neither counts (the same rule
+// as the coverage map figure).
+const DEPTH_KEYS: (keyof StateRow)[] = ["incidents", "closures", "cameras", "signs", "weather"];
+const FULL_STATES = STATE_COVERAGE.filter((r) => DEPTH_KEYS.every((k) => r[k].startsWith("Y"))).length;
+
 const TOC: TocItem[] = [
+  { id: "how", label: "How it fits together" },
   { id: "coverage", label: "Coverage by state" },
-  { id: "gaps", label: "Why the gaps" },
-  { id: "freshness", label: "How freshness works" },
+  { id: "freshness", label: "How fresh it is" },
   { id: "feeds", label: "California feeds" },
-  { id: "closures", label: "The closure taxonomy" },
-  { id: "parsing", label: "Parsing rules" },
+  { id: "closures", label: "Closure types" },
 ];
 
 function driveTone(drive: string) {
@@ -59,101 +66,70 @@ export default function DataSourcesPage() {
   return (
     <DocsShell
       current="/data-sources"
-      eyebrow="Data sources"
-      title="Official feeds, with their timestamps attached."
+      title="Where the data comes from"
       dek={
         <>
-          CommuteScout reads 53 official agency feeds. Everything it serves comes from public agency
-          feeds, fetched live and cached briefly in-process, and every answer says how old each source is.
+          CommuteScout reads 53 official agency feeds from state transportation departments, highway
+          patrols, and national weather and fire services, and puts them on one map.
         </>
       }
       facts={[
-        { value: "53", label: "official agency feeds" },
-        { value: String(STATE_COVERAGE.length), label: "states live on the map" },
-        { value: "Every", label: "response carries data_as_of" },
-        { value: String(GAP_REASONS.length), label: "gaps, each with its reason" },
+        { value: String(AGENCY_FEED_COUNT), label: "official feeds" },
+        { value: String(STATE_COVERAGE.length), label: "states" },
+        { value: String(FULL_STATES), label: "states with every live layer" },
       ]}
       toc={TOC}
     >
-      <Section id="coverage" kicker="Coverage" title="What each state has">
+      <Section id="how" title="How it fits together">
         <div className="dx-prose dx-lead">
           <p>
-            Updated {STATE_COVERAGE_UPDATED}. A check means the layer is live on the map. A dash means the
-            state&apos;s public feeds do not offer it without a key; its number links to the reason.
-            &ldquo;(wz)&rdquo; next to a check means closures come from the state&apos;s WZDx roadwork feed.
+            Each agency publishes one kind of information, such as crashes, closures or chain controls.
+            CommuteScout reads each one as its own layer and lines them all up on the same map.
+          </p>
+        </div>
+        <DocFigure name="map-layers" />
+      </Section>
+
+      <Section id="coverage" title="Coverage by state">
+        <div className="dx-prose dx-lead">
+          <p>
+            A check means the state publishes that information and it is live on the map. A dash means the
+            state does not publish it publicly. Updated {STATE_COVERAGE_UPDATED.split(" ")[0]}.
           </p>
         </div>
         <StateCoverageTable rows={STATE_COVERAGE} />
-        <div className="dx-cards">
-          <div className="dx-card dx-card--plain">
-            <h3>Wildfires (*)</h3>
-            <p>{WILDFIRE_NOTE}</p>
-          </div>
-          <div className="dx-card dx-card--plain">
-            <h3>Cameras (**)</h3>
-            <p>{CAMERA_SUBSET_NOTE}</p>
-          </div>
-        </div>
-        <p className="dx-small dx-mt-16 dx-measure">
-          {OVERLAY_NOTE}
-        </p>
+        <ul className="dx-list dx-mt-20 dx-measure">
+          <li>
+            <b>roadwork</b>: closures come from the state&apos;s roadwork feed. <b>passes</b>: chain rules
+            for mountain passes. <b>some</b>: part of the state.
+          </li>
+          <li>{WILDFIRE_NOTE}</li>
+          <li>{CAMERA_SUBSET_NOTE}</li>
+          <li>{OVERLAY_NOTE}</li>
+        </ul>
       </Section>
 
-      <Section id="gaps" kicker="Gaps" title="Why the gaps">
+      <Section id="freshness" title="How fresh it is">
         <div className="dx-prose dx-lead">
           <p>
-            Every dash in the table has one of these {GAP_REASONS.length} reasons. Most are a state that does
-            not publish the data, or publishes it only behind a separate agreement.
+            Every answer shows when each source last updated, as <C>data_as_of</C>. If a source falls behind,
+            its last data stays on the map and is marked as old.
           </p>
         </div>
-        <details className="dx-details">
-          <summary>Show all {GAP_REASONS.length} reasons</summary>
-          <div className="dx-details-body">
-            <ol className="dx-rules dx-rules--compact">
-              {GAP_REASONS.map((gap) => (
-                <li key={gap.n} id={`gap-${gap.n}`}>
-                  <span>{gap.text}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </details>
       </Section>
 
-      <Section id="freshness" kicker="Freshness" title="How freshness works">
+      <Section id="feeds" title="California feeds">
         <div className="dx-prose dx-lead">
-          <p>
-            No feed is ever silently dropped. Every response carries a <C>data_as_of</C> time for each
-            source, and when a feed is stale or failing, the last good data is served, flagged stale, with
-            the error attached, so both the map and an AI assistant can say how much to trust the answer.
-          </p>
-          <p>
-            Caches are stale-while-revalidate: an expired feed is served from memory at once while one
-            background task refreshes it, so a request never waits on an agency server. A watchdog checks
-            every source every 5 minutes, and a source past its own stale limit on two checks in a row is
-            reported to the operator.
-          </p>
-        </div>
-        <DocFigure name="feed-cadence" />
-      </Section>
-
-      <Section id="feeds" kicker="California" title="The California feeds">
-        <div className="dx-prose dx-lead">
-          <p>
-            California publishes the deepest feeds, so it has the most layers. &ldquo;Stale after&rdquo; is
-            the age at which the watchdog reports a source; every other state&apos;s feeds share a 90-minute
-            limit.
-          </p>
+          <p>California publishes the most, so it has the most layers. Refresh is how often CommuteScout reads each one.</p>
         </div>
         <div className="dx-tbox">
           <table className="dx-table dx-table--stack">
-            <caption className="sr-only">California feeds and how often each refreshes</caption>
+            <caption className="sr-only">California feeds and how often each is read</caption>
             <thead>
               <tr>
                 <th scope="col">Source</th>
                 <th scope="col">Data</th>
                 <th scope="col">Refresh</th>
-                <th scope="col">Stale after</th>
               </tr>
             </thead>
             <tbody>
@@ -162,7 +138,6 @@ export default function DataSourcesPage() {
                   <th scope="row">{feed.source}</th>
                   <td data-label="Data">{feed.data}</td>
                   <td data-label="Refresh">{feed.refresh}</td>
-                  <td data-label="Stale after">{feed.stale ?? "n/a"}</td>
                 </tr>
               ))}
             </tbody>
@@ -170,12 +145,11 @@ export default function DataSourcesPage() {
         </div>
       </Section>
 
-      <Section id="closures" kicker="Closures" title="The closure taxonomy">
+      <Section id="closures" title="Closure types">
         <div className="dx-prose dx-lead">
           <p>
-            Every closure record carries a <C>closure_class</C> derived from the Caltrans facility and
-            closure type. The raw feed marks an on-ramp repair &ldquo;Full&rdquo;, and reporting that as a
-            closed highway would be wrong, so the classes keep them apart.
+            Not every closure stops traffic. A closed on-ramp is not a closed highway, so each closure carries
+            a <C>closure_class</C> that says what it means for drivers.
           </p>
         </div>
         <ul className="dx-classes" aria-label="Closure classes">
@@ -190,19 +164,6 @@ export default function DataSourcesPage() {
             </li>
           ))}
         </ul>
-      </Section>
-
-      <Section id="parsing" kicker="In production" title="Hard-won parsing rules">
-        <div className="dx-prose dx-lead">
-          <p>These feeds misbehave in production, and the parsers encode what running them taught.</p>
-        </div>
-        <ol className="dx-rules">
-          {PARSING_RULES.map((rule) => (
-            <li key={rule}>
-              <span>{rule}</span>
-            </li>
-          ))}
-        </ol>
       </Section>
     </DocsShell>
   );

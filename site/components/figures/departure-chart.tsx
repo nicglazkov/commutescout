@@ -113,9 +113,8 @@ export default function DepartureChart({ n = 5 }: { n?: number | string }) {
       }
       caption={
         <>
-          The tool drives the same route at each departure, up to sixteen. The best is the fastest one without snow, ice or sleet
-          in the forecast; a tie goes to the hour that usually has fewer incidents on this route, counted over the last 90 days.
-          Here 1:00 PM and 6:00 AM both take 42 minutes, and 1:00 PM wins on history. Sample day; values are illustrative.
+          best_time_to_go picks the fastest departure without snow or ice in the forecast. A tie goes to the hour with fewer
+          incidents on this route. Sample day.
         </>
       }
     >

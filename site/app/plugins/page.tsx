@@ -38,7 +38,7 @@ const TOC: TocItem[] = [
   { id: "topology", label: "Who talks to whom" },
   { id: "ways", label: "Three tiers" },
   { id: "catalog", label: "Public catalog" },
-  { id: "start", label: "Run one in five minutes" },
+  { id: "start", label: "Run one locally" },
   {
     id: "endpoints",
     label: "Endpoints",
@@ -65,7 +65,7 @@ const CAPABILITIES: [string, string, boolean][] = [
   ["alerts", "Serve alerts near a point.", true],
   ["report", "Accept a new report from a user: police, crash, hazard, and the rest.", false],
   ["confirm", "Accept a \"still there\" or \"not there\" vote on an alert.", false],
-  ["notify", "Mark alerts the apps should announce out loud and push, not just draw.", false],
+  ["notify", "Mark alerts the apps may announce, not just draw. Announced in the apps only.", false],
   ["snapshot", "Serve the whole list in one response, for data that is the same for everyone.", false],
 ];
 
@@ -163,7 +163,7 @@ const RECORD_FIELDS: [string, boolean, string][] = [
   ["n_confirmations", false, "Count of confirmations, 0 if none."],
   ["reliability", false, "0 to 1, the plugin's own confidence. Default 0.5."],
   ["ttl_s", true, "Seconds from report_ts (or confirm_ts when present) after which the alert is stale. At most 86400."],
-  ["notify", false, "The app should announce it (voice, push) when the driver is approaching. Needs the notify capability."],
+  ["notify", false, "The app may announce it as the driver approaches. Needs the notify capability."],
   ["geometry", false, "GeoJSON Point or LineString when the alert covers a stretch. At most 500 points."],
   ["source_url", false, "Where a person can read more."],
   ["extra", false, "Anything else, at most 2 KB, shown in the details pane as key: value."],
@@ -176,8 +176,7 @@ const MANIFEST = `{
   "protocol": "flare/1",
   "visibility": "public",
   "trust": "community",
-  "attribution": {"name": "Example Alerts", "url": "https://example.com"},
-  "signature": "<reserved; not issued or verified yet>"
+  "attribution": {"name": "Example Alerts", "url": "https://example.com"}
 }`;
 
 const ERROR_ENVELOPE = `{"error": {"code": "outside_coverage", "message": "...", "hint": "..."}}`;
@@ -193,18 +192,18 @@ const ERROR_CODES: [string, string][] = [
 ];
 
 const CALLER_RULES = [
-  "Never send a user's exact position to a plugin. Mediated: grid-cell centers. Direct: the snapped tile center.",
-  "Never send an account identifier; reporter is a per-plugin pseudonym.",
+  "Never send a user's exact position to a plugin. Send the center of an area.",
+  "Never send an account identifier. reporter is a per-plugin pseudonym.",
   "Honor refresh_s, ttl_s, coverage.bbox and Retry-After.",
   "Drop alerts with unknown kind, no ttl_s, or past their ttl_s.",
-  "Cap what one plugin can show: 500 alerts per response, 50 per grid cell, 1 MB per response. A plugin over the caps is trimmed, not refused.",
+  "Cap what one plugin can show: 500 alerts and 1 MB per response. A plugin over the caps is trimmed, not refused.",
   "Official agency data always outranks plugin alerts on the same spot.",
 ];
 
 const PLUGIN_RULES = [
   "Serve over HTTPS with a valid certificate. Answer the handshake without authentication.",
-  "Keep id stable for the life of an alert; reuse means an update.",
-  "Set ttl_s honestly; stale alerts are the fastest way to lose trust.",
+  "Keep id stable for the life of an alert. Reusing an id means an update.",
+  "Set ttl_s honestly. Stale alerts are the fastest way to lose trust.",
   "Do not log the callers' addresses beyond what abuse control needs.",
   "Say who you are: attribution and contact in the handshake.",
 ];
@@ -250,20 +249,17 @@ export default function PluginsPage() {
   return (
     <DocsShell
       current="/plugins"
-      eyebrow="Flare · protocol version 1"
-      title="Your own road alerts, on the map and in the apps."
+      title="Plugins"
       dek={
         <>
-          Flare is the open protocol CommuteScout uses to talk to third-party alert sources. A plugin is a
-          small HTTPS server, not an app: it answers a handful of requests, so it works the same for the
-          web map, the iOS app, the Android app and anything else that speaks the protocol. Run one for
-          yourself, for a group, or for everyone.
+          Flare is the open protocol for adding your own road alerts to CommuteScout. A plugin is a small
+          HTTPS server that the map and the apps read.
         </>
       }
       actions={
         <>
           <a href="#start" className="dx-btn dx-btn-primary">
-            Run one in five minutes
+            Run one locally
           </a>
           <a href="#endpoints" className="dx-textlink">
             Read the protocol
@@ -271,14 +267,13 @@ export default function PluginsPage() {
         </>
       }
       facts={[
-        { value: "5", label: "endpoints; handshake and alerts required" },
+        { value: String(CAPABILITIES.length), label: "capabilities" },
         { value: String(KIND_COUNT), label: "alert kinds" },
-        { value: "3", label: "tiers: approved, unreviewed, private" },
-        { value: "1 command", label: "runs the conformance check" },
+        { value: "3", label: "trust levels" },
       ]}
       toc={TOC}
     >
-      <Section id="what" kicker="Capabilities" title="A plugin says what it can do">
+      <Section id="what" title="A plugin says what it can do">
         <div className="dx-prose dx-lead">
           <p>
             A plugin declares what it supports in its handshake, and the apps only ask for what it declared.
@@ -308,9 +303,9 @@ export default function PluginsPage() {
         </div>
       </Section>
 
-      <Section id="topology" kicker="Topology" title="Who talks to whom">
+      <Section id="topology" title="Who talks to whom">
         <div className="dx-prose dx-lead">
-          <p>Two topologies. The manifest chooses; a public plugin is always mediated.</p>
+          <p>A plugin is either listed, so CommuteScout reads it for everyone, or private to your own app.</p>
         </div>
         <DocFigure name="plugin-flow" />
         <div className="dx-cards">
@@ -318,31 +313,28 @@ export default function PluginsPage() {
             <h3>Mediated</h3>
             <p className="dx-card-meta">public and unlisted plugins</p>
             <p>
-              The CommuteScout backend polls the plugin&apos;s alerts per grid cell, validates and caps what
-              comes back, and serves it through the same snapshot the map and apps already read. Reports and
-              confirmations go to the backend, which forwards them under CommuteScout&apos;s own identity.
-              The plugin never sees a user, a device, an address or an exact position.
+              CommuteScout reads the plugin, checks every answer, and shows the alerts on the map and in the
+              apps. Reports and confirmations are passed on under CommuteScout&apos;s name. The plugin never
+              sees who you are or exactly where you are.
             </p>
           </div>
           <div className="dx-card dx-card--plain">
             <h3>Direct</h3>
             <p className="dx-card-meta">private plugins only</p>
             <p>
-              The app calls the plugin itself: something a person runs on their own network for their own
-              devices. The app sends the snapped grid tile, never the exact position, and no account
-              identifiers; the plugin may require its own bearer token. Direct plugins can show anything,
-              because nothing leaves the user&apos;s own path.
+              Your app calls the plugin itself. It is something you run for your own devices. The app sends
+              the center of an area, never your exact position, and no account details. The plugin can ask
+              for its own bearer token.
             </p>
           </div>
         </div>
       </Section>
 
-      <Section id="ways" kicker="Trust" title="Three tiers">
+      <Section id="ways" title="Three tiers">
         <div className="dx-prose dx-lead">
           <p>
-            Every plugin is shown to people as one of three levels. The level is derived from the manifest
-            and travels on every marker and catalog row as <C>tier</C>, so the map and the apps can always say
-            who is behind an alert.
+            Every plugin is shown as one of three levels, so people can always see who is behind an alert.
+            The level comes from the manifest and travels on every marker as <C>tier</C>.
           </p>
         </div>
         <div className="dx-cards dx-cards--3">
@@ -350,8 +342,8 @@ export default function PluginsPage() {
             <h3>Approved</h3>
             <p className="dx-card-meta">public · official or verified</p>
             <p>
-              Reviewed by CommuteScout: the operator is known and the feed passed review. Drawn by default,
-              may speak out loud (<C>notify</C>), badged as approved. Always mediated.
+              Reviewed by CommuteScout: the operator is known and the feed passed review. Drawn by default
+              and badged as approved, with no notice to tick. Always mediated.
             </p>
           </div>
           <div className="dx-card dx-card--warn">
@@ -359,9 +351,9 @@ export default function PluginsPage() {
             <p className="dx-card-meta">public or unlisted · community</p>
             <p>
               Anyone who passes the conformance check can be listed, labelled &ldquo;public, not
-              reviewed&rdquo;. Its alerts appear only after the person confirms at install that CommuteScout
-              has not reviewed it, and they can turn its alerts, and its spoken alerts, on or off at any time.
-              Unlisted plugins are the same tier, reachable by id for a group that knows they exist.
+              reviewed&rdquo;. It stays on the map, but it does not alert until the person ticks a required
+              notice at install. Unlisted plugins are the same tier, reachable by id for a group that knows
+              they exist.
             </p>
           </div>
           <div className="dx-card dx-card--plain">
@@ -369,17 +361,30 @@ export default function PluginsPage() {
             <p className="dx-card-meta">added by URL on one device</p>
             <p>
               Something you run for your own devices, called directly from the app, with your own bearer
-              token if you want one. Like any plugin CommuteScout has not reviewed, it needs your confirmation
-              at install. It may show anything, including personal data, and speak if you want it to.
+              token if you want one. Like any plugin CommuteScout has not reviewed, it needs the same notice
+              ticked at install. It may show anything, including personal data.
             </p>
           </div>
         </div>
+        <h3 className="dx-mt-8">Turning a plugin on</h3>
+        <ul className="dx-list dx-measure">
+          <li>
+            A plugin CommuteScout has not reviewed needs one required notice ticked at install: &ldquo;This
+            plugin hasn&apos;t been reviewed by CommuteScout. Its alerts come from its operator, not from
+            official sources.&rdquo;
+          </li>
+          <li>
+            Each plugin then has two switches in the app under Settings &gt; Alerts: <b>Alerts</b>, and{" "}
+            <b>Speak its alerts</b>, which is off until you turn it on.
+          </li>
+          <li>Plugin alerts appear in the iOS and Android apps only. They are never sent as push notifications and do not alert on the website.</li>
+        </ul>
         <p className="dx-small dx-mt-16">
           Official agency data (the state feeds) is not a plugin and always outranks all three.
         </p>
       </Section>
 
-      <Section id="catalog" kicker="Live" title="Public catalog">
+      <Section id="catalog" title="Public catalog">
         <div className="dx-prose dx-lead">
           <p>
             The public plugins the map and the apps read right now. CommuteScout&apos;s own community reports
@@ -394,7 +399,7 @@ export default function PluginsPage() {
         <PluginCatalog />
       </Section>
 
-      <Section id="start" kicker="Quickstart" title="Run one in five minutes">
+      <Section id="start" title="Run one locally">
         <div className="dx-prose dx-lead">
           <p>
             The example plugin is one file with every endpoint, an in-memory store and a passing conformance
@@ -431,7 +436,7 @@ export default function PluginsPage() {
         </ol>
       </Section>
 
-      <Section id="endpoints" kicker="Protocol" title="Endpoints">
+      <Section id="endpoints" title="Endpoints">
         <div className="dx-prose dx-lead">
           <p>
             All paths are relative to the plugin&apos;s <C>base</C>, which must be <C>https://</C>. Every
@@ -446,8 +451,8 @@ export default function PluginsPage() {
             <p>
               Who the plugin is and what it can do. Callers cache it for an hour. <C>auth</C> is <C>none</C>,
               or <C>bearer</C> when the plugin wants a token on every other call. <C>coverage.bbox</C> is{" "}
-              <C>[south, west, north, east]</C>; callers never ask outside it. <C>refresh_s</C> is the polling
-              hint; callers honor it and never poll more often than every 15 seconds.
+              <C>[south, west, north, east]</C>. Callers never ask outside it. <C>refresh_s</C> is the polling
+              hint. Callers honor it and never poll more often than every 15 seconds.
             </p>
           </div>
           <CodeBlock code={HANDSHAKE} lang="json" title="200 response" />
@@ -456,9 +461,9 @@ export default function PluginsPage() {
         <Endpoint id="ep-alerts" method="GET" path="/flare/v1/alerts">
           <div className="dx-prose">
             <p>
-              Alerts within <C>r</C> meters of the point, <C>r</C> at most 100000. Mediated callers pass
-              grid-cell centers; direct callers pass the snapped tile center, never the raw position.{" "}
-              <C>ttl_s</C> is how long the caller may cache the response.
+              Alerts within <C>r</C> meters of the point, <C>r</C> at most 100000. The point is the center
+              of an area, never a user&apos;s exact position. <C>ttl_s</C> is how long the caller may cache
+              the response.
             </p>
           </div>
           <CodeBlock code={ALERTS} lang="http" title="Request and response" />
@@ -467,9 +472,8 @@ export default function PluginsPage() {
         <Endpoint id="ep-report" method="POST" path="/flare/v1/report" needs="report">
           <div className="dx-prose">
             <p>
-              A new report from a user. <C>reporter</C> is an opaque, per-plugin, stable pseudonym derived from
-              the account with a keyed hash: it never identifies the person, and the plugin can still
-              rate-limit and score a reporter.
+              A new report from a user. <C>reporter</C> is a stable pseudonym, different for each plugin. It
+              never identifies the person, but lets the plugin tell reporters apart.
             </p>
           </div>
           <CodeBlock code={REPORT} lang="json" title="Request body" />
@@ -530,7 +534,7 @@ export default function PluginsPage() {
         </div>
       </Section>
 
-      <Section id="kinds" kicker="Vocabulary" title="Alert kinds">
+      <Section id="kinds" title="Alert kinds">
         <div className="dx-prose dx-lead">
           <p>
             Every alert carries one <C>kind</C> from this list, the union of what community alert networks,
@@ -551,7 +555,7 @@ export default function PluginsPage() {
         </ul>
       </Section>
 
-      <Section id="record" kicker="Schema" title="Alert record">
+      <Section id="record" title="Alert record">
         <CodeBlock code={RECORD} lang="json" title="One alert" />
         <div className="dx-tbox">
           <table className="dx-table dx-table--stack">
@@ -583,23 +587,19 @@ export default function PluginsPage() {
         </p>
       </Section>
 
-      <Section id="manifest" kicker="Catalog entry" title="Manifest and trust">
+      <Section id="manifest" title="Manifest and trust">
         <div className="dx-prose dx-lead">
           <p>
             What a plugin looks like in the catalog and in the apps&apos; sources list. <C>visibility</C> is{" "}
             <C>public</C> (listed, always mediated), <C>unlisted</C> (mediated, reachable by id) or{" "}
-            <C>private</C> (direct; the user typed the URL). <C>trust</C> is <C>official</C>,{" "}
+            <C>private</C> (direct, added by URL). <C>trust</C> is <C>official</C>,{" "}
             <C>verified</C>, <C>community</C> or <C>private</C>, and decides which tier the plugin is shown as.
           </p>
         </div>
         <CodeBlock code={MANIFEST} lang="json" title="Manifest" />
-        <Callout>
-          <C>signature</C> is reserved for a JWS that CommuteScout will issue for verified entries. Nothing
-          issues or checks one yet, so its presence proves nothing.
-        </Callout>
       </Section>
 
-      <Section id="shared" kicker="Privacy" title="Shared data">
+      <Section id="shared" title="Shared data">
         <div className="dx-prose dx-lead">
           <p>
             Most plugin alerts exist because a person was somewhere: a report of police is also a report of
@@ -609,18 +609,18 @@ export default function PluginsPage() {
           <p>
             Some data is not like that. A fixed camera is the same fact for everyone and says nothing about
             anybody. A plugin whose alerts are all of that kind can be marked <strong>shared</strong> in the
-            catalog; its alerts are read whole through <C>snapshot</C> and shown across the map at any zoom.
+            catalog. Its alerts are read whole through <C>snapshot</C> and shown across the map at any zoom.
           </p>
         </div>
         <Callout>
           <C>shared</C> is set by CommuteScout on the catalog entry, never by the plugin: it is a statement
           about privacy that a plugin cannot make about itself. The catalog row carries <C>shared: true</C> so
-          clients can tell. A plugin that is not shared may still offer <C>snapshot</C>; it is not used.
+          clients can tell. A plugin that is not shared may still offer <C>snapshot</C>, but it is not used.
         </Callout>
       </Section>
 
-      <Section id="rules" kicker="Obligations" title="Rules">
-        <h3 className="dx-mt-8">For callers: the map, the apps, the backend</h3>
+      <Section id="rules" title="Rules">
+        <h3 className="dx-mt-8">For CommuteScout and its apps</h3>
         <ol className="dx-rules dx-rules--compact">
           {CALLER_RULES.map((r) => (
             <li key={r}>
@@ -638,7 +638,7 @@ export default function PluginsPage() {
         </ol>
       </Section>
 
-      <Section id="conformance" kicker="Testing" title="Conformance">
+      <Section id="conformance" title="Conformance">
         <div className="dx-prose dx-lead">
           <p>
             One command runs the suite against a live plugin: handshake shape, an alerts call inside the
@@ -650,7 +650,7 @@ export default function PluginsPage() {
         <CodeBlock code="python -m ca_roads.flare check https://your-plugin.example" lang="bash" title="Check a plugin" />
       </Section>
 
-      <Section id="listing" kicker="Publishing" title="Get listed">
+      <Section id="listing" title="Get listed">
         <div className="dx-prose dx-lead">
           <p>
             To be listed publicly, deploy behind HTTPS, pass the conformance check, and send the manifest
@@ -666,7 +666,7 @@ export default function PluginsPage() {
             <a href="https://github.com/nicglazkov/commutescout/blob/main/docs/flare.md" className="dx-link">
               docs/flare.md
             </a>
-            ; this page follows it. The rest of the API is in the{" "}
+            . This page follows it. The rest of the API is in the{" "}
             <Link href="/developers" prefetch={false} className="dx-link">
               REST API reference
             </Link>
@@ -675,7 +675,7 @@ export default function PluginsPage() {
         </div>
       </Section>
 
-      <Section id="roadmap" kicker="Next" title="Roadmap">
+      <Section id="roadmap" title="Roadmap">
         <ul className="dx-list">
           <li>
             Plugin ideas on the list: aircraft enforcement (ADS-B), license plate readers, air quality, EV

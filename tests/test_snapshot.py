@@ -366,9 +366,11 @@ def test_feed_counts_are_current():
     for path, pattern in (
         ("README.md", r"reads (\d+) official agency feeds"),
         ("site/lib/stats.ts", r"AGENCY_FEED_COUNT = (\d+)"),
-        ("site/app/about/page.tsx", r"reads (\d+) official agency feeds"),
+        # The marketing pages say "official sources" for a first-time
+        # reader (owner review, 2026-11-19); the guard reads either.
+        ("site/app/about/page.tsx", r"(\d+) official (?:agency )?(?:feeds|sources)"),
         ("site/components/blocks/hero-section-1.tsx",
-         r"reads (\d+) official agency feeds"),
+         r"(\d+) official (?:agency )?(?:feeds|sources)"),
         ("site/app/data-sources/page.tsx",
          r"reads (\d+) official agency feeds"),
     ):
@@ -476,8 +478,10 @@ def test_tool_counts_are_current():
                     f"{m.group(0)!r}, the registry has {actual}")
     assert not bad, sorted(bad)
     # The claim is made on several surfaces; if it vanishes everywhere
-    # the guard has stopped guarding anything.
-    assert checked >= 5, f"only {checked} tool-count claims found"
+    # the guard has stopped guarding anything. /mcp and /developers now
+    # render the count from site/lib/stats.ts instead of prose (owner
+    # review, 2026-11), so fewer prose claims remain.
+    assert checked >= 3, f"only {checked} tool-count claims found"
 
 
 @pytest.mark.asyncio

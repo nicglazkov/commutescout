@@ -266,8 +266,9 @@ export function Marketplace() {
             )}
             {!approved && (
               <p className="mt-3 text-xs text-cs-ink-3">
-                Use at your own risk. Its alerts are spoken like any other; turn voice off in the
-                app&apos;s alert settings.
+                Not reviewed by CommuteScout. Its alerts come from its operator, not from official sources. It
+                alerts only after you tick that notice at install, and only in the apps. Turn its alerts, or
+                speaking them, on or off in Settings &gt; Alerts.
               </p>
             )}
           </article>

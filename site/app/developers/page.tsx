@@ -4,8 +4,8 @@ import { ArrowUpRight } from "lucide-react";
 import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
 import { C, CodeBlock, CopyField } from "@/components/docs/code-block";
 import { Callout } from "@/components/docs/callout";
-import { DocFigure } from "@/components/docs/doc-figure";
 import reference from "@/lib/api-reference.json";
+import { AGENCY_FEED_COUNT, STATE_COUNT } from "@/lib/stats";
 
 // The developer documentation: the REST API in full (base URL, keys,
 // limits, errors, conventions, every tool with every parameter), the
@@ -15,21 +15,27 @@ import reference from "@/lib/api-reference.json";
 // tests/test_api_reference.py fails when the JSON is stale, so the
 // parameter list here cannot drift from the server.
 //
-// Limits on this page come from src/ca_roads/apikeys.py (TIERS, five keys
-// per account, ten new keys a day) and src/ca_roads_mcp/ratelimit.py (the
-// keyless bucket: 20 burst, 0.5 a second; the bad-key budget; Retry-After
-// values). Bulk cadences come from src/ca_roads_demo/snapshot.py BUNDLES.
+// Access: every /v1 and /mcp request needs a key (owner decision,
+// 2026-11-19; a request without one is a 401 missing_key). Keys are read
+// by src/ca_roads/apikeys.py from_headers: X-API-Key, or Authorization:
+// Bearer. Limits come from apikeys.py (TIERS, five keys per account, ten
+// new keys a day) and src/ca_roads_mcp/ratelimit.py (Retry-After values).
+// Bulk cadences come from src/ca_roads_demo/snapshot.py BUNDLES.
+//
+// Security (owner review): this page documents only what a developer
+// needs about their own limits and errors. How requests are identified,
+// limited or logged internally stays off the site.
 export const metadata: Metadata = {
   title: "Developers - CommuteScout",
   description:
-    "Use CommuteScout's live road data from your own code: a REST API with an OpenAPI document, an MCP server, keys and limits, and every tool documented parameter by parameter.",
+    "Use CommuteScout's live road data from your own code: a REST API with an OpenAPI document, keys and limits, and every tool documented parameter by parameter.",
   alternates: {
     canonical: "https://commutescout.com/developers",
   },
   openGraph: {
     title: "Developers - CommuteScout",
     description:
-      "Use CommuteScout's live road data from your own code: a REST API with an OpenAPI document, an MCP server, keys and limits, and every tool documented parameter by parameter.",
+      "Use CommuteScout's live road data from your own code: a REST API with an OpenAPI document, keys and limits, and every tool documented parameter by parameter.",
     url: "https://commutescout.com/developers",
     images: ["/static/shots/og.png"],
   },
@@ -119,7 +125,8 @@ const TOC: TocItem[] = [
   { id: "terms", label: "Attribution and terms" },
 ];
 
-const CURL_QUICK = `curl "${API_ROOT}/tools/get_incidents?center=LAT,LON&radius_km=20"`;
+const CURL_QUICK = `curl -H "X-API-Key: YOUR_KEY" \\
+  "${API_ROOT}/tools/get_incidents?center=LAT,LON&radius_km=20"`;
 
 // A sample, not a record: the id keeps the real shape (date, then a
 // dispatch-center code, then a sequence) with a placeholder center code.
@@ -154,7 +161,7 @@ const RESPONSE_SHAPE = `{
   ]
 }`;
 
-const CURL_KEYED = `curl -H "X-API-Key: cs_live_..." \\
+const CURL_BEARER = `curl -H "Authorization: Bearer YOUR_KEY" \\
   "${API_ROOT}/tools/plan_trip?origin=home&destination=work"`;
 
 const ERROR_SHAPE = `{
@@ -170,19 +177,20 @@ const ERRORS = [
   ["400", "unknown_parameter", "A parameter the tool does not have. The hint lists the accepted names."],
   ["400", "invalid_parameter", "A value of the wrong type, for example radius_km=wide."],
   ["400", "tool_error", "The tool refused the arguments for a reason it explains."],
-  ["401", "invalid_key", "The key is unknown or revoked. There is no silent fallback to keyless."],
+  ["401", "missing_key", "No key was sent. Create a free key (see Keys and limits) and send it with every request."],
+  ["401", "invalid_key", "The key is unknown or has been revoked."],
   ["404", "unknown_tool", "No tool by that name. The index at /v1 lists them."],
   ["429", "rate_limited", "Too many requests at once. Retry-After says how long to wait."],
-  ["429", "daily_limit", "The account (for a keyed request) or the address (without a key) has used its day. Retry-After is 3600."],
+  ["429", "daily_limit", "Your account has used today's requests. Retry-After is 3600."],
   ["502", "upstream_error", "A source feed did not answer. Retry in a minute."],
-  ["503", "keys_unavailable", "Key checks are down. Retry, or call without a key."],
+  ["503", "keys_unavailable", "Keys cannot be checked right now. Retry in a minute."],
 ];
 
-// [tier, counted per, sustained, burst, per UTC day]
+// [tier, sustained, burst, per UTC day], from apikeys.py TIERS
+// (per_second x 60, burst, daily). Counted per account.
 const TIERS = [
-  ["No key", "Network address", "30 a minute", "20", "10,000"],
-  ["Free key", "Account, all keys together", "30 a minute", "30", "2,000"],
-  ["Pro key (coming soon)", "Account, all keys together", "120 a minute", "60", "10,000"],
+  ["Free", "30 a minute", "30", "2,000"],
+  ["Pro (coming soon)", "120 a minute", "60", "10,000"],
 ];
 
 const RULES = [
@@ -194,7 +202,7 @@ const RULES = [
   {
     title: "Do not put a key in a web page or a mobile app.",
     body:
-      "A key is a secret. Anyone who can open your app can read it and spend your limit. Call keyless from browsers (the API allows cross-origin reads) or keep the key on a server you control.",
+      "A key is a secret. Anyone who can open your page or app can read it and spend your limit. Call the API from a server you control.",
   },
   {
     title: "Do not call the map's private endpoints.",
@@ -214,7 +222,7 @@ const RULES = [
   {
     title: "Do not share one key across products.",
     body:
-      "One key per app or job. When a key leaks, revoke it in Settings; requests with it stop within a minute.",
+      "One key per app or job. When a key leaks, revoke it in Settings. Requests with it stop within a minute.",
   },
 ];
 
@@ -235,11 +243,9 @@ function pollText(s: number) {
   return `every ${s} seconds`;
 }
 
-// Examples that read saved places need a key; show it in the command.
+// Every request sends the key.
 function exampleCommand(t: Tool) {
-  const url = `${API_ROOT}/tools/${t.example}`;
-  const needsKey = t.name === "get_my_places" || /=(home|work)\b/.test(t.example);
-  return needsKey ? `curl -H "X-API-Key: cs_live_..." \\\n  "${url}"` : `curl "${url}"`;
+  return `curl -H "X-API-Key: YOUR_KEY" \\\n  "${API_ROOT}/tools/${t.example}"`;
 }
 
 function ToolEntry({ t }: { t: Tool }) {
@@ -269,7 +275,7 @@ function ToolEntry({ t }: { t: Tool }) {
           <dt>Limits</dt>
           <dd>{t.caps}</dd>
         </dl>
-        <h5 className="dx-subhead dx-kicker dx-mb-0">
+        <h5 className="dx-param-h">
           {t.params.length ? "Query parameters" : "Parameters"}
         </h5>
         {t.params.length ? (
@@ -297,14 +303,11 @@ export default function DevelopersPage() {
   return (
     <DocsShell
       current="/developers"
-      eyebrow="REST API · v1"
-      title="Live roads, from your own code."
+      title="REST API"
       dek={
         <>
-          One REST API and one MCP server over the same live data as the map: trip planning and the
-          best time to leave anywhere in the US, plus incidents, closures, chain controls, wildfires,
-          cameras, message signs, traffic, weather and event history. Every tool is one GET. No key,
-          account or SDK needed to start.
+          The same live road data as the map, from your own code. Every tool is one GET request with your
+          API key.
         </>
       }
       actions={
@@ -316,34 +319,44 @@ export default function DevelopersPage() {
         </>
       }
       facts={[
-        { value: String(TOOLS.length), label: "tools, each a GET" },
-        { value: "No key", label: "needed to start" },
-        { value: "2,000 a day", label: "with a free key, per account" },
-        { value: "/v1", label: "additive changes only" },
+        { value: String(TOOLS.length), label: "tools" },
+        { value: String(STATE_COUNT), label: "states" },
+        { value: String(AGENCY_FEED_COUNT), label: "official feeds" },
       ]}
       toc={TOC}
     >
-      <Section id="quickstart" kicker="Quickstart" title="One GET returns JSON.">
-        <div className="dx-prose dx-lead">
-          <p>
-            Replace <C>LAT,LON</C> with the point you care about. Highlighted capitals in every example
-            are placeholders.
-          </p>
-        </div>
+      <Section id="quickstart" title="Quickstart">
+        <ol className="dx-rules dx-rules--compact">
+          <li>
+            <span>
+              <b>Get a free key.</b> Open the{" "}
+              <Link href="/map" prefetch={false} className="dx-link">
+                live map
+              </Link>
+              , choose Settings, sign in, and create a key under API keys. Copy it right away. It is only
+              shown once.
+            </span>
+          </li>
+          <li>
+            <span>
+              <b>Send a request.</b> Put the key in the <C>X-API-Key</C> header and replace <C>LAT,LON</C>{" "}
+              with a point. Highlighted capitals in every example are placeholders.
+            </span>
+          </li>
+        </ol>
         <CodeBlock code={CURL_QUICK} lang="bash" title="Request" />
         <div className="dx-prose dx-mt-20">
           <p>
-            Every response carries the records you asked for, the filters the server understood, and a{" "}
+            Every response has the records you asked for, the filters the server understood, and a{" "}
             <C>sources</C> list with each source&apos;s own <C>data_as_of</C> time. Show that time to your
-            users. When <C>get_incidents</C>, <C>get_lane_closures</C> or <C>get_chain_controls</C> is
-            filtered by route or center, the response also carries the <C>signs</C> and verified{" "}
-            <C>cameras</C> near the returned records, when there are any.
+            users. Incident, closure and chain control answers filtered by route or center also include the
+            nearby <C>signs</C> and <C>cameras</C>, when there are any.
           </p>
         </div>
         <CodeBlock code={RESPONSE_SHAPE} lang="json" title="200 OK · sample response" />
         <div className="dx-prose dx-mt-20">
           <p>
-            The full machine-readable contract is the OpenAPI document at{" "}
+            The full contract is the OpenAPI document at{" "}
             <a href={`${API_ROOT}/openapi.json`} className="dx-link">
               {API_ROOT_TEXT}/openapi.json
             </a>
@@ -355,12 +368,12 @@ export default function DevelopersPage() {
             <a href={API_ROOT} className="dx-link">
               {API_ROOT_TEXT}
             </a>
-            . It is generated from the tools&apos; own schemas, so it is never out of date.
+            . It is generated from the tools&apos; own schemas.
           </p>
         </div>
       </Section>
 
-      <Section id="basics" kicker="Basics" title="Base URL and versioning">
+      <Section id="basics" title="Base URL and versioning">
         <dl className="dx-defs">
           <div>
             <dt>Base URL</dt>
@@ -372,59 +385,43 @@ export default function DevelopersPage() {
           <div>
             <dt>Versioning</dt>
             <dd>
-              The path carries the version. Changes within <C>/v1</C> are additive: new fields, new
-              parameters with defaults, new tools. Nothing is renamed or removed within a version. A
-              breaking change would ship as <C>/v2</C> with <C>/v1</C> kept running.
+              The path carries the version. Changes within <C>/v1</C> only add things: new fields, new
+              parameters with defaults, new tools. A breaking change would ship as <C>/v2</C>, with{" "}
+              <C>/v1</C> kept running.
             </dd>
           </div>
           <div>
             <dt>Encoding</dt>
             <dd>
-              Query strings are URL-encoded UTF-8; a space in a value is <C>%20</C>, as in{" "}
-              <C>Main%20St</C>. Responses are <C>application/json</C>, UTF-8, uncompressed unless you
-              send <C>Accept-Encoding: gzip</C>.
-            </dd>
-          </div>
-          <div>
-            <dt>Cross-origin</dt>
-            <dd>
-              Every <C>/v1</C> response carries <C>Access-Control-Allow-Origin: *</C> and answers
-              preflight, so a browser page can call it directly. Do that keyless (see the rules below).
+              Query strings are URL-encoded UTF-8. A space in a value is <C>%20</C>, as in{" "}
+              <C>Main%20St</C>. Responses are <C>application/json</C>, UTF-8, and gzip when you send{" "}
+              <C>Accept-Encoding: gzip</C>.
             </dd>
           </div>
           <div>
             <dt>Caching</dt>
             <dd>
-              Tool responses are <C>Cache-Control: no-store</C>; cache them yourself for as long as the
+              Tool responses are <C>Cache-Control: no-store</C>. Cache them yourself for as long as the
               tool&apos;s refresh interval says.
             </dd>
           </div>
         </dl>
       </Section>
 
-      <Section id="keys" kicker="Keys and limits" title="Limits are counted per account.">
+      <Section id="keys" title="Keys and limits">
         <div className="dx-prose dx-lead">
           <p>
-            Without a key, requests are limited per network address, and everything behind that address
-            shares the day. A key moves you onto your own limits. Every key belongs to a signed-in
-            account: open the{" "}
-            <Link href="/map" prefetch={false} className="dx-link">
-              live map
-            </Link>
-            , choose Settings, sign in with Google or an email link, and create a key under API keys.
-            The key is shown once. Send it as <C>X-API-Key</C> or{" "}
-            <C>Authorization: Bearer cs_live_...</C>.
+            Every request needs a key. Send it as <C>X-API-Key</C> or as <C>Authorization: Bearer</C>.
+            Limits belong to your account and are shared by all of its keys.
           </p>
         </div>
-        <CodeBlock code={CURL_KEYED} lang="bash" title="A keyed request" />
-        <DocFigure name="rate-limit" />
+        <CodeBlock code={CURL_BEARER} lang="bash" title="The same key as a bearer token" />
         <div className="dx-tbox">
           <table className="dx-table dx-table--stack">
-            <caption className="sr-only">Rate limits by tier</caption>
+            <caption className="sr-only">Limits by plan, per account</caption>
             <thead>
               <tr>
-                <th scope="col">Tier</th>
-                <th scope="col">Counted per</th>
+                <th scope="col">Plan</th>
                 <th scope="col">Sustained</th>
                 <th scope="col">Burst</th>
                 <th scope="col">Requests per UTC day</th>
@@ -434,10 +431,9 @@ export default function DevelopersPage() {
               {TIERS.map((row) => (
                 <tr key={row[0]}>
                   <th scope="row">{row[0]}</th>
-                  <td data-label="Counted per">{row[1]}</td>
-                  <td data-label="Sustained" className="num">{row[2]}</td>
-                  <td data-label="Burst" className="num">{row[3]}</td>
-                  <td data-label="Requests per UTC day" className="num">{row[4]}</td>
+                  <td data-label="Sustained" className="num">{row[1]}</td>
+                  <td data-label="Burst" className="num">{row[2]}</td>
+                  <td data-label="Requests per UTC day" className="num">{row[3]}</td>
                 </tr>
               ))}
             </tbody>
@@ -445,23 +441,24 @@ export default function DevelopersPage() {
         </div>
         <ul className="dx-list dx-mt-20">
           <li>
-            The limits belong to the account: all of its keys share one burst allowance and one daily
-            count, so creating another key never buys a fresh allowance. An account holds up to five
-            active keys and creates up to ten a day. Revoking a key stops it within a minute.
+            An account can have up to five active keys and create up to ten a day. A revoked key stops
+            working within a minute.
           </li>
           <li>
-            Every keyed response carries <C>RateLimit-Limit</C> and <C>RateLimit-Remaining</C> for the
-            day. A spent day answers 429 with <C>Retry-After: 3600</C>; a burst answers 429 with{" "}
-            <C>Retry-After: 2</C>. Days reset at midnight UTC. Limits apply to <C>/v1</C> and{" "}
-            <C>/mcp</C> alike.
+            Responses carry <C>RateLimit-Limit</C> and <C>RateLimit-Remaining</C> for the day. Too many
+            requests at once is a 429 with <C>Retry-After: 2</C>. A used-up day is a 429 with{" "}
+            <C>Retry-After: 3600</C>. Days reset at midnight UTC.
           </li>
           <li>
-            A bad key is a 401, never a quiet fallback to keyless. Ten bad keys from one address in about
-            a minute block that address for 60 seconds.
+            The same key and limits work for the REST API and the{" "}
+            <Link href="/mcp" prefetch={false} className="dx-link">
+              MCP server
+            </Link>
+            .
           </li>
         </ul>
         <Callout>
-          New keys are on the Free tier. <strong>Pro is coming soon.</strong> If you need more than Free
+          New keys are on the Free plan. <strong>Pro is coming soon.</strong> If you need more than Free
           today, write to{" "}
           <a href="mailto:hello@commutescout.com" className="dx-link">
             hello@commutescout.com
@@ -470,7 +467,7 @@ export default function DevelopersPage() {
         </Callout>
       </Section>
 
-      <Section id="responses" kicker="Responses" title="What every response carries">
+      <Section id="responses" title="What every response carries">
         <dl className="dx-defs">
           <div>
             <dt>Coordinates</dt>
@@ -489,7 +486,7 @@ export default function DevelopersPage() {
           <div>
             <dt>Timestamps</dt>
             <dd>
-              ISO 8601 with an offset. Most are UTC; some sources log in their own local offset. Parse
+              ISO 8601 with an offset. Most are UTC. Some sources log in their own local offset. Parse
               the offset rather than assuming one.
             </dd>
           </div>
@@ -512,7 +509,7 @@ export default function DevelopersPage() {
             <dt>Notes</dt>
             <dd>
               A <C>notes</C> list explains anything the server did on your behalf, such as clamping a
-              radius or listing the corridors when a route did not match. Read it; it is meant for
+              radius or listing the corridors when a route did not match. Read it. It is meant for
               people.
             </dd>
           </div>
@@ -527,7 +524,7 @@ export default function DevelopersPage() {
         </dl>
       </Section>
 
-      <Section id="errors" kicker="Errors" title="One envelope everywhere">
+      <Section id="errors" title="One envelope everywhere">
         <div className="dx-prose dx-lead">
           <p>
             A status code, a stable <C>code</C> you can branch on, a <C>message</C> for a log line, and a{" "}
@@ -564,7 +561,7 @@ export default function DevelopersPage() {
         </Callout>
       </Section>
 
-      <Section id="rules" kicker="Fair use" title="What not to do">
+      <Section id="rules" title="What not to do">
         <ol className="dx-rules">
           {RULES.map((r) => (
             <li key={r.title}>
@@ -575,13 +572,13 @@ export default function DevelopersPage() {
         </ol>
       </Section>
 
-      <Section id="tools" kicker="Tool reference" title={`${TOOLS.length} tools, parameter by parameter`}>
+      <Section id="tools" title="Tool reference">
         <div className="dx-prose dx-lead">
           <p>
-            18 tools. Each one lists every parameter it accepts, what it reads, how fresh that is, and
-            what it caps. Replace the capitalized placeholders (<C>LAT,LON</C>, <C>ROUTE</C>,{" "}
-            <C>PLACE</C> and the like) with your own values. <C>home</C> and <C>work</C> need a key whose
-            account has them saved. Optional parameters combine; leave them out for everything.
+            Each tool lists its parameters, what it reads, how fresh that is, and what it caps. Replace the
+            capitalized placeholders (<C>LAT,LON</C>, <C>ROUTE</C>, <C>PLACE</C> and the like) with your
+            own values. <C>home</C> and <C>work</C> work when your account has them saved. Optional
+            parameters combine. Leave them out to get everything.
           </p>
         </div>
         {GROUPS.map((g) => (
@@ -600,13 +597,12 @@ export default function DevelopersPage() {
         ))}
       </Section>
 
-      <Section id="mcp" kicker="MCP" title="The same tools over MCP">
+      <Section id="mcp" title="The same tools over MCP">
         <div className="dx-prose dx-lead">
           <p>
-            The same {TOOLS.length} tools for Claude and any other MCP client, over streamable HTTP. No
-            key is needed. A key works the same way as on <C>/v1</C>: it gives your client its own
-            limits, and it lets <C>&quot;home&quot;</C>, <C>&quot;work&quot;</C> and your saved places
-            work in every trip tool.
+            Claude and other MCP clients can use the same {TOOLS.length} tools over streamable HTTP, with the
+            same key and limits. Your key also lets <C>&quot;home&quot;</C>, <C>&quot;work&quot;</C> and your
+            saved places work in every trip tool.
           </p>
         </div>
         <div className="dx-mt-20">
@@ -614,8 +610,7 @@ export default function DevelopersPage() {
         </div>
         <div className="dx-prose dx-mt-20">
           <p>
-            Setup for Claude Code, claude.ai, Cursor, VS Code, Windsurf, Codex, Gemini CLI and ChatGPT,
-            plus local stdio, is on the{" "}
+            Setup for each client is on the{" "}
             <Link href="/mcp#connect" prefetch={false} className="dx-link">
               MCP server page
             </Link>
@@ -623,19 +618,17 @@ export default function DevelopersPage() {
             <a href="/llms.txt" className="dx-link">
               /llms.txt
             </a>
-            . The server is open source; its tool descriptions are written for the model reading them and
-            say the same things this page says.
+            .
           </p>
         </div>
       </Section>
 
-      <Section id="bulk" kicker="Bulk" title="Bulk snapshots">
+      <Section id="bulk" title="Bulk snapshots">
         <div className="dx-prose dx-lead">
           <p>
-            The map does not poll the API; it reads three gzip JSON snapshots the server publishes and the
-            edge caches. They are public and the cheapest way to read everything at once. They carry the
-            same records as the map&apos;s markers, so their shape follows the map, not this API, and it
-            can change between releases.
+            The map reads three gzip JSON snapshots instead of the API. They are public and the cheapest
+            way to read everything at once. They hold the same records as the map&apos;s markers, so their
+            shape follows the map, not this API, and it can change between releases.
           </p>
         </div>
         <div className="dx-tbox">
@@ -669,7 +662,7 @@ export default function DevelopersPage() {
         </div>
       </Section>
 
-      <Section id="flare" kicker="Plugins" title="Flare plugins">
+      <Section id="flare" title="Flare plugins">
         <div className="dx-prose dx-lead">
           <p>
             Flare is CommuteScout&apos;s open protocol for third-party alert sources: a small HTTPS contract
@@ -685,7 +678,7 @@ export default function DevelopersPage() {
         <CodeBlock code="python -m ca_roads.flare check https://your-plugin.example" lang="bash" />
       </Section>
 
-      <Section id="terms" kicker="Terms" title="Attribution and terms">
+      <Section id="terms" title="Attribution and terms">
         <ul className="dx-list dx-lead dx-mt-16">
           <li>
             Credit CommuteScout and the agency named in each record&apos;s <C>source</C> wherever the data
@@ -706,10 +699,9 @@ export default function DevelopersPage() {
             </Link>{" "}
             and{" "}
             <Link href="/privacy" prefetch={false} className="dx-link">
-              privacy page
+              privacy policy
             </Link>{" "}
-            apply to API use; keyed requests are logged per key (key id, tool, status) for metering and
-            nothing else.
+            apply to API use.
           </li>
           <li>
             Questions, a higher limit, or a feed you would like added:{" "}

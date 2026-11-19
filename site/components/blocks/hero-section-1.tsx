@@ -1,13 +1,16 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { HeroScene } from "@/components/home/hero-scene";
 
-// The homepage hero. A left-aligned split: the claim, what CommuteScout
-// reads, two actions, then a made-up area with three sample events on the
-// right. The counts in the lede are pinned by tests/test_snapshot.py
+// The homepage hero. A left-aligned split: the claim, one line on what the
+// map shows, two actions, and a real screenshot of the live map on the
+// right (light and dark captures of /map, swapped by the site theme).
+// The copy never names the area the screenshot shows.
+//
+// The counts in the lede are pinned by tests/test_snapshot.py
 // (test_state_counts_are_current, test_feed_counts_are_current), which
-// read this file for "reads N official agency feeds" and "across N states".
+// read this file for "N official sources" and "across N states".
 export default function HeroSection() {
   return (
     <section className="relative overflow-hidden">
@@ -28,9 +31,9 @@ export default function HeroSection() {
           <h1 className="cs-display cs-rise mt-6 [animation-delay:60ms]">
             Live road conditions, straight from the source.
           </h1>
-          <p className="cs-lede cs-rise mt-6 max-w-[34rem] [animation-delay:120ms]">
-            CommuteScout reads 53 official agency feeds across 37 states and puts incidents,
-            closures, chain controls, cameras and wildfires on one live map.
+          <p className="cs-lede cs-rise mt-6 max-w-[32rem] [animation-delay:120ms]">
+            Incidents, closures, chain controls, cameras and wildfires from 53 official sources
+            across 37 states, on one live map.
           </p>
 
           <div className="cs-rise mt-8 flex flex-wrap items-center gap-3 [animation-delay:180ms]">
@@ -55,16 +58,35 @@ export default function HeroSection() {
             />
           </div>
 
-          <p className="cs-rise mt-8 flex items-start gap-2.5 text-sm text-cs-ink-3 [animation-delay:240ms]">
-            <span aria-hidden className="relative mt-[7px] flex size-1.5 shrink-0">
-              <span className="absolute inset-0 rounded-full bg-cs-ok" />
-            </span>
-            Every record carries its own source and timestamp. The map is free and needs no account.
+          <p className="cs-rise mt-6 text-sm text-cs-ink-3 [animation-delay:240ms]">
+            Free, with no account needed.
           </p>
         </div>
 
-        <div className="lg:col-span-7 lg:pl-6">
-          <HeroScene />
+        <div className="cs-rise min-w-0 [animation-delay:120ms] lg:col-span-7 lg:pl-6">
+          <figure className="rounded-[calc(var(--cs-radius-lg)+6px)] border border-cs-line bg-cs-surface-2 p-1.5 sm:p-2">
+            <div className="overflow-hidden rounded-[var(--cs-radius-lg)] border border-cs-line-strong bg-cs-surface shadow-[var(--cs-shadow-md)]">
+              {/* One capture per theme. The light one is the LCP image;
+                  the dark one is display:none in light mode. */}
+              <Image
+                src="/shots/live-map-light.webp"
+                alt="The CommuteScout live map, zoomed out to show thousands of live incident, closure and road-weather markers."
+                width={1600}
+                height={939}
+                sizes="(min-width: 1024px) 700px, 100vw"
+                priority
+                className="block h-auto w-full dark:hidden"
+              />
+              <Image
+                src="/shots/live-map-dark.webp"
+                alt="The CommuteScout live map on its dark base map, zoomed out to show thousands of live incident, closure and road-weather markers."
+                width={1600}
+                height={939}
+                sizes="(min-width: 1024px) 700px, 100vw"
+                className="hidden h-auto w-full dark:block"
+              />
+            </div>
+          </figure>
         </div>
       </div>
     </section>

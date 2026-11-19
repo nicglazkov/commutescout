@@ -19,15 +19,17 @@ import { PointerHint, FigureFrame } from "./frame";
 type Kind = "incident" | "closure" | "chain" | "fire" | "weather" | "sign" | "camera" | "toll";
 type Item = { mile: number; kind: Kind; section: string; text: string };
 const TOTAL = 46.8;
+// A winter mountain drive, in an order that happens: a crash in town, the signs warn of chains,
+// a lane closed for plowing, the chain-up area and its camera, the road weather station at the pass,
+// then the drop to the cabin. No wildfire, no roadwork: wrong season.
 const ITEMS: Item[] = [
   { mile: 6.2, kind: "toll", section: "tolls", text: "Toll plaza, $3.50" },
   { mile: 12.4, kind: "incident", section: "incidents", text: "Crash, right lane blocked" },
-  { mile: 21.8, kind: "sign", section: "message_signs", text: "Sign reads: CHAINS REQUIRED AHEAD" },
-  { mile: 24.6, kind: "closure", section: "closures", text: "Right lane closed for roadwork" },
+  { mile: 18.7, kind: "sign", section: "message_signs", text: "Sign reads: CHAINS REQUIRED 12 MI AHEAD" },
+  { mile: 24.6, kind: "closure", section: "closures", text: "Right lane closed for snow plowing" },
+  { mile: 28.9, kind: "camera", section: "cameras", text: "Camera at Exit 29: snow on the road, image a minute old" },
   { mile: 31.0, kind: "chain", section: "chain_controls", text: "Chains required, except 4WD with snow tires" },
-  { mile: 33.5, kind: "weather", section: "road_weather", text: "Station at the pass: pavement 29°F, gusts 34 mph" },
-  { mile: 35.1, kind: "camera", section: "cameras", text: "Camera at the pass, image a minute old" },
-  { mile: 41.0, kind: "fire", section: "wildfires_nearby", text: "Wildfire 6 mi off the route, 1,200 acres, 40% contained" },
+  { mile: 36.4, kind: "weather", section: "road_weather", text: "Station at the pass: pavement 27°F, light snow" },
 ];
 const KIND_LABEL: Record<Kind, string> = {
   incident: "Incident",
@@ -54,15 +56,14 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
   return (
     <FigureFrame
       n={n}
-      title="A trip plan, laid out by mile"
+      title="One plan_trip answer"
       className="csf-route"
       hint={<PointerHint fine="Hover or focus an item to find it on the strip" coarse="Tap an item to find it on the strip" />}
       readout={it ? `mile ${it.mile.toFixed(1)} · ${KIND_LABEL[it.kind].toLowerCase()}` : `${TOTAL} mi · ${ITEMS.length} live items on the line`}
       caption={
         <>
-          The trip planner snaps every live report onto the route and gives it a <b>mile</b> from the start, so the answer reads
-          in driving order: what you meet first comes first. It also returns three drive times for the departure and the
-          forecast at the destination for the hour you arrive. Sample trip; values are illustrative.
+          Every live report on the route gets a <b>mile</b> from the start, so the answer reads in driving order. It also has
+          three drive times and the forecast for when you arrive. A sample winter trip.
         </>
       }
     >
@@ -70,8 +71,8 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
         <div className="rs-head">
           <p className="rs-summary">
             <span className="rs-key csf-mono">summary</span>
-            Home to Destination: {TOTAL} mi via Interstate; about 1 h 4 min leaving 7:30 AM, arriving around 8:34 AM; 11 min of that is
-            traffic; on the route right now: 1 closure, 1 incident, 1 chain control, 1 wildfire nearby.
+            Home to Cabin: {TOTAL} mi via Interstate; about 1 h 4 min leaving 7:30 AM, arriving around 8:34 AM; 11 min of that is
+            traffic; on the route right now: 1 closure, 1 incident, 1 chain control.
           </p>
           <dl className="rs-times" aria-label="Drive time for this departure">
             {(
@@ -94,7 +95,7 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
           </dl>
         </div>
 
-        <svg className="csf-svg rs-strip csf-desk" viewBox="0 0 1000 150" role="img" aria-label={`Strip map of a ${TOTAL}-mile route from Home to Destination with ${ITEMS.length} live items pinned at their mile.`}>
+        <svg className="csf-svg rs-strip csf-desk" viewBox="0 0 1000 150" role="img" aria-label={`Strip map of a ${TOTAL}-mile route from Home to Cabin with ${ITEMS.length} live items pinned at their mile.`}>
           {/* mileposts */}
           {Array.from({ length: Math.floor(TOTAL) + 1 }, (_, m) => m).map((m) => (
             <line key={m} x1={xOf(m)} x2={xOf(m)} y1={LINE_Y + 10} y2={LINE_Y + (m % 5 === 0 ? 18 : 14)} className={m % 5 === 0 ? "rs-tick-major" : "rs-tick"} />
@@ -146,7 +147,7 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
           <g className="rs-end">
             <rect x={X1 - 7} y={LINE_Y - 7} width={14} height={14} rx={3} />
             <text x={X1} y={LINE_Y - 16} textAnchor="middle">
-              Destination
+              Cabin
             </text>
           </g>
         </svg>
@@ -185,12 +186,12 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
               </span>
             </li>
           ))}
-          <li className="rs-row rs-row-end" aria-label={`Destination at mile ${TOTAL}`}>
+          <li className="rs-row rs-row-end" aria-label={`Cabin at mile ${TOTAL}`}>
             <span className="rs-row-num rs-row-num-end" aria-hidden="true" />
             <span className="rs-row-mile csf-mono">{TOTAL}</span>
             <span className="rs-row-body">
-              <span className="rs-row-kind">Destination</span>
-              <span className="rs-row-text">Forecast on arrival: snow showers, 31°F. Alert along the route: winter storm warning.</span>
+              <span className="rs-row-kind">Cabin</span>
+              <span className="rs-row-text">Forecast on arrival: snow showers, 30°F. Alert along the route: winter storm warning.</span>
             </span>
           </li>
         </ol>

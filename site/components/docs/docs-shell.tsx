@@ -19,7 +19,6 @@ type DocsHref = (typeof DOCS_NAV)[number]["href"];
 // phone), the reading column, and previous/next links at the end.
 export function DocsShell({
   current,
-  eyebrow,
   title,
   dek,
   actions,
@@ -28,7 +27,6 @@ export function DocsShell({
   children,
 }: {
   current: DocsHref;
-  eyebrow: string;
   title: React.ReactNode;
   dek: React.ReactNode;
   actions?: React.ReactNode;
@@ -54,12 +52,11 @@ export function DocsShell({
 
       <header className="dx-head">
         <div className="dx-head-inner">
-          <p className="dx-eyebrow">{eyebrow}</p>
           <h1>{title}</h1>
           <p className="dx-dek">{dek}</p>
           {actions ? <div className="dx-head-actions">{actions}</div> : null}
           {facts?.length ? (
-            <ul className="dx-facts" aria-label="At a glance">
+            <ul className="dx-facts" aria-label="At a glance" data-count={facts.length}>
               {facts.map((f) => (
                 <li key={f.label}>
                   <b>{f.value}</b>
@@ -114,16 +111,14 @@ export function DocsShell({
 }
 
 // A documentation section: an anchored heading (the id the rail and other
-// pages link to), an optional mono kicker, then content.
+// pages link to), then content.
 export function Section({
   id,
-  kicker,
   title,
   children,
   labelledBy,
 }: {
   id: string;
-  kicker?: string;
   title: React.ReactNode;
   children: React.ReactNode;
   labelledBy?: string;
@@ -131,7 +126,6 @@ export function Section({
   const hid = labelledBy ?? `${id}-h`;
   return (
     <section className="dx-sec" aria-labelledby={hid}>
-      {kicker ? <p className="dx-kicker">{kicker}</p> : null}
       <h2 id={id} className="dx-sec-h">
         <a href={`#${id}`} className="dx-anchor">
           <span id={hid}>{title}</span>

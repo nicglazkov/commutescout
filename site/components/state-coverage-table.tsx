@@ -20,12 +20,19 @@ const COLUMNS: { key: keyof StateRow; label: string }[] = [
   { key: "wildfires", label: "Wildfires" },
 ];
 
+// Plain words for the doc's cell notes, so the table reads without a key.
+const SUFFIX: Record<string, string> = {
+  "(wz)": "roadwork",
+  "(passes)": "passes",
+  "**": "some",
+};
+
 function CoverageCell({ value }: { value: string }) {
   if (value === "n/a") {
     return <span className="dx-matrix-na">n/a</span>;
   }
   if (value.startsWith("Y")) {
-    const suffix = value.slice(1).trim(); // "", "*", "**", "(wz)", "(passes)"
+    const suffix = SUFFIX[value.slice(1).trim()]; // "(wz)", "(passes)", "**"; "*" needs no note
     return (
       <span className="dx-matrix-yes">
         <Check aria-hidden="true" />
@@ -34,18 +41,11 @@ function CoverageCell({ value }: { value: string }) {
       </span>
     );
   }
-  // "- (n)": the state's public feeds do not offer this keylessly. The
-  // footnote number links to its reason in the "Why the gaps" list.
-  const n = value.match(/\((\d+)\)/)?.[1];
+  // "- (n)": the state does not publish this publicly.
   return (
     <span className="dx-matrix-no">
       <Minus aria-hidden="true" />
       <span className="sr-only">Not available</span>
-      {n && (
-        <a href={`#gap-${n}`} aria-label={`Reason ${n}`}>
-          {n}
-        </a>
-      )}
     </span>
   );
 }

@@ -38,32 +38,32 @@ const features = [
   {
     icon: Navigation,
     title: "Turn-by-turn navigation",
-    body: "Routes that avoid closures and lane restrictions, with alternates to choose from before you start. Heading-up 3D map, speed limit, and the screen stays on for the trip.",
+    body: "Routes around closures and lane restrictions, with alternate routes to pick from before you start. Shows the speed limit and keeps the screen on.",
   },
   {
     icon: Volume2,
-    title: "Alerts before you reach them",
-    body: "Incidents, closures, chain controls and community reports along your route, spoken a distance ahead that you set per kind.",
+    title: "Spoken alerts",
+    body: "Incidents, closures, chain controls and reports on your route are read out before you reach them. You set how far ahead for each kind.",
   },
   {
     icon: Megaphone,
-    title: "Reports from the road",
-    body: "One tap to report police, a crash, a hazard or a closure. Reports snap to the road and show on this site and in every app.",
+    title: "Reports",
+    body: "Tap to report police, a crash, a hazard or a closure. Your report shows on the map on this site and in the apps.",
   },
   {
     icon: Puzzle,
     title: "Plugins",
-    body: "Turn on community sources from the catalog, or add a private plugin by URL. Every alert says where it came from, and what a plugin sees is yours alone.",
+    body: "Turn on plugins from the catalog, or add a private one by its address. Each alert shows which plugin sent it.",
   },
   {
     icon: UserRound,
-    title: "The same account",
-    body: "Sign in with Google or Apple. Your watch areas, saved places and plugin choices follow you between the web and the phone.",
+    title: "One account",
+    body: "Sign in with Google or Apple. Your watch areas, saved places and plugins are the same on the web and the phone.",
   },
   {
     icon: Bell,
-    title: "Watch areas on the phone",
-    body: "The areas you drew on the web map notify the phone too: a push when something new appears inside one.",
+    title: "Watch areas",
+    body: "Get a push notification when something new appears in a watch area you drew on the web map.",
   },
 ];
 
@@ -74,22 +74,22 @@ const gallery = [
   {
     src: "/shots/app/ios-nav.webp",
     alt: "iPhone: navigating along a waterfront street with the next turn, the speed limit and the arrival time",
-    caption: "Drive. The next turn, the speed limit, and when you arrive.",
+    caption: "The next turn, the speed limit and the arrival time.",
   },
   {
     src: "/shots/app/android-nav.webp",
     alt: "Android: a route with a closure ahead shown in an alert strip above the arrival time",
-    caption: "Hear it first. A closure ahead, read out before you get there.",
+    caption: "A closure ahead on the route.",
   },
   {
     src: "/shots/app/ios-alert.webp",
     alt: "iPhone: a hazard reported on the route, shown in an alert strip with how far ahead it is",
-    caption: "Know what is ahead. Every alert says how far, and how many more.",
+    caption: "A reported hazard ahead, with its distance.",
   },
   {
     src: "/shots/app/ios-map.webp",
     alt: "iPhone: the live map around the driver with a closed road segment, a camera and a report",
-    caption: "Look around. The same live map as the site, around you.",
+    caption: "The live map around you.",
   },
 ];
 
@@ -103,12 +103,10 @@ export default function AppPage() {
       <section className="overflow-hidden">
         <div className="cs-container grid items-center gap-14 pb-16 pt-12 md:pb-24 md:pt-20 lg:grid-cols-12 lg:gap-10">
           <div className="lg:col-span-6">
-            <p className="cs-eyebrow cs-rise">CommuteScout Drive · iPhone and Android beta</p>
-            <h1 className="cs-display cs-rise mt-5 [animation-delay:60ms]">The live map, with a voice.</h1>
-            <p className="cs-lede cs-rise mt-6 max-w-[36rem] [animation-delay:120ms]">
-              Turn-by-turn navigation that reads the same official feeds as this site: closures,
-              chain controls, crashes and community reports, spoken before you reach them. Same
-              account, same plugins, one tap to report what you see.
+            <h1 className="cs-display cs-rise">CommuteScout Drive</h1>
+            <p className="cs-lede cs-rise mt-6 max-w-[34rem] [animation-delay:120ms]">
+              Turn-by-turn navigation for iPhone and Android. It reads out closures, chain controls,
+              crashes and reports on your route before you reach them.
             </p>
             <div className="cs-rise mt-8 flex flex-wrap gap-3 [animation-delay:180ms]">
               <a href={TESTFLIGHT_PUBLIC} className={`${installBtn} bg-cs-accent text-cs-accent-ink shadow-[var(--cs-shadow-sm)] hover:bg-cs-accent-hover`}>
@@ -121,8 +119,7 @@ export default function AppPage() {
               </a>
             </div>
             <p className="cs-rise mt-5 max-w-[36rem] text-sm text-cs-ink-3 [animation-delay:240ms]">
-              Free while in beta. Open the link on your phone: TestFlight installs the iPhone build,
-              and the Android build installs from the release page.
+              Free while in beta. Open the link on your phone to install.
             </p>
             {TESTFLIGHT_IN_REVIEW && <p className="mt-2 text-sm text-cs-ink-2">{TESTFLIGHT_IN_REVIEW_NOTE}</p>}
           </div>
@@ -149,12 +146,9 @@ export default function AppPage() {
       {/* What it does: an indexed grid, hairlines instead of cards. */}
       <section aria-labelledby="does-title" className="border-t border-cs-line bg-cs-surface py-20 md:py-28">
         <div className="cs-container">
-          <div className="grid gap-6 md:grid-cols-12">
-            <p className="cs-eyebrow md:col-span-3">What it does</p>
-            <h2 id="does-title" className="cs-h2 max-w-[22ch] md:col-span-9">
-              Everything the map knows, while you drive.
-            </h2>
-          </div>
+          <h2 id="does-title" className="cs-h2">
+            Features
+          </h2>
           <ul className="mt-12 grid gap-x-10 sm:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, body }) => (
               <li key={title} className="border-t border-cs-line py-8">
@@ -172,33 +166,19 @@ export default function AppPage() {
       {/* Screens: scrolls sideways on a phone, four across on a desktop. */}
       <section aria-labelledby="screens-title" className="border-t border-cs-line py-20 md:py-28">
         <div className="cs-container">
-          <div className="grid gap-6 md:grid-cols-12">
-            <p className="cs-eyebrow md:col-span-3">On the road</p>
-            <div className="md:col-span-9">
-              <h2 id="screens-title" className="cs-h2">Screens from the apps.</h2>
-              <p className="cs-lede mt-4 max-w-[40rem]">
-                Captured on a simulated drive. Alerts, times and distances are what the app showed
-                at the time.
-              </p>
-            </div>
-          </div>
+          <h2 id="screens-title" className="cs-h2">Screenshots</h2>
+          <p className="cs-lede mt-4 max-w-[40rem]">Taken on a simulated drive.</p>
         </div>
         <div className="cs-container mt-12">
           <ul className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:mx-0 md:grid md:grid-cols-4 md:gap-6 md:overflow-visible md:px-0">
-            {gallery.map(({ src, alt, caption }, i) => {
-              const [lead, ...rest] = caption.split(". ");
-              return (
-                <li key={src} className="w-[62vw] max-w-[15rem] shrink-0 snap-center md:w-auto md:max-w-none">
-                  <figure>
-                    <PhoneShot src={src} alt={alt} width={300} className="w-full" />
-                    <figcaption className="mt-4 text-sm leading-relaxed text-cs-ink-2">
-                      <span className="cs-data mr-2 text-xs text-cs-ink-3">0{i + 1}</span>
-                      <span className="font-medium text-cs-ink">{lead}.</span> {rest.join(". ")}
-                    </figcaption>
-                  </figure>
-                </li>
-              );
-            })}
+            {gallery.map(({ src, alt, caption }) => (
+              <li key={src} className="w-[62vw] max-w-[15rem] shrink-0 snap-center md:w-auto md:max-w-none">
+                <figure>
+                  <PhoneShot src={src} alt={alt} width={300} className="w-full" />
+                  <figcaption className="mt-4 text-sm leading-relaxed text-cs-ink-2">{caption}</figcaption>
+                </figure>
+              </li>
+            ))}
           </ul>
         </div>
       </section>
@@ -206,10 +186,7 @@ export default function AppPage() {
       {/* Install. */}
       <section aria-labelledby="install-title" className="border-t border-cs-line bg-cs-surface py-20 md:py-28">
         <div className="cs-container">
-          <div className="grid gap-6 md:grid-cols-12">
-            <p className="cs-eyebrow md:col-span-3">Install</p>
-            <h2 id="install-title" className="cs-h2 md:col-span-9">Two minutes on either phone.</h2>
-          </div>
+          <h2 id="install-title" className="cs-h2">Install</h2>
           <div className="mt-12 grid gap-4 md:grid-cols-2 md:gap-6">
             {[
               {
@@ -242,7 +219,7 @@ export default function AppPage() {
                     on your phone and download the APK.
                   </>,
                   <>Open the file and allow installing from that source when asked.</>,
-                  <>New versions are new APKs on the same page; install over the old one.</>,
+                  <>New versions appear on the same page. Install them over the old one.</>,
                 ],
                 href: ANDROID_RELEASES,
                 cta: "Download the APK",
@@ -277,10 +254,10 @@ export default function AppPage() {
             <a href={APP_REPO} className="cs-link">
               github.com/nicglazkov/commutescout-app
             </a>
-            . Location stays on the phone except for what a route or a report needs, and what a
-            plugin sees is served to you alone; see{" "}
+            . Your location stays on the phone, except what a route or a report needs. Details are
+            in the{" "}
             <Link href="/privacy" prefetch={false} className="cs-link">
-              Privacy
+              Privacy Policy
             </Link>
             .
           </p>

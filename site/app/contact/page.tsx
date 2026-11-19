@@ -65,13 +65,12 @@ export default function ContactPage() {
     <section className="cs-container pb-20 pt-14 md:pb-28 md:pt-20">
       <div className="grid gap-14 lg:grid-cols-12 lg:gap-10">
         <div className="lg:col-span-5">
-          <p className="cs-eyebrow cs-rise">Contact</p>
-          <h1 className="cs-display cs-rise mt-5 [animation-delay:60ms]">Write to us.</h1>
+          <h1 className="cs-display cs-rise">Contact</h1>
           <p className="cs-lede cs-rise mt-6 max-w-[30rem] [animation-delay:120ms]">
             Send a message and the CommuteScout team will get back to you.
           </p>
 
-          <h2 className="cs-eyebrow mt-14">Other ways to reach us</h2>
+          <h2 className="mt-14 text-sm font-medium text-cs-ink">Other ways to reach us</h2>
           <ul className="mt-3 border-t border-cs-line">
             {OTHER_WAYS.map(({ icon: Icon, href, text, note }) => (
               <li key={href} className="border-b border-cs-line">

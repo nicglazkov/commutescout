@@ -16,18 +16,18 @@ import { US_NATION, US_STATES, US_VIEWBOX } from "./us-map.geo";
 
 type Layer = { key: keyof StateRow; label: string };
 const LAYERS: Layer[] = [
-  { key: "incidents", label: "Incidents" },
+  { key: "incidents", label: "Crashes" },
   { key: "closures", label: "Closures" },
   { key: "cameras", label: "Cameras" },
-  { key: "signs", label: "Message signs" },
+  { key: "signs", label: "Road signs" },
   { key: "weather", label: "Road weather" },
 ];
 const TIERS = [
-  { tier: 4, label: "All five layers", short: "All 5" },
-  { tier: 3, label: "Three or four layers", short: "3 or 4" },
-  { tier: 2, label: "Two layers", short: "2" },
-  { tier: 1, label: "One layer", short: "1" },
-  { tier: 0, label: "Nationwide layers only", short: "National" },
+  { tier: 4, label: "All five kinds", short: "All 5" },
+  { tier: 3, label: "Three or four kinds", short: "3 or 4" },
+  { tier: 2, label: "Two kinds", short: "2" },
+  { tier: 1, label: "One kind", short: "1" },
+  { tier: 0, label: "Weather and wildfires only", short: "Basics" },
 ] as const;
 // small eastern states get a labelled key square beside the map so they stay pointable
 const SMALL: [string, string][] = [
@@ -51,9 +51,9 @@ function cellText(v: string): string {
   if (v === "Y (wz)") return "Work zones";
   if (v === "Y (passes)") return "Mountain passes";
   if (v === "Y*") return "Yes, national feed";
-  if (v === "Y**") return "Partial, via a regional feed";
+  if (v === "Y**") return "Part of the state";
   if (v === "n/a") return "Not applicable";
-  return "Not published keylessly";
+  return "Not available";
 }
 
 type Info = { name: string; row?: StateRow; count: number; tier: number; note?: string };
@@ -142,20 +142,20 @@ export default function UsCoverageMap({ n = 2 }: { n?: number | string }) {
   return (
     <FigureFrame
       n={n}
-      title="Where the live layers come from each state"
+      title="How much live detail each state shares"
       className="csf-map"
-      hint={<PointerHint fine="Hover or focus the map and use the arrow keys" coarse="Tap a state to see its layers" />}
+      hint={<PointerHint fine="Hover or focus the map and use the arrow keys" coarse="Tap a state to see what it shares" />}
       readout={
         a
-          ? `${a.name}: ${a.tier ? `${a.count} of 5 layers` : "nationwide layers"}`
-          : `${STATE_COVERAGE.length} states · ${counts[0]} with all five layers`
+          ? `${a.name}: ${a.tier ? `${a.count} of 5 kinds` : "weather and wildfires only"}`
+          : `${STATE_COVERAGE.length} states · ${counts[0]} share all five`
       }
       legend={
         <details className="csf-details">
           <summary>Coverage by state, as a table</summary>
           <div className="csf-table-wrap">
             <table className="csf-table">
-              <caption className="csf-sr">Live layers each covered state publishes</caption>
+              <caption className="csf-sr">What each covered state shares</caption>
               <thead>
                 <tr>
                   <th scope="col">State</th>
@@ -191,13 +191,13 @@ export default function UsCoverageMap({ n = 2 }: { n?: number | string }) {
       }
       caption={
         <>
-          Depth counts the five live layers a state&apos;s own feeds publish: incidents, closures, cameras, message signs and road weather.
-          Wildfires, weather alerts and the traffic overlay are nationwide, so every state has them. Coverage as of {STATE_COVERAGE_UPDATED.split(" ")[0]}.
+          Stronger blue means more of five kinds of live detail: crashes, closures, cameras, road signs and road weather.
+          Every state also gets weather alerts, wildfires and traffic speeds. As of {STATE_COVERAGE_UPDATED.split(" ")[0]}.
         </>
       }
     >
       <div className="csf-map-legend" aria-hidden="true">
-        <span className="csf-map-legend-title">Live layers from the state&apos;s own feeds, and how many states have each</span>
+        <span className="csf-map-legend-title">Kinds of live detail a state shares, out of 5 (number of states below)</span>
         <span className="csf-ramp">
           {[...TIERS].reverse().map((t, i) => (
             <span key={t.tier} className="csf-ramp-step">
@@ -216,7 +216,7 @@ export default function UsCoverageMap({ n = 2 }: { n?: number | string }) {
           tabIndex={0}
           aria-label={`Map of the United States shaded by coverage depth. Number of states by depth: ${TIERS.slice(0, 4)
             .map((t, i) => `${t.label}: ${counts[i]}`)
-            .join("; ")}; the remaining states have the nationwide layers. Use the arrow keys to step through covered states; the table below lists every state.`}
+            .join("; ")}; the remaining states have weather and wildfires only. Use the arrow keys to step through covered states; the table below lists every state.`}
           aria-describedby="csf-map-live"
           onPointerMove={onMove}
           onPointerDown={onTap}
@@ -283,7 +283,7 @@ export default function UsCoverageMap({ n = 2 }: { n?: number | string }) {
           {a
             ? a.row
               ? `${a.name}: ${LAYERS.map((l) => `${l.label} ${cellText(a.row![l.key]).toLowerCase()}`).join(", ")}.`
-              : `${a.name}: nationwide layers only.`
+              : `${a.name}: weather and wildfires only.`
             : ""}
         </p>
       </div>

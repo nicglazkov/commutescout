@@ -59,12 +59,12 @@ export function SiteFooter() {
               <span className="text-[0.975rem] font-semibold tracking-[-0.01em] text-cs-ink">CommuteScout</span>
             </Link>
             <p className="mt-4 max-w-[30ch] text-sm leading-relaxed text-cs-ink-2">
-              Live road conditions read from official agency feeds. Open source, MIT licensed.
+              Live road conditions from official sources. Open source, MIT licensed.
             </p>
             <p className="mt-5 inline-flex items-center gap-2 rounded-full border border-cs-line px-3 py-1.5 text-xs text-cs-ink-2">
               <span aria-hidden className="size-1.5 rounded-full bg-cs-ok" />
               <span className="cs-data">
-                {AGENCY_FEED_COUNT} feeds, {STATE_COUNT} states
+                {AGENCY_FEED_COUNT} sources, {STATE_COUNT} states
               </span>
             </p>
           </div>
@@ -96,7 +96,7 @@ export function SiteFooter() {
         <div className="mt-14 flex flex-col gap-3 border-t border-cs-line pt-6 text-[0.8125rem] leading-relaxed text-cs-ink-3 md:flex-row md:items-start md:justify-between">
           <p className="max-w-[72ch]">
             Data from state transportation agencies, highway patrols, the National Weather Service
-            and national wildfire feeds, listed on the{" "}
+            and national wildfire agencies, listed on the{" "}
             <Link href="/data-sources" prefetch={false} className="underline underline-offset-2 hover:text-cs-ink">
               data sources page
             </Link>

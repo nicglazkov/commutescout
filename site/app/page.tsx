@@ -1,13 +1,6 @@
 import type { Metadata } from "next";
 import HeroSection from "@/components/blocks/hero-section-1";
-import FeedBench from "@/components/figures/feed-bench";
-import {
-  DeveloperBand,
-  DriveBand,
-  FourWays,
-  SourceProof,
-  SourcesStrip,
-} from "@/components/home/sections";
+import { Coverage, DeveloperBand, DriveBand, FourWays } from "@/components/home/sections";
 
 // Homepage takes the product-level metadata (Task 7 brief). Description is
 // homepage-focused (brand and product overview) and distinct from the map
@@ -20,14 +13,14 @@ import {
 export const metadata: Metadata = {
   title: "CommuteScout: live road conditions, traffic map, and route planner",
   description:
-    "CommuteScout tracks live road conditions from 53 official agency feeds across 37 states and plans routes that avoid closures and chain controls.",
+    "CommuteScout tracks live road conditions from 53 official sources across 37 states and plans routes that avoid closures and chain controls.",
   alternates: {
     canonical: "https://commutescout.com/",
   },
   openGraph: {
     title: "CommuteScout: live road conditions, traffic map, and route planner",
     description:
-      "CommuteScout tracks live road conditions from 53 official agency feeds across 37 states and plans routes that avoid closures and chain controls.",
+      "CommuteScout tracks live road conditions from 53 official sources across 37 states and plans routes that avoid closures and chain controls.",
     // The brief pins this to exactly "https://commutescout.com/" (trailing
     // slash). Next 16's metadata resolver unconditionally normalizes a
     // root-path absolute URL to origin-only (see resolveAbsoluteUrlWithPathname
@@ -47,42 +40,19 @@ export const metadata: Metadata = {
   },
 };
 
-// The page argues in one line: one live picture of the road (hero), what
-// it reads (strip), four ways to use it, how many feeds become one (the
-// feed bench figure, workstream B), proof that every answer names its
-// source, the phone app, and the developer surfaces.
+// The page in order: the live map (hero, with a real screenshot), what
+// you can do with it, what each state gets, the phone app as a compact
+// band, and the developer surfaces.
 export default function Home() {
   return (
     <>
       <HeroSection />
-      <SourcesStrip />
       <FourWays />
-
-      <section aria-labelledby="how-title" className="border-t border-cs-line bg-cs-surface-2/50 py-20 md:py-28">
-        <div className="cs-container">
-          <div className="grid gap-6 md:grid-cols-12">
-            <p className="cs-eyebrow md:col-span-3">How it works</p>
-            <div className="md:col-span-9">
-              <h2 id="how-title" className="cs-h2 max-w-[22ch]">
-                Many feeds in, one picture out.
-              </h2>
-              <p className="cs-lede mt-5 max-w-[40rem]">
-                Every record keeps the time its own agency gave it. Duplicates from two feeds
-                become one event. A feed that falls behind is flagged, not hidden.
-              </p>
-            </div>
-          </div>
-          <div className="mt-12">
-            <FeedBench n={1} />
-          </div>
-        </div>
-      </section>
-
-      <SourceProof />
+      <Coverage />
       <DriveBand />
       <DeveloperBand>
-        The MCP server&rsquo;s 18 tools and the REST API read the same feeds as the map. Neither
-        needs a key; a free key gives your account 2,000 requests a day, shared by all of its keys.
+        The MCP server&rsquo;s 18 tools and the REST API read the same sources as the map. Neither
+        needs a key. A free key gives your account 2,000 requests a day, shared by all of its keys.
       </DeveloperBand>
     </>
   );

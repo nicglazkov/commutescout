@@ -5,7 +5,7 @@ import { FormNotice } from "@/components/form-notice";
 
 // /pricing. Two plans side by side on one hairline grid: Free, which is
 // everything the site does today, and Pro, which is coming soon. Pro has
-// no price on purpose; the slot says "Coming soon" and names the address
+// no price on purpose. The slot says "Coming soon" and names the address
 // to write to. The Pro waitlist form (POST /api/waitlist, honeypot
 // "website", anchor #waitlist) lives in the Pro column.
 //
@@ -15,7 +15,7 @@ import { FormNotice } from "@/components/form-notice";
 const PRO_EMAIL = "hello@commutescout.com";
 
 const freeItems = [
-  `The live map: ${AGENCY_FEED_COUNT} official agency feeds across ${STATE_COUNT} states`,
+  `The live map: ${AGENCY_FEED_COUNT} official sources across ${STATE_COUNT} states`,
   "Route planner with GPX, KML and print export",
   "Ask about your drive, with a daily cap",
   "3 watch areas (accounts need approval for now): circles up to 25 miles, polygons up to 2,000 square miles, or routes up to 250 miles with a 2 mile buffer",
@@ -41,19 +41,8 @@ function Item({ children }: { children: React.ReactNode }) {
 export default function Pricing() {
   return (
     <>
-      <section className="cs-container pb-14 pt-14 md:pb-20 md:pt-20">
-        <div className="grid gap-6 lg:grid-cols-12 lg:items-end">
-          <div className="lg:col-span-7">
-            <p className="cs-eyebrow cs-rise">Pricing</p>
-            <h1 className="cs-display cs-rise mt-5 [animation-delay:60ms]">
-              Free today. Pro when it is ready.
-            </h1>
-          </div>
-          <p className="cs-lede cs-rise max-w-[34rem] [animation-delay:120ms] lg:col-span-5">
-            The live map, the route planner, watch areas and the apps are free. Pro adds more room
-            to watch and a record of what happened.
-          </p>
-        </div>
+      <section className="cs-container pb-10 pt-14 md:pb-14 md:pt-20">
+        <h1 className="cs-display cs-rise">Pricing</h1>
       </section>
 
       <section aria-label="Plans" className="cs-container pb-16 md:pb-24">
@@ -82,7 +71,7 @@ export default function Pricing() {
             >
               Open the map
             </Link>
-            <p className="cs-eyebrow mt-9">Included</p>
+            <p className="mt-9 text-sm font-medium text-cs-ink">Included</p>
             <ul className="mt-2 flex-1">
               {freeItems.map((t) => (
                 <Item key={t}>{t}</Item>
@@ -102,12 +91,7 @@ export default function Pricing() {
               Coming soon
             </p>
             <p className="mt-3 text-[0.9375rem] text-cs-ink-2">
-              For drivers who watch more ground and want the record to back it up. Questions, or a
-              team that needs it sooner? Write to{" "}
-              <a href={`mailto:${PRO_EMAIL}`} className="cs-link">
-                {PRO_EMAIL}
-              </a>
-              .
+              More room to watch, and a record of what happened. Questions? Write to us.
             </p>
             <a
               href={`mailto:${PRO_EMAIL}?subject=CommuteScout%20Pro`}
@@ -116,7 +100,7 @@ export default function Pricing() {
               <Mail aria-hidden className="size-4" />
               Email {PRO_EMAIL}
             </a>
-            <p className="cs-eyebrow mt-9">Everything in Free, plus</p>
+            <p className="mt-9 text-sm font-medium text-cs-ink">Everything in Free, plus</p>
             <ul className="mt-2">
               {proItems.map((t) => (
                 <Item key={t}>{t}</Item>
@@ -166,12 +150,11 @@ export default function Pricing() {
         </div>
 
         <p className="mt-8 max-w-[44rem] text-sm leading-relaxed text-cs-ink-3">
-          Every feed carries its own timestamp, and a stale feed is flagged, never hidden. Keyless
-          API calls are limited per network address; see{" "}
+          The API and MCP server need a free key. Every limit is in{" "}
           <Link href="/developers" prefetch={false} className="cs-link">
             the developer docs
-          </Link>{" "}
-          for every limit.
+          </Link>
+          .
         </p>
       </section>
     </>
