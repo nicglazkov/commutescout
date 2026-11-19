@@ -25,9 +25,7 @@ export const metadata: Metadata = {
 };
 
 export default function PricingPage() {
-  // The Pro waitlist (form, honeypot, and the #waitlist anchor the
-  // homepage hero's "Get Pro updates" CTA scrolls to) lives inside the
-  // Pricing block's Pro card since the two-tone redesign, not as a
-  // page-owned section here.
+  // The Pro waitlist (form, honeypot, and the #waitlist anchor) lives in
+  // the Pricing block's Pro column.
   return <Pricing />;
 }

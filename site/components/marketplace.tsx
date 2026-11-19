@@ -84,19 +84,19 @@ function category(kinds?: string[]): "cameras" | "crowd" | "other" {
 }
 
 const ICONS = {
-  cameras: { Icon: Camera, tile: "from-amber-400 to-orange-600" },
-  crowd: { Icon: Users, tile: "from-sky-400 to-blue-700" },
-  other: { Icon: Puzzle, tile: "from-slate-400 to-slate-700" },
+  cameras: { Icon: Camera, tile: "bg-cs-surface-2 text-cs-ink-2" },
+  crowd: { Icon: Users, tile: "bg-cs-accent-soft text-cs-accent" },
+  other: { Icon: Puzzle, tile: "bg-cs-surface-2 text-cs-ink-2" },
 } as const;
 
 function PluginIcon({ kinds }: { kinds?: string[] }) {
   const { Icon, tile } = ICONS[category(kinds)];
   return (
     <div
-      className={"flex size-14 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br text-white shadow-sm " + tile}
+      className={"flex size-12 shrink-0 items-center justify-center rounded-[var(--cs-radius-md)] border border-cs-line " + tile}
       aria-hidden
     >
-      <Icon className="size-7" strokeWidth={1.75} />
+      <Icon className="size-6" strokeWidth={1.75} />
     </div>
   );
 }
@@ -108,9 +108,9 @@ function kindChips(kinds?: string[]): string[] {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 flex-1 px-3 text-center first:pl-0 last:pr-0">
-      <dt className="text-cs-ink/50 text-[10px] font-semibold uppercase tracking-wider">{label}</dt>
-      <dd className="mt-0.5 truncate text-sm font-semibold text-cs-ink" style={{ fontVariantNumeric: "tabular-nums" }}>
+    <div className="min-w-0 flex-1 sm:px-3 sm:text-center sm:first:pl-0 sm:last:pr-0">
+      <dt className="cs-data text-[11px] uppercase tracking-[0.06em] text-cs-ink-3">{label}</dt>
+      <dd className="mt-1 truncate text-sm font-medium text-cs-ink" style={{ fontVariantNumeric: "tabular-nums" }}>
         {value}
       </dd>
     </div>
@@ -171,16 +171,16 @@ export function Marketplace() {
   }
 
   if (failed) {
-    return <p className="text-cs-ink/60 mt-6 text-sm">The marketplace could not be loaded right now.</p>;
+    return <p role="status" className="mt-10 rounded-[var(--cs-radius-lg)] border border-cs-line bg-cs-surface p-6 text-sm text-cs-ink-2">The marketplace could not be loaded right now. Try again in a minute.</p>;
   }
   if (sources === null) {
-    return <p className="text-cs-ink/60 mt-6 text-sm">Loading plugins…</p>;
+    return <p role="status" className="mt-10 rounded-[var(--cs-radius-lg)] border border-dashed border-cs-line-strong p-6 text-sm text-cs-ink-3">Loading plugins…</p>;
   }
   if (sources.length === 0) {
-    return <p className="text-cs-ink/70 mt-6">No plugin is listed yet.</p>;
+    return <p className="mt-10 rounded-[var(--cs-radius-lg)] border border-cs-line bg-cs-surface p-6 text-cs-ink-2">No plugin is listed yet.</p>;
   }
   return (
-    <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2">
+    <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2">
       {sources.map((s) => {
         const installed = isInstalled(s);
         const approved = s.tier === "approved";
@@ -190,16 +190,16 @@ export function Marketplace() {
         return (
           <article
             key={s.id}
-            className="flex min-w-0 flex-col rounded-3xl border border-cs-ink/10 bg-white p-5 shadow-sm transition-shadow hover:shadow-md sm:p-6"
+            className="flex min-w-0 flex-col rounded-[var(--cs-radius-lg)] border border-cs-line bg-cs-surface p-5 shadow-[var(--cs-shadow-sm)] transition-[border-color,box-shadow] duration-150 hover:border-cs-line-strong hover:shadow-[var(--cs-shadow-md)] sm:p-6"
             data-plugin={s.id}
           >
             <div className="flex items-center gap-4">
               <PluginIcon kinds={s.kinds} />
               <div className="min-w-0 flex-1">
-                <h2 className="text-balance text-base font-semibold leading-snug text-cs-ink sm:text-lg">{s.name}</h2>
-                <p className="text-cs-ink/60 mt-0.5 truncate text-sm">
+                <h2 className="cs-h3 text-balance">{s.name}</h2>
+                <p className="mt-0.5 truncate text-sm text-cs-ink-3">
                   {s.attribution?.url ? (
-                    <a href={s.attribution.url} className="hover:text-cs-sky hover:underline">
+                    <a href={s.attribution.url} className="hover:text-cs-accent hover:underline">
                       {operator}
                     </a>
                   ) : (
@@ -211,10 +211,10 @@ export function Marketplace() {
                 type="button"
                 onClick={() => toggle(s)}
                 className={
-                  "inline-flex shrink-0 items-center gap-1 rounded-full px-5 py-2 text-sm font-semibold transition-colors " +
+                  "inline-flex h-9 shrink-0 items-center gap-1 rounded-[var(--cs-radius-md)] px-4 text-sm font-medium transition-colors duration-150 " +
                   (installed
-                    ? "bg-cs-ink/5 text-cs-ink hover:bg-cs-ink/10"
-                    : "bg-cs-sky text-white hover:bg-cs-sky/90")
+                    ? "border border-cs-line-strong bg-cs-surface text-cs-ink hover:bg-cs-surface-2"
+                    : "bg-cs-accent text-cs-accent-ink hover:bg-cs-accent-hover")
                 }
                 aria-pressed={installed}
               >
@@ -223,21 +223,21 @@ export function Marketplace() {
               </button>
             </div>
 
-            <p className="text-cs-ink/75 mt-4 text-sm leading-relaxed">
+            <p className="mt-4 text-[0.9375rem] leading-relaxed text-cs-ink-2">
               {s.description || (kindsLabel(s.kinds) ? `Shows ${kindsLabel(s.kinds)}.` : "Community alerts for the map.")}
             </p>
 
             {kindChips(s.kinds).length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="What it shows">
                 {kindChips(s.kinds).map((k) => (
-                  <li key={k} className="bg-cs-ink/5 text-cs-ink/70 rounded-full px-2.5 py-0.5 text-xs capitalize">
+                  <li key={k} className="rounded-[var(--cs-radius-sm)] border border-cs-line bg-cs-bg px-2 py-0.5 text-xs capitalize text-cs-ink-2">
                     {k}
                   </li>
                 ))}
               </ul>
             )}
 
-            <dl className="divide-cs-ink/10 border-cs-ink/10 mt-5 flex divide-x border-y py-3">
+            <dl className="mt-5 grid grid-cols-2 gap-y-4 border-y border-cs-line py-3 sm:flex sm:divide-x sm:divide-cs-line">
               <Stat label="Alerts now" value={s.ok === false ? "Offline" : (s.count ?? 0).toLocaleString()} />
               <Stat label="Coverage" value={coverageLabel(s.coverage)} />
               <Stat label="Reports" value={s.capabilities?.report ? "Accepted" : "Read only"} />
@@ -247,25 +247,25 @@ export function Marketplace() {
             <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <span
                 className={
-                  "rounded-full px-2.5 py-0.5 text-xs font-semibold " +
-                  (approved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")
+                  "rounded-full px-2.5 py-0.5 text-xs font-medium " +
+                  (approved ? "bg-cs-ok-soft text-cs-ok" : "border border-cs-line-strong text-cs-ink-2")
                 }
               >
                 {approved ? "Approved by CommuteScout" : "Public, not reviewed"}
               </span>
               <a
                 href={`/map?plugin=${encodeURIComponent(s.id)}`}
-                className="inline-flex items-center gap-1 text-sm font-medium text-cs-sky hover:underline"
+                className="inline-flex items-center gap-1 text-sm font-medium text-cs-accent hover:underline"
               >
                 <MapPin className="size-4" aria-hidden />
                 See it on the map
               </a>
             </div>
             {s.visibility === "unlisted" && (
-              <p className="text-cs-ink/60 mt-3 text-xs">Unlisted: shared with you by link, not on the catalog.</p>
+              <p className="mt-3 text-xs text-cs-ink-3">Unlisted: shared with you by link, not on the catalog.</p>
             )}
             {!approved && (
-              <p className="text-cs-ink/50 mt-3 text-xs">
+              <p className="mt-3 text-xs text-cs-ink-3">
                 Use at your own risk. Its alerts are spoken like any other; turn voice off in the
                 app&apos;s alert settings.
               </p>

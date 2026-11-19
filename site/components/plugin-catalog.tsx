@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 
 // The public plugin catalog, read live from /api/flare/sources on the
 // same origin. The page is a static export, so this small client
-// component is the only part that changes without a build.
+// component is the only part that changes without a build. Styled with
+// the docs classes (components/docs/docs.css), which /plugins loads.
 type Source = {
   id: string;
   name: string;
   attribution?: { name?: string; url?: string } | null;
   trust?: string | null;
   tier?: "approved" | "unreviewed" | "private" | null;
+  shared?: boolean | null;
   count?: number;
   ok?: boolean | null;
   last_ok?: string | null;
@@ -27,53 +29,56 @@ export function PluginCatalog() {
       .catch(() => setFailed(true));
   }, []);
 
+  let body: React.ReactNode;
   if (failed) {
-    return (
-      <p className="text-cs-ink/60 mt-4 text-sm">
+    body = (
+      <p className="dx-catalog-note">
         The catalog could not be loaded right now. It is also served as JSON at{" "}
-        <code className="rounded bg-cs-ink/5 px-1.5 py-0.5 text-[0.85em]">/api/flare/sources</code>.
+        <code className="dx-ic">/api/flare/sources</code>.
       </p>
     );
-  }
-  if (sources === null) {
-    return <p className="text-cs-ink/60 mt-4 text-sm">Loading the catalog…</p>;
-  }
-  if (sources.length === 0) {
-    return (
-      <p className="text-cs-ink/70 mt-4 text-balance">
-        No public plugin is listed yet. CommuteScout&apos;s own community reports are the
-        first source; yours can be next.
+  } else if (sources === null) {
+    body = <p className="dx-catalog-note">Loading the catalog...</p>;
+  } else if (sources.length === 0) {
+    body = (
+      <p className="dx-catalog-note">
+        No public plugin is listed yet. CommuteScout&apos;s own community reports are the first source; yours
+        can be next.
       </p>
+    );
+  } else {
+    body = (
+      <ul className="dx-catalog">
+        {sources.map((s) => (
+          <li key={s.id}>
+            <div>
+              <p className="dx-catalog-name">
+                {s.name}
+                <span className={`dx-tag ${s.tier === "approved" ? "dx-tag-2xx" : "dx-tag-4xx"}`}>
+                  {s.tier === "approved" ? "Approved" : "Public, not reviewed"}
+                </span>
+                {s.shared ? <span className="dx-tag dx-tag-muted">Shared</span> : null}
+              </p>
+              <p className="dx-catalog-meta">
+                {[
+                  s.attribution?.name,
+                  s.trust,
+                  s.count !== undefined ? `${s.count.toLocaleString("en-US")} alerts` : null,
+                  s.ok === false ? "not answering" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+            <code className="dx-catalog-id">{s.id}</code>
+          </li>
+        ))}
+      </ul>
     );
   }
   return (
-    <ul className="mt-6 divide-y divide-cs-ink/10 rounded-2xl border border-cs-ink/10 bg-white">
-      {sources.map((s) => (
-        <li key={s.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 py-4">
-          <div>
-            <p className="font-medium text-cs-ink">
-              {s.name}{" "}
-              <span
-                className={
-                  "ml-1 rounded-full px-2 py-0.5 text-[11px] font-semibold " +
-                  (s.tier === "approved"
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-amber-100 text-amber-800")
-                }
-              >
-                {s.tier === "approved" ? "Approved" : "Public, not reviewed"}
-              </span>
-            </p>
-            <p className="text-cs-ink/60 text-sm">
-              {[s.attribution?.name, s.trust, s.count !== undefined ? `${s.count} alerts` : null,
-                s.ok === false ? "not answering" : null]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          </div>
-          <code className="text-cs-ink/50 text-xs">{s.id}</code>
-        </li>
-      ))}
-    </ul>
+    <div aria-live="polite" aria-busy={sources === null && !failed}>
+      {body}
+    </div>
   );
 }

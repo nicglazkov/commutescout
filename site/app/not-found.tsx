@@ -19,41 +19,39 @@ const destinations = [
 
 export default function NotFound() {
   return (
-    <section className="py-16 md:py-24">
-      <div className="mx-auto max-w-2xl px-6">
-        <p className="text-cs-sky text-sm font-semibold">404</p>
-        <h1 className="text-cs-ink mt-2 text-balance text-4xl font-medium tracking-tight lg:text-5xl">
-          This page isn&rsquo;t here
-        </h1>
-        <p className="text-cs-ink/70 mt-4 text-lg">
-          The link may be old or mistyped. These are good places to pick up from:
-        </p>
-        <ul className="mt-8 divide-y divide-cs-ink/10 border-y border-cs-ink/10">
-          {destinations.map((d) => (
-            <li key={d.href}>
-              <Link
-                href={d.href}
-                prefetch={false}
-                className="hover:bg-cs-ink/[0.03] flex items-center justify-between gap-4 px-1 py-4"
-              >
-                <span>
-                  <span className="text-cs-ink block font-medium">{d.label}</span>
-                  <span className="text-cs-ink/60 block text-sm">{d.note}</span>
-                </span>
-                <span aria-hidden="true" className="text-cs-ink/40">
-                  &rarr;
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <p className="text-cs-ink/70 mt-8 text-sm">
-          Or go to the{" "}
-          <Link href="/" prefetch={false} className="text-cs-sky underline underline-offset-2">
-            home page
-          </Link>
-          .
-        </p>
+    <section className="cs-container pb-24 pt-16 md:pb-32 md:pt-24">
+      <div className="grid gap-12 lg:grid-cols-12">
+        <div className="lg:col-span-6">
+          <p className="cs-eyebrow">Error 404</p>
+          <h1 className="cs-display mt-5">This page isn&rsquo;t here.</h1>
+          <p className="cs-lede mt-6 max-w-[30rem]">
+            The link may be old or mistyped. These are good places to pick up from.
+          </p>
+        </div>
+        <div className="lg:col-span-5 lg:col-start-8 lg:pt-10">
+          <ul className="border-t border-cs-line">
+            {destinations.map((d) => (
+              <li key={d.href} className="border-b border-cs-line">
+                <Link href={d.href} prefetch={false} className="group flex items-center justify-between gap-4 py-5">
+                  <span>
+                    <span className="block font-medium text-cs-ink group-hover:text-cs-accent">{d.label}</span>
+                    <span className="mt-0.5 block text-sm text-cs-ink-3">{d.note}</span>
+                  </span>
+                  <span aria-hidden="true" className="text-cs-ink-3 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-cs-accent">
+                    &rarr;
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-6 text-sm text-cs-ink-2">
+            Or go to the{" "}
+            <Link href="/" prefetch={false} className="cs-link">
+              home page
+            </Link>
+            .
+          </p>
+        </div>
       </div>
     </section>
   );

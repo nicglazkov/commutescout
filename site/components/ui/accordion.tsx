@@ -22,7 +22,7 @@ function AccordionItem({ className, ...props }: AccordionPrimitive.Item.Props) {
   return (
     <AccordionPrimitive.Item
       data-slot="accordion-item"
-      className={cn("not-last:border-b border-cs-line", className)}
+      className={cn("border-b border-cs-line", className)}
       {...props}
     />
   );
@@ -38,7 +38,7 @@ function AccordionTrigger({
       <AccordionPrimitive.Trigger
         data-slot="accordion-trigger"
         className={cn(
-          "group/accordion-trigger focus-visible:border-cs-sky focus-visible:ring-3 focus-visible:ring-cs-sky/50 focus-visible:after:border-cs-sky **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 **:data-[slot=accordion-trigger-icon]:text-cs-ink/60 relative flex flex-1 items-start justify-between rounded-lg border border-transparent py-2.5 text-left text-sm font-medium outline-none transition-all hover:underline aria-disabled:pointer-events-none aria-disabled:opacity-50",
+          "group/accordion-trigger **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 **:data-[slot=accordion-trigger-icon]:text-cs-ink-3 relative flex flex-1 items-start justify-between gap-4 py-4 text-left text-[0.9375rem] font-medium text-cs-ink transition-colors hover:text-cs-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cs-accent aria-disabled:pointer-events-none aria-disabled:opacity-50",
           className
         )}
         {...props}
@@ -70,7 +70,7 @@ function AccordionContent({
     >
       <div
         className={cn(
-          "h-(--accordion-panel-height) data-ending-style:h-0 data-starting-style:h-0 [&_a]:underline-offset-3 [&_a]:hover:text-cs-navy pb-2.5 pt-0 [&_a]:underline [&_p:not(:last-child)]:mb-4",
+          "h-(--accordion-panel-height) data-ending-style:h-0 data-starting-style:h-0 [&_a]:underline-offset-3 [&_a]:text-cs-accent text-cs-ink-2 leading-relaxed pb-4 pt-0 [&_a]:underline [&_p:not(:last-child)]:mb-4",
           className
         )}
       >

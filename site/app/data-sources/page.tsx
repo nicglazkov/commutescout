@@ -11,14 +11,15 @@ import {
   WILDFIRE_NOTE,
 } from "@/lib/state-coverage";
 import { StateCoverageTable } from "@/components/state-coverage-table";
+import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
+import { C } from "@/components/docs/code-block";
+import { DocFigure } from "@/components/docs/doc-figure";
 
-// Data sources page takes its own metadata, matching the shape every
-// other marketing page uses (title/description/canonical/openGraph/
-// twitter). Description is one sentence, Google style. Source for every
-// factual claim on this page: docs/data-sources.md and
-// docs/state-coverage.md; this page restyles those docs into a visual
-// page rather than rewording their content (see AGENCY_FEED_COUNT/
-// PUBLIC_SOURCE_COUNT drift guard note below the intro).
+// Data sources page. Source for every factual claim: docs/data-sources.md
+// and docs/state-coverage.md (through lib/state-coverage.ts), with cache
+// times checked against src/ca_roads/feeds/* and the stale limits against
+// src/ca_roads_demo/freshness.py. The "53 official agency feeds" phrase is
+// pinned by tests/test_snapshot.py::test_feed_counts_are_current.
 export const metadata: Metadata = {
   title: "Data sources - CommuteScout",
   description:
@@ -39,193 +40,170 @@ export const metadata: Metadata = {
   },
 };
 
-const INTRO_TEXT =
-  "Everything CommuteScout serves comes from public agency feeds, " +
-  "fetched live and cached briefly in-process.";
+const TOC: TocItem[] = [
+  { id: "coverage", label: "Coverage by state" },
+  { id: "gaps", label: "Why the gaps" },
+  { id: "freshness", label: "How freshness works" },
+  { id: "feeds", label: "California feeds" },
+  { id: "closures", label: "The closure taxonomy" },
+  { id: "parsing", label: "Parsing rules" },
+];
 
-const FRESHNESS_TEXT =
-  "No feed is ever silently dropped: every response carries per-source " +
-  "data_as_of timestamps, and when a feed is stale or failing, the last " +
-  "good data is served, flagged stale, with the error attached, so both " +
-  "the UI and an AI assistant can say how much to trust the answer. " +
-  "Caches are stale-while-revalidate: an expired feed is served from " +
-  "memory instantly while one background task refreshes it, so " +
-  "requests never wait on an upstream agency server.";
-
-const TAXONOMY_INTRO =
-  "Every closure record carries a closure_class derived from the " +
-  "Caltrans facility and closure type. The raw feed marks an on-ramp " +
-  "repair \"Full\", and reporting that as a closed highway would be " +
-  "wrong, so the classes keep them apart.";
-
-const LEGEND_TEXT =
-  "Check = live on the map. Dash = the state's public feeds do not " +
-  "offer it keylessly; the number links to the reason below. \"wz\" " +
-  "next to a check means closures come from the state's WZDx roadwork " +
-  "feed.";
+function driveTone(drive: string) {
+  if (drive === "No") return "no";
+  if (/delay/i.test(drive)) return "delay";
+  return "yes";
+}
 
 export default function DataSourcesPage() {
   return (
-    <>
-      <section className="py-16 md:py-20">
-        <div className="mx-auto max-w-3xl px-6">
-          <h1 className="text-cs-ink text-balance text-4xl font-medium tracking-tight lg:text-5xl">
-            Data sources
-          </h1>
-
-          {/* The "53 official agency feeds" phrase and number are pinned
-              by tests/test_snapshot.py::test_feed_counts_are_current,
-              which scans this file alongside the README, the homepage
-              hero, and site/lib/stats.ts. */}
-          <p className="text-cs-ink/60 mt-6 text-balance md:text-lg">
-            CommuteScout reads 53 official agency feeds. {INTRO_TEXT}
+    <DocsShell
+      current="/data-sources"
+      eyebrow="Data sources"
+      title="Official feeds, with their timestamps attached."
+      dek={
+        <>
+          CommuteScout reads 53 official agency feeds. Everything it serves comes from public agency
+          feeds, fetched live and cached briefly in-process, and every answer says how old each source is.
+        </>
+      }
+      facts={[
+        { value: "53", label: "official agency feeds" },
+        { value: String(STATE_COVERAGE.length), label: "states live on the map" },
+        { value: "Every", label: "response carries data_as_of" },
+        { value: String(GAP_REASONS.length), label: "gaps, each with its reason" },
+      ]}
+      toc={TOC}
+    >
+      <Section id="coverage" kicker="Coverage" title="What each state has">
+        <div className="dx-prose dx-lead">
+          <p>
+            Updated {STATE_COVERAGE_UPDATED}. A check means the layer is live on the map. A dash means the
+            state&apos;s public feeds do not offer it without a key; its number links to the reason.
+            &ldquo;(wz)&rdquo; next to a check means closures come from the state&apos;s WZDx roadwork feed.
           </p>
         </div>
-      </section>
-
-      <section className="pb-16 md:pb-20" aria-labelledby="coverage-heading">
-        <div className="mx-auto max-w-7xl px-6">
-          <h2
-            id="coverage-heading"
-            className="text-cs-ink text-balance text-3xl font-medium tracking-tight md:text-4xl"
-          >
-            Coverage by state
-          </h2>
-          <p className="text-cs-ink/50 mt-2 text-sm">
-            Updated {STATE_COVERAGE_UPDATED}. What each live state actually
-            has on the map, and why the gaps exist.
-          </p>
-
-          <div className="mt-8">
-            <StateCoverageTable rows={STATE_COVERAGE} />
+        <StateCoverageTable rows={STATE_COVERAGE} />
+        <div className="dx-cards">
+          <div className="dx-card dx-card--plain">
+            <h3>Wildfires (*)</h3>
+            <p>{WILDFIRE_NOTE}</p>
           </div>
-
-          <p className="text-cs-ink/50 mt-4 max-w-3xl text-xs text-balance">
-            {LEGEND_TEXT}
-          </p>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div className="bg-cs-bg rounded-lg p-4">
-              <p className="text-cs-ink text-sm font-medium">Wildfires (*)</p>
-              <p className="text-cs-ink/60 mt-1 text-sm">{WILDFIRE_NOTE}</p>
-            </div>
-            <div className="bg-cs-bg rounded-lg p-4">
-              <p className="text-cs-ink text-sm font-medium">Cameras (**)</p>
-              <p className="text-cs-ink/60 mt-1 text-sm">{CAMERA_SUBSET_NOTE}</p>
-            </div>
+          <div className="dx-card dx-card--plain">
+            <h3>Cameras (**)</h3>
+            <p>{CAMERA_SUBSET_NOTE}</p>
           </div>
+        </div>
+        <p className="dx-small" style={{ marginTop: 16, maxWidth: "68ch" }}>
+          {OVERLAY_NOTE}
+        </p>
+      </Section>
 
-          <p className="text-cs-ink/50 mt-6 max-w-3xl text-sm text-balance">
-            {OVERLAY_NOTE}
+      <Section id="gaps" kicker="Gaps" title="Why the gaps">
+        <div className="dx-prose dx-lead">
+          <p>
+            Every dash in the table has one of these {GAP_REASONS.length} reasons. Most are a state that does
+            not publish the data, or publishes it only behind a separate agreement.
           </p>
-
-          <details className="border-cs-line mt-8 rounded-xl border p-6">
-            <summary className="text-cs-ink cursor-pointer text-sm font-medium">
-              Why the gaps ({GAP_REASONS.length} reasons)
-            </summary>
-            <ol className="text-cs-ink/60 mt-4 space-y-3 text-sm">
+        </div>
+        <details className="dx-details">
+          <summary>Show all {GAP_REASONS.length} reasons</summary>
+          <div className="dx-details-body">
+            <ol className="dx-rules dx-rules--compact">
               {GAP_REASONS.map((gap) => (
-                <li key={gap.n} id={`gap-${gap.n}`} className="scroll-mt-6">
-                  <span className="text-cs-ink font-medium">{gap.n}.</span>{" "}
-                  {gap.text}
+                <li key={gap.n} id={`gap-${gap.n}`}>
+                  <span>{gap.text}</span>
                 </li>
               ))}
             </ol>
-          </details>
-        </div>
-      </section>
+          </div>
+        </details>
+      </Section>
 
-      <section className="bg-cs-bg py-16 md:py-20" aria-labelledby="freshness-heading">
-        <div className="mx-auto max-w-7xl px-6">
-          <h2
-            id="freshness-heading"
-            className="text-cs-ink text-balance text-3xl font-medium tracking-tight md:text-4xl"
-          >
-            How freshness works
-          </h2>
-          <p className="text-cs-ink/60 mt-4 max-w-3xl text-balance md:text-lg">
-            {FRESHNESS_TEXT}
+      <Section id="freshness" kicker="Freshness" title="How freshness works">
+        <div className="dx-prose dx-lead">
+          <p>
+            No feed is ever silently dropped. Every response carries a <C>data_as_of</C> time for each
+            source, and when a feed is stale or failing, the last good data is served, flagged stale, with
+            the error attached, so both the map and an AI assistant can say how much to trust the answer.
           </p>
+          <p>
+            Caches are stale-while-revalidate: an expired feed is served from memory at once while one
+            background task refreshes it, so a request never waits on an agency server. A watchdog checks
+            every source every 5 minutes, and a source past its own stale limit on two checks in a row is
+            reported to the operator.
+          </p>
+        </div>
+        <DocFigure name="feed-cadence" />
+      </Section>
 
-          <div className="ring-cs-line bg-cs-paper mt-10 overflow-x-auto rounded-xl ring-1">
-            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
-              <thead>
-                <tr>
-                  <th className="border-b border-cs-line px-4 py-3 font-medium">Source</th>
-                  <th className="border-b border-cs-line px-4 py-3 font-medium">Data</th>
-                  <th className="border-b border-cs-line px-4 py-3 font-medium whitespace-nowrap">
-                    Refresh
-                  </th>
+      <Section id="feeds" kicker="California" title="The California feeds">
+        <div className="dx-prose dx-lead">
+          <p>
+            California publishes the deepest feeds, so it has the most layers. &ldquo;Stale after&rdquo; is
+            the age at which the watchdog reports a source; every other state&apos;s feeds share a 90-minute
+            limit.
+          </p>
+        </div>
+        <div className="dx-tbox">
+          <table className="dx-table dx-table--stack">
+            <caption className="sr-only">California feeds and how often each refreshes</caption>
+            <thead>
+              <tr>
+                <th scope="col">Source</th>
+                <th scope="col">Data</th>
+                <th scope="col">Refresh</th>
+                <th scope="col">Stale after</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CA_FEEDS.map((feed) => (
+                <tr key={feed.source}>
+                  <th scope="row">{feed.source}</th>
+                  <td data-label="Data">{feed.data}</td>
+                  <td data-label="Refresh">{feed.refresh}</td>
+                  <td data-label="Stale after">{feed.stale ?? "n/a"}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {CA_FEEDS.map((feed) => (
-                  <tr key={feed.source} className="even:bg-cs-bg/40">
-                    <td className="border-b border-cs-line px-4 py-3 font-medium whitespace-nowrap">
-                      {feed.source}
-                    </td>
-                    <td className="text-cs-ink/70 border-b border-cs-line px-4 py-3">
-                      {feed.data}
-                    </td>
-                    <td className="text-cs-ink/70 border-b border-cs-line px-4 py-3 whitespace-nowrap">
-                      {feed.refresh}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </section>
+      </Section>
 
-      <section className="py-16 md:py-20" aria-labelledby="the-closure-taxonomy">
-        <div className="mx-auto max-w-7xl px-6">
-          <h2
-            id="the-closure-taxonomy"
-            className="text-cs-ink text-balance text-3xl font-medium tracking-tight md:text-4xl"
-          >
-            The closure taxonomy
-          </h2>
-          <p className="text-cs-ink/60 mt-4 max-w-3xl text-balance md:text-lg">
-            {TAXONOMY_INTRO}
+      <Section id="closures" kicker="Closures" title="The closure taxonomy">
+        <div className="dx-prose dx-lead">
+          <p>
+            Every closure record carries a <C>closure_class</C> derived from the Caltrans facility and
+            closure type. The raw feed marks an on-ramp repair &ldquo;Full&rdquo;, and reporting that as a
+            closed highway would be wrong, so the classes keep them apart.
           </p>
-
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {CLOSURE_CLASSES.map((cls) => (
-              <div
-                key={cls.code}
-                className="ring-cs-line bg-cs-paper flex flex-col gap-3 rounded-xl p-6 shadow ring-1"
-              >
-                <code className="bg-cs-bg text-cs-ink w-fit rounded-md px-2 py-1 text-xs font-medium">
-                  {cls.code}
-                </code>
-                <p className="text-cs-ink text-sm">{cls.means}</p>
-                <p className="text-cs-ink/50 mt-auto text-xs font-medium tracking-wide uppercase">
-                  Can you drive through? <span className="text-cs-sky normal-case">{cls.drive}</span>
-                </p>
-              </div>
-            ))}
-          </div>
         </div>
-      </section>
+        <ul className="dx-classes" aria-label="Closure classes">
+          {CLOSURE_CLASSES.map((cls) => (
+            <li key={cls.code}>
+              <code>{cls.code}</code>
+              <p>{cls.means}</p>
+              <span className="dx-drive" data-v={driveTone(cls.drive)}>
+                <span className="sr-only">Can you drive through? </span>
+                {cls.drive}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Section>
 
-      <section className="pb-16 md:pb-20">
-        <div className="mx-auto max-w-3xl px-6">
-          <h2 className="text-cs-ink text-balance text-3xl font-medium tracking-tight md:text-4xl">
-            Hard-won parsing rules
-          </h2>
-          <p className="text-cs-ink/60 mt-4 text-balance">
-            These feeds misbehave in production, and the parsers encode what
-            we learned running them.
-          </p>
-
-          <ul className="text-cs-ink/60 mt-8 list-outside list-disc space-y-3 pl-5">
-            {PARSING_RULES.map((rule) => (
-              <li key={rule}>{rule}</li>
-            ))}
-          </ul>
+      <Section id="parsing" kicker="In production" title="Hard-won parsing rules">
+        <div className="dx-prose dx-lead">
+          <p>These feeds misbehave in production, and the parsers encode what running them taught.</p>
         </div>
-      </section>
-    </>
+        <ol className="dx-rules">
+          {PARSING_RULES.map((rule) => (
+            <li key={rule}>
+              <span>{rule}</span>
+            </li>
+          ))}
+        </ol>
+      </Section>
+    </DocsShell>
   );
 }

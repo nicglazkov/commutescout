@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import UsCoverageMap from "@/components/figures/us-coverage-map";
+import { STATE_COUNT } from "@/lib/stats";
 
 // About page takes its own metadata (Task 9 brief). Title/description
 // shape follows the pricing page's metadata export (Task 8); description is
@@ -23,60 +26,123 @@ export const metadata: Metadata = {
   },
 };
 
+const principles = [
+  {
+    title: "Official feeds only.",
+    body: "Every layer comes from an agency that publishes it: state DOTs, highway patrols, the National Weather Service and national wildfire feeds. CommuteScout never scrapes.",
+  },
+  {
+    title: "Every answer shows its source.",
+    body: "Each response lists the feeds it read, whether each one answered, and when that feed itself last changed, not when we fetched it.",
+  },
+  {
+    title: "Stale is flagged, never hidden.",
+    body: "A feed past its stale limit still shows, marked as stale, so you can judge it yourself. A feed that is down is named, and the others still answer.",
+  },
+  {
+    title: "Open source, all of it.",
+    body: "The map, the planner, the MCP server and every data parser are MIT licensed, with no open-core carve-outs.",
+  },
+];
+
 export default function AboutPage() {
   return (
-    // Plain page-owned content section: none of the six vendored Dusk block
-    // types (hero, feature grid, stat band, pricing, FAQ, footer) fit a
-    // short prose page, so this composes directly rather than forcing one.
-    <section className="py-16 md:py-20">
-      <div className="mx-auto max-w-3xl px-6">
-        <h1 className="text-cs-ink text-balance text-4xl font-medium tracking-tight lg:text-5xl">
-          About
-        </h1>
-
-        {/* Copy sources (Task 9 brief): the first two paragraphs are the
-            README's opening two sentences verbatim (already sentence case);
-            the data story sentence is the brief's exact copy; the third
-            paragraph is the README's "License & sustainability" section,
-            substance kept verbatim. */}
-        <div className="text-cs-ink/60 mt-8 space-y-6 text-balance md:text-lg">
-          <p>
-            CommuteScout reads 53 official agency feeds (CHP dispatch, state
-            DOT closures and incidents, chain controls, cameras, message
-            signs, wildfire perimeters, road weather, toll prices) and turns
-            them into one live picture of the road. Look at the map, plan a
-            route and see what is actually on it, or ask about a drive in
-            plain English.
-          </p>
-
-          <p>
-            Every layer comes from official agency feeds. CommuteScout never
-            scrapes, and every response carries per-source timestamps.
-          </p>
-
-          <p>
-            CommuteScout is{" "}
-            <a
-              href="https://github.com/nicglazkov/commutescout/blob/main/LICENSE"
-              className="text-cs-sky font-medium hover:underline"
-            >
-              MIT licensed
-            </a>
-            : the map, the planner, the MCP server, and every data parser,
-            with no open-core carve-outs. The hosted app at commutescout.com
-            will soon offer optional premium features (deeper history, more
-            alerts); that is what funds the servers and keeps the free tier
-            free.
-          </p>
+    <>
+      <section className="cs-container pb-16 pt-14 md:pb-24 md:pt-20">
+        <div className="grid gap-10 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <p className="cs-eyebrow cs-rise">About</p>
+            <h1 className="cs-display cs-rise mt-5 [animation-delay:60ms]">
+              One live picture of the road, read from the agencies that run it.
+            </h1>
+          </div>
+          <div className="cs-rise space-y-5 text-[1.0625rem] leading-relaxed text-cs-ink-2 [animation-delay:120ms] lg:col-span-5 lg:pt-12">
+            <p>
+              CommuteScout reads 53 official agency feeds (highway patrol dispatch, state DOT
+              closures and incidents, chain controls, cameras, message signs, wildfire perimeters,
+              road weather, toll prices) and turns them into one live picture of the road.
+            </p>
+            <p>
+              Look at the map, plan a route and see what is actually on it, or ask about a drive in
+              plain English.
+            </p>
+          </div>
         </div>
+      </section>
 
-        <a
-          href="https://github.com/nicglazkov/commutescout"
-          className="text-cs-sky mt-8 inline-block font-medium hover:underline"
-        >
-          View the code on GitHub
-        </a>
-      </div>
-    </section>
+      <section aria-labelledby="coverage-title" className="border-t border-cs-line bg-cs-surface py-20 md:py-28">
+        <div className="cs-container">
+          <div className="grid gap-6 md:grid-cols-12">
+            <p className="cs-eyebrow md:col-span-3">Coverage</p>
+            <div className="md:col-span-9">
+              <h2 id="coverage-title" className="cs-h2">
+                {STATE_COUNT} states with their own feeds, and the nationwide layers everywhere.
+              </h2>
+              <p className="cs-lede mt-4 max-w-[42rem]">
+                Depth depends on what each state publishes. Wildfires, weather alerts and the
+                traffic overlay cover every state.
+              </p>
+            </div>
+          </div>
+          <div className="mt-12">
+            <UsCoverageMap n={1} />
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="principles-title" className="border-t border-cs-line py-20 md:py-28">
+        <div className="cs-container grid gap-10 md:grid-cols-12">
+          <div className="md:col-span-4">
+            <p className="cs-eyebrow">How it works</p>
+            <h2 id="principles-title" className="cs-h2 mt-4 md:sticky md:top-28">
+              Four rules the data follows.
+            </h2>
+          </div>
+          <ol className="md:col-span-8">
+            {principles.map((p, i) => (
+              <li key={p.title} className="grid gap-2 border-t border-cs-line py-7 first:border-t-0 first:pt-0 sm:grid-cols-[3.5rem_1fr]">
+                <span className="cs-data text-sm text-cs-ink-3">0{i + 1}</span>
+                <div>
+                  <h3 className="cs-h3">{p.title}</h3>
+                  <p className="mt-2 max-w-[56ch] text-[0.9375rem] leading-relaxed text-cs-ink-2">{p.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section aria-labelledby="funding-title" className="border-t border-cs-line bg-cs-surface py-20 md:py-24">
+        <div className="cs-container grid gap-8 md:grid-cols-12 md:items-end">
+          <div className="md:col-span-7">
+            <p className="cs-eyebrow">License and sustainability</p>
+            <h2 id="funding-title" className="cs-h2 mt-4">Free to use, free to read.</h2>
+            <p className="cs-lede mt-4 max-w-[40rem]">
+              CommuteScout is{" "}
+              <a href="https://github.com/nicglazkov/commutescout/blob/main/LICENSE" className="cs-link">
+                MIT licensed
+              </a>
+              . The hosted app will offer optional Pro features (more watch areas, event history);
+              that is what funds the servers and keeps the free tier free.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3 md:col-span-5 md:justify-end">
+            <a
+              href="https://github.com/nicglazkov/commutescout"
+              className="inline-flex h-11 items-center rounded-[var(--cs-radius-md)] bg-cs-ink px-5 text-[0.9375rem] font-medium text-cs-bg transition-opacity hover:opacity-90"
+            >
+              View the code on GitHub
+            </a>
+            <Link
+              href="/contact"
+              prefetch={false}
+              className="inline-flex h-11 items-center rounded-[var(--cs-radius-md)] border border-cs-line-strong bg-cs-surface px-5 text-[0.9375rem] font-medium text-cs-ink transition-colors hover:bg-cs-surface-2"
+            >
+              Contact
+            </Link>
+          </div>
+        </div>
+      </section>
+    </>
   );
 }

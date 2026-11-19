@@ -21,22 +21,23 @@ export const metadata: Metadata = {
 // write a plugin live on /plugins.
 export default function MarketplacePage() {
   return (
-    <section className="py-12 md:py-16">
-      <div className="mx-auto max-w-7xl px-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-cs-ink md:text-4xl">Plugin marketplace</h1>
-            <p className="text-cs-ink/70 mt-2 max-w-2xl text-balance">
-              Plugins add alerts to the map and the apps. Every one here is free. Approved ones are
-              reviewed by CommuteScout; the others are public but not reviewed, and say so.
-            </p>
-          </div>
-          <Link href="/plugins" prefetch={false} className="text-sm text-cs-sky hover:underline">
+    <section className="cs-container pb-20 pt-14 md:pb-28 md:pt-20">
+      <div className="grid gap-6 lg:grid-cols-12 lg:items-end">
+        <div className="lg:col-span-7">
+          <p className="cs-eyebrow cs-rise">Plugins</p>
+          <h1 className="cs-display cs-rise mt-5 [animation-delay:60ms]">Plugin marketplace</h1>
+        </div>
+        <div className="cs-rise [animation-delay:120ms] lg:col-span-5">
+          <p className="text-[1.0625rem] leading-relaxed text-cs-ink-2">
+            Plugins add alerts to the map and the apps. Every one here is free. Approved ones are
+            reviewed by CommuteScout; the others are public but not reviewed, and say so.
+          </p>
+          <Link href="/plugins" prefetch={false} className="cs-link mt-4 inline-block text-sm">
             Write a plugin
           </Link>
         </div>
-        <Marketplace />
       </div>
+      <Marketplace />
     </section>
   );
 }

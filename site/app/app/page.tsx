@@ -93,182 +93,193 @@ const gallery = [
   },
 ];
 
+const installBtn =
+  "inline-flex h-11 items-center gap-2 rounded-[var(--cs-radius-md)] px-4 text-[0.9375rem] font-medium transition-colors duration-150";
+
 export default function AppPage() {
   return (
     <>
-      {/* Hero: the pitch and the two install links beside the app itself. */}
-      <section className="relative overflow-hidden bg-cs-navy text-white">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-32 top-0 h-[48rem] w-[48rem] rounded-full bg-cs-sky/25 blur-3xl"
-        />
-        <div className="relative mx-auto grid max-w-7xl gap-12 px-6 py-16 md:grid-cols-[1.1fr_1fr] md:items-center md:py-24">
-          <div>
-            <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white/80 ring-1 ring-white/15">
-              <Smartphone className="size-3.5" aria-hidden />
-              Early access
+      {/* Hero: the pitch and both install links beside the app itself. */}
+      <section className="overflow-hidden">
+        <div className="cs-container grid items-center gap-14 pb-16 pt-12 md:pb-24 md:pt-20 lg:grid-cols-12 lg:gap-10">
+          <div className="lg:col-span-6">
+            <p className="cs-eyebrow cs-rise">CommuteScout Drive · iPhone and Android beta</p>
+            <h1 className="cs-display cs-rise mt-5 [animation-delay:60ms]">The live map, with a voice.</h1>
+            <p className="cs-lede cs-rise mt-6 max-w-[36rem] [animation-delay:120ms]">
+              Turn-by-turn navigation that reads the same official feeds as this site: closures,
+              chain controls, crashes and community reports, spoken before you reach them. Same
+              account, same plugins, one tap to report what you see.
             </p>
-            <h1 className="mt-5 text-balance text-4xl font-medium tracking-tight md:text-6xl">
-              CommuteScout Drive.
-              <br />
-              The live map, with a voice.
-            </h1>
-            <p className="mt-5 max-w-xl text-balance text-lg text-white/70">
-              Turn-by-turn navigation for iPhone and Android that reads the same official feeds as
-              this site: closures, chain controls, crashes and community reports, spoken before you
-              reach them. Same account, same plugins, one tap to report what you see.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <a
-                href={TESTFLIGHT_PUBLIC}
-                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-cs-navy transition-colors hover:bg-white/90"
-              >
-                <Apple className="size-4" aria-hidden />
+            <div className="cs-rise mt-8 flex flex-wrap gap-3 [animation-delay:180ms]">
+              <a href={TESTFLIGHT_PUBLIC} className={`${installBtn} bg-cs-accent text-cs-accent-ink shadow-[var(--cs-shadow-sm)] hover:bg-cs-accent-hover`}>
+                <Apple aria-hidden className="size-4" />
                 iPhone: join the TestFlight beta
               </a>
-              <a
-                href={ANDROID_RELEASES}
-                className="inline-flex items-center gap-2 rounded-full border border-white/30 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
-              >
-                <Smartphone className="size-4" aria-hidden />
+              <a href={ANDROID_RELEASES} className={`${installBtn} border border-cs-line-strong bg-cs-surface text-cs-ink hover:bg-cs-surface-2`}>
+                <Smartphone aria-hidden className="size-4" />
                 Android: download the APK
               </a>
             </div>
-            <p className="mt-4 text-sm text-white/50">
+            <p className="cs-rise mt-5 max-w-[36rem] text-sm text-cs-ink-3 [animation-delay:240ms]">
               Free while in beta. Open the link on your phone: TestFlight installs the iPhone build,
               and the Android build installs from the release page.
             </p>
-            {TESTFLIGHT_IN_REVIEW && (
-              <p className="mt-2 text-sm text-white/70">{TESTFLIGHT_IN_REVIEW_NOTE}</p>
-            )}
+            {TESTFLIGHT_IN_REVIEW && <p className="mt-2 text-sm text-cs-ink-2">{TESTFLIGHT_IN_REVIEW_NOTE}</p>}
           </div>
 
-          <div className="flex items-end justify-center gap-4 sm:gap-6 md:justify-end">
-            <PhoneShot
-              src="/shots/app/android-nav.webp"
-              alt="CommuteScout Drive on Android with a closure alert ahead on the route"
-              width={210}
-              className="hidden sm:block"
-            />
-            <PhoneShot
-              src="/shots/app/ios-nav.webp"
-              alt="CommuteScout Drive on iPhone navigating with the next turn, the speed limit and the arrival time"
-              width={280}
-              priority
-            />
+          <div className="lg:col-span-6">
+            <div className="relative mx-auto flex max-w-[34rem] items-end justify-center gap-5 sm:gap-7">
+              <PhoneShot
+                src="/shots/app/android-nav.webp"
+                alt="CommuteScout Drive on Android with a closure alert ahead on the route"
+                width={230}
+                className="mb-12 hidden sm:block"
+              />
+              <PhoneShot
+                src="/shots/app/ios-nav.webp"
+                alt="CommuteScout Drive on iPhone navigating with the next turn, the speed limit and the arrival time"
+                width={260}
+                priority
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* What it does. */}
-      <section className="py-16 md:py-20">
-        <div className="mx-auto max-w-7xl px-6">
-          <h2 className="text-balance text-3xl font-medium tracking-tight text-cs-ink md:text-4xl">
-            Everything the map knows, while you drive.
-          </h2>
-          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {/* What it does: an indexed grid, hairlines instead of cards. */}
+      <section aria-labelledby="does-title" className="border-t border-cs-line bg-cs-surface py-20 md:py-28">
+        <div className="cs-container">
+          <div className="grid gap-6 md:grid-cols-12">
+            <p className="cs-eyebrow md:col-span-3">What it does</p>
+            <h2 id="does-title" className="cs-h2 max-w-[22ch] md:col-span-9">
+              Everything the map knows, while you drive.
+            </h2>
+          </div>
+          <ul className="mt-12 grid gap-x-10 sm:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="rounded-2xl border border-cs-line bg-cs-paper p-6">
-                <div className="inline-flex size-10 items-center justify-center rounded-xl bg-cs-sky/10 text-cs-sky">
-                  <Icon className="size-5" aria-hidden />
-                </div>
-                <h3 className="mt-4 font-semibold text-cs-ink">{title}</h3>
-                <p className="mt-2 text-sm text-cs-ink/70">{body}</p>
-              </div>
+              <li key={title} className="border-t border-cs-line py-8">
+                <span className="flex size-9 items-center justify-center rounded-[var(--cs-radius-md)] border border-cs-line bg-cs-bg text-cs-accent">
+                  <Icon aria-hidden className="size-[18px]" strokeWidth={1.75} />
+                </span>
+                <h3 className="cs-h3 mt-5">{title}</h3>
+                <p className="mt-2 max-w-[38ch] text-[0.9375rem] leading-relaxed text-cs-ink-2">{body}</p>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       </section>
 
-      {/* Screens. A row of phones that scrolls sideways on a phone and
-          fits four across on a desktop. */}
-      <section className="overflow-hidden bg-cs-bg py-16 md:py-20">
-        <div className="mx-auto max-w-7xl px-6">
-          <h2 className="text-balance text-3xl font-medium tracking-tight text-cs-ink md:text-4xl">
-            On the road
-          </h2>
-          <p className="mt-3 max-w-2xl text-cs-ink/70">
-            Screens from the apps, on a simulated drive. Alerts, times and distances are what the
-            app showed at the time.
-          </p>
+      {/* Screens: scrolls sideways on a phone, four across on a desktop. */}
+      <section aria-labelledby="screens-title" className="border-t border-cs-line py-20 md:py-28">
+        <div className="cs-container">
+          <div className="grid gap-6 md:grid-cols-12">
+            <p className="cs-eyebrow md:col-span-3">On the road</p>
+            <div className="md:col-span-9">
+              <h2 id="screens-title" className="cs-h2">Screens from the apps.</h2>
+              <p className="cs-lede mt-4 max-w-[40rem]">
+                Captured on a simulated drive. Alerts, times and distances are what the app showed
+                at the time.
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="mt-10 flex snap-x snap-mandatory gap-6 overflow-x-auto px-6 pb-4 md:mx-auto md:max-w-7xl md:justify-between">
-          {gallery.map(({ src, alt, caption }) => (
-            <figure key={src} className="snap-center shrink-0" style={{ width: 240 }}>
-              <PhoneShot src={src} alt={alt} width={240} />
-              <figcaption className="mt-4 text-sm text-cs-ink/70">{caption}</figcaption>
-            </figure>
-          ))}
+        <div className="cs-container mt-12">
+          <ul className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:mx-0 md:grid md:grid-cols-4 md:gap-6 md:overflow-visible md:px-0">
+            {gallery.map(({ src, alt, caption }, i) => {
+              const [lead, ...rest] = caption.split(". ");
+              return (
+                <li key={src} className="w-[62vw] max-w-[15rem] shrink-0 snap-center md:w-auto md:max-w-none">
+                  <figure>
+                    <PhoneShot src={src} alt={alt} width={300} className="w-full" />
+                    <figcaption className="mt-4 text-sm leading-relaxed text-cs-ink-2">
+                      <span className="cs-data mr-2 text-xs text-cs-ink-3">0{i + 1}</span>
+                      <span className="font-medium text-cs-ink">{lead}.</span> {rest.join(". ")}
+                    </figcaption>
+                  </figure>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </section>
 
       {/* Install. */}
-      <section className="py-16 md:py-20">
-        <div className="mx-auto max-w-7xl px-6">
-          <h2 className="text-balance text-3xl font-medium tracking-tight text-cs-ink md:text-4xl">
-            Install
-          </h2>
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
-            <div className="rounded-2xl border border-cs-line bg-cs-paper p-6">
-              <div className="flex items-center gap-2">
-                <Apple className="size-5 text-cs-ink" aria-hidden />
-                <h3 className="font-semibold text-cs-ink">iPhone</h3>
-              </div>
-              <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-cs-ink/80">
-                <li>Install TestFlight from the App Store.</li>
-                <li>
-                  Open the{" "}
-                  <a href={TESTFLIGHT_PUBLIC} className="font-medium text-cs-sky hover:underline">
-                    public beta link
-                  </a>{" "}
-                  on your phone and tap Install.
-                </li>
-                <li>Updates arrive through TestFlight.</li>
-              </ol>
-              {TESTFLIGHT_IN_REVIEW && (
-                <p className="mt-3 text-sm text-cs-ink/70">{TESTFLIGHT_IN_REVIEW_NOTE}</p>
-              )}
-              <a
-                href={TESTFLIGHT_PUBLIC}
-                className="mt-5 inline-flex items-center gap-2 rounded-full bg-cs-navy px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cs-navy/90"
-              >
-                <Apple className="size-4" aria-hidden />
-                Join the TestFlight beta
-              </a>
-            </div>
-            <div className="rounded-2xl border border-cs-line bg-cs-paper p-6">
-              <div className="flex items-center gap-2">
-                <Smartphone className="size-5 text-cs-ink" aria-hidden />
-                <h3 className="font-semibold text-cs-ink">Android</h3>
-              </div>
-              <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-cs-ink/80">
-                <li>
-                  Open the{" "}
-                  <a href={ANDROID_RELEASES} className="font-medium text-cs-sky hover:underline">
-                    latest release
-                  </a>{" "}
-                  on your phone and download the APK.
-                </li>
-                <li>Open the file and allow installing from that source when asked.</li>
-                <li>New versions are new APKs on the same page; install over the old one.</li>
-              </ol>
-              <a
-                href={ANDROID_RELEASES}
-                className="mt-5 inline-flex items-center gap-2 rounded-full bg-cs-navy px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cs-navy/90"
-              >
-                <Smartphone className="size-4" aria-hidden />
-                Download the APK
-              </a>
-            </div>
+      <section aria-labelledby="install-title" className="border-t border-cs-line bg-cs-surface py-20 md:py-28">
+        <div className="cs-container">
+          <div className="grid gap-6 md:grid-cols-12">
+            <p className="cs-eyebrow md:col-span-3">Install</p>
+            <h2 id="install-title" className="cs-h2 md:col-span-9">Two minutes on either phone.</h2>
           </div>
-          <p className="mt-8 max-w-3xl text-sm text-cs-ink/70">
+          <div className="mt-12 grid gap-4 md:grid-cols-2 md:gap-6">
+            {[
+              {
+                icon: Apple,
+                name: "iPhone",
+                steps: [
+                  <>Install TestFlight from the App Store.</>,
+                  <>
+                    Open the{" "}
+                    <a href={TESTFLIGHT_PUBLIC} className="cs-link">
+                      public beta link
+                    </a>{" "}
+                    on your phone and tap Install.
+                  </>,
+                  <>Updates arrive through TestFlight.</>,
+                ],
+                href: TESTFLIGHT_PUBLIC,
+                cta: "Join the TestFlight beta",
+                note: TESTFLIGHT_IN_REVIEW ? TESTFLIGHT_IN_REVIEW_NOTE : null,
+              },
+              {
+                icon: Smartphone,
+                name: "Android",
+                steps: [
+                  <>
+                    Open the{" "}
+                    <a href={ANDROID_RELEASES} className="cs-link">
+                      latest release
+                    </a>{" "}
+                    on your phone and download the APK.
+                  </>,
+                  <>Open the file and allow installing from that source when asked.</>,
+                  <>New versions are new APKs on the same page; install over the old one.</>,
+                ],
+                href: ANDROID_RELEASES,
+                cta: "Download the APK",
+                note: null,
+              },
+            ].map(({ icon: Icon, name, steps, href, cta, note }) => (
+              <div key={name} className="flex flex-col rounded-[var(--cs-radius-lg)] border border-cs-line bg-cs-bg p-6 md:p-8">
+                <div className="flex items-center gap-2.5">
+                  <Icon aria-hidden className="size-5 text-cs-ink" />
+                  <h3 className="cs-h3">{name}</h3>
+                </div>
+                <ol className="mt-6 flex-1 space-y-4">
+                  {steps.map((step, i) => (
+                    <li key={i} className="flex gap-3.5 text-[0.9375rem] leading-relaxed text-cs-ink-2">
+                      <span aria-hidden className="cs-data mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-cs-line-strong text-xs text-cs-ink">
+                        {i + 1}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+                {note && <p className="mt-4 text-sm text-cs-ink-3">{note}</p>}
+                <a href={href} className={`${installBtn} mt-8 w-fit border border-cs-line-strong bg-cs-surface text-cs-ink hover:bg-cs-surface-2`}>
+                  <Icon aria-hidden className="size-4" />
+                  {cta}
+                </a>
+              </div>
+            ))}
+          </div>
+          <p className="mt-10 max-w-[44rem] text-[0.9375rem] leading-relaxed text-cs-ink-2">
             Both apps are open source at{" "}
-            <a href={APP_REPO} className="text-cs-sky hover:underline">
+            <a href={APP_REPO} className="cs-link">
               github.com/nicglazkov/commutescout-app
             </a>
             . Location stays on the phone except for what a route or a report needs, and what a
             plugin sees is served to you alone; see{" "}
-            <Link href="/privacy" prefetch={false} className="text-cs-sky hover:underline">
+            <Link href="/privacy" prefetch={false} className="cs-link">
               Privacy
             </Link>
             .

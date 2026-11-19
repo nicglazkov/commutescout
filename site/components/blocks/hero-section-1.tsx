@@ -1,104 +1,70 @@
-import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Smartphone } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { HeroScene } from "@/components/home/hero-scene";
 
-// Source: Tailark OSS registry, Dusk kit, dusk-hero-section-1
-// (https://oss.tailark.com/r/dusk-hero-section-1.json).
-//
-// Adapted from upstream:
-// - Dropped the block's own embedded <HeroHeader /> nav: the site already
-//   renders one global header (components/site-header.tsx) in app/layout.tsx,
-//   so a second nav bar baked into the hero would compete with it.
-// - Dropped the "trusted by" third-party logo strip (Spotify, Supabase,
-//   Hulu, etc.) and the "New:" announcement pill: both were stock Tailark
-//   content with no CommuteScout equivalent to fill them with.
-// - Replaced the screenshot mockup with a real screenshot captured for
-//   Task 7 (site/public/shots/hero-map.webp), a wide multi-state view from
-//   the live production map. A second overlapping Bay Area card
-//   (hero-route.png) was removed 2026-08-06 by project decision.
-// - text-muted-foreground replaced with text-cs-ink/60; the rest of the
-//   text inherits the page's --cs-ink color from the body rule in
-//   app/globals.css, same as upstream relied on a global text-foreground.
-// - Copy and hrefs are the homepage's real copy and links (Task 7's brief
-//   copy is final and exact; this file owns it directly, not via props).
+// The homepage hero. A left-aligned split: the claim, what CommuteScout
+// reads, two actions, then a made-up area with three sample events on the
+// right. The counts in the lede are pinned by tests/test_snapshot.py
+// (test_state_counts_are_current, test_feed_counts_are_current), which
+// read this file for "reads N official agency feeds" and "across N states".
 export default function HeroSection() {
   return (
-    <section className="overflow-hidden">
-      <div className="relative pt-4 md:pt-6">
-        <div className="mx-auto max-w-7xl">
-          <div className="px-6 text-center sm:mx-auto lg:mr-auto lg:mt-0">
-            {/* The app announcement. It is the first thing on the page
-                after the header, so nobody has to scroll to learn the
-                phone apps exist. */}
-            <Link
-              href="/app"
-              prefetch={false}
-              className="group mx-auto inline-flex items-center gap-2 rounded-full border border-cs-line bg-cs-paper py-1 pl-1 pr-3 text-sm text-cs-ink shadow-sm transition-colors hover:border-cs-sky/50"
-            >
-              <span className="rounded-full bg-cs-sky px-2 py-0.5 text-xs font-semibold text-white">New</span>
-              <span>CommuteScout Drive is on iPhone and Android</span>
-              <ArrowRight className="size-4 text-cs-ink/50 transition-transform group-hover:translate-x-0.5" aria-hidden />
-            </Link>
-            <h1 className="mx-auto mt-4 max-w-4xl text-balance text-5xl font-medium tracking-tight md:text-6xl lg:mt-6 xl:text-7xl">
-              Live road conditions, straight from the source.
-            </h1>
-            <p className="text-cs-ink/60 mx-auto mt-4 max-w-2xl text-balance md:text-lg">
-              CommuteScout reads 53 official agency feeds across 37 states: incidents,
-              closures, chain controls, cameras, and wildfires on one live map.
-            </p>
+    <section className="relative overflow-hidden">
+      <div className="cs-container grid items-center gap-12 pb-16 pt-12 md:pb-24 md:pt-20 lg:grid-cols-12 lg:gap-10">
+        <div className="lg:col-span-5">
+          <Link
+            href="/app"
+            prefetch={false}
+            className="group cs-rise inline-flex items-center gap-2 text-[0.8125rem] text-cs-ink-2 transition-colors hover:text-cs-ink"
+          >
+            <span className="cs-data rounded-[var(--cs-radius-sm)] bg-cs-accent-soft px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase tracking-[0.06em] text-cs-accent">
+              New
+            </span>
+            CommuteScout Drive for iPhone and Android
+            <ArrowRight aria-hidden className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+          </Link>
 
-            <div className="mt-6 flex flex-col items-center justify-center gap-2 pb-8 md:flex-row">
-              <Button
-                nativeButton={false}
-                render={
-                  <Link href="/map" prefetch={false}>
-                    <span className="text-nowrap">Open the map</span>
-                  </Link>
-                }
-              />
-              <Button
-                variant="secondary"
-                nativeButton={false}
-                render={
-                  <Link href="/app" prefetch={false}>
-                    <Smartphone aria-hidden />
-                    <span className="text-nowrap">Get the app</span>
-                  </Link>
-                }
-              />
-              <Button
-                variant="ghost"
-                nativeButton={false}
-                render={
-                  <Link href="/pricing#waitlist" prefetch={false}>
-                    <span className="text-nowrap">Get Pro updates</span>
-                  </Link>
-                }
-              />
-            </div>
+          <h1 className="cs-display cs-rise mt-6 [animation-delay:60ms]">
+            Live road conditions, straight from the source.
+          </h1>
+          <p className="cs-lede cs-rise mt-6 max-w-[34rem] [animation-delay:120ms]">
+            CommuteScout reads 53 official agency feeds across 37 states and puts incidents,
+            closures, chain controls, cameras and wildfires on one live map.
+          </p>
 
-            <div className="relative mx-auto mt-10 max-w-5xl pb-8 md:pb-10">
-              {/* The whole screenshot links to the live map, so a click
-                  anywhere on it opens /map. focus-visible + hover give it
-                  a clickable affordance; the alt text is the label. */}
-              <Link
-                href="/map"
-                prefetch={false}
-                aria-label="Open the live map"
-                className="focus-visible:ring-cs-sky block cursor-pointer overflow-hidden rounded-2xl shadow-2xl shadow-cs-navy/15 ring-1 ring-cs-line transition hover:shadow-cs-navy/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-              >
-                <Image
-                  src="/shots/hero-map.webp"
-                  alt="The CommuteScout live map showing incidents, closures, chain controls, and cameras across dozens of states"
-                  width={1440}
-                  height={900}
-                  className="h-auto w-full"
-                  priority
-                />
-              </Link>
-            </div>
+          <div className="cs-rise mt-8 flex flex-wrap items-center gap-3 [animation-delay:180ms]">
+            <Button
+              size="lg"
+              nativeButton={false}
+              render={
+                <Link href="/map" prefetch={false}>
+                  Open the live map
+                </Link>
+              }
+            />
+            <Button
+              size="lg"
+              variant="outline"
+              nativeButton={false}
+              render={
+                <Link href="/app" prefetch={false}>
+                  Get the app
+                </Link>
+              }
+            />
           </div>
+
+          <p className="cs-rise mt-8 flex items-start gap-2.5 text-sm text-cs-ink-3 [animation-delay:240ms]">
+            <span aria-hidden className="relative mt-[7px] flex size-1.5 shrink-0">
+              <span className="absolute inset-0 rounded-full bg-cs-ok" />
+            </span>
+            Every record carries its own source and timestamp. The map is free and needs no account.
+          </p>
+        </div>
+
+        <div className="lg:col-span-7 lg:pl-6">
+          <HeroScene />
         </div>
       </div>
     </section>

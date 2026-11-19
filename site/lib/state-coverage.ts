@@ -119,49 +119,59 @@ export const OVERLAY_NOTE =
   "quakes are nationwide by nature; the traffic overlay works over any " +
   "state.";
 
-export type FeedRow = { source: string; data: string; refresh: string };
+// stale: the age at which the freshness watchdog
+// (src/ca_roads_demo/freshness.py CALIFORNIA) reports a source as stale.
+export type FeedRow = { source: string; data: string; refresh: string; stale?: string };
 
 // docs/data-sources.md's "The feeds" table (California feeds).
 export const CA_FEEDS: FeedRow[] = [
   {
     source: "CHP live feed",
     data: "Statewide incidents (collisions, hazards, closures) as dispatchers log them, with travel direction parsed from the location text, plus the full shared dispatch timeline (comments and unit lifecycle, verbatim)",
-    refresh: "1-minute cache; feed updates ~1/min",
+    refresh: "1-minute cache; the feed updates about once a minute",
+    stale: "20 min",
   },
   {
     source: "Caltrans LCS",
     data: "Lane and road closures physically in place right now (CHP code 1097), classified by what they mean for through traffic",
     refresh: "5-minute cache",
+    stale: "30 min",
   },
   {
     source: "Caltrans chain controls",
     data: "R-1/R-2/R-3 requirements at mountain checkpoints",
     refresh: "5-minute cache",
+    stale: "30 min",
   },
   {
     source: "WFIGS",
     data: "Active wildfires (name, size, containment), flagged within ~10 miles of major highways; perimeter edges refine distances for big fires",
     refresh: "5-minute cache",
+    stale: "60 min",
   },
   {
     source: "CAL FIRE",
     data: "CAL FIRE's own incident postings, merged into the wildfire layer for fires WFIGS does not list yet",
     refresh: "5-minute cache",
+    stale: "60 min",
   },
   {
     source: "Caltrans CMS",
     data: "What changeable message signs display right now (blank signs filtered)",
-    refresh: "2-minute cache",
+    refresh: "2.5-minute cache",
+    stale: "30 min",
   },
   {
     source: "Caltrans CCTV",
-    data: "Roadside camera snapshots, image-verified live before return",
-    refresh: "per query",
+    data: "Roadside camera inventory; each snapshot image is checked for freshness before it is returned",
+    refresh: "2.5-minute cache; images checked per query",
+    stale: "7 h",
   },
   {
     source: "Caltrans RWIS",
     data: "Road-weather stations: pavement temperature, gusts, visibility on the passes",
-    refresh: "5-minute cache",
+    refresh: "2.5-minute cache",
+    stale: "60 min",
   },
   {
     source: "NWS alerts",
@@ -185,7 +195,7 @@ export const CA_FEEDS: FeedRow[] = [
   },
   {
     source: "Nevada DOT (optional key)",
-    data: "I-80, US-50, I-15 continuations past the state line",
+    data: "Nevada events on routes that continue past the California state line",
     refresh: "3-minute cache",
   },
 ];

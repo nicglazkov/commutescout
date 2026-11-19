@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import HeroSection from "@/components/blocks/hero-section-1";
-import AppBand from "@/components/blocks/app-band";
-import Features from "@/components/blocks/features-1";
-import StatsSection from "@/components/blocks/stats-1";
-import { CopyField } from "@/components/copy-field";
+import FeedBench from "@/components/figures/feed-bench";
+import {
+  DeveloperBand,
+  DriveBand,
+  FourWays,
+  SourceProof,
+  SourcesStrip,
+} from "@/components/home/sections";
 
 // Homepage takes the product-level metadata (Task 7 brief). Description is
 // homepage-focused (brand and product overview) and distinct from the map
@@ -44,57 +47,43 @@ export const metadata: Metadata = {
   },
 };
 
-const MCP_URL = "https://mcp.commutescout.com/mcp";
-
+// The page argues in one line: one live picture of the road (hero), what
+// it reads (strip), four ways to use it, how many feeds become one (the
+// feed bench figure, workstream B), proof that every answer names its
+// source, the phone app, and the developer surfaces.
 export default function Home() {
   return (
     <>
       <HeroSection />
-      <AppBand />
-      <Features />
-      <StatsSection />
+      <SourcesStrip />
+      <FourWays />
 
-      {/* Developer band. Not a vendored Tailark block: none of the six
-          required block types (hero, feature grid, stat band, pricing,
-          FAQ/content, footer) fit a one-off connector-URL callout, so this
-          is page-owned markup, styled to match the navy header/footer
-          bands. */}
-      <section className="bg-cs-navy text-white">
-        <div className="mx-auto max-w-7xl px-6 py-16 md:py-20">
-          <div className="grid gap-8 md:grid-cols-2 md:items-center md:gap-12">
-            <div>
-              <h2 className="text-balance text-3xl font-medium tracking-tight md:text-4xl">
-                Bring live roads to your assistant.
+      <section aria-labelledby="how-title" className="border-t border-cs-line bg-cs-surface-2/50 py-20 md:py-28">
+        <div className="cs-container">
+          <div className="grid gap-6 md:grid-cols-12">
+            <p className="cs-eyebrow md:col-span-3">How it works</p>
+            <div className="md:col-span-9">
+              <h2 id="how-title" className="cs-h2 max-w-[22ch]">
+                Many feeds in, one picture out.
               </h2>
-              <p className="text-white/70 mt-4 max-w-md text-balance">
-                Ask Claude, ChatGPT, Cursor or any MCP client when to leave, what is
-                on the road, and what the weather will be, from the same live feeds
-                the map reads.
+              <p className="cs-lede mt-5 max-w-[40rem]">
+                Every record keeps the time its own agency gave it. Duplicates from two feeds
+                become one event. A feed that falls behind is flagged, not hidden.
               </p>
             </div>
-            <div className="space-y-4">
-              <CopyField value={MCP_URL} />
-              <Link
-                href="/mcp#connect"
-                prefetch={false}
-                className="inline-flex items-center gap-1.5 text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
-              >
-                Set up your assistant
-              </Link>
-              <Link
-                href="/developers"
-                prefetch={false}
-                className="ml-5 inline-flex items-center gap-1.5 text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
-              >
-                REST API and keys
-              </Link>
-            </div>
+          </div>
+          <div className="mt-12">
+            <FeedBench n={1} />
           </div>
         </div>
       </section>
 
-      {/* Global footer: rendered once from app/layout.tsx via
-          <SiteFooter/>, not repeated here. */}
+      <SourceProof />
+      <DriveBand />
+      <DeveloperBand>
+        The MCP server&rsquo;s 18 tools and the REST API read the same feeds as the map. Neither
+        needs a key; a free key gives your account 2,000 requests a day, shared by all of its keys.
+      </DeveloperBand>
     </>
   );
 }
