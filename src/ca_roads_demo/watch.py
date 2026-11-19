@@ -34,7 +34,7 @@ import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from ca_roads import apikeys
+from ca_roads import apikeys, flare
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads_demo import lanecount, staticmap_sig
 from ca_roads_mcp import server as tools
@@ -819,18 +819,36 @@ MAX_PRIVATE_PLUGINS = 20
 
 def _plugins_of(user: dict) -> dict:
     """The account's plugin choices: catalog plugins switched off (every
-    listed plugin is on until switched off) and private plugins added by
-    URL, so an Install on one device follows the account to the next."""
+    listed plugin is on until switched off), private plugins added by
+    URL, so an Install on one device follows the account to the next,
+    and ``ack``: the unreviewed plugins whose notice the person
+    acknowledged at install ({id: {at, notice}}), without which an
+    unreviewed plugin's alerts stay off (docs/flare.md)."""
     p = user.get("plugins") or {}
     off = [x for x in (p.get("off") or []) if isinstance(x, str)]
     private = [x for x in (p.get("private") or []) if isinstance(x, dict)]
-    return {"off": off[:MAX_PLUGIN_IDS], "private": private[:MAX_PRIVATE_PLUGINS]}
+    raw_ack = p.get("ack") if isinstance(p.get("ack"), dict) else {}
+    ack = {k: v for k, v in list(raw_ack.items())[:MAX_PLUGIN_IDS]
+           if isinstance(k, str) and isinstance(v, dict)}
+    return {"off": off[:MAX_PLUGIN_IDS], "private": private[:MAX_PRIVATE_PLUGINS], "ack": ack}
+
+
+def _merge_ack(stored: dict, ids: list[str]) -> dict:
+    """The acknowledgements after a PUT of ``ids``: one already stored
+    keeps its original time and notice version, a new one is stamped now
+    with the current notice, and an id left out is withdrawn."""
+    now = datetime.now(UTC).isoformat()
+    out = {}
+    for i in sorted(set(ids))[:MAX_PLUGIN_IDS]:
+        out[i] = stored.get(i) or {"at": now, "notice": flare.UNREVIEWED_NOTICE_VERSION}
+    return out
 
 
 async def api_me_plugins(request: Request) -> JSONResponse:
     """GET: the account's plugin choices. PUT: replace them ({off: [ids],
-    private: [{id, name, base, token?}]}); either key may be omitted to
-    keep what is stored."""
+    private: [{id, name, base, token?}], ack: [ids]}); any key may be
+    omitted to keep what is stored. ``ack`` lists the unreviewed plugins
+    whose notice the person acknowledged; the server stamps the time."""
     claims = await verify_user(request)
     if not claims:
         return _err("sign in required", 401)
@@ -861,6 +879,12 @@ async def api_me_plugins(request: Request) -> JSONResponse:
             clean.append({k: p[k] for k in ("id", "name", "base", "token", "refresh_s")
                           if k in p and isinstance(p[k], (str, int))})
         current["private"] = clean
+    if "ack" in body:
+        ack = body.get("ack")
+        ok_ids = isinstance(ack, list) and all(isinstance(x, str) and 0 < len(x) <= 64 for x in ack)
+        if not ok_ids:
+            return _err("ack must be a list of plugin ids")
+        current["ack"] = _merge_ack(current["ack"], ack)
     await get_store().upsert_user(claims["sub"], {"plugins": current})
     return JSONResponse({"plugins": current})
 

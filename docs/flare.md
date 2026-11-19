@@ -21,7 +21,7 @@ everything below.
 | `alerts` | Serve alerts near a point. Required. |
 | `report` | Accept a new report from a user (police, crash, hazard, and the rest). |
 | `confirm` | Accept a "still there" or "not there" vote on an alert. |
-| `notify` | Mark alerts the app should announce out loud and push, not just draw. |
+| `notify` | Mark alerts the app should announce while driving, not just draw. Whether they alert or speak is the person's choice, by tier (see "Three tiers"). |
 | `snapshot` | Serve the whole list in one response, for data that is the same for everyone. |
 
 A plugin declares what it supports in its handshake. The apps only ask for
@@ -244,9 +244,9 @@ nothing.
 
 `visibility` is `public` (listed, always mediated), `unlisted` (mediated,
 reachable by id), or `private` (direct; the user typed the URL). `trust`
-is `official`, `verified`, `community` or `private`; it decides whether
-`notify` alerts may speak (official and verified: yes; community: map
-only until promoted; private: the user's choice).
+is `official`, `verified`, `community` or `private`; together with
+`visibility` it decides the plugin's tier below, and the tier decides
+when its alerts may alert and speak.
 
 ## Three tiers
 
@@ -256,9 +256,45 @@ catalog row as `tier`:
 
 | Tier | Manifest | What it means |
 |---|---|---|
-| `approved` | `visibility: public`, `trust: official` or `verified` | Reviewed by CommuteScout: the operator is known and the feed passed review. Drawn by default, may speak (`notify`), badged "approved". |
-| `unreviewed` | `visibility: public` or `unlisted`, `trust: community` | Anyone who passes the conformance check can be listed. Drawn and labelled "public, not reviewed"; its alerts are spoken like any other, and the user can turn voice off per alert type in the app's alert settings. |
-| `private` | `visibility: private` (added by URL on one device) | Direct from the phone to the plugin. Whatever the user wants, including voice; nothing leaves the user's own path. |
+| `approved` | `visibility: public`, `trust: official` or `verified` | Reviewed by CommuteScout: the operator is known and the feed passed review. Drawn by default, badged "approved". Its alerts alert while driving (a banner and a chime) with no extra step; each plugin has its own switch for alerts and a separate one for spoken alerts (voice off until the person turns it on). |
+| `unreviewed` | `visibility: public` or `unlisted`, `trust: community` | Anyone who passes the conformance check can be listed. Drawn and labelled "public, not reviewed". Its alerts stay off until the person acknowledges the unreviewed notice when installing it (below); after that it has the same two per-plugin switches, alerts on and voice off to start. |
+| `private` | `visibility: private` (added by URL on one device) | Direct from the phone to the plugin. The person added it themselves, so no notice is asked; the same two per-plugin switches apply, voice off to start. |
+
+### Unreviewed plugins and alerts
+
+An unreviewed plugin may send alerts, but only after the person has
+explicitly acknowledged, when installing it, this notice, shown with a
+required checkbox and an Install button that stays disabled until it is
+ticked:
+
+> This plugin hasn't been reviewed by CommuteScout. Its alerts come from
+> its operator, not from official sources.
+
+The text and its version are served on `/api/flare/sources` as
+`unreviewed_notice` (`ca_roads.flare.UNREVIEWED_NOTICE`). A listed
+plugin that is on by default but was never installed with the notice is
+drawn on the map and never alerts; turning its alerts on in settings
+asks for the same acknowledgement first.
+
+The acknowledgement is kept with the plugin subscription on the
+account: `PUT /api/me/plugins` with `ack: [ids]` and read back as
+`plugins.ack: {id: {at, notice}}`, the time stamped by the server and
+the notice version shown. Removing the plugin withdraws it. On a phone
+signed out, it is kept on the phone.
+
+After that, in Settings > Alerts, each plugin has two switches the
+person can change at any time:
+
+- **Alerts**: whether its alerts alert at all (banner and chime). On
+  after the acknowledgement.
+- **Speak alerts**: whether its alerts are spoken instead of chimed.
+  Off until the person turns it on, for every tier.
+
+Plugin alerts are never sent as push notifications (watch-area pushes
+carry official data only); they alert only in the app while it is open,
+and the markers stay on the map whatever the switches say. The apps decide all
+of this from the marker's `tier`; a marker with no tier is treated as
+unreviewed.
 
 Official agency data (the state feeds) is not a plugin and always
 outranks all three.

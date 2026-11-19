@@ -44,13 +44,31 @@ TRUST = ("official", "verified", "community", "private")
 TIERS = ("approved", "unreviewed", "private")
 
 
+# What a person must acknowledge before an unreviewed plugin may alert
+# them (docs/flare.md, "Unreviewed plugins and alerts"). The apps show
+# this text with a required checkbox at install; the account keeps the
+# acknowledgement with the plugin subscription (plugins.ack). Bump the
+# version when the wording changes in substance.
+UNREVIEWED_NOTICE = ("This plugin hasn't been reviewed by CommuteScout. Its alerts come "
+                     "from its operator, not from official sources.")
+UNREVIEWED_NOTICE_VERSION = "2026-11-19"
+
+
+def needs_ack(tier: str | None) -> bool:
+    """Whether a plugin's alerts wait for the person's acknowledgement.
+    Only unreviewed plugins do; an unknown tier is treated as unreviewed."""
+    return tier not in ("approved", "private")
+
+
 def tier_of(manifest: dict) -> str:
     """The three levels a plugin is shown as. Approved: reviewed by
-    CommuteScout (official or verified trust); its notify alerts may
-    speak. Unreviewed: public and listed after the conformance check,
-    but nobody has vouched for it; drawn on the map, labelled as such,
-    voice only if the user turns it on. Private: added by URL on one
-    device; nothing about it leaves the user's own path."""
+    CommuteScout (official or verified trust); its alerts may alert and,
+    when the person turns it on, speak. Unreviewed: public and listed
+    after the conformance check, but nobody has vouched for it; drawn on
+    the map and labelled as such, and it alerts only after the person
+    acknowledges UNREVIEWED_NOTICE at install, with alerts and voice
+    each a per-plugin switch. Private: added by URL on one device;
+    nothing about it leaves the user's own path."""
     if manifest.get("visibility") == "private" or manifest.get("trust") == "private":
         return "private"
     if manifest.get("trust") in ("official", "verified"):
