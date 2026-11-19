@@ -5,6 +5,13 @@ rules_version = '2';
 // mobile, anyone holding the public Firebase web API key) is ever
 // allowed to read or write directly. Deployed to the cloud.firestore
 // release; keep it deny-all.
+//
+// Account records (watch_users/{uid}) include fields that must only
+// ever be written by the server after verifying the caller's ID token:
+// terms_version / terms_accepted_at (the Terms of Use and Privacy
+// Policy agreed to at sign-in, POST /api/me/terms, time stamped by the
+// server). A client-writable rule here would let anyone forge an
+// acceptance, which is one more reason this stays deny-all.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {

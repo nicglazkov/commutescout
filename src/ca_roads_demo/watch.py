@@ -581,6 +581,8 @@ async def api_watch_config(_: Request) -> JSONResponse:
         },
         "vapidPublicKey": public,
         "emailEnabled": bool(RESEND_API_KEY and ALERT_FROM_EMAIL),
+        # The Terms/Privacy version the sign-in checkbox agrees to.
+        "termsVersion": TERMS_VERSION,
         # Where a watch may be drawn. The page validates against this
         # instead of carrying its own copy of the outline.
         "coverage": {"california": CA_BOUNDARY,
@@ -617,6 +619,7 @@ async def api_watch_me(request: Request) -> JSONResponse:
         "admin": is_admin(claims),
         "prefs": user.get("prefs") or {},
         "plugins": _plugins_of(user),
+        "terms": _terms_of(user),
         "watches": watches,
     })
 
@@ -768,6 +771,44 @@ async def api_me_places(request: Request) -> JSONResponse:
     merged = merge_places([] if body.get("replace") else stored, body["places"])
     await get_store().upsert_user(claims["sub"], {"places": merged})
     return JSONResponse({"places": merged})
+
+
+# ------------------------------------------------------------ terms of use
+
+# The Terms of Use and Privacy Policy the sign-in screens ask people to
+# agree to. Bump it (and the copy in both apps) when either document
+# changes in a way people must agree to again; clients compare their
+# stored acceptance against this and ask again when it differs.
+TERMS_VERSION = "2026-11-19"
+
+
+def _terms_of(user: dict) -> dict:
+    """What the account has agreed to: the version and when, or nulls."""
+    return {"version": user.get("terms_version"),
+            "accepted_at": user.get("terms_accepted_at"),
+            "current": TERMS_VERSION}
+
+
+async def api_me_terms(request: Request) -> JSONResponse:
+    """POST {version}: the signed-in person agreed to the Terms of Use
+    and Privacy Policy of that version at sign-in. Only the current
+    version is accepted. The server stamps the time; repeating the same
+    version keeps the first acceptance, so a second device signing in
+    does not move the date."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    body = await _read_json(request)
+    if body is None or body.get("version") != TERMS_VERSION:
+        return _err(f"version must be {TERMS_VERSION}")
+    user = await _load_user(claims)
+    if user.get("terms_version") != TERMS_VERSION or not user.get("terms_accepted_at"):
+        user = {**user, "terms_version": TERMS_VERSION,
+                "terms_accepted_at": datetime.now(UTC).isoformat()}
+        await get_store().upsert_user(claims["sub"], {
+            "terms_version": user["terms_version"],
+            "terms_accepted_at": user["terms_accepted_at"]})
+    return JSONResponse({"terms": _terms_of(user)})
 
 
 # ------------------------------------------------------- plugin subscriptions
