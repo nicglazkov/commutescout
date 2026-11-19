@@ -168,7 +168,7 @@ CommuteScout ({SITE}) is a live road map, a driving app and an MCP server
 built on the same data: state DOT and 511 feeds, CHP, NWS weather,
 wildfires, cameras, message signs, TomTom traffic and an archive of past
 events. The MCP server lets an assistant answer "what's a good time to
-drive to X?", "is I-80 open over Donner?" or "what's going on near me?"
+drive to X?", "is the pass on my route open?" or "what's going on near me?"
 with live data.
 
 ## Install the MCP server
@@ -179,16 +179,17 @@ account. Pick the user's client:
 {clients}
 
 After connecting, check it with a question such as "When should I leave
-Union Station in Denver for Red Rocks tomorrow?". The assistant should
-call `best_time_to_go`.
+for work tomorrow morning?" (or name your own start and end). The
+assistant should call `best_time_to_go`.
 
 ## Saved places and API keys (optional)
 
 A key lets "home", "work" and the names of the user's saved places work in
-every trip tool, and gives the client its own rate limits. The user gets
+every trip tool, and puts the client on the account's rate limits. The user gets
 one at {SITE}/map: Settings, sign in, then API keys. It is shown once.
 Send it as `{KEY_HEADER}` or `X-API-Key: cs_live_...`. Free keys get
-2,000 requests a day; without a key, each address gets 10,000 a day. An
+2,000 requests a day, counted once per account across all of its keys; without a key, each
+address gets 10,000 a day. An
 agent cannot create a key for the user: ask them to create one and paste
 it, and keep it out of shared files.
 

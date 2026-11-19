@@ -9,6 +9,12 @@ import type { Metadata } from "next";
 // levels, and link styling classes were adapted; the old page's own
 // topbar nav (which pointed "Live map" at "/", stale now that "/" is the
 // marketing homepage) is gone, replaced by the shared SiteHeader.
+//
+// Owner-approved edit 2026-11-19: the blanket "don't use the service
+// while driving" line contradicted the CommuteScout Drive navigation
+// apps; it is replaced by a driving-safety clause, and the page now
+// covers the apps, API keys, account-level limits and plugins. The
+// fixture was regenerated from the build.
 export const metadata: Metadata = {
   title: "Terms - CommuteScout",
   description:
@@ -37,7 +43,7 @@ export default function TermsPage() {
           Terms of use
         </h1>
         <p className="text-cs-ink/70 mt-3 text-sm">
-          Effective August 9, 2026.
+          Effective November 19, 2026.
         </p>
 
         <div className="text-cs-ink/60 mt-8 space-y-8 md:text-lg">
@@ -64,8 +70,10 @@ export default function TermsPage() {
               A free, independent project that displays public road data
               from state and federal sources across the country - CHP,
               Caltrans, other state transportation agencies, and national
-              wildfire and weather feeds - plus routing and an AI
-              assistant. Coverage varies by state and the map says so
+              wildfire and weather feeds - plus routing, an AI assistant,
+              watch-area alerts, the CommuteScout Drive navigation apps for
+              iPhone and Android, and an MCP server and REST API. Coverage
+              varies by state and the map says so
               where it is missing. It is not affiliated with, endorsed by,
               or operated by any government agency. Names of data sources
               are used to describe where data comes from, nothing more.
@@ -75,7 +83,21 @@ export default function TermsPage() {
           <div>
             <h2 className="text-cs-ink text-xl font-medium">Using it</h2>
             <ul className="mt-4 list-disc space-y-3 pl-5">
-              <li>Don&apos;t use the service while driving.</li>
+              <li>
+                Drive safely. Set your route before you start, and
+                don&apos;t look at or touch the screen while the vehicle is
+                moving; let the Drive app&apos;s voice guidance and alerts do
+                the talking, or have a passenger handle it. Obey traffic
+                laws, road signs, and officials on the scene: they win over
+                anything the app or map says, including a route that tells
+                you to turn where you shouldn&apos;t.
+              </li>
+              <li>
+                Routes, drive times, and alerts are estimates built from
+                public feeds and can be wrong or out of date. They are not a
+                substitute for your state&apos;s official 511 or DOT
+                information.
+              </li>
               <li>
                 Don&apos;t abuse it: no scraping at volumes that degrade it
                 for others, no attempts to bypass rate limits or access
@@ -83,10 +105,29 @@ export default function TermsPage() {
                 road questions.
               </li>
               <li>
+                API keys belong to your account. Keep them secret, and
+                don&apos;t put one in a web page or app that others can
+                read. Request limits apply per account, shared by all of
+                its keys, and per address without a key; we can change
+                limits and revoke keys that are abused.
+              </li>
+              <li>
+                Plugins can be run by people other than us. What a
+                plugin shows is its operator&apos;s, not ours, and reports
+                you post go to the plugins you have switched on as the{" "}
+                <a
+                  href="/privacy"
+                  className="text-cs-sky font-medium hover:underline"
+                >
+                  privacy policy
+                </a>{" "}
+                describes.
+              </li>
+              <li>
                 Watch-area accounts are an invite-gated trial. We can
-                approve, limit, or revoke access at any time, and alert
-                delivery is best effort - alerts can be late, missed, or
-                wrong.
+                approve, limit, or revoke access at any time. Areas are
+                checked about every five minutes, and alert delivery is best
+                effort - alerts can be late, missed, or wrong.
               </li>
             </ul>
           </div>

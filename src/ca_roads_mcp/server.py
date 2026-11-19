@@ -1482,7 +1482,7 @@ async def get_road_signs(
     filtered - every record is a message a driver is physically seeing.
     Signs carry the road's operational truth ("CHAINS REQUIRED 10 MI
     AHEAD", "FULL CLOSURE HWY 96 DUE TO FIRE", "PREPARE TO STOP"), often
-    before the event shows up in any other feed. Refresh: ~2-minute cache.
+    before the event shows up in any other feed. Refresh: 150-second cache.
 
     Filters: route (e.g. "I-80") and/or center "lat,lon" with radius_km.
     Quote sign text verbatim to the user - it is the most current and

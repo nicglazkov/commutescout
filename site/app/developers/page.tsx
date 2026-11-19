@@ -51,19 +51,19 @@ const SECTIONS = [
   { id: "terms", label: "Attribution and terms" },
 ];
 
-const CURL_QUICK = `curl "${API_ROOT}/tools/get_incidents?center=37.48,-122.14&radius_km=20"`;
+const CURL_QUICK = `curl "${API_ROOT}/tools/get_incidents?center=LAT,LON&radius_km=20"`;
 
 const RESPONSE_SHAPE = `{
   "count": 1,
-  "filters": { "highway": null, "area": null, "center": "37.48,-122.14" },
+  "filters": { "highway": null, "area": null, "center": "LAT,LON" },
   "incidents": [
     {
       "id": "260916GG0001",
       "type": "1182-Trfc Collision-No Inj",
-      "location": "Sr84 E / University Ave Onr",
+      "location": "Route E / Cross St Onr",
       "direction_hint": "eastbound",
-      "area": "Redwood City",
-      "lat": 37.482, "lon": -122.14,
+      "area": "CHP dispatch area",
+      "lat": LAT, "lon": LON,
       "reported_at": "2026-09-16T12:00:00+00:00"
     }
   ],
@@ -73,19 +73,19 @@ const RESPONSE_SHAPE = `{
       "ok": true, "data_as_of": "2026-09-16T12:00:41+00:00" }
   ],
   "signs": [
-    { "route": "US-101", "direction": "N", "near": "Redwood City",
-      "county": "San Mateo", "lat": 37.49, "lon": -122.23,
+    { "route": "ROUTE", "direction": "N", "near": "Nearest town",
+      "county": "County", "lat": LAT, "lon": LON,
       "message": "CRASH AHEAD / EXPECT DELAYS" }
   ],
   "cameras": [
-    { "name": "SR-84 at University Ave", "route": "SR-84", "direction": "E",
-      "near": "Redwood City", "lat": 37.48, "lon": -122.15,
+    { "name": "ROUTE at Cross St", "route": "ROUTE", "direction": "E",
+      "near": "Nearest town", "lat": LAT, "lon": LON,
       "image_url": "https://cwwp2.dot.ca.gov/.../image.jpg", "stream_url": null }
   ]
 }`;
 
 const CURL_KEYED = `curl -H "X-API-Key: cs_live_..." \\
-  "${API_ROOT}/tools/check_route?from_place=Sacramento&to_place=Reno"`;
+  "${API_ROOT}/tools/check_route?from_place=START&to_place=END"`;
 
 const ERROR_SHAPE = `{
   "error": {
@@ -103,15 +103,15 @@ const ERRORS = [
   ["401", "invalid_key", "The key is unknown or revoked. There is no silent fallback to keyless."],
   ["404", "unknown_tool", "No tool by that name. The index at /v1 lists them."],
   ["429", "rate_limited", "Too many requests at once. Retry-After says how long to wait."],
-  ["429", "daily_limit", "The key or address has used its day. Retry-After is 3600."],
+  ["429", "daily_limit", "The account (for a keyed request) or the address (without a key) has used its day. Retry-After is 3600."],
   ["502", "upstream_error", "A source feed did not answer. Retry in a minute."],
   ["503", "keys_unavailable", "Key checks are down. Retry, or call without a key."],
 ];
 
 const TIERS = [
   ["No key", "Per address", "30 a minute sustained, 20 in a burst", "10,000 shared by everything behind that address"],
-  ["Free key", "Per key", "30 a minute, 30 in a burst", "2,000"],
-  ["Pro key", "Per key", "120 a minute, 60 in a burst", "10,000"],
+  ["Free key", "Per account (all its keys together)", "30 a minute, 30 in a burst", "2,000"],
+  ["Pro key", "Per account (all its keys together)", "120 a minute, 60 in a burst", "10,000"],
 ];
 
 const RULES = [
@@ -218,7 +218,8 @@ export default function DevelopersPage() {
         <div className="mx-auto max-w-3xl px-6">
           <H2 id="quickstart">Quickstart</H2>
           <p className="text-cs-ink/70 mt-4 text-balance">
-            No key, no account, no SDK. One GET returns JSON.
+            No key, no account, no SDK. One GET returns JSON. Replace{" "}
+            {code("LAT,LON")} with the point you care about.
           </p>
           <pre className="bg-cs-navy2 mt-5 overflow-x-auto rounded-xl p-5 text-sm text-white/90">
             <code>{CURL_QUICK}</code>
@@ -270,7 +271,7 @@ export default function DevelopersPage() {
             </li>
             <li>
               <b className="text-cs-ink">Encoding:</b> query strings are URL-encoded UTF-8;
-              a place name with a space is {code("Bay%20Area")}. Responses are{" "}
+              a space in a value is {code("%20")}, as in {code("Main%20St")}. Responses are{" "}
               {code("application/json")}, UTF-8, uncompressed unless you send{" "}
               {code("Accept-Encoding: gzip")}.
             </li>
@@ -347,7 +348,8 @@ export default function DevelopersPage() {
               yet; that comes with the Pro tier later.
             </li>
             <li>
-              The daily allowance belongs to the account: all of its keys share one count.
+              The limits belong to the account: all of its keys share one burst
+              allowance and one daily count.
               An account holds up to five active keys and creates up to ten a day. Revoking
               a key stops it within a minute.
             </li>
@@ -362,7 +364,7 @@ export default function DevelopersPage() {
             <li>
               <b className="text-cs-ink">Coordinates</b> are decimal degrees, WGS 84, as{" "}
               {code("lat")} and {code("lon")} fields on records. Parameters take a point
-              as one string, {code("\"lat,lon\"")}, for example {code("37.48,-122.14")}.
+              as one string, {code("\"lat,lon\"")}: latitude first, then longitude.
             </li>
             <li>
               <b className="text-cs-ink">Distances</b> are kilometers unless the field
@@ -460,8 +462,10 @@ export default function DevelopersPage() {
           <H2 id="tools">Tool reference</H2>
           <p className="text-cs-ink/70 mt-4 text-balance">
             18 tools. Each one lists every parameter it accepts, what it reads, how
-            fresh that is, and what it caps. The examples are complete URLs relative to{" "}
-            {code(BASE)}. Optional parameters combine; leave them out for everything.
+            fresh that is, and what it caps. The examples are URLs relative to{" "}
+            {code(BASE)}; replace the capitalized placeholders ({code("LAT,LON")},{" "}
+            {code("ROUTE")}, {code("PLACE")} and the like) with your own values.{" "}
+            {code("home")} and {code("work")} need a key whose account has them saved. Optional parameters combine; leave them out for everything.
           </p>
           <div className="mt-8 space-y-10">
             {TOOLS.map((t) => (

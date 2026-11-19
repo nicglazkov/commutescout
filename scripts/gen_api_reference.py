@@ -37,29 +37,29 @@ PARAM_DOCS: dict[str, dict[str, str]] = {
                   "other value returns the list.",
     },
     "get_incidents": {
-        "highway": "A route as people write it: \"I-80\", \"US 50\", \"17\", \"Hwy 99\". "
-                   "Matches incidents whose location text names that route.",
-        "area": "Substring of a CHP dispatch-area name (\"Golden Gate\", \"East Sac\"). "
-                "These are communication-center names, not towns; for a town use center.",
+        "highway": "A route as people write it: a number, with or without a prefix such "
+                   "as I-, US, SR or Hwy. Matches incidents whose location text names "
+                   "that route.",
+        "area": "Substring of a CHP dispatch-area name. These are communication-center "
+                "names, not towns; for a town use center.",
         "center": "\"lat,lon\". With radius_km, incidents inside that circle. The right "
                   "filter for a town or place.",
         "radius_km": "Radius around center in kilometers. 15 to 30 covers a town.",
     },
     "get_lane_closures": {
-        "route": "A route: \"I-80\", \"US 101\", \"1\".",
-        "district": "Caltrans district, 1 to 12 (3 Sacramento and Tahoe, 4 Bay Area, "
-                    "7 Los Angeles).",
+        "route": "A route number, with or without a prefix such as I-, US or SR.",
+        "district": "Caltrans district number, 1 to 12.",
         "center": "\"lat,lon\". Closures whose begin or end point is inside the circle.",
         "radius_km": "Radius around center in kilometers.",
     },
     "get_chain_controls": {
-        "route": "A mountain route: \"80\", \"US-50\", \"SR-88\".",
+        "route": "A mountain route number, with or without a prefix such as I-, US or SR.",
         "center": "\"lat,lon\" for every checkpoint around a place, whatever highway.",
         "radius_km": "Radius around center in kilometers.",
     },
     "get_wildfires": {
         "near_route": "Only fires within about 10 miles of that highway's corridor "
-                      "(\"I-5\", \"101\").",
+                      "(a route number, with or without a prefix).",
         "center": "\"lat,lon\" for fires around a place, regardless of highway.",
         "radius_km": "Radius around center in kilometers.",
     },
@@ -72,12 +72,12 @@ PARAM_DOCS: dict[str, dict[str, str]] = {
     },
     "get_cameras": {
         "center": "\"lat,lon\". Required unless route is given. Results sort nearest first.",
-        "route": "Narrow to one highway: \"I-80\", \"50\".",
+        "route": "Narrow to one highway: a route number, with or without a prefix.",
         "radius_km": "Radius around center in kilometers.",
         "limit": "At most 10 verified cameras per call.",
     },
     "get_road_signs": {
-        "route": "A route: \"I-80\".",
+        "route": "A route number, with or without a prefix such as I-, US or SR.",
         "center": "\"lat,lon\" with radius_km.",
         "radius_km": "Radius around center in kilometers.",
     },
@@ -95,8 +95,8 @@ PARAM_DOCS: dict[str, dict[str, str]] = {
         "limit": "At most 8 matches. Default 5.",
     },
     "plan_trip": {
-        "origin": "Start: an address, landmark or place anywhere in the US "
-                  "(\"Pike Place Market\", \"1600 Pennsylvania Ave NW, DC\").",
+        "origin": "Start: an address, landmark or place anywhere in the US, or, with "
+                  "an API key, \"home\", \"work\" or a saved place's name.",
         "destination": "End of the drive, same forms as origin.",
         "origin_coords": "Start as \"lat,lon\". Wins over origin.",
         "destination_coords": "End as \"lat,lon\". Wins over destination.",
@@ -107,8 +107,8 @@ PARAM_DOCS: dict[str, dict[str, str]] = {
                       "avoid_chains.",
     },
     "best_time_to_go": {
-        "origin": "Start: an address, landmark or place anywhere in the US "
-                  "(\"Pike Place Market\", \"1600 Pennsylvania Ave NW, DC\").",
+        "origin": "Start: an address, landmark or place anywhere in the US, or, with "
+                  "an API key, \"home\", \"work\" or a saved place's name.",
         "destination": "End of the drive, same forms as origin.",
         "origin_coords": "Start as \"lat,lon\". Wins over origin.",
         "destination_coords": "End as \"lat,lon\". Wins over destination.",
@@ -159,7 +159,7 @@ TOOL_META: dict[str, dict] = {
                 "the covered corridors; use the filtered tools with center for "
                 "anything else.",
         "poll_s": 60,
-        "example": "check_route?from_place=Sacramento&to_place=Reno",
+        "example": "check_route?from_place=START&to_place=END",
     },
     "check_region": {
         "title": "Check a region",
@@ -170,7 +170,7 @@ TOOL_META: dict[str, dict] = {
         "caps": "Large regions cap each list to the most severe items. Counts are "
                 "always exact and the response says when a list was truncated.",
         "poll_s": 60,
-        "example": "check_region?region=Bay%20Area",
+        "example": "check_region?region=REGION",
     },
     "get_incidents": {
         "title": "Live incidents",
@@ -182,7 +182,7 @@ TOOL_META: dict[str, dict] = {
         "caps": "Locations are dispatcher free text; a few incidents lack usable "
                 "coordinates and are omitted. Current logs only, no history.",
         "poll_s": 60,
-        "example": "get_incidents?center=37.48,-122.14&radius_km=20",
+        "example": "get_incidents?center=LAT,LON&radius_km=20",
     },
     "get_lane_closures": {
         "title": "Lane closures",
@@ -196,7 +196,7 @@ TOOL_META: dict[str, dict] = {
                 "were more. Read closure_class: full-roadway is the only class that "
                 "means you cannot drive through.",
         "poll_s": 300,
-        "example": "get_lane_closures?route=I-80&district=3",
+        "example": "get_lane_closures?route=ROUTE",
     },
     "get_chain_controls": {
         "title": "Chain controls",
@@ -208,7 +208,7 @@ TOOL_META: dict[str, dict] = {
         "caps": "Off season (roughly May to October) the response says no controls "
                 "are active instead of returning an empty list.",
         "poll_s": 300,
-        "example": "get_chain_controls?route=80",
+        "example": "get_chain_controls?route=ROUTE",
     },
     "get_wildfires": {
         "title": "Wildfires",
@@ -220,7 +220,7 @@ TOOL_META: dict[str, dict] = {
         "caps": "Knows nothing about road closures caused by a fire; cross-check "
                 "incidents and lane closures for the area.",
         "poll_s": 300,
-        "example": "get_wildfires?near_route=I-5",
+        "example": "get_wildfires?near_route=ROUTE",
     },
     "rank_routes": {
         "title": "Rank busiest routes",
@@ -242,18 +242,18 @@ TOOL_META: dict[str, dict] = {
         "refresh": "Snapshots about once a minute; stream_url, when present, is HLS.",
         "caps": "At most 10 cameras per call. center is required unless route is given.",
         "poll_s": 60,
-        "example": "get_cameras?center=39.32,-120.34&radius_km=15&limit=5",
+        "example": "get_cameras?center=LAT,LON&radius_km=15&limit=5",
     },
     "get_road_signs": {
         "title": "Message signs",
         "summary": "What changeable message signs are displaying right now, verbatim.",
         "reads": "Statewide Caltrans CMS text, blank and out-of-service signs already "
                  "filtered.",
-        "refresh": "About two minutes.",
+        "refresh": "About every 2½ minutes: sign text is cached for 150 seconds.",
         "caps": "Quote sign text verbatim; it is the most current and most local "
                 "signal there is.",
-        "poll_s": 120,
-        "example": "get_road_signs?route=I-80",
+        "poll_s": 150,
+        "example": "get_road_signs?route=ROUTE",
     },
     "get_nearby_events": {
         "title": "Nearby events, nationwide",
@@ -268,7 +268,7 @@ TOOL_META: dict[str, dict] = {
                 "page has the matrix. For California, the dedicated tools carry more "
                 "detail.",
         "poll_s": 60,
-        "example": "get_nearby_events?center=39.53,-119.81&radius_km=40&kinds=incident,closure",
+        "example": "get_nearby_events?center=LAT,LON&radius_km=40&kinds=incident,closure",
     },
     "find_place": {
         "title": "Find a place",
@@ -279,7 +279,7 @@ TOOL_META: dict[str, dict] = {
         "refresh": "Static data; cached per query.",
         "caps": "United States only. At most 8 matches.",
         "poll_s": 3600,
-        "example": "find_place?query=Pike%20Place%20Market",
+        "example": "find_place?query=ADDRESS",
     },
     "plan_trip": {
         "title": "Plan a trip",
@@ -293,8 +293,7 @@ TOOL_META: dict[str, dict] = {
         "caps": "Trips up to 2,500 km. Each on-route list is capped and notes says "
                 "when one was trimmed.",
         "poll_s": 300,
-        "example": "plan_trip?origin=San%20Jose%2C%20CA&destination=SFO"
-                   "&depart_at=tomorrow%208am",
+        "example": "plan_trip?origin=home&destination=work&depart_at=tomorrow%208am",
     },
     "best_time_to_go": {
         "title": "Best time to go",
@@ -306,8 +305,7 @@ TOOL_META: dict[str, dict] = {
         "refresh": "Typical times are stable; forecasts refresh about hourly.",
         "caps": "One day per call, up to 60 days out; trips up to 2,500 km.",
         "poll_s": 900,
-        "example": "best_time_to_go?origin=Union%20Station%2C%20Denver"
-                   "&destination=Red%20Rocks%20Amphitheatre&day=saturday",
+        "example": "best_time_to_go?origin=home&destination=DESTINATION&day=saturday",
     },
     "get_weather": {
         "title": "Weather for drivers",
@@ -318,7 +316,7 @@ TOOL_META: dict[str, dict] = {
         "refresh": "Forecast about hourly; alerts and stations every few minutes.",
         "caps": "NWS covers the US and its territories only.",
         "poll_s": 900,
-        "example": "get_weather?place=Denver%2C%20CO&hours=12",
+        "example": "get_weather?place=PLACE&hours=12",
     },
     "get_traffic": {
         "title": "Traffic speeds",
@@ -328,7 +326,7 @@ TOOL_META: dict[str, dict] = {
         "refresh": "About a minute.",
         "caps": "Up to 10 points per call.",
         "poll_s": 120,
-        "example": "get_traffic?points=37.8199,-122.4783",
+        "example": "get_traffic?points=LAT,LON",
     },
     "get_area_history": {
         "title": "Area history",
@@ -339,7 +337,7 @@ TOOL_META: dict[str, dict] = {
         "caps": "Radius up to 25 km, window up to 365 days. Counts what official "
                 "feeds published, not a crash database.",
         "poll_s": 21600,
-        "example": "get_area_history?place=Ohio%20Stadium&radius_km=2",
+        "example": "get_area_history?place=PLACE&radius_km=2",
     },
     "get_coverage": {
         "title": "Coverage",

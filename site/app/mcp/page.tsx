@@ -55,8 +55,8 @@ const STEPS = [
     title: "Ask about a drive",
     body:
       'Ask in plain English: "When should I leave for the airport ' +
-      'tomorrow?", "Is I-80 open over Donner?", "What’s going on near ' +
-      'Pike Place Market?"',
+      'tomorrow?", "Is the pass on my route open?", "What’s going on near ' +
+      'work?"',
   },
   {
     icon: CircleCheck,
@@ -349,8 +349,9 @@ export default function McpPage() {
             </li>
           </ol>
           <p className="text-cs-ink/60 mt-6 text-sm text-balance">
-            A key also gives your client its own limits: 2,000 requests a day on
-            the free tier, against 10,000 a day per address without one. No MCP
+            A key also moves your client onto your account&rsquo;s limits: 2,000
+            requests a day on the free tier, shared by every key on the account,
+            against 10,000 a day per address without one. No MCP
             server can see your device&rsquo;s location, so for &ldquo;from
             here&rdquo; the assistant uses a place you name or asks you.{" "}
             <Link href="/developers#keys" prefetch={false} className="text-cs-sky hover:underline">

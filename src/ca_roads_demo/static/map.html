@@ -111,12 +111,12 @@
     <section id="pane-plan" data-tool="route" class="on">
       <div class="fld"><label for="from">From</label>
         <button type="button" class="pickmap" id="pickfrom" data-pick="from">Pick on map</button>
-        <input id="from" maxlength="200" placeholder="e.g. San Jose or 123 Main St, Davis" autocomplete="off">
+        <input id="from" maxlength="200" placeholder="Address, place or city" autocomplete="off">
         <div class="sugg" id="fromsugg"></div>
         <div class="val" id="fromval"></div></div>
       <div class="fld"><label for="to">To</label>
         <button type="button" class="pickmap" id="pickto" data-pick="to">Pick on map</button>
-        <input id="to" maxlength="200" placeholder="e.g. South Lake Tahoe" autocomplete="off">
+        <input id="to" maxlength="200" placeholder="Address, place or city" autocomplete="off">
         <div class="sugg" id="tosugg"></div>
         <div class="val" id="toval"></div></div>
       <button type="button" class="planbtn" id="planbtn">Plan route</button>
@@ -246,7 +246,7 @@
       <!-- signed out -->
       <section id="signin" class="hidden">
         <p class="panenote">Draw an area anywhere CommuteScout covers, once.
-          It is checked every few minutes, and you get an alert the moment an
+          It is checked about every 5 minutes, and you get an alert when an
           incident, closure, chain control, or wildfire shows up inside it.</p>
         <div class="card signin-card">
           <button class="primary" id="googlebtn">Continue with Google</button>
@@ -277,7 +277,7 @@
       </section>
       <!-- approved -->
       <section id="appzone" class="hidden">
-        <div class="sub">Alerts are checked every few minutes.
+        <div class="sub">Alerts are checked about every 5 minutes.
           Informational only - verify with 511 before you drive.</div>
         <div class="card newwatch-card">
           <h2>New watch</h2>
@@ -305,11 +305,11 @@
               <div class="field hidden" id="routerow" style="margin-top:12px">
                 <label for="rw-from">From</label>
                 <input type="text" id="rw-from" maxlength="200"
-                       placeholder="e.g. San Jose">
+                       placeholder="Address, place or city">
                 <div style="height:8px"></div>
                 <label for="rw-to">To</label>
                 <input type="text" id="rw-to" maxlength="200"
-                       placeholder="e.g. South Lake Tahoe">
+                       placeholder="Address, place or city">
                 <div style="height:8px"></div>
                 <button class="ghost" id="rw-preview" style="width:100%">
                   Preview route</button>
@@ -337,7 +337,7 @@
               <div class="field">
                 <label for="wname">Name</label>
                 <input type="text" id="wname" maxlength="60"
-                       placeholder="e.g. Commute over 17">
+                       placeholder="e.g. My commute">
               </div>
               <div class="field">
                 <label>Alert me about</label>
@@ -426,8 +426,9 @@
           <h2>API keys</h2>
           <p class="hint" style="margin-bottom:10px">A key calls the same tools as
             the MCP server over plain HTTP, at mcp.commutescout.com/v1. Free keys get
-            2,000 requests a day, Pro keys 10,000; <a href="/contact">ask</a> when you
-            need more. A key is shown once, when it is created.</p>
+            2,000 requests a day, Pro keys 10,000, counted once per account across all
+            of its keys;
+            <a href="/contact">ask</a> when you need more. A key is shown once, when it is created.</p>
           <div class="wlist" id="keylist"></div>
           <div class="devrow" style="margin-top:10px">
             <input type="text" id="keyname" maxlength="40" placeholder="What is this key for?"
