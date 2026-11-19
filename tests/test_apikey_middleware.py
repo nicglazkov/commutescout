@@ -1,4 +1,5 @@
-"""ApiKeyMiddleware: keyless passes through to the address limiter, a
+"""ApiKeyMiddleware: keyless passes through to the address limiter
+(or, with require_key, is a 401 on the data surfaces), a
 valid key is limited by its tier with RateLimit headers, a bad key is a
 401 envelope, a spent day is a 429 with Retry-After."""
 
@@ -166,3 +167,73 @@ async def test_usage_mirror_throttles_and_keeps_the_latest():
     assert store.usage["sam"]["requests"] == 1      # inside the window
     await asyncio.sleep(0.1)
     assert store.usage["sam"]["requests"] == 3      # one write, the latest
+
+
+# ---------------------------------------------------------- key required
+
+
+@pytest.fixture
+def required():
+    store = apikeys.MemoryKeyStore()
+
+    async def guide(request):
+        return JSONResponse({"guide": True})
+
+    inner = RateLimitMiddleware(Starlette(routes=[
+        Route("/v1/tools/x", ok), Route("/mcp", ok, methods=["POST", "GET"]),
+        Route("/v1/tools", guide), Route("/v1/openapi.json", guide),
+        Route("/llms.txt", guide), Route("/.well-known/mcp.json", guide)]))
+    mw = ApiKeyMiddleware(inner, resolver=apikeys.KeyResolver(store), require_key=True)
+    return store, TestClient(mw)
+
+
+def test_keyless_tool_call_is_a_401_that_says_where_to_get_a_key(required):
+    _, c = required
+    r = c.get("/v1/tools/x")
+    assert r.status_code == 401
+    err = r.json()["error"]
+    assert err["code"] == "missing_key"
+    assert "https://commutescout.com/map" in err["hint"]
+    assert "X-API-Key" in err["hint"] and "Bearer" in err["hint"]
+    assert r.headers["access-control-allow-origin"] == "*"
+    assert r.headers["www-authenticate"].startswith("Bearer ")
+    assert "error=" not in r.headers["www-authenticate"]  # RFC 6750: no creds, no code
+
+
+def test_keyless_mcp_call_is_a_jsonrpc_401(required):
+    _, c = required
+    r = c.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+    assert r.status_code == 401
+    body = r.json()
+    assert body["jsonrpc"] == "2.0" and body["id"] is None
+    assert body["error"]["code"] == -32001
+    assert "https://commutescout.com/map" in body["error"]["message"]
+    assert body["error"]["data"]["code"] == "missing_key"
+    assert r.headers["www-authenticate"].startswith("Bearer ")
+    # A bad key on the MCP transport answers in the same shape.
+    r = c.post("/mcp", json={}, headers={"Authorization": "Bearer cs_live_deadbeef_nope"})
+    assert r.status_code == 401 and r.json()["error"]["data"]["code"] == "invalid_key"
+    assert 'error="invalid_token"' in r.headers["www-authenticate"]
+
+
+@pytest.mark.asyncio
+async def test_keyed_calls_pass_when_a_key_is_required(required):
+    store, c = required
+    full, view = await apikeys.create_key(store, "sam", "sam@example.com", "t")
+    r = c.get("/v1/tools/x", headers={"Authorization": f"Bearer {full}"})
+    assert r.status_code == 200 and r.json()["key"] == view["id"]
+    assert c.post("/mcp", headers={"X-API-Key": full}).json()["key"] == view["id"]
+
+
+@pytest.mark.parametrize("path", ["/v1/tools", "/v1/openapi.json", "/llms.txt",
+                                  "/.well-known/mcp.json"])
+def test_discovery_stays_open_without_a_key(required, path):
+    _, c = required
+    assert c.get(path).status_code == 200
+
+
+def test_cors_preflight_needs_no_key(required):
+    _, c = required
+    r = c.options("/v1/tools/x", headers={"Origin": "https://example.com",
+                                          "Access-Control-Request-Method": "GET"})
+    assert r.status_code != 401

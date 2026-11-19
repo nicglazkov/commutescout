@@ -1958,10 +1958,11 @@ CommuteScout archive since 2026-07-12.
 
 ## Your places
 
-Connect with a CommuteScout API key (Settings on commutescout.com/map)
-sent as `Authorization: Bearer cs_live_...`. "home", "work" and the
-names of saved places then work in every trip tool, and a trip with no
-origin starts from Home. For example, in Claude Code (one line):
+The hosted server needs a CommuteScout API key (free: Settings on
+https://commutescout.com/map, then API keys) sent as
+`Authorization: Bearer cs_live_...`. "home", "work" and the names of
+saved places then work in every trip tool, and a trip with no origin
+starts from Home. For example, in Claude Code (one line):
 
     claude mcp add --transport http commutescout https://mcp.commutescout.com/mcp
       --header "Authorization: Bearer cs_live_..."
@@ -2038,6 +2039,47 @@ from ca_roads_mcp.rest import register as _register_rest  # noqa: E402
 _register_rest(mcp)
 
 
+def hosted_app(host: str = "0.0.0.0", require_key: bool | None = None):
+    """The hosted HTTP stack: MCP transport, REST bridge and discovery
+    routes, behind the key check, the limiters and security headers.
+
+    ``require_key`` defaults to ``MCP_REQUIRE_KEY`` (on unless "0"): the
+    hosted service answers a keyless call to /mcp or /v1/tools/* with a
+    401 that says where to get a free key. A self-hosted server without
+    Firestore sets MCP_REQUIRE_KEY=0 to stay open.
+    """
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    from ca_roads_mcp.headers import SecurityHeaders
+    from ca_roads_mcp.nostream import NoIdleStream
+    from ca_roads_mcp.ratelimit import ApiKeyMiddleware, RateLimitMiddleware
+
+    if require_key is None:
+        require_key = os.environ.get("MCP_REQUIRE_KEY", "1") != "0"
+    # The SDK's DNS-rebinding protection only allows localhost hosts by
+    # default, which answers 421 behind Cloud Run's hostname. This is a
+    # public, read-only API served over TLS by the platform; host-header
+    # validation adds nothing here.
+    http_app = mcp.streamable_http_app(
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+        host=host,
+    )
+    # One client sent 60k requests in a day (2026-09-15), most of
+    # them 429s, and every one of them billed CPU. The bucket keeps
+    # the rate polite; the daily cap keeps the day bounded. With keys
+    # required, only the open discovery routes still reach it keyless.
+    app = RateLimitMiddleware(
+        NoIdleStream(http_app, "/mcp"),
+        daily_limit=int(os.environ.get("MCP_PER_CLIENT_DAILY", "10000")))
+    # Keys (from Settings on the map page) sit in front: a keyed
+    # request is limited by its tier instead of its address.
+    app = ApiKeyMiddleware(app, require_key=require_key)
+    # Outermost, so a 401 or 429 from the middlewares carries them too.
+    return SecurityHeaders(app)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="CommuteScout MCP server")
     parser.add_argument(
@@ -2052,37 +2094,11 @@ def main() -> None:
     if args.transport == "http":
         import uvicorn
 
-        mcp.count_calls = True
-        from mcp.server.transport_security import TransportSecuritySettings
-
-        from ca_roads_mcp.headers import SecurityHeaders
-        from ca_roads_mcp.nostream import NoIdleStream
-        from ca_roads_mcp.ratelimit import ApiKeyMiddleware, RateLimitMiddleware
         from ca_roads_mcp.telemetry import uvicorn_log_config
 
-        # The SDK's DNS-rebinding protection only allows localhost hosts by
-        # default, which answers 421 behind Cloud Run's hostname. This is a
-        # public, unauthenticated, read-only API served over TLS by the
-        # platform; host-header validation adds nothing here.
-        http_app = mcp.streamable_http_app(
-            streamable_http_path="/mcp",
-            stateless_http=True,
-            transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
-            host=args.host,
-        )
-        # One client sent 60k requests in a day (2026-09-15), most of
-        # them 429s, and every one of them billed CPU. The bucket keeps
-        # the rate polite; the daily cap keeps the day bounded.
-        app = RateLimitMiddleware(
-            NoIdleStream(http_app, "/mcp"),
-            daily_limit=int(os.environ.get("MCP_PER_CLIENT_DAILY", "10000")))
-        # Keys (from Settings on the map page) sit in front: a keyed
-        # request is limited by its tier instead of its address.
-        app = ApiKeyMiddleware(app)
-        # Outermost, so a 429 from the limiters carries them too.
-        app = SecurityHeaders(app)
-        uvicorn.run(app, host=args.host, port=args.port, log_level="info",
-                    log_config=uvicorn_log_config())
+        mcp.count_calls = True
+        uvicorn.run(hosted_app(args.host), host=args.host, port=args.port,
+                    log_level="info", log_config=uvicorn_log_config())
     else:
         mcp.run(transport="stdio")
 

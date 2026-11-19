@@ -14,8 +14,8 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Optional CommuteScout API key as 'Bearer cs_live_...', from Settings on commutescout.com/map. Enables saved places (home, work) and per-key limits.",
-          "isRequired": false,
+          "description": "CommuteScout API key as 'Bearer cs_live_...' (required). Free at https://commutescout.com/map: Settings, then API keys. Also enables saved places (home, work).",
+          "isRequired": true,
           "isSecret": true
         }
       ]

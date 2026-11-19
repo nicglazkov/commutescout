@@ -60,9 +60,46 @@ export async function initWatch(opts) {
     return data;
   }
 
+  // ------------------------------------------------------------- terms
+
+  // Signing in can create an account (Google and email link both do on
+  // first use), and the page cannot tell a new account from a returning
+  // one until after it exists. So the agreement is asked per browser:
+  // an unticked "I agree" box, with every sign-in button disabled until
+  // it is ticked. Once agreed here, the box becomes a passive line. The
+  // account records the acceptance (/api/me/terms) right after sign-in;
+  // an account without one (an email link opened in another browser, an
+  // account from before the box) is asked once more before going on.
+  const TERMS_VERSION = CFG.termsVersion || '2026-11-19';
+  const TERMS_KEY = 'cs.terms';
+  const agreedHere = () => {
+    try { return localStorage.getItem(TERMS_KEY) === TERMS_VERSION; } catch (e) { return false; }
+  };
+  const noteAgreed = () => {
+    try { localStorage.setItem(TERMS_KEY, TERMS_VERSION); } catch (e) { /* private mode */ }
+  };
+  // gate: signed in already, only the agreement is missing.
+  let termsGate = false;
+  function syncAgree() {
+    const passive = agreedHere() && !termsGate;
+    $('agreerow').hidden = passive;
+    $('agreenote').hidden = !passive;
+    const ok = passive || $('agree').checked;
+    $('googlebtn').disabled = !ok;
+    $('emailbtn').disabled = !ok;
+    $('termsbtn').disabled = !$('agree').checked;
+    $('signinbtns').classList.toggle('hidden', termsGate);
+    $('termsbtn').classList.toggle('hidden', !termsGate);
+  }
+  $('agree').addEventListener('change', syncAgree);
+  syncAgree();
+  const mayStart = () => agreedHere() || $('agree').checked;
+
   // ------------------------------------------------------------- sign-in
 
   $('googlebtn').addEventListener('click', async () => {
+    if (!mayStart()) { msg('signinmsg', 'Tick "I agree" first.', 'err'); return; }
+    noteAgreed();
     try { await signInWithPopup(auth, new GoogleAuthProvider()); }
     catch (e) { msg('signinmsg', e.message, 'err'); }
   });
@@ -70,6 +107,8 @@ export async function initWatch(opts) {
   $('emailbtn').addEventListener('click', async () => {
     const email = $('email').value.trim();
     if (!email) { msg('signinmsg', 'Enter your email first.', 'err'); return; }
+    if (!mayStart()) { msg('signinmsg', 'Tick "I agree" first.', 'err'); return; }
+    noteAgreed();
     try {
       // Our endpoint mints the link and sends a branded email through
       // Resend, instead of Firebase sending its own unbranded one. The
@@ -113,6 +152,24 @@ export async function initWatch(opts) {
     out.textContent = 'Sign out';
     out.addEventListener('click', () => signOut(auth));
     $('who').append(label, out);
+    const terms = me.terms || {};
+    if (terms.version !== TERMS_VERSION) {
+      if (agreedHere()) {
+        // Ticked here before signing in: the account records it now.
+        try { me.terms = (await api('/api/me/terms', { method: 'POST',
+          body: JSON.stringify({ version: TERMS_VERSION }) })).terms; } catch (e) { /* next sign-in retries */ }
+      } else {
+        termsGate = true;
+        $('agree').checked = false;
+        syncAgree();
+        show('signin');
+        msg('signinmsg', 'Signed in as ' + (me.email || 'you')
+          + '. Agree to the Terms of Use and Privacy Policy to continue.');
+        return;
+      }
+    }
+    termsGate = false;
+    syncAgree();
     if ($('acctcard')) $('acctcard').hidden = false;
     if ($('acctnote')) $('acctnote').hidden = true;
     if ($('keycard')) { $('keycard').hidden = false; renderKeys(); }
@@ -137,9 +194,17 @@ export async function initWatch(opts) {
   // The map page's report form and confirm votes need a token; the
   // module owns sign-in, so it lends one out.
   window.csAuth = { token: async () => (user ? user.getIdToken() : null) };
+  $('termsbtn').addEventListener('click', async () => {
+    if (!$('agree').checked) return;
+    noteAgreed();
+    msg('signinmsg', '');
+    try { await refresh(); } catch (e) { msg('signinmsg', e.message, 'err'); }
+  });
   onAuthStateChanged(auth, async (u) => {
     user = u;
     if (!u) {
+      termsGate = false;
+      syncAgree();
       $('who').innerHTML = '';
       if ($('acctcard')) $('acctcard').hidden = true;
       if ($('acctnote')) $('acctnote').hidden = false;

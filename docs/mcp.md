@@ -13,22 +13,28 @@ The endpoint is streamable HTTP and stateless:
 https://mcp.commutescout.com/mcp
 ```
 
-No key or account needed. It is the same server behind
-[commutescout.com](https://commutescout.com), with the same live feeds.
+Every request needs a CommuteScout API key. Keys are free: open
+[the map](https://commutescout.com/map), choose Settings, sign in, and
+create one under API keys (2,000 requests a day). Send it as
+`Authorization: Bearer cs_live_...` or `X-API-Key: cs_live_...`. Without
+one, the server answers HTTP 401 with a JSON-RPC error (code `-32001`,
+`data.code` `missing_key`) that says where to get a key. It is the same
+server behind [commutescout.com](https://commutescout.com), with the same
+live feeds.
 
 | Client | How to add it |
 |--------|---------------|
-| Claude Code | `claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp`, then `/mcp` to confirm |
-| claude.ai and Claude Desktop | Customize > Connectors > + Add > Add custom connector, with the URL above and no sign-in |
-| Cursor | `~/.cursor/mcp.json`: `{"mcpServers": {"commutescout": {"url": "https://mcp.commutescout.com/mcp"}}}` |
-| VS Code (Copilot) | `.vscode/mcp.json`: `{"servers": {"commutescout": {"type": "http", "url": "https://mcp.commutescout.com/mcp"}}}` |
-| Windsurf | `mcp_config.json`: `{"mcpServers": {"commutescout": {"serverUrl": "https://mcp.commutescout.com/mcp"}}}` |
-| OpenAI Codex CLI | `codex mcp add commutescout --url https://mcp.commutescout.com/mcp` |
-| Gemini CLI | `gemini mcp add --transport http commutescout https://mcp.commutescout.com/mcp` |
-| ChatGPT | Plugins > + > Add custom MCP server, authentication none (plan and workspace settings permitting) |
-| stdio-only clients | `npx mcp-remote https://mcp.commutescout.com/mcp --transport http-only` |
+| Claude Code | `claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp --header "Authorization: Bearer cs_live_..."`, then `/mcp` to confirm |
+| claude.ai and Claude Desktop | Customize > Connectors > + Add > Add custom connector, with the URL above, no sign-in, and a request header `Authorization: Bearer cs_live_...` |
+| Cursor | `~/.cursor/mcp.json`: `{"mcpServers": {"commutescout": {"url": "https://mcp.commutescout.com/mcp", "headers": {"Authorization": "Bearer ${env:COMMUTESCOUT_API_KEY}"}}}}` |
+| VS Code (Copilot) | `.vscode/mcp.json`: `{"servers": {"commutescout": {"type": "http", "url": "https://mcp.commutescout.com/mcp", "headers": {"Authorization": "Bearer ${input:commutescout-key}"}}}}` plus a `promptString` input named `commutescout-key` |
+| Windsurf | `mcp_config.json`: `{"mcpServers": {"commutescout": {"serverUrl": "https://mcp.commutescout.com/mcp", "headers": {"Authorization": "Bearer ${env:COMMUTESCOUT_API_KEY}"}}}}` |
+| OpenAI Codex CLI | `codex mcp add commutescout --url https://mcp.commutescout.com/mcp --bearer-token-env-var COMMUTESCOUT_API_KEY` |
+| Gemini CLI | `gemini mcp add --transport http commutescout https://mcp.commutescout.com/mcp --header "Authorization: Bearer cs_live_..."` |
+| ChatGPT | Not yet: its custom MCP servers take OAuth or no authentication, not a header. Use another client until CommuteScout supports OAuth sign-in |
+| stdio-only clients | `npx mcp-remote https://mcp.commutescout.com/mcp --transport http-only --header "Authorization: Bearer ${COMMUTESCOUT_API_KEY}"` |
 
-The full steps, including where each client takes the optional key, are
+The full steps, including where each client takes the key, are
 on [commutescout.com/mcp](https://commutescout.com/mcp#connect). The same
 steps as plain text for agents are served at
 [commutescout.com/llms.txt](https://commutescout.com/llms.txt) and
@@ -43,16 +49,8 @@ Station in Denver for Red Rocks tomorrow?". The assistant should call
 
 ### Your places
 
-To let the trip tools read "home", "work" and your saved places, connect
-with an API key from Settings on [the map](https://commutescout.com/map):
-
-```sh
-claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp   --header "Authorization: Bearer cs_live_..."
-```
-
-Other clients take the same header; `X-API-Key: cs_live_...` works too.
-
-Then "When should I leave for the airport?" starts from your Home, and
+The key also tells the trip tools whose "home", "work" and saved places
+to read. With it connected, "When should I leave for the airport?" starts from your Home, and
 "from work to the gym" uses your saved Work and the favorite named Gym.
 Places are read only for the account that owns the key. A self-hosted
 server can set `MCP_HOME` and `MCP_WORK` ("lat,lon" or an address)
@@ -74,27 +72,40 @@ https://mcp.commutescout.com/v1/tools/get_incidents?area=Redwood%20City
 https://mcp.commutescout.com/v1/tools/check_route?from_place=Sacramento&to_place=Reno
 ```
 
+Each call needs the key (`X-API-Key: cs_live_...` or
+`Authorization: Bearer cs_live_...`).
+
 Arguments are query parameters with the same names as the tool
 parameters below; the body is the tool's JSON. The OpenAPI document is
 generated from the tools' own schemas at
 [`/v1/openapi.json`](https://mcp.commutescout.com/v1/openapi.json), with
 a browsable reference at [`/v1/docs`](https://mcp.commutescout.com/v1/docs)
 and an index at [`/v1`](https://mcp.commutescout.com/v1). Errors come back
-as `{"error": {"code", "message", "hint"}}` with a 400, 404 or 429;
-every response allows cross-origin reads. The same per-address rate limits
-apply as on `/mcp`. Changes within `/v1` are additive.
+as `{"error": {"code", "message", "hint"}}` with a 400, 401, 404 or 429;
+every response allows cross-origin reads. The same per-account limits
+apply as on `/mcp`. The OpenAPI document, `/v1`, `/v1/docs` and the
+discovery files (`/llms.txt`, `/.well-known/mcp.json`) need no key.
 
 ### Keys
 
-Without a key, both `/v1` and `/mcp` work at the per-address limits.
-A key lifts a client onto its own limits and needs a signed-in account:
-open the live map, choose Settings in the rail, sign in, and create a
-key under API keys. Send it as `Authorization: Bearer cs_live_...` or
+Tool calls on `/v1/tools/*` and every request to `/mcp` need a key,
+which needs a signed-in account: open
+[the live map](https://commutescout.com/map), choose Settings in the
+rail, sign in, and create a key under API keys. Send it as `Authorization: Bearer cs_live_...` or
 `X-API-Key`. Free keys get 2,000 requests a day and 30 in a burst; Pro
 keys get 10,000 a day and 60 in a burst; ask through the contact page
 for more. Every keyed response carries `RateLimit-Limit` and
 `RateLimit-Remaining`; a spent day answers 429 with `Retry-After`. A
-revoked or unknown key answers 401 rather than falling back to keyless.
+missing key answers 401 with code `missing_key`:
+
+```json
+{"error": {"code": "missing_key", "message": "An API key is required.",
+  "hint": "Get a free key (2,000 requests a day) at https://commutescout.com/map: open Settings, sign in, then API keys. Send it as 'Authorization: Bearer cs_live_...' or 'X-API-Key: cs_live_...'."}}
+```
+
+A revoked or unknown key answers 401 with code `invalid_key`. On `/mcp`
+both come back as a JSON-RPC error (code `-32001`) with the same code
+and hint under `data`.
 
 ## Run it locally (stdio)
 
@@ -118,8 +129,10 @@ Desktop or Claude Code (needs [uv](https://docs.astral.sh/uv/)):
 From a checkout: `pip install .` then `ca-roads-mcp` for stdio, or
 `ca-roads-mcp --transport http` for streamable HTTP on `$PORT`. The
 http transport is tuned for Cloud Run (binds 0.0.0.0, host-header
-checks off), so bind it to localhost when running it on your machine:
-`ca-roads-mcp --transport http --host 127.0.0.1`.
+checks off, API key required on `/mcp` and `/v1/tools/*`), so bind it
+to localhost and turn the key check off when running it on your machine
+without Firestore:
+`MCP_REQUIRE_KEY=0 ca-roads-mcp --transport http --host 127.0.0.1`.
 
 ## Tools
 

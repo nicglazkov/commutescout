@@ -8,10 +8,12 @@ the protocol, times out, leaks an unhandled exception into the result,
 or refuses a valid request.
 
     uv run python scripts/stress_mcp.py --url http://127.0.0.1:18765/mcp
-    uv run python scripts/stress_mcp.py --url https://mcp.commutescout.com/mcp --pace 2.2
+    uv run python scripts/stress_mcp.py --url https://mcp.commutescout.com/mcp --pace 2.2 --key cs_live_...
 
-Use --pace against production: the per-address limit is a 20-request
-burst refilling at one request every 2 seconds.
+Production needs --key (keyless calls answer 401 missing_key; a local
+server started with MCP_REQUIRE_KEY=0 does not). Use --pace there too: a
+free key's bucket is a 30-request burst refilling at one request every
+2 seconds.
 """
 
 from __future__ import annotations

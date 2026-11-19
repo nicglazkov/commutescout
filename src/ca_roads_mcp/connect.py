@@ -20,18 +20,16 @@ from __future__ import annotations
 ENDPOINT = "https://mcp.commutescout.com/mcp"
 SITE = "https://commutescout.com"
 KEY_HEADER = "Authorization: Bearer cs_live_..."
+KEY_PAGE = f"{SITE}/map"
 
-# Each client: name, whether it can send a key (saved places), and its
-# steps. A step is {"text": ...} or {"code": ..., "lang": ...}.
+# Each client: name, whether it can send a key (the hosted server needs
+# one), and its steps. A step is {"text": ...} or {"code": ..., "lang": ...}.
 CLIENTS: list[dict] = [
     {
         "id": "claude-code",
         "name": "Claude Code",
         "key": True,
         "steps": [
-            {"lang": "sh", "code":
-                f"claude mcp add --transport http --scope user commutescout {ENDPOINT}"},
-            {"text": "With a key, for saved places:"},
             {"lang": "sh", "code":
                 f"claude mcp add --transport http --scope user commutescout {ENDPOINT} \\\n"
                 f'  --header "{KEY_HEADER}"'},
@@ -45,8 +43,8 @@ CLIENTS: list[dict] = [
         "steps": [
             {"text": "Customize > Connectors > + Add > Add custom connector. "
                      f"Name: CommuteScout. URL: {ENDPOINT}. Sign-in: No sign in."},
-            {"text": "For saved places, add a request header named Authorization "
-                     "with the value Bearer cs_live_..."},
+            {"text": "Add a request header named Authorization with the value "
+                     "Bearer cs_live_... (your key)."},
             {"text": "On Team and Enterprise plans, an owner adds it first under "
                      "Organization settings > Connectors. The connector also "
                      "appears in Claude Desktop and the mobile apps."},
@@ -63,7 +61,6 @@ CLIENTS: list[dict] = [
                 f'      "url": "{ENDPOINT}",\n'
                 '      "headers": { "Authorization": "Bearer ${env:COMMUTESCOUT_API_KEY}" }\n'
                 "    }\n  }\n}"},
-            {"text": "Leave out headers to connect without a key."},
         ],
     },
     {
@@ -79,7 +76,6 @@ CLIENTS: list[dict] = [
                 "    }\n  },\n"
                 '  "inputs": [\n    { "type": "promptString", "id": "commutescout-key",\n'
                 '      "description": "CommuteScout API key", "password": true }\n  ]\n}'},
-            {"text": "Leave out headers and inputs to connect without a key."},
         ],
     },
     {
@@ -100,8 +96,9 @@ CLIENTS: list[dict] = [
         "name": "OpenAI Codex CLI",
         "key": True,
         "steps": [
-            {"lang": "sh", "code": f"codex mcp add commutescout --url {ENDPOINT}"},
-            {"text": "With a key, in ~/.codex/config.toml:"},
+            {"lang": "sh", "code": f"codex mcp add commutescout --url {ENDPOINT} "
+                "--bearer-token-env-var COMMUTESCOUT_API_KEY"},
+            {"text": "Or in ~/.codex/config.toml:"},
             {"lang": "toml", "code":
                 "[mcp_servers.commutescout]\n"
                 f'url = "{ENDPOINT}"\n'
@@ -114,8 +111,8 @@ CLIENTS: list[dict] = [
         "key": True,
         "steps": [
             {"lang": "sh", "code":
-                f"gemini mcp add --transport http commutescout {ENDPOINT}"},
-            {"text": f'Add --header "{KEY_HEADER}" for saved places.'},
+                f"gemini mcp add --transport http commutescout {ENDPOINT} \\\n"
+                f'  --header "{KEY_HEADER}"'},
         ],
     },
     {
@@ -123,11 +120,13 @@ CLIENTS: list[dict] = [
         "name": "ChatGPT",
         "key": False,
         "steps": [
-            {"text": "On chatgpt.com: Plugins > + > Add custom MCP server. "
-                     f"URL: {ENDPOINT}. Authentication: none."},
-            {"text": "Custom MCP servers depend on your plan and workspace "
-                     "settings. ChatGPT offers sign-in (OAuth) rather than a key "
-                     'field, so use addresses instead of "home" and "work" there.'},
+            {"text": "Not yet. The hosted server needs an API key sent as a "
+                     "request header, and ChatGPT's custom MCP servers (chatgpt.com: "
+                     f"Plugins > + > Add custom MCP server, URL {ENDPOINT}) offer "
+                     "sign-in (OAuth) or no authentication, not a header."},
+            {"text": "Until CommuteScout supports OAuth sign-in, use a client that "
+                     "can send a header (any other client on this page), or the "
+                     "REST API from your own code."},
         ],
     },
     {
@@ -135,10 +134,12 @@ CLIENTS: list[dict] = [
         "name": "Any other MCP client",
         "key": True,
         "steps": [
-            {"text": f"Streamable HTTP at {ENDPOINT}: stateless, no sign-in, "
-                     f"optional {KEY_HEADER} (or X-API-Key)."},
+            {"text": f"Streamable HTTP at {ENDPOINT}: stateless, no OAuth sign-in. "
+                     f"Send the key on every request as {KEY_HEADER} "
+                     "(or X-API-Key: cs_live_...)."},
             {"text": "A client that only speaks stdio can bridge with:"},
-            {"lang": "sh", "code": f"npx mcp-remote {ENDPOINT} --transport http-only"},
+            {"lang": "sh", "code": f"npx mcp-remote {ENDPOINT} --transport http-only \\\n"
+                f'  --header "Authorization: Bearer ${{COMMUTESCOUT_API_KEY}}"'},
         ],
     },
 ]
@@ -161,8 +162,8 @@ def guide() -> str:
     return f"""# CommuteScout
 
 > Live road conditions for 37 US states, trip planning, and the best time
-> to leave, as a public MCP server. Hosted endpoint (streamable HTTP, no
-> key needed): {ENDPOINT}
+> to leave, as a public MCP server. Hosted endpoint (streamable HTTP, free
+> API key required): {ENDPOINT}
 
 CommuteScout ({SITE}) is a live road map, a driving app and an MCP server
 built on the same data: state DOT and 511 feeds, CHP, NWS weather,
@@ -173,8 +174,9 @@ with live data.
 
 ## Install the MCP server
 
-Endpoint: `{ENDPOINT}` (streamable HTTP). It works without a key or an
-account. Pick the user's client:
+Endpoint: `{ENDPOINT}` (streamable HTTP). Every request needs a
+CommuteScout API key (free; see "API keys" below). Without one the server
+answers 401 with code `missing_key`. Pick the user's client:
 
 {clients}
 
@@ -182,16 +184,17 @@ After connecting, check it with a question such as "When should I leave
 for work tomorrow morning?" (or name your own start and end). The
 assistant should call `best_time_to_go`.
 
-## Saved places and API keys (optional)
+## API keys (required)
 
-A key lets "home", "work" and the names of the user's saved places work in
-every trip tool, and puts the client on the account's rate limits. The user gets
-one at {SITE}/map: Settings, sign in, then API keys. It is shown once.
-Send it as `{KEY_HEADER}` or `X-API-Key: cs_live_...`. Free keys get
-2,000 requests a day, counted once per account across all of its keys; without a key, each
-address gets 10,000 a day. An
-agent cannot create a key for the user: ask them to create one and paste
-it, and keep it out of shared files.
+The hosted MCP server and the REST API need a key. The user gets one free
+at {KEY_PAGE}: Settings, sign in, then API keys. It is shown once.
+Send it on every request as `{KEY_HEADER}` or `X-API-Key: cs_live_...`.
+Free keys get 2,000 requests a day (Pro: 10,000), counted once per account
+across all of its keys. The key also lets "home", "work" and the names of
+the user's saved places work in every trip tool. An agent cannot create a
+key for the user: ask them to create one and paste it, and keep it out of
+shared files. Discovery needs no key: this file, the server card and
+the OpenAPI document.
 
 The server cannot see the user's device location. For "from here", pass
 coordinates or a city you already know, or ask.
@@ -253,12 +256,12 @@ def server_card(version: str) -> dict:
             "type": "streamable-http",
             "url": ENDPOINT,
             "authentication": {
-                "required": False,
+                "required": True,
                 "schemes": ["bearer"],
                 "header": "Authorization",
-                "description": "Optional CommuteScout API key (cs_live_...) "
-                               f"from Settings on {SITE}/map: saved places "
-                               "and per-key limits.",
+                "description": "CommuteScout API key (cs_live_...), required. "
+                               f"Free at {KEY_PAGE} (Settings, then API keys); "
+                               "also enables saved places.",
             },
         }],
         "capabilities": {"tools": True, "resources": True, "prompts": True},

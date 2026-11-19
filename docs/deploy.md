@@ -167,10 +167,15 @@ while the first page loads.
   - API keys and saved places ("from home") need Firestore and
     `roles/datastore.user`. See [Watch areas](#watch-areas-optional-demo-service)
     for the Firestore setup.
-- Requests without an API key are limited per client address, in
-  process: a token bucket of 20 requests burst and 0.5 a second
-  (about 30 a minute) sustained, plus `MCP_PER_CLIENT_DAILY` requests a
-  UTC day (default 10,000). This is why `--max-instances 1` matters.
+- Tool calls need an API key: a request to `/mcp` or `/v1/tools/*`
+  without one answers 401 `missing_key`. Set `MCP_REQUIRE_KEY=0` to
+  serve them keyless (a self-hosted server without Firestore, or a
+  rollback without a code change). Discovery routes (`/llms.txt`, the
+  server card, `/v1/openapi.json`, which the uptime check reads) stay
+  open and are limited per client address, in process: a token bucket
+  of 20 requests burst and 0.5 a second (about 30 a minute) sustained,
+  plus `MCP_PER_CLIENT_DAILY` requests a UTC day (default 10,000). This
+  is why `--max-instances 1` matters.
 - Requests with an API key are limited per account instead, by the
   key's tier (`TIERS` in `src/ca_roads/apikeys.py`):
 
@@ -191,7 +196,9 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
 async def main():
-    async with streamablehttp_client("https://<service-url>/mcp") as (r, w, _):
+    # The hosted service needs a key (MCP_REQUIRE_KEY); keyless is a 401.
+    headers = {"Authorization": "Bearer cs_live_..."}
+    async with streamablehttp_client("https://<service-url>/mcp", headers=headers) as (r, w, _):
         async with ClientSession(r, w) as s:
             await s.initialize()
             print([t.name for t in (await s.list_tools()).tools])
@@ -224,6 +231,7 @@ default, so you only set one to raise or lower that limit.
 | `STADIA_NAV_DAILY` | Global daily cap on app navigation routes (`/api/nav/route`) | `300` |
 | `NAV_PER_CLIENT_DAILY` | App navigation routes per client per day | `150` |
 | `STATICMAP_SIGNING_KEY` | Random 32+ chars; signs the `/api/staticmap` URLs minted for alert emails and trip pages so nobody else can spend map tiles through that endpoint. Unset disables the check. Rotating it breaks the images in emails already sent | unset |
+| `MCP_REQUIRE_KEY` | `0` lets keyless requests reach `/mcp` and `/v1/tools/*` at the per-address limits; anything else answers them 401 `missing_key` | `1` |
 | `MCP_PER_CLIENT_DAILY` | Requests per client address per UTC day on the MCP service, on top of the per-second bucket. Hosted MCP clients can share an egress address, so keep this well above one office's daily use | `10000` |
 | `ARCHIVE_ENABLED` | Appends event lifecycle rows and toll price changes to BigQuery each checker cycle. Set `0` or `false` to turn both off | `1` |
 | `ARCHIVE_DATASET` | BigQuery dataset that holds the event archive and the `toll_prices` table; the MCP history tools read the same name | `events` |
