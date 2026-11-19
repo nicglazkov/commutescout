@@ -18,6 +18,16 @@
   color:var(--ink); border-radius:9px; padding:9px 14px;
   font:500 .84rem Inter; cursor:pointer }
 .watch button.ghost:hover { border-color:var(--sky); color:var(--sky) }
+/* Sign-in agreement: unticked until the person ticks it; the buttons
+   stay disabled until then. Once agreed on this browser it becomes a
+   passive line. */
+.watch .agree { display:flex; gap:9px; align-items:flex-start; font-size:.84rem;
+  line-height:1.4; margin:0 0 12px; cursor:pointer }
+.watch .agree input { margin-top:3px; width:16px; height:16px; flex:none;
+  accent-color:var(--sky) }
+.watch .agree a, .watch .agreenote a { color:var(--sky) }
+.watch .agreenote { color:var(--dim); font-size:.78rem; line-height:1.4; margin:0 0 12px }
+.watch button.ghost:disabled { opacity:.55; cursor:default; border-color:var(--line); color:inherit }
 .watch .or { color:var(--dim); font-size:.76rem; margin:12px 0; display:flex;
   gap:10px; align-items:center }
 .watch .or::before, .watch .or::after { content:""; flex:1; height:1px;
