@@ -91,7 +91,8 @@ def _plugins_app():
 def test_plugin_choices_follow_the_account(store):  # noqa: F811 - fixture
     c = TestClient(_plugins_app())
     assert c.get("/api/me/plugins").status_code == 401
-    assert c.get("/api/me/plugins", headers=auth()).json()["plugins"] == {"off": [], "private": []}
+    assert c.get("/api/me/plugins", headers=auth()).json()["plugins"] == {
+        "off": [], "private": [], "ack": {}}
     # Switch a catalog plugin off; add a private one by URL.
     r = c.put("/api/me/plugins", json={"off": ["wz-flare", "wz-flare"]}, headers=auth())
     assert r.status_code == 200 and r.json()["plugins"]["off"] == ["wz-flare"]

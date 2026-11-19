@@ -1127,13 +1127,17 @@ async def api_flare_sources(request: Request) -> JSONResponse:
     plugin by id, which is how an unlisted plugin is shared: by link,
     never on the catalog."""
     spec = "https://github.com/nicglazkov/commutescout/blob/main/docs/flare.md"
+    # What the apps show, with a required checkbox, before an unreviewed
+    # plugin may alert (see flare.needs_ack).
+    notice = {"text": flare.UNREVIEWED_NOTICE, "version": flare.UNREVIEWED_NOTICE_VERSION}
     sid = (request.query_params.get("id") or "").strip()[:80]
     if sid:
         card = poller.card(sid)
         if not card:
             return JSONResponse({"error": "no such plugin"}, status_code=404)
-        return JSONResponse({"sources": [card], "spec": spec})
-    return JSONResponse({"sources": poller.public_sources(), "spec": spec})
+        return JSONResponse({"sources": [card], "spec": spec, "unreviewed_notice": notice})
+    return JSONResponse({"sources": poller.public_sources(), "spec": spec,
+                         "unreviewed_notice": notice})
 
 
 async def api_admin_flare(request: Request) -> JSONResponse:

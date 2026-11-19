@@ -10,8 +10,11 @@ rules_version = '2';
 // ever be written by the server after verifying the caller's ID token:
 // terms_version / terms_accepted_at (the Terms of Use and Privacy
 // Policy agreed to at sign-in, POST /api/me/terms, time stamped by the
-// server). A client-writable rule here would let anyone forge an
-// acceptance, which is one more reason this stays deny-all.
+// server) and plugins.ack (per plugin, that the person acknowledged
+// an unreviewed plugin's alerts come from its operator, PUT
+// /api/me/plugins, also stamped by the server). A client-writable rule
+// here would let anyone forge either, which is one more reason this
+// stays deny-all.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
