@@ -21,17 +21,23 @@ import Link from "next/link";
 // service stores now (shared trips, saved places, reports, plugin
 // choices, API keys, the apps, request logs). The fixture was
 // regenerated from the build the same way.
+//
+// Owner-approved edit 2026-11-19: checked line by line against the code
+// (watch.py, apikeys.py, ratelimit.py, telemetry.py, the contact form's
+// Turnstile check) and brought up to date: the MCP server and REST API,
+// browser push services, Turnstile, federal data sources, Apple sign-in
+// in the iPhone app. The fixture was regenerated from the build.
 export const metadata: Metadata = {
   title: "Privacy - CommuteScout",
   description:
-    "What CommuteScout collects: nothing identifying you on the map or assistant, just your email and watch areas if you make an account. Nothing is sold.",
+    "What CommuteScout collects: nothing identifying you on the map, assistant or API, just your email and what you save if you make an account. Nothing is sold.",
   alternates: {
     canonical: "https://commutescout.com/privacy",
   },
   openGraph: {
     title: "Privacy - CommuteScout",
     description:
-      "What CommuteScout collects: nothing identifying you on the map or assistant, just your email and watch areas if you make an account. Nothing is sold.",
+      "What CommuteScout collects: nothing identifying you on the map, assistant or API, just your email and what you save if you make an account. Nothing is sold.",
     url: "https://commutescout.com/privacy",
     images: ["/static/shots/og.png"],
   },
@@ -49,7 +55,7 @@ export default function PrivacyPage() {
           Privacy
         </h1>
         <p className="text-cs-ink/70 mt-3 text-sm">
-          Effective October 27, 2026. Material changes will be posted here with
+          Effective November 19, 2026. Material changes will be posted here with
           a new effective date; account holders get an email when a change
           affects them.
         </p>
@@ -57,8 +63,9 @@ export default function PrivacyPage() {
         <div className="text-cs-ink/60 mt-8 space-y-8 md:text-lg">
           <p>
             CommuteScout is an independent, one-person project. The short
-            version: the map and assistant work without an account and
-            store nothing that identifies you; if you create an account,
+            version: the map, the assistant, the MCP server and the API
+            work without an account and store nothing that identifies
+            you; if you create an account,
             we store your email and what you save to it (watch areas,
             places, reports, plugin choices, API keys), because that is
             what those features are; nothing is sold, there are no ads,
@@ -106,13 +113,17 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>With an account</strong>: your email address, your
-                sign-in identity from Google, Apple, or the email link you
-                used, and what you save:
+                sign-in identity from Google, Apple (in the iPhone app), or
+                the email link you used, and what you save. Accounts are
+                stored in Google Cloud Firestore:
                 <ul className="mt-3 list-[circle] space-y-3 pl-5">
                   <li>
-                    Watch areas you draw (names, shapes, alert settings)
-                    and, if you enable notifications, the push subscription
-                    for each device. Alert emails are delivered through
+                    Watch areas you draw (names, shapes, alert settings),
+                    the alerts already sent for each (so you are not told
+                    twice), and, if you enable notifications, the push
+                    subscription or app push token for each device. Alerts
+                    go out as app notifications, browser notifications, or
+                    email, as you choose; emails are delivered through
                     Resend.
                   </li>
                   <li>
@@ -137,9 +148,13 @@ export default function PrivacyPage() {
                   </li>
                   <li>
                     API keys: the name you give each key, a one-way hash of
-                    its secret, and when it was created and last used. Each
-                    keyed request is logged with the key id, the tool, and
-                    the result, to count it against the daily allowance.
+                    its secret, and when it was created and last used, plus
+                    the account&apos;s request count for the current day.
+                    Each keyed request is logged with the key id, the tool,
+                    and the result, and counted against the account&apos;s
+                    daily allowance. Anyone holding one of your keys can
+                    read your saved places through it, so keep keys
+                    private.
                   </li>
                 </ul>
               </li>
@@ -155,6 +170,16 @@ export default function PrivacyPage() {
                 the area you are driving through, and a plugin that shows
                 alerts meant for you also receives a sign-in token that
                 proves which account is asking.
+              </li>
+              <li>
+                <strong>The MCP server and REST API</strong>: each tool call
+                is logged with the tool name, whether it worked, and how
+                long it took, never its arguments. The places and
+                coordinates in a request are used to answer it, which can
+                mean passing them to the routing, geocoding, traffic, and
+                weather services listed below. Your IP address is used in
+                memory to apply the per-address limits on requests without
+                a key; it is not written to these logs.
               </li>
               <li>
                 <strong>If you write to us</strong> (the contact form): the
@@ -201,11 +226,16 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Cloudflare</strong> provides the cookieless visit
-                counts and serves the downloadable map files.
+                counts, serves the downloadable map files and data
+                snapshots, and runs the Turnstile bot check on the contact
+                form, which sees your browser and IP address the way any
+                such check does.
               </li>
               <li>
                 <strong>Apple and Google</strong> distribute the apps and
-                deliver their push notifications.
+                deliver their push notifications. Browser notifications are
+                delivered through your browser maker&apos;s push service
+                (Google, Apple, Mozilla, or Microsoft).
               </li>
               <li>
                 <strong>Plugin operators</strong> receive reports and
@@ -231,6 +261,13 @@ export default function PrivacyPage() {
                 Camera snapshots load in your browser directly from the
                 agency&apos;s image host, which sees the request the way
                 any image load does.
+              </li>
+              <li>
+                <strong>Federal sources</strong>: the National Weather
+                Service receives the coordinates our server asks about for
+                forecasts and alerts; national wildfire and earthquake
+                feeds are fetched whole. None of them receive anything
+                about who is asking.
               </li>
               <li>
                 <strong>Stadia Maps</strong> provides routing and address

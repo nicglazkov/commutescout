@@ -72,14 +72,14 @@ const HANDSHAKE = `GET /flare/v1/handshake
   "version": "2.1.0",
   "capabilities": {"alerts": true, "report": true, "confirm": true, "notify": true},
   "kinds": ["POLICE_VISIBLE", "POLICE_HIDING", "CRASH_MAJOR", "HAZARD_ON_ROAD"],
-  "coverage": {"bbox": [32.5, -124.5, 42.0, -114.1]},
+  "coverage": {"bbox": [MIN_LAT, MIN_LON, MAX_LAT, MAX_LON]},
   "refresh_s": 60,
   "attribution": {"name": "SABRE Plus", "url": "https://example.com"},
   "contact": "mailto:owner@example.com",
   "auth": "none"
 }`;
 
-const ALERTS = `GET /flare/v1/alerts?lat=37.34&lon=-121.88&r=50000
+const ALERTS = `GET /flare/v1/alerts?lat=LAT&lon=LON&r=50000
 
 {"alerts": [ ...alert records... ], "ttl_s": 60, "as_of": "2026-09-16T18:30:00-07:00"}`;
 
@@ -87,7 +87,7 @@ const REPORT = `POST /flare/v1/report
 
 {
   "kind": "HAZARD_ON_ROAD",
-  "lat": 37.34, "lon": -121.88,
+  "lat": LAT, "lon": LON,
   "heading_deg": 270,
   "ts": "2026-09-16T18:40:00-07:00",
   "description": "Ladder in the number 2 lane",
@@ -108,20 +108,20 @@ const CONFIRM = `POST /flare/v1/confirm
 const RECORD = `{
   "id": "sabreplus:2026-09-16:8f3a",
   "kind": "POLICE_VISIBLE",
-  "lat": 37.3382,
-  "lon": -121.8863,
+  "lat": LAT,
+  "lon": LON,
   "heading_deg": 270,
-  "road_names": ["I-280 N"],
-  "description": "CHP on the right shoulder past Meridian",
+  "road_names": ["ROUTE N"],
+  "description": "Officer on the right shoulder past the exit",
   "report_ts": "2026-09-16T18:04:11-07:00",
   "confirm_ts": "2026-09-16T18:21:02-07:00",
   "n_confirmations": 3,
   "reliability": 0.8,
   "ttl_s": 1800,
   "notify": true,
-  "geometry": {"type": "LineString", "coordinates": [[-121.89, 37.34], [-121.87, 37.35]]},
+  "geometry": {"type": "LineString", "coordinates": [[LON, LAT], [LON2, LAT2]]},
   "source_url": "https://example.com/alerts/8f3a",
-  "extra": {"unit": "CHP 42"}
+  "extra": {"unit": "Unit 42"}
 }`;
 
 const RECORD_FIELDS: [string, string, string][] = [
