@@ -189,7 +189,7 @@ export function HeroScene() {
               <span className="flex items-center gap-2">
                 <span
                   aria-hidden
-                  className={`cs-data flex size-4 items-center justify-center rounded-full text-[0.625rem] font-bold text-cs-surface ${dot[e.kind]}`}
+                  className={`cs-data flex size-4 items-center justify-center rounded-full text-[0.625rem] font-semibold text-cs-surface ${dot[e.kind]}`}
                 >
                   {e.marker}
                 </span>

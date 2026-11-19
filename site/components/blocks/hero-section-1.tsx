@@ -16,7 +16,7 @@ export default function HeroSection() {
           <Link
             href="/app"
             prefetch={false}
-            className="group cs-rise inline-flex items-center gap-2 text-[0.8125rem] text-cs-ink-2 transition-colors hover:text-cs-ink"
+            className="group cs-rise inline-flex min-h-6 items-center gap-2 text-[0.8125rem] text-cs-ink-2 transition-colors hover:text-cs-ink"
           >
             <span className="cs-data rounded-[var(--cs-radius-sm)] bg-cs-accent-soft px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase tracking-[0.06em] text-cs-accent">
               New

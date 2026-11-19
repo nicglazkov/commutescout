@@ -53,11 +53,14 @@
 
   /* The site header is sticky; anchors land below it. */
   --dx-top: calc(var(--cs-header-h, 64px) + 20px);
+  /* Same column as the marketing pages' cs-container. */
+  --dx-gutter: 20px;
 
   background: var(--dx-bg);
   color: var(--dx-ink);
   font-family: var(--dx-sans);
 }
+@media (min-width: 48rem) { .dx { --dx-gutter: 32px; } }
 .dx [id] { scroll-margin-top: var(--dx-top); }
 
 .dx :where(a) { color: inherit; }
@@ -73,9 +76,9 @@
   background: var(--dx-surface);
 }
 .dx-subnav-inner {
-  max-width: 1280px;
+  max-width: 1264px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 var(--dx-gutter);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -125,22 +128,22 @@
   background: var(--dx-surface);
 }
 .dx-head-inner {
-  max-width: 1280px;
+  max-width: 1264px;
   margin: 0 auto;
-  padding: 56px 24px 48px;
+  padding: 56px var(--dx-gutter) 48px;
 }
 .dx-eyebrow {
-  font: 600 12px/1.2 var(--dx-mono);
+  font: 500 12px/1.2 var(--dx-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--dx-accent);
+  color: var(--dx-ink-3);
   margin: 0 0 14px;
 }
 .dx-head h1 {
   font-size: clamp(2.125rem, 1.4rem + 2.6vw, 3.25rem);
   line-height: 1.04;
-  letter-spacing: -0.032em;
-  font-weight: 700;
+  letter-spacing: -0.035em;
+  font-weight: 600;
   margin: 0;
   max-width: 18ch;
   text-wrap: balance;
@@ -167,7 +170,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid var(--dx-line);
-  border-radius: var(--dx-r-md);
+  border-radius: var(--dx-r-lg);
   overflow: hidden;
   background: var(--dx-surface);
 }
@@ -181,7 +184,7 @@
   display: block;
   font-size: 20px;
   line-height: 1.2;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.015em;
   font-variant-numeric: tabular-nums;
 }
@@ -194,9 +197,9 @@
 
 /* ---------- body grid ---------- */
 .dx-body {
-  max-width: 1280px;
+  max-width: 1264px;
   margin: 0 auto;
-  padding: 0 24px 96px;
+  padding: 0 var(--dx-gutter) 96px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
 }
@@ -276,7 +279,7 @@
 .dx-sec + .dx-sec { margin-top: 0; }
 .dx-sec-rule { border-top: 1px solid var(--dx-line); margin-top: 64px; }
 .dx-kicker {
-  font: 600 12px/1.2 var(--dx-mono);
+  font: 500 12px/1.2 var(--dx-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--dx-ink-3);
@@ -285,8 +288,8 @@
 .dx h2 {
   font-size: clamp(1.5rem, 1.25rem + 0.9vw, 1.875rem);
   line-height: 1.15;
-  letter-spacing: -0.022em;
-  font-weight: 700;
+  letter-spacing: -0.028em;
+  font-weight: 600;
   margin: 0;
   text-wrap: balance;
 }
@@ -377,7 +380,7 @@
 /* ---------- code blocks ---------- */
 .dx-code {
   margin: 20px 0 0;
-  border-radius: var(--dx-r-md);
+  border-radius: var(--dx-r-lg);
   background: var(--dx-code-bg);
   color: var(--dx-code-ink);
   overflow: hidden;
@@ -465,7 +468,7 @@
   background: var(--dx-bg);
 }
 .dx-field-method {
-  font: 700 11px/1 var(--dx-mono);
+  font: 600 11px/1 var(--dx-mono);
   letter-spacing: 0.04em;
   padding: 4px 6px;
   border-radius: 5px;
@@ -493,23 +496,25 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* Matches components/ui/button size "lg" so docs and marketing buttons are one control. */
   height: 44px;
-  padding: 0 18px;
+  padding: 0 20px;
   border-radius: var(--dx-r-md);
-  font-weight: 600;
+  font-weight: 500;
   font-size: 15px;
   text-decoration: none;
   white-space: nowrap;
   transition: background-color 150ms ease, border-color 150ms ease;
 }
 .dx-btn-primary { background: var(--dx-accent); color: var(--dx-accent-ink); }
-.dx-btn-primary:hover { background: color-mix(in oklab, var(--dx-accent) 88%, black); }
+.dx-btn-primary:hover { background: var(--cs-accent-hover, color-mix(in oklab, var(--dx-accent) 88%, black)); }
 .dx-btn-ghost { border: 1px solid var(--dx-line-strong); color: var(--dx-ink); background: var(--dx-surface); }
 .dx-btn-ghost:hover { background: var(--dx-surface-2); }
 .dx-textlink {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 24px;
   font-size: 15px;
   font-weight: 600;
   color: var(--dx-accent);
@@ -523,7 +528,7 @@
   position: relative;
   margin-top: 20px;
   border: 1px solid var(--dx-line);
-  border-radius: var(--dx-r-md);
+  border-radius: var(--dx-r-lg);
   background: var(--dx-surface);
   overflow: hidden;
 }
@@ -546,7 +551,7 @@
 .dx-table td { color: var(--dx-ink-2); }
 .dx-table th[scope="row"] { font-weight: 600; color: var(--dx-ink); }
 .dx-table .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dx-table code { font-family: var(--dx-mono); font-size: 13px; color: var(--dx-ink); overflow-wrap: anywhere; }
+.dx-table code { font-family: var(--dx-mono); font-size: 13px; color: var(--dx-ink); overflow-wrap: break-word; }
 @media (max-width: 640px) {
   /* Stacked rows: each row is a small card, each cell labelled. */
   .dx-table--stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -574,7 +579,7 @@
   height: 22px;
   padding: 0 7px;
   border-radius: 5px;
-  font: 700 11px/1 var(--dx-mono);
+  font: 600 11px/1 var(--dx-mono);
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
@@ -731,7 +736,7 @@
 .dx-card {
   padding: 18px 20px;
   border: 1px solid var(--dx-line);
-  border-radius: var(--dx-r-md);
+  border-radius: var(--dx-r-lg);
   background: var(--dx-surface);
   min-width: 0;
 }
@@ -780,12 +785,6 @@
 /* Figure frame for workstream B figures */
 .dx-figure {
   margin: 28px 0 0;
-  /* departure-chart's screen-reader table is absolutely positioned inside
-     its horizontally scrolling chart and escapes it at phone width (B's
-     .csf-sr in .dc); clipping here keeps the page from scrolling sideways
-     without hiding anything visible. */
-  overflow-x: clip;
-  overflow-clip-margin: 6px;
 }
 .dx-figure-fallback {
   border: 1px dashed var(--dx-line-strong);
@@ -830,7 +829,7 @@
   display: block;
   padding: 16px 18px;
   border: 1px solid var(--dx-line);
-  border-radius: var(--dx-r-md);
+  border-radius: var(--dx-r-lg);
   background: var(--dx-surface);
   text-decoration: none;
   transition: border-color 150ms ease;
@@ -851,7 +850,7 @@
   padding: 0;
   list-style: none;
   border: 1px solid var(--dx-line);
-  border-radius: var(--dx-r-md);
+  border-radius: var(--dx-r-lg);
   background: var(--dx-surface);
 }
 .dx-catalog > li {
@@ -876,7 +875,7 @@
   max-height: 34rem;
   overflow: auto;
   border: 1px solid var(--dx-line);
-  border-radius: var(--dx-r-md);
+  border-radius: var(--dx-r-lg);
   background: var(--dx-surface);
   overscroll-behavior-x: contain;
 }
@@ -934,3 +933,13 @@
 @media (max-width: 640px) {
   .dx-classes li { grid-template-columns: 1fr; }
 }
+
+/* Spacing helpers (replace one-off inline margins; one scale for all four pages) */
+.dx .dx-mt-8 { margin-top: 8px; }
+.dx .dx-mt-16 { margin-top: 16px; }
+.dx .dx-mt-20 { margin-top: 20px; }
+.dx .dx-mt-36 { margin-top: 36px; }
+.dx .dx-mb-0 { margin-bottom: 0; }
+.dx .dx-measure { max-width: 68ch; }
+.dx .dx-plain { text-decoration: none; }
+.dx .dx-code-quiet { font-weight: 400; color: var(--dx-ink-3); }

@@ -94,7 +94,7 @@ export default function DataSourcesPage() {
             <p>{CAMERA_SUBSET_NOTE}</p>
           </div>
         </div>
-        <p className="dx-small" style={{ marginTop: 16, maxWidth: "68ch" }}>
+        <p className="dx-small dx-mt-16 dx-measure">
           {OVERLAY_NOTE}
         </p>
       </Section>

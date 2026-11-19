@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type KeyboardEvent } from "react";
-import { FigureFrame } from "./frame";
+import { PointerHint, FigureFrame } from "./frame";
 
 // One hour of refreshes. Each row is a feed family: how often its cache refetches (TTL) and the age at which
 // the freshness monitor calls it stale. Sources:
@@ -55,7 +55,7 @@ export default function FeedCadence({ n = 9 }: { n?: number | string }) {
       n={n}
       title="An hour of refreshes"
       className="csf-cadence"
-      hint="Hover a row, or focus the chart and use the arrow keys"
+      hint={<PointerHint fine="Hover a row, or focus the chart and use the arrow keys" coarse="Tap a row to read its refresh and stale limit" />}
       readout={
         f
           ? `${f.name}: refetched every ${fmtEvery(f.every)}, stale after ${fmtLimit(f.limit)}`
@@ -91,7 +91,7 @@ export default function FeedCadence({ n = 9 }: { n?: number | string }) {
           aria-label={`Timeline of one hour. ${FEEDS.map((d) => `${d.name}: every ${fmtEvery(d.every)}, stale after ${fmtLimit(d.limit)}`).join(". ")}. The live bundle is rebuilt every 30 seconds and freshness is checked every 5 minutes.`}
           onKeyDown={onKey}
           onBlur={() => setHot(null)}
-          onPointerLeave={() => setHot(null)}
+          onPointerLeave={(e) => { if (e.pointerType === "mouse") setHot(null); }}
         >
           {/* minute axis */}
           {Array.from({ length: 13 }, (_, i) => i * 5).map((m) => (
@@ -184,7 +184,10 @@ export default function FeedCadence({ n = 9 }: { n?: number | string }) {
             ))}
           </ul>
         </div>
-        <table className="csf-sr">
+        {/* The wrapper, not the table, is the 1px clip: a table ignores width: 1px
+            and would widen the page on a phone. */}
+        <div className="csf-sr">
+        <table>
           <caption>Refresh and stale limit by feed</caption>
           <thead>
             <tr>
@@ -203,6 +206,7 @@ export default function FeedCadence({ n = 9 }: { n?: number | string }) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </FigureFrame>
   );

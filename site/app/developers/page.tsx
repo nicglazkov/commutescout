@@ -247,7 +247,7 @@ function ToolEntry({ t }: { t: Tool }) {
     <article id={`tool-${t.name}`} className="dx-endpoint" aria-labelledby={`tool-${t.name}-h`}>
       <div className="dx-endpoint-head">
         <div className="dx-endpoint-title">
-          <h4 id={`tool-${t.name}-h`} className="dx-endpoint-name" style={{ color: "var(--dx-ink)" }}>
+          <h4 id={`tool-${t.name}-h`} className="dx-endpoint-name">
             {t.name}
           </h4>
           <span className="dx-tag dx-tag-muted">{t.title}</span>
@@ -269,7 +269,7 @@ function ToolEntry({ t }: { t: Tool }) {
           <dt>Limits</dt>
           <dd>{t.caps}</dd>
         </dl>
-        <h5 className="dx-subhead dx-kicker" style={{ marginBottom: 0 }}>
+        <h5 className="dx-subhead dx-kicker dx-mb-0">
           {t.params.length ? "Query parameters" : "Parameters"}
         </h5>
         {t.params.length ? (
@@ -331,7 +331,7 @@ export default function DevelopersPage() {
           </p>
         </div>
         <CodeBlock code={CURL_QUICK} lang="bash" title="Request" />
-        <div className="dx-prose" style={{ marginTop: 20 }}>
+        <div className="dx-prose dx-mt-20">
           <p>
             Every response carries the records you asked for, the filters the server understood, and a{" "}
             <C>sources</C> list with each source&apos;s own <C>data_as_of</C> time. Show that time to your
@@ -341,7 +341,7 @@ export default function DevelopersPage() {
           </p>
         </div>
         <CodeBlock code={RESPONSE_SHAPE} lang="json" title="200 OK · sample response" />
-        <div className="dx-prose" style={{ marginTop: 20 }}>
+        <div className="dx-prose dx-mt-20">
           <p>
             The full machine-readable contract is the OpenAPI document at{" "}
             <a href={`${API_ROOT}/openapi.json`} className="dx-link">
@@ -443,7 +443,7 @@ export default function DevelopersPage() {
             </tbody>
           </table>
         </div>
-        <ul className="dx-list" style={{ marginTop: 20 }}>
+        <ul className="dx-list dx-mt-20">
           <li>
             The limits belong to the account: all of its keys share one burst allowance and one daily
             count, so creating another key never buys a fresh allowance. An account holds up to five
@@ -585,10 +585,10 @@ export default function DevelopersPage() {
           </p>
         </div>
         {GROUPS.map((g) => (
-          <div key={g.id} style={{ marginTop: 40 }}>
+          <div key={g.id} className="dx-mt-36">
             <h3 id={g.id}>{g.title}</h3>
             {g.blurb ? (
-              <p className="dx-small" style={{ marginTop: 6, maxWidth: "68ch" }}>
+              <p className="dx-small dx-mt-8 dx-measure">
                 {g.blurb}
               </p>
             ) : null}
@@ -609,10 +609,10 @@ export default function DevelopersPage() {
             work in every trip tool.
           </p>
         </div>
-        <div style={{ marginTop: 20 }}>
+        <div className="dx-mt-20">
           <CopyField value={`${BASE}/mcp`} label="MCP endpoint" />
         </div>
-        <div className="dx-prose" style={{ marginTop: 20 }}>
+        <div className="dx-prose dx-mt-20">
           <p>
             Setup for Claude Code, claude.ai, Cursor, VS Code, Windsurf, Codex, Gemini CLI and ChatGPT,
             plus local stdio, is on the{" "}
@@ -654,14 +654,14 @@ export default function DevelopersPage() {
                   <th scope="row">
                     <code>https://data.commutescout.com/{name}</code>
                   </th>
-                  <td data-label="Rebuilt" style={{ whiteSpace: "nowrap" }}>{every}</td>
+                  <td data-label="Rebuilt" className="num">{every}</td>
                   <td data-label="Holds">{holds}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="dx-prose" style={{ marginTop: 20 }}>
+        <div className="dx-prose dx-mt-20">
           <p>
             An object is only uploaded when its contents changed. Fetch with <C>If-None-Match</C> and honor
             the <C>Cache-Control</C> you get back. Attribution applies exactly as it does to the API.
@@ -686,7 +686,7 @@ export default function DevelopersPage() {
       </Section>
 
       <Section id="terms" kicker="Terms" title="Attribution and terms">
-        <ul className="dx-list dx-lead" style={{ marginTop: 16 }}>
+        <ul className="dx-list dx-lead dx-mt-16">
           <li>
             Credit CommuteScout and the agency named in each record&apos;s <C>source</C> wherever the data
             is shown. The{" "}

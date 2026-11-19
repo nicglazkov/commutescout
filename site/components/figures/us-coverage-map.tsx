@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { STATE_COVERAGE, STATE_COVERAGE_UPDATED, type StateRow } from "@/lib/state-coverage";
-import { FigureFrame } from "./frame";
+import { PointerHint, FigureFrame } from "./frame";
 import { US_NATION, US_STATES, US_VIEWBOX } from "./us-map.geo";
 
 // Coverage depth by state, on true state geography (us-atlas states-albers-10m, geoAlbersUsa,
@@ -144,7 +144,7 @@ export default function UsCoverageMap({ n = 2 }: { n?: number | string }) {
       n={n}
       title="Where the live layers come from each state"
       className="csf-map"
-      hint="Hover, tap, or focus the map and use the arrow keys"
+      hint={<PointerHint fine="Hover or focus the map and use the arrow keys" coarse="Tap a state to see its layers" />}
       readout={
         a
           ? `${a.name}: ${a.tier ? `${a.count} of 5 layers` : "nationwide layers"}`

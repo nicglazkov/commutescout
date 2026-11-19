@@ -40,12 +40,12 @@ Semantic (each with a `-soft` fill; every base value is AA as text on
 
 | Token | Light | Dark | Meaning |
 |---|---|---|---|
-| `--cs-incident` | #b5520f | #f0914f | Crashes, hazards, patrol log entries |
+| `--cs-incident` | #ab4d0d | #f0914f | Crashes, hazards, patrol log entries |
 | `--cs-closure` | #a1262e | #ff8a8f | Full, lane and ramp closures |
 | `--cs-chain` | #4053a8 | #98a6f0 | Chain controls |
 | `--cs-fire` | #946200 | #e3b341 | Wildfire perimeters and points |
 | `--cs-weather` | #0e7480 | #4cc2c9 | Road weather, NWS alerts |
-| `--cs-ok` | #1d7f55 | #4fc98e | Fresh feed, success |
+| `--cs-ok` | #1a774f | #4fc98e | Fresh feed, success |
 | `--cs-stale` | #6b5b95 | #b4a5e0 | A feed past its stale limit |
 
 Dark band (developer section, footer; stays dark in both themes):

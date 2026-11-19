@@ -32,7 +32,7 @@ export default function MarketplacePage() {
             Plugins add alerts to the map and the apps. Every one here is free. Approved ones are
             reviewed by CommuteScout; the others are public but not reviewed, and say so.
           </p>
-          <Link href="/plugins" prefetch={false} className="cs-link mt-4 inline-block text-sm">
+          <Link href="/plugins" prefetch={false} className="cs-link mt-4 inline-flex min-h-6 items-center text-sm">
             Write a plugin
           </Link>
         </div>

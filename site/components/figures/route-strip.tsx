@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FigureFrame } from "./frame";
+import { PointerHint, FigureFrame } from "./frame";
 
 // plan_trip, drawn literally as a strip map. Everything here mirrors the tool's output
 // (src/ca_roads_mcp/planning.py plan_trip, :692-879; MCP wrapper src/ca_roads_mcp/server.py:1769-1809):
@@ -56,7 +56,7 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
       n={n}
       title="A trip plan, laid out by mile"
       className="csf-route"
-      hint="Hover or focus an item to find it on the strip"
+      hint={<PointerHint fine="Hover or focus an item to find it on the strip" coarse="Tap an item to find it on the strip" />}
       readout={it ? `mile ${it.mile.toFixed(1)} · ${KIND_LABEL[it.kind].toLowerCase()}` : `${TOTAL} mi · ${ITEMS.length} live items on the line`}
       caption={
         <>
@@ -122,7 +122,7 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
                 data-hot={hot === i ? "" : undefined}
                 data-dim={hot !== null && hot !== i ? "" : undefined}
                 onPointerEnter={() => setHot(i)}
-                onPointerLeave={() => setHot(null)}
+                onPointerLeave={(e) => { if (e.pointerType === "mouse") setHot(null); }}
               >
                 <line x1={x} x2={x} y1={y + 11} y2={LINE_Y - 4} className="rs-stem" />
                 <circle cx={x} cy={LINE_Y} r={4} className="rs-foot" />
@@ -168,7 +168,7 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
               data-kind={item.kind}
               data-hot={hot === i ? "" : undefined}
               onPointerEnter={() => setHot(i)}
-              onPointerLeave={() => setHot(null)}
+              onPointerLeave={(e) => { if (e.pointerType === "mouse") setHot(null); }}
               onFocus={() => setHot(i)}
               onBlur={() => setHot(null)}
             >

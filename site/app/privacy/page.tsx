@@ -33,7 +33,6 @@ export const metadata: Metadata = {
   },
 };
 
-const PRIVACY = "privacy@commutescout.com";
 const HELLO = "hello@commutescout.com";
 
 function Mail({ to }: { to: string }) {
@@ -102,7 +101,7 @@ const summary = [
   </>,
   <>
     <strong>You can delete your account</strong> yourself in the app or on the
-    web, or ask us at <Mail to={PRIVACY} />.
+    web, or ask us at <Mail to={HELLO} />.
   </>,
 ];
 
@@ -115,8 +114,8 @@ export default function PrivacyPage() {
       updated="Covers commutescout.com, the MCP server and API, and the CommuteScout Drive apps."
       lede={
         <>
-          CommuteScout is an independent project run by one person in
-          California (&ldquo;we&rdquo;, &ldquo;us&rdquo;). This policy says
+          CommuteScout is an independent project based in California
+          (&ldquo;CommuteScout&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;). This policy says
           what we collect, why, who helps us process it, how long we keep it,
           and how you can see or delete it. The code behind the service is open
           source, so you can check any of this yourself.
@@ -196,7 +195,9 @@ export default function PrivacyPage() {
               <h3>Accounts</h3>
               <p>
                 An account is optional. It is needed for watch areas, road
-                reports, syncing places and plugins, and API keys. When you
+                reports, syncing places and plugins, and API keys. Creating
+                one requires agreeing to the <a href="/terms">terms of use</a>{" "}
+                and this privacy policy. When you
                 sign in with Google, with Apple (in the iPhone app) or with an
                 email link, we receive your email address and a user ID from
                 that sign-in. Accounts are managed with Google Firebase
@@ -580,7 +581,7 @@ export default function PrivacyPage() {
                   <strong>Ask us.</strong> Wherever you live, you can ask us what
                   personal information we hold about you and what we do with
                   it, for a copy, to correct it, or to delete it. Email{" "}
-                  <Mail to={PRIVACY} /> from the address on your account. We may
+                  <Mail to={HELLO} /> from the address on your account. We may
                   ask you to confirm the request from that address before we
                   act on it, and we answer within 45 days. Someone you authorize
                   can ask for you if they show us your signed permission.
@@ -622,7 +623,7 @@ export default function PrivacyPage() {
                   <a href="/watch">watch page</a>).
                 </li>
                 <li>
-                  <strong>By email:</strong> write to <Mail to={PRIVACY} /> from
+                  <strong>By email:</strong> write to <Mail to={HELLO} /> from
                   the address on your account.
                 </li>
               </ul>
@@ -723,9 +724,8 @@ export default function PrivacyPage() {
           body: (
             <p>
               CommuteScout is not directed to children under 13, and we do not
-              knowingly collect personal information from them. You must be at
-              least 13 to create an account. If you believe a child under 13 has
-              given us personal information, email <Mail to={PRIVACY} /> and we
+              knowingly collect personal information from them. If you believe a child under 13 has
+              given us personal information, email <Mail to={HELLO} /> and we
               will delete it.
             </p>
           ),
@@ -765,8 +765,7 @@ export default function PrivacyPage() {
           title: "Contact",
           body: (
             <p>
-              Privacy requests: <Mail to={PRIVACY} />. Anything else:{" "}
-              <Mail to={HELLO} />. The code is open source at{" "}
+              Privacy requests and anything else: <Mail to={HELLO} />. The code is open source at{" "}
               <a href="https://github.com/nicglazkov/commutescout">
                 github.com/nicglazkov/commutescout
               </a>

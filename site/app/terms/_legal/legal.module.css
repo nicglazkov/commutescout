@@ -23,12 +23,17 @@
   background: var(--l-bg);
   color: var(--l-ink);
   font-family: var(--cs-font-sans, inherit);
-  padding: 56px 16px 96px;
+  padding: 56px 20px 96px;
 }
 
+@media (min-width: 48rem) {
+  .page { padding-inline: 32px; }
+}
+
+/* Same 1200px column as the marketing and docs pages. */
 .wrap {
   margin: 0 auto;
-  max-width: 1120px;
+  max-width: 1200px;
 }
 
 /* ---------- header ---------- */
@@ -307,11 +312,15 @@
 }
 
 .anchor {
+  display: inline-block;
+  min-width: 24px;
+  text-align: center;
   color: var(--l-ink-3);
   text-decoration: none;
   font-weight: 400;
   opacity: 0;
-  margin-left: 6px;
+  margin-left: 2px;
+  border-radius: 4px;
 }
 
 .sectionHead:hover .anchor,
@@ -445,7 +454,7 @@
 .tableWrap {
   overflow-x: auto;
   border: 1px solid var(--l-line);
-  border-radius: var(--l-radius);
+  border-radius: var(--l-radius-lg);
   background: var(--l-surface);
 }
 
@@ -460,16 +469,18 @@
 .table td {
   text-align: left;
   vertical-align: top;
-  padding: 10px 14px;
+  padding: 11px 16px;
   border-top: 1px solid var(--l-line);
 }
 
+/* Same header treatment as the developer docs tables (docs.css .dx-table). */
 .table thead th {
   border-top: 0;
   background: var(--l-surface-2);
-  color: var(--l-ink);
+  color: var(--l-ink-3);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12.5px;
+  white-space: nowrap;
 }
 
 .table td:first-child {

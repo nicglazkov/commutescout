@@ -16,9 +16,9 @@ how much to trust the answer.
 | **Caltrans chain controls** | R-1/R-2/R-3 requirements at mountain checkpoints | 5-minute cache |
 | **WFIGS** | Active wildfires (name, size, containment), flagged within ~10 miles of major highways; perimeter edges refine distances for big fires | 5-minute cache |
 | **CAL FIRE** | CAL FIRE's own incident postings, merged into the wildfire layer for fires WFIGS does not list yet | 5-minute cache |
-| **Caltrans CMS** | What changeable message signs display right now (blank signs filtered) | 2-minute cache |
-| **Caltrans CCTV** | Roadside camera snapshots, image-verified live before return | Camera list hourly; each image fetched live |
-| **Caltrans RWIS** | Road-weather stations: pavement temperature, gusts, visibility on the passes | 5-minute cache |
+| **Caltrans CMS** | What changeable message signs display right now (blank signs filtered) | 2.5-minute cache (150 s) |
+| **Caltrans CCTV** | Roadside camera snapshots, image-verified live before return | Camera list on a 2.5-minute cache (150 s); each image checked per query |
+| **Caltrans RWIS** | Road-weather stations: pavement temperature, gusts, visibility on the passes | 2.5-minute cache (150 s) |
 | **NWS alerts** | Winter storm, wind, flood, fog, and fire-weather warnings along the route | 5-minute cache |
 | **USGS quakes** | M4.5+ earthquakes near a corridor in the last 24 hours | 5-minute cache |
 | **TomTom** (optional key) | Actual current speeds vs free-flow along the route | 1-minute cache |

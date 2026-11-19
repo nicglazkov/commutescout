@@ -271,10 +271,10 @@ export default function McpPage() {
           </p>
         </div>
         {GROUPS.map((g) => (
-          <div key={g.title} style={{ marginTop: 36 }}>
+          <div key={g.title} className="dx-mt-36">
             <h3>{g.title}</h3>
             {g.blurb ? (
-              <p className="dx-small" style={{ marginTop: 6, maxWidth: "68ch" }}>
+              <p className="dx-small dx-mt-8 dx-measure">
                 {g.blurb}
               </p>
             ) : null}
@@ -284,7 +284,7 @@ export default function McpPage() {
                 if (!t) return null;
                 return (
                   <li key={n}>
-                    <Link href={`/developers#tool-${n}`} prefetch={false} style={{ textDecoration: "none" }}>
+                    <Link href={`/developers#tool-${n}`} prefetch={false} className="dx-plain">
                       <code>
                         {t.name}
                         <span className="sig">{signature(t)}</span>
@@ -297,8 +297,8 @@ export default function McpPage() {
             </ul>
           </div>
         ))}
-        <h3 style={{ marginTop: 36 }}>Prompts</h3>
-        <p className="dx-small" style={{ marginTop: 6, maxWidth: "68ch" }}>
+        <h3 className="dx-mt-36">Prompts</h3>
+        <p className="dx-small dx-mt-8 dx-measure">
           Clients that show MCP prompts offer these as one-click starting points.
         </p>
         <div className="dx-tbox">
@@ -317,7 +317,7 @@ export default function McpPage() {
                   <th scope="row">
                     {title}
                     <br />
-                    <code style={{ fontWeight: 400, color: "var(--dx-ink-3)" }}>{name}</code>
+                    <code className="dx-code-quiet">{name}</code>
                   </th>
                   <td data-label="Arguments">
                     <code>{args}</code>
@@ -377,7 +377,7 @@ export default function McpPage() {
             </p>
           </div>
         </div>
-        <div className="dx-prose" style={{ marginTop: 20 }}>
+        <div className="dx-prose dx-mt-20">
           <p>
             Not running an MCP client? Every tool is also a plain HTTP GET; see the{" "}
             <Link href="/developers" prefetch={false} className="dx-link">

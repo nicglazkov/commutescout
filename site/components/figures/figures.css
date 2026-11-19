@@ -429,10 +429,12 @@
 .csf-details {
   margin-top: 12px;
   border-top: 1px solid var(--f-line);
-  padding-top: 10px;
+  padding-top: 6px;
 }
 .csf-details > summary {
   cursor: pointer;
+  min-height: 24px;
+  padding-block: 4px;
   font-size: 13px;
   font-weight: 500;
   color: var(--f-ink);
@@ -584,21 +586,22 @@
 }
 
 /* ---------- Fig: US coverage map ---------- */
-/* one-hue sequential ramp from the accent, validated with the dataviz script
-   (adjacent ΔE ≥ 15 normal vision and CVD, light and dark) */
+/* one-hue sequential ramp from the accent. Steps chosen so every adjacent
+   pair is at least 15 OKLab ΔE apart in both themes (the old dark tiers 0
+   and 1 were 8.6 apart and read as one); checked with the dataviz rules. */
 .csf-map {
   --f-q0: var(--f-bg2);
-  --f-q1: color-mix(in oklab, var(--f-accent) 24%, var(--f-bg));
-  --f-q2: color-mix(in oklab, var(--f-accent) 56%, var(--f-bg));
-  --f-q3: color-mix(in oklab, var(--f-accent) 90%, var(--f-bg));
-  --f-q4: color-mix(in oklab, var(--f-ink) 40%, var(--f-accent));
+  --f-q1: color-mix(in oklab, var(--f-accent) 38%, var(--f-bg));
+  --f-q2: color-mix(in oklab, var(--f-accent) 68%, var(--f-bg));
+  --f-q3: color-mix(in oklab, var(--f-accent) 98%, var(--f-bg));
+  --f-q4: color-mix(in oklab, var(--f-ink) 45%, var(--f-accent));
 }
 :root[data-theme="dark"] .csf-map,
 :root.dark .csf-map {
-  --f-q1: color-mix(in oklab, var(--f-accent) 24%, var(--f-bg));
-  --f-q2: color-mix(in oklab, var(--f-accent) 56%, var(--f-bg));
-  --f-q3: color-mix(in oklab, var(--f-accent) 88%, var(--f-bg));
-  --f-q4: color-mix(in oklab, var(--f-ink) 45%, var(--f-accent));
+  --f-q1: color-mix(in oklab, var(--f-accent) 38%, var(--f-bg));
+  --f-q2: color-mix(in oklab, var(--f-accent) 68%, var(--f-bg));
+  --f-q3: var(--f-accent);
+  --f-q4: color-mix(in oklab, var(--f-ink) 55%, var(--f-accent));
 }
 .csf-map [data-tier="0"] { fill: var(--f-q0); background: var(--f-q0); }
 .csf-map [data-tier="1"] { fill: var(--f-q1); background: var(--f-q1); }
@@ -792,6 +795,10 @@
 .dc [data-s="avoid"], .csf-depart .dc-sw[data-s="avoid"] { --s: color-mix(in oklab, var(--f-incident) 62%, var(--f-bg)); }
 .csf-depart .dc-sw { background: var(--s); }
 .dc-key-wx { width: 14px; height: 14px; }
+/* The chart scrolls sideways on narrow cards; positioning it keeps the
+   absolutely placed screen-reader table (.csf-sr) inside that scroll box
+   instead of widening the page. */
+.dc { position: relative; }
 .dc-svg { overflow: visible; }
 .dc-grid { stroke: var(--f-grid); stroke-width: 1; }
 .dc-base { stroke: var(--f-ink3); stroke-width: 1; }
@@ -821,7 +828,7 @@
 .dc-row-bar { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--s); }
 .dc-row-bar[data-snow] { box-shadow: inset 0 0 0 1.4px var(--f-chain); }
 .dc-row-min { color: var(--f-ink); text-align: right; }
-.dc-row[data-s="best"] .dc-row-min { font-weight: 700; }
+.dc-row[data-s="best"] .dc-row-min { font-weight: 600; }
 .dc-row-wx svg { width: 14px; height: 14px; display: block; }
 .dc-row-best { position: absolute; top: 50%; transform: translateY(-50%); padding: 1px 7px; border-radius: 8px; background: var(--f-accent); color: var(--f-accent-ink); font: 600 10.5px/1.3 var(--f-sans); }
 @container csf (max-width: 620px) { .dc-rows.csf-phone { display: grid; } }
@@ -848,7 +855,7 @@
 .rl-cell[data-on] { background: var(--f-accent); box-shadow: none; }
 .rl-sub { margin: 10px 0 0; font-size: 12px; color: var(--f-ink2); }
 .rl-day { height: 22px; border-radius: 6px; background: var(--f-bg2); box-shadow: inset 0 0 0 1px var(--f-line); overflow: hidden; }
-.rl-day span { display: block; height: 100%; background: var(--f-accent); transition: width 400ms var(--cs-ease, ease); }
+.rl-day span { display: block; height: 100%; background: var(--f-accent); transform-origin: left center; transition: transform 400ms var(--cs-ease, ease); }
 .rl-day span[data-full] { background: var(--f-closure); }
 .rl-log { list-style: none; margin: 0; padding: 10px 12px; border-radius: var(--f-r-md); background: var(--f-bg2); border: 1px solid var(--f-line); min-height: 104px; display: grid; align-content: start; gap: 4px; }
 .rl-line { font-size: 12px; color: var(--f-ink2); display: flex; gap: 8px; align-items: baseline; }
@@ -959,3 +966,10 @@
 .fc-item-strip span { width: 2px; border-radius: 1px; background: var(--k); }
 .fc-item-note { font-size: 11.5px; color: var(--f-ink3); }
 @media (prefers-reduced-motion: reduce) { .fc-row { transition: none; } }
+
+/* ---------- pointer-aware hints (frame.tsx PointerHint) ---------- */
+.csf-hint-coarse { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .csf-hint-fine { display: none; }
+  .csf-hint-coarse { display: inline; }
+}

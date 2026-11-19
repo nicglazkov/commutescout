@@ -46,7 +46,7 @@
   /* Semantic: one hue per kind of road event, matching the live map's
      families (incident orange, closure red, chain blue, fire amber,
      road weather teal). Each is AA as text on --cs-surface. */
-  --cs-incident: #b5520f;
+  --cs-incident: #ab4d0d;
   --cs-incident-soft: #fdf0e6;
   --cs-closure: #a1262e;
   --cs-closure-soft: #fcebec;
@@ -56,7 +56,7 @@
   --cs-fire-soft: #fbf3df;
   --cs-weather: #0e7480;
   --cs-weather-soft: #e3f4f5;
-  --cs-ok: #1d7f55;
+  --cs-ok: #1a774f;
   --cs-ok-soft: #e4f4ec;
   --cs-stale: #6b5b95;
   --cs-stale-soft: #efecf7;
@@ -145,7 +145,7 @@
     --cs-ok-soft: #10301f;
     --cs-stale: #b4a5e0;
     --cs-stale-soft: #241f3a;
-    --cs-band: #0d1622;
+    --cs-band: #0e1a29;
     --cs-band-2: #142134;
     --cs-band-ink: #e6edf5;
     --cs-band-ink-2: #a3b2c4;
@@ -184,7 +184,7 @@
   --cs-ok-soft: #10301f;
   --cs-stale: #b4a5e0;
   --cs-stale-soft: #241f3a;
-  --cs-band: #0d1622;
+  --cs-band: #0e1a29;
   --cs-band-2: #142134;
   --cs-band-ink: #e6edf5;
   --cs-band-ink-2: #a3b2c4;

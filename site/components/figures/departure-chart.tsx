@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type KeyboardEvent } from "react";
-import { FigureFrame } from "./frame";
+import { PointerHint, FigureFrame } from "./frame";
 
 // best_time_to_go, as the tool computes it (src/ca_roads_mcp/planning.py:930-1151):
 // - at most 16 departures (MAX_SLOTS, planning.py:71); with no step given the window is split into
@@ -87,7 +87,7 @@ export default function DepartureChart({ n = 5 }: { n?: number | string }) {
       n={n}
       title="Sixteen departures, one best time"
       className="csf-depart"
-      hint="Hover, or focus the chart and use the arrow keys"
+      hint={<PointerHint fine="Hover, or focus the chart and use the arrow keys" coarse="Tap a departure to read it" />}
       readout={r ? describe(r) : `Best ${clock(best.h)} · ${best.min} min · ${fastest.min} min at ${clock(fastest.h)} skipped for snow`}
       legend={
         <ul className="csf-keys">
@@ -128,7 +128,7 @@ export default function DepartureChart({ n = 5 }: { n?: number | string }) {
           aria-label={`Bar chart of drive time for 16 hourly departures from 6 AM to 9 PM. Best: ${describe(best)}. The fastest, ${clock(fastest.h)} at ${fastest.min} minutes, has snow forecast and is skipped. Use the arrow keys to read each departure.`}
           onKeyDown={onKey}
           onBlur={() => setHot(null)}
-          onPointerLeave={() => setHot(null)}
+          onPointerLeave={(e) => { if (e.pointerType === "mouse") setHot(null); }}
         >
           {[0, 20, 40, 60].map((m) => (
             <g key={m}>
@@ -224,7 +224,10 @@ export default function DepartureChart({ n = 5 }: { n?: number | string }) {
             </li>
           ))}
         </ol>
-        <table className="csf-sr">
+        {/* The wrapper, not the table, is the 1px clip: a table ignores width: 1px
+            and would widen the page on a phone. */}
+        <div className="csf-sr">
+        <table>
           <caption>Departures compared</caption>
           <thead>
             <tr>
@@ -247,6 +250,7 @@ export default function DepartureChart({ n = 5 }: { n?: number | string }) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </FigureFrame>
   );

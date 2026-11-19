@@ -74,8 +74,8 @@ export default function TermsPage() {
       updated="Covers commutescout.com, the MCP server and API, and the CommuteScout Drive apps."
       lede={
         <>
-          These terms are an agreement between you and the individual who
-          runs CommuteScout (&ldquo;we&rdquo;, &ldquo;us&rdquo;). By using the
+          These terms are an agreement between you and CommuteScout
+          (&ldquo;CommuteScout&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;). By using the
           website, the live map, the assistant, watch-area alerts, the MCP
           server, the REST API or the CommuteScout Drive apps (together,
           &ldquo;the service&rdquo;), you agree to them. If you do not agree,
@@ -194,9 +194,10 @@ export default function TermsPage() {
           body: (
             <>
               <p>
-                You can use most of the service without an account. To create
-                one you must be at least 13 years old; if you are under 18, you
-                need a parent or guardian&rsquo;s permission. You are
+                You can use most of the service without an account. You must be
+                at least 13 years old to create one, and creating one requires
+                agreeing to these terms and the{" "}
+                <a href="/privacy">privacy policy</a>. You are
                 responsible for what happens under your account and for keeping
                 your sign-in secure. Tell us at <Mail to={HELLO} /> if you think
                 someone else is using it.
@@ -336,10 +337,17 @@ export default function TermsPage() {
                 Plugins add alerts from sources other than public agencies, and
                 many are run by people other than us. What a plugin shows is
                 its operator&rsquo;s, not ours. We list plugins and check that
-                they follow the plugin format, but we do not control them, do not endorse them, and are not
-                responsible for their content, availability or how they handle
-                data. A plugin you add yourself by address is your choice and
-                your risk.
+                they follow the plugin format, but we do not control them, do
+                not endorse them, and are not responsible for their content,
+                availability or how they handle data.
+              </p>
+              <p>
+                Some plugins have not been reviewed by CommuteScout. You can
+                install one, including one you add yourself by address, only
+                after you confirm at install that you understand it has not
+                been reviewed. Its alerts are then your choice and your risk.
+                You can turn any plugin&rsquo;s alerts, and its spoken alerts,
+                on or off at any time.
               </p>
               <p>
                 The service also relies on other companies, such as sign-in
@@ -433,36 +441,10 @@ export default function TermsPage() {
           id: "copyright",
           title: "Copyright complaints",
           body: (
-            <>
-              <p>
-                If you believe something on the service infringes your
-                copyright, email <Mail to={HELLO} /> with:
-              </p>
-              <ol>
-                <li>
-                  your name, address, phone number and email, and your
-                  signature (a typed name is fine);
-                </li>
-                <li>the work you believe is infringed;</li>
-                <li>
-                  where the material is on the service, precisely enough for us
-                  to find it;
-                </li>
-                <li>
-                  a statement that you believe in good faith that the use is not
-                  authorized by the owner, its agent or the law; and
-                </li>
-                <li>
-                  a statement, under penalty of perjury, that your notice is
-                  accurate and that you are the owner or authorized to act for
-                  the owner.
-                </li>
-              </ol>
-              <p>
-                We will review it and remove material that should not be here.
-                We may close the accounts of repeat infringers.
-              </p>
-            </>
+            <p>
+              Send copyright complaints to <Mail to={HELLO} />. We will review
+              them and remove material that should not be here.
+            </p>
           ),
         },
         {

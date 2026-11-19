@@ -358,10 +358,10 @@ export default function PluginsPage() {
             <h3>Public, not reviewed</h3>
             <p className="dx-card-meta">public or unlisted · community</p>
             <p>
-              Anyone who passes the conformance check can be listed. Drawn on the map and labelled
-              &ldquo;public, not reviewed&rdquo;. Voice for these alerts is under the person&apos;s control in
-              the app&apos;s alert settings. Unlisted plugins are the same tier, reachable by id for a group
-              that knows they exist.
+              Anyone who passes the conformance check can be listed, labelled &ldquo;public, not
+              reviewed&rdquo;. Its alerts appear only after the person confirms at install that CommuteScout
+              has not reviewed it, and they can turn its alerts, and its spoken alerts, on or off at any time.
+              Unlisted plugins are the same tier, reachable by id for a group that knows they exist.
             </p>
           </div>
           <div className="dx-card dx-card--plain">
@@ -369,12 +369,12 @@ export default function PluginsPage() {
             <p className="dx-card-meta">added by URL on one device</p>
             <p>
               Something you run for your own devices, called directly from the app, with your own bearer
-              token if you want one. It may show anything, including personal data, and speak if you want it
-              to.
+              token if you want one. Like any plugin CommuteScout has not reviewed, it needs your confirmation
+              at install. It may show anything, including personal data, and speak if you want it to.
             </p>
           </div>
         </div>
-        <p className="dx-small" style={{ marginTop: 16 }}>
+        <p className="dx-small dx-mt-16">
           Official agency data (the state feeds) is not a plugin and always outranks all three.
         </p>
       </Section>
@@ -500,10 +500,10 @@ export default function PluginsPage() {
           <CodeBlock code={SNAPSHOT} lang="http" title="Request and response" />
         </Endpoint>
 
-        <h3 id="ep-errors" style={{ marginTop: 40 }}>
+        <h3 id="ep-errors" className="dx-mt-36">
           Errors
         </h3>
-        <div className="dx-prose" style={{ marginTop: 8 }}>
+        <div className="dx-prose dx-mt-8">
           <p>The same envelope CommuteScout&apos;s API uses.</p>
         </div>
         <CodeBlock code={ERROR_ENVELOPE} lang="json" title="Error body" />
@@ -578,7 +578,7 @@ export default function PluginsPage() {
             </tbody>
           </table>
         </div>
-        <p className="dx-small" style={{ marginTop: 16 }}>
+        <p className="dx-small dx-mt-16">
           A response is capped at 500 alerts and 1 MB. A plugin that has more should return the nearest 500.
         </p>
       </Section>
@@ -620,7 +620,7 @@ export default function PluginsPage() {
       </Section>
 
       <Section id="rules" kicker="Obligations" title="Rules">
-        <h3 style={{ marginTop: 8 }}>For callers: the map, the apps, the backend</h3>
+        <h3 className="dx-mt-8">For callers: the map, the apps, the backend</h3>
         <ol className="dx-rules dx-rules--compact">
           {CALLER_RULES.map((r) => (
             <li key={r}>
@@ -628,7 +628,7 @@ export default function PluginsPage() {
             </li>
           ))}
         </ol>
-        <h3 style={{ marginTop: 32 }}>For plugins</h3>
+        <h3 className="dx-mt-36">For plugins</h3>
         <ol className="dx-rules dx-rules--compact">
           {PLUGIN_RULES.map((r) => (
             <li key={r}>

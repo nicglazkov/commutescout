@@ -172,7 +172,7 @@ export function SourceProof() {
             Each response lists the feeds it read, whether each one answered, and when that feed
             itself last changed. If a feed is down, the others still answer and that one says so.
           </p>
-          <Link href="/data-sources" prefetch={false} className="cs-link mt-7 inline-flex items-center gap-1 text-[0.9375rem]">
+          <Link href="/data-sources" prefetch={false} className="cs-link mt-7 inline-flex min-h-6 items-center gap-1 text-[0.9375rem]">
             See every feed by state
             <ArrowRight aria-hidden className="size-3.5" />
           </Link>
@@ -278,7 +278,7 @@ const MCP_URL = "https://mcp.commutescout.com/mcp";
 // page file, where tests/test_snapshot.py checks it against the registry.
 export function DeveloperBand({ children }: { children: React.ReactNode }) {
   return (
-    <section aria-labelledby="dev-title" className="bg-cs-band text-cs-band-ink">
+    <section aria-labelledby="dev-title" className="border-y border-cs-band-line bg-cs-band text-cs-band-ink">
       <div className="cs-container grid gap-12 py-20 [&>*]:min-w-0 md:py-24 lg:grid-cols-12 lg:items-center lg:gap-10">
         <div className="lg:col-span-6">
           <p className="cs-eyebrow text-cs-band-ink-2">For developers: MCP and REST</p>

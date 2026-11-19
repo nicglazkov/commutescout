@@ -56,3 +56,15 @@ export function FigureFrame({
     </figure>
   );
 }
+
+// A hint that names the right gesture: "Hover" for a mouse, "Tap" on a touch screen.
+// Pure CSS (any-hover / pointer media queries), so the static export needs no JS and
+// the server and client render the same markup.
+export function PointerHint({ fine, coarse }: { fine: string; coarse: string }) {
+  return (
+    <>
+      <span className="csf-hint-fine">{fine}</span>
+      <span className="csf-hint-coarse">{coarse}</span>
+    </>
+  );
+}

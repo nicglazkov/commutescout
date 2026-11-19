@@ -164,7 +164,7 @@ export default function RateLimit({ n = 6 }: { n?: number | string }) {
               <span className="csf-mono">{T.daily.toLocaleString("en-US")} per day</span>
             </header>
             <div className="rl-day" aria-hidden="true">
-              <span style={{ width: `${Math.max(dailyPct, sim.used ? 0.6 : 0)}%` }} data-full={sim.used >= T.daily ? "" : undefined} />
+              <span style={{ transform: `scaleX(${Math.max(dailyPct, sim.used ? 0.6 : 0) / 100})` }} data-full={sim.used >= T.daily ? "" : undefined} />
             </div>
             <p className="rl-sub">
               {sim.used >= T.daily
