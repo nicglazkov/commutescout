@@ -62,9 +62,14 @@ A request passes through these layers, outermost first:
 2. The API-key middleware. A request with a valid key
    (`Authorization: Bearer cs_live_...`) is limited by the key's tier
    and carries the key's account, so tools can read that account's
-   saved places. An unknown or revoked key gets a 401; there is no
-   silent fallback to keyless.
-3. The per-address rate limiter, for requests without a key.
+   saved places. A request to `/mcp` or `/v1/tools/*` without a key
+   gets a 401 `missing_key` naming where to get a free one
+   (`MCP_REQUIRE_KEY`, on by default); an unknown or revoked key gets a
+   401 `invalid_key`. Discovery (`/`, `/llms.txt`, `/robots.txt`,
+   `/.well-known/*`, `/openapi.json`, `/v1`, `/v1/tools`, `/v1/docs`,
+   `/v1/openapi.json`) and CORS preflights stay open.
+3. The per-address rate limiter, for the keyless requests that remain
+   (the open discovery routes).
 4. The tool itself.
 
 The nationwide tools (the trip tools and `get_nearby_events`) read

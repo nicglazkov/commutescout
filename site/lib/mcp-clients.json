@@ -9,13 +9,6 @@
       "steps": [
         {
           "lang": "sh",
-          "code": "claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp"
-        },
-        {
-          "text": "With a key, for saved places:"
-        },
-        {
-          "lang": "sh",
           "code": "claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp \\\n  --header \"Authorization: Bearer cs_live_...\""
         },
         {
@@ -32,7 +25,7 @@
           "text": "Customize > Connectors > + Add > Add custom connector. Name: CommuteScout. URL: https://mcp.commutescout.com/mcp. Sign-in: No sign in."
         },
         {
-          "text": "For saved places, add a request header named Authorization with the value Bearer cs_live_..."
+          "text": "Add a request header named Authorization with the value Bearer cs_live_... (your key)."
         },
         {
           "text": "On Team and Enterprise plans, an owner adds it first under Organization settings > Connectors. The connector also appears in Claude Desktop and the mobile apps."
@@ -50,9 +43,6 @@
         {
           "lang": "json",
           "code": "{\n  \"mcpServers\": {\n    \"commutescout\": {\n      \"url\": \"https://mcp.commutescout.com/mcp\",\n      \"headers\": { \"Authorization\": \"Bearer ${env:COMMUTESCOUT_API_KEY}\" }\n    }\n  }\n}"
-        },
-        {
-          "text": "Leave out headers to connect without a key."
         }
       ]
     },
@@ -67,9 +57,6 @@
         {
           "lang": "json",
           "code": "{\n  \"servers\": {\n    \"commutescout\": {\n      \"type\": \"http\",\n      \"url\": \"https://mcp.commutescout.com/mcp\",\n      \"headers\": { \"Authorization\": \"Bearer ${input:commutescout-key}\" }\n    }\n  },\n  \"inputs\": [\n    { \"type\": \"promptString\", \"id\": \"commutescout-key\",\n      \"description\": \"CommuteScout API key\", \"password\": true }\n  ]\n}"
-        },
-        {
-          "text": "Leave out headers and inputs to connect without a key."
         }
       ]
     },
@@ -94,10 +81,10 @@
       "steps": [
         {
           "lang": "sh",
-          "code": "codex mcp add commutescout --url https://mcp.commutescout.com/mcp"
+          "code": "codex mcp add commutescout --url https://mcp.commutescout.com/mcp --bearer-token-env-var COMMUTESCOUT_API_KEY"
         },
         {
-          "text": "With a key, in ~/.codex/config.toml:"
+          "text": "Or in ~/.codex/config.toml:"
         },
         {
           "lang": "toml",
@@ -112,10 +99,7 @@
       "steps": [
         {
           "lang": "sh",
-          "code": "gemini mcp add --transport http commutescout https://mcp.commutescout.com/mcp"
-        },
-        {
-          "text": "Add --header \"Authorization: Bearer cs_live_...\" for saved places."
+          "code": "gemini mcp add --transport http commutescout https://mcp.commutescout.com/mcp \\\n  --header \"Authorization: Bearer cs_live_...\""
         }
       ]
     },
@@ -125,10 +109,10 @@
       "key": false,
       "steps": [
         {
-          "text": "On chatgpt.com: Plugins > + > Add custom MCP server. URL: https://mcp.commutescout.com/mcp. Authentication: none."
+          "text": "Not yet. The hosted server needs an API key sent as a request header, and ChatGPT's custom MCP servers (chatgpt.com: Plugins > + > Add custom MCP server, URL https://mcp.commutescout.com/mcp) offer sign-in (OAuth) or no authentication, not a header."
         },
         {
-          "text": "Custom MCP servers depend on your plan and workspace settings. ChatGPT offers sign-in (OAuth) rather than a key field, so use addresses instead of \"home\" and \"work\" there."
+          "text": "Until CommuteScout supports OAuth sign-in, use a client that can send a header (any other client on this page), or the REST API from your own code."
         }
       ]
     },
@@ -138,14 +122,14 @@
       "key": true,
       "steps": [
         {
-          "text": "Streamable HTTP at https://mcp.commutescout.com/mcp: stateless, no sign-in, optional Authorization: Bearer cs_live_... (or X-API-Key)."
+          "text": "Streamable HTTP at https://mcp.commutescout.com/mcp: stateless, no OAuth sign-in. Send the key on every request as Authorization: Bearer cs_live_... (or X-API-Key: cs_live_...)."
         },
         {
           "text": "A client that only speaks stdio can bridge with:"
         },
         {
           "lang": "sh",
-          "code": "npx mcp-remote https://mcp.commutescout.com/mcp --transport http-only"
+          "code": "npx mcp-remote https://mcp.commutescout.com/mcp --transport http-only \\\n  --header \"Authorization: Bearer ${COMMUTESCOUT_API_KEY}\""
         }
       ]
     }

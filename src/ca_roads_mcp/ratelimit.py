@@ -252,20 +252,78 @@ def _json_error(status: int, code: str, message: str, hint: str | None = None,
                     (b"access-control-allow-origin", b"*"), *headers], raw
 
 
+# Where to get a key, named in every key error so the fix is one click.
+KEY_PAGE = "https://commutescout.com/map"
+KEY_STEPS = (f"Get a free key ({apikeys.TIERS['free']['daily']:,} requests a day) "
+             f"at {KEY_PAGE}: open Settings, "
+             "sign in, then API keys. Send it as 'Authorization: Bearer cs_live_...' "
+             "or 'X-API-Key: cs_live_...'.")
+
+# The data surfaces of the hosted service: the MCP transport and the
+# REST bridge's tool calls. Discovery stays open so a client can find
+# out how to connect: /, /llms.txt, /robots.txt, /.well-known/*,
+# /openapi.json, /v1, /v1/tools (the index), /v1/docs, /v1/openapi.json
+# (the Cloud Monitoring uptime check). A CORS preflight (OPTIONS) never
+# carries the key, so it stays open too.
+KEY_REQUIRED_PREFIXES: tuple[str, ...] = ("/mcp", "/v1/tools/")
+
+# JSON-RPC error code for "no or bad credentials" on the MCP transport
+# (implementation-defined server error range, as the SDK uses).
+MCP_AUTH_ERROR = -32001
+
+
+def needs_key(scope) -> bool:
+    if scope.get("method") == "OPTIONS":
+        return False
+    path = scope.get("path", "")
+    return any(path.startswith(p) for p in KEY_REQUIRED_PREFIXES)
+
+
+def _is_mcp(scope) -> bool:
+    path = scope.get("path", "")
+    return path == "/mcp" or path.startswith("/mcp/")
+
+
+def _auth_error(scope, code: str, message: str, hint: str) -> tuple[int, list, bytes]:
+    """A 401 that both kinds of client read. The REST bridge gets the
+    API's envelope; the MCP transport gets a JSON-RPC error (what MCP
+    clients print) carrying the same code and hint in ``data``. Both
+    send ``WWW-Authenticate: Bearer`` as RFC 6750 asks of a 401."""
+    # RFC 6750 3.1: no error code when the request carried no credentials.
+    error = b"" if code == "missing_key" else b'error="invalid_token", '
+    challenge = (b'Bearer realm="CommuteScout", ' + error
+                 + b'error_description="' + message.replace('"', "'").encode() + b'"')
+    if not _is_mcp(scope):
+        return _json_error(401, code, message, hint, ((b"www-authenticate", challenge),))
+    raw = json.dumps({"jsonrpc": "2.0", "id": None, "error": {
+        "code": MCP_AUTH_ERROR, "message": f"{message} {hint}",
+        "data": {"code": code, "hint": hint, "key_page": KEY_PAGE}}}).encode("utf-8")
+    return 401, [(b"content-type", b"application/json"),
+                 (b"access-control-allow-origin", b"*"),
+                 (b"www-authenticate", challenge)], raw
+
+
 class ApiKeyMiddleware:
     """Resolves an API key and applies its tier's limits.
 
-    Keyless requests pass straight through to the per-address limiter
-    behind this one. A keyed request is limited per account instead (its
-    tier's bucket and daily count, shared by every key on the account so
-    revoking and minting keys never buys a fresh allowance), marked in
-    ``scope["state"]`` so the inner limiter steps aside, answered with ``RateLimit-*`` headers,
-    and logged as one JSON line for metering. A bad key is a 401 with
-    the API's error envelope, never a silent fall back to keyless.
+    With ``require_key`` (the hosted service), a keyless request to a
+    data surface (``needs_key``) is a 401 ``missing_key`` that says where
+    to get a free key; discovery paths and CORS preflights stay open and
+    fall through to the per-address limiter behind this one, as every
+    keyless request does when ``require_key`` is off (self-hosting).
+
+    A keyed request is limited per account (its tier's bucket and daily
+    count, shared by every key on the account so revoking and minting
+    keys never buys a fresh allowance), marked in ``scope["state"]`` so
+    the inner limiter steps aside, answered with ``RateLimit-*`` headers,
+    and logged as one JSON line for metering. A bad key is a 401, never
+    a silent fall back to keyless.
     """
 
-    def __init__(self, app, resolver: apikeys.KeyResolver | None = None) -> None:
+    def __init__(self, app, resolver: apikeys.KeyResolver | None = None,
+                 require_key: bool = False) -> None:
         self.app = app
+        self.require_key = require_key
         self.resolver = resolver or apikeys.KeyResolver()
         self.daily = DailyCounter()
         # Same store the keys come from, so tests never reach Firestore.
@@ -293,6 +351,13 @@ class ApiKeyMiddleware:
                    for k, v in scope.get("headers") or []}
         presented = apikeys.from_headers(headers.get)
         if not presented:
+            if self.require_key and needs_key(scope):
+                status, hdrs, raw = _auth_error(
+                    scope, "missing_key", "An API key is required.", KEY_STEPS)
+                await send({"type": "http.response.start", "status": status,
+                            "headers": hdrs})
+                await send({"type": "http.response.body", "body": raw})
+                return
             await self.app(scope, receive, send)
             return
         addr = limiter_key(RateLimitMiddleware._client_key(scope))
@@ -300,7 +365,7 @@ class ApiKeyMiddleware:
         if self.blocked.get(addr, 0.0) > now:
             await self._send_error(send, 429, "rate_limited",
                                    "Too many invalid API keys from this address.",
-                                   "Check the key under Settings on commutescout.com/map.",
+                                   f"Check the key under Settings on {KEY_PAGE}.",
                                    ((b"retry-after", b"60"),))
             return
         try:
@@ -309,16 +374,19 @@ class ApiKeyMiddleware:
             self.log.exception("api key lookup failed")
             await self._send_error(send, 503, "keys_unavailable",
                                    "Key checks are unavailable right now.",
-                                   "Retry in a minute, or call without a key.")
+                                   "Retry in a minute.")
             return
         if not info:
             if not self.bad_keys.allow(addr):
                 if len(self.blocked) > 10_000:
                     self.blocked = {a: t for a, t in self.blocked.items() if t > now}
                 self.blocked[addr] = now + 60
-            await self._send_error(send, 401, "invalid_key",
-                                   "That API key is unknown or revoked.",
-                                   "Create a key under Settings on commutescout.com/map.")
+            status, hdrs, raw = _auth_error(
+                scope, "invalid_key", "That API key is unknown or revoked.",
+                f"Check it, or create a new one at {KEY_PAGE}: open Settings, "
+                "sign in, then API keys.")
+            await send({"type": "http.response.start", "status": status, "headers": hdrs})
+            await send({"type": "http.response.body", "body": raw})
             return
         limits = apikeys.tier_limits(info["tier"])
         who = f"acct:{info['uid']}" if info.get("uid") else info["id"]

@@ -100,7 +100,7 @@ def openapi(mcp) -> dict:
                 "200": {"description": "The tool's result.",
                         "content": {"application/json": {"schema": {"type": "object"}}}},
                 "400": {"$ref": "#/components/responses/BadRequest"},
-                "401": {"$ref": "#/components/responses/InvalidKey"},
+                "401": {"$ref": "#/components/responses/Unauthorized"},
                 "429": {"$ref": "#/components/responses/RateLimited"},
             },
         }}
@@ -115,19 +115,21 @@ def openapi(mcp) -> dict:
                 "cameras, message signs, traffic, weather and event history, "
                 "California in the most depth and live events across every "
                 "covered state. Every tool the MCP server exposes "
-                "(https://mcp.commutescout.com/mcp), as plain HTTP GET. Works without a "
-                "key at per-address limits; a key from Settings on commutescout.com/map "
-                "gives 2,000 requests a day (Pro: 10,000). Attribution to CommuteScout "
+                "(https://mcp.commutescout.com/mcp), as plain HTTP GET. Every tool call "
+                "needs an API key: get a free one (2,000 requests a day; Pro: 10,000) "
+                "at https://commutescout.com/map under Settings, then API keys. This "
+                "document, /v1 and /v1/docs need no key. Attribution to CommuteScout "
                 "and the agencies named in each response is required."),
         },
         "servers": [{"url": PUBLIC_BASE}],
-        "security": [{}, {"ApiKey": []}, {"BearerKey": []}],
+        "security": [{"ApiKey": []}, {"BearerKey": []}],
         "paths": paths,
         "components": {
             "securitySchemes": {
                 "ApiKey": {"type": "apiKey", "in": "header", "name": "X-API-Key",
-                           "description": "A key from Settings on commutescout.com/map. "
-                                          "Optional: without one, per-address limits apply."},
+                           "description": "Required. A key (cs_live_...) from Settings "
+                                          "on https://commutescout.com/map; free keys get "
+                                          "2,000 requests a day."},
                 "BearerKey": {"type": "http", "scheme": "bearer",
                               "description": "The same key as a bearer token."},
             },
@@ -142,7 +144,8 @@ def openapi(mcp) -> dict:
                 "BadRequest": {"description": "A parameter is missing, unknown or malformed.",
                                "content": {"application/json": {
                                    "schema": {"$ref": "#/components/schemas/Error"}}}},
-                "InvalidKey": {"description": "The API key is unknown or revoked.",
+                "Unauthorized": {"description": "No API key (code missing_key) or an "
+                                                "unknown or revoked one (invalid_key).",
                                "content": {"application/json": {
                                    "schema": {"$ref": "#/components/schemas/Error"}}}},
                 "RateLimited": {"description": "Slow down; Retry-After says how long.",

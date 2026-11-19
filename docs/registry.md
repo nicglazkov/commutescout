@@ -56,5 +56,6 @@ Submission form asks for a name, the connector URL, and a description.
   > reports); everywhere else a nearby-events tool serves the same live
   > map data, and each event names its source agency. Every answer carries
   > per-source timestamps so the assistant can tell you how fresh the data
-  > is. Read-only public data, no account needed. Not affiliated with any
+  > is. Read-only public data; needs a free CommuteScout API key, sent as
+  > the Authorization header. Not affiliated with any
   > government agency; verify before you drive.
