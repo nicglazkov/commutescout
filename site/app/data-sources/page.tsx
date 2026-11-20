@@ -17,7 +17,7 @@ import { DocFigure } from "@/components/docs/doc-figure";
 
 // Data sources page. Source for every factual claim: docs/data-sources.md
 // and docs/state-coverage.md (through lib/state-coverage.ts), with cache
-// times checked against src/ca_roads/feeds/*. The "53 official agency
+// times checked against src/ca_roads/feeds/*. The "54 official agency
 // feeds" phrase in the dek is pinned by
 // tests/test_snapshot.py::test_feed_counts_are_current.
 //
@@ -124,7 +124,7 @@ export default function DataSourcesPage() {
       title="Where the data comes from"
       dek={
         <>
-          CommuteScout reads 53 official agency feeds from state transportation departments, highway
+          CommuteScout reads 54 official agency feeds from state transportation departments, highway
           patrols, and national weather and fire services, and puts them on one map. Toll prices come
           from {TOLL_FEED_COUNT} separate toll-price feeds.
         </>

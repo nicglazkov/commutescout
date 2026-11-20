@@ -63,7 +63,7 @@ TZ_EAST = ZoneInfo("America/New_York")
 # location (README.md, site/lib/stats.ts, site/app/about/page.tsx,
 # site/components/blocks/hero-section-1.tsx) and pins them to this
 # constant.
-PUBLIC_SOURCE_COUNT = 53
+PUBLIC_SOURCE_COUNT = 54
 
 # (lat_min, lon_min, lat_max, lon_max) - fetch a state only when the
 # viewport overlaps it.
@@ -484,6 +484,11 @@ TRAVELIQ = {
     # is retired and the standard endpoints accept our existing key.
     "nck": ("North Carolina", NC_BOUNDS,
             "https://www.drivenc.gov", "NC511_API_KEY", "NCDOT"),
+    # FL511 runs on Travel-IQ too (fl511.com/api/v2 answers "Invalid Key"
+    # without one, like az511). Once FL511_API_KEY is mounted it replaces
+    # the DIVAS layers on gis.fdot.gov, which refuse non-browser clients.
+    "flk": ("Florida", (24.3, -87.7, 31.1, -79.8), "https://fl511.com",
+            "FL511_API_KEY", "FDOT (FL511)"),
 }
 
 
@@ -1378,7 +1383,18 @@ for _c in TRAVELIQ:
 
 # A ready keyed state replaces its WZDx-only feed so roadwork is not
 # drawn twice. keyed code -> wzdx code.
-SUPERSEDES = {"utk": "ut", "azk": "az", "idk": "id", "nck": "nc"}
+SUPERSEDES = {"utk": "ut", "azk": "az", "idk": "id", "nck": "nc",
+              "flk": "flw"}
+
+
+# A ready keyed state can also replace a keyless live feed for the same
+# state. keyless code -> keyed code.
+KEYLESS_SUPERSEDES = {"fl": "flk"}
+
+
+def _keyless_superseded(code: str) -> bool:
+    entry = KEYED_STATES.get(KEYLESS_SUPERSEDES.get(code, ""))
+    return bool(entry and entry[3]())
 
 
 def _wzdx_superseded(wzdx_code: str) -> bool:
@@ -1449,6 +1465,10 @@ WZDX_FEEDS = {
             "https://data.austintexas.gov/download/d9mm-cjw9"),
     # The app_key below is published in the public FHWA registry entry
     # (FDOT's one.network WZDx distribution), not a private secret.
+    # Listed in the FHWA registry (needapikey false, 2026-07-23); unlike
+    # the www.mdottraffic.com alert endpoint it answers Google Cloud.
+    "msw": ("Mississippi", "MDOT (WZDx)", MS_BOUNDS,
+            "https://api.mdottraffic.com/prod/v3/data/wzdx"),
     "flw": ("Florida", "FDOT (WZDx)", (24.3, -87.7, 31.1, -79.8),
             "https://us-datacloud.one.network/fdot/feed.json?app_key="
             "c4090b04-26de-c9ee-873b2bd9a38c"),
@@ -2918,7 +2938,7 @@ async def markers_for_bbox(client, box, want,
                 _capped(lambda u=url, s=src, k=cap:
                         _fetch_wzdx(client, u, s, cap=k))))
     for code, (_st, bounds, fetcher) in KEYLESS_STATES.items():
-        if _overlaps(box, bounds):
+        if _overlaps(box, bounds) and not _keyless_superseded(code):
             lookups.append(_cache.get(
                 f"{code}:all", TTL, MAX_SERVE,
                 _capped(lambda f=fetcher: f(client))))
@@ -2980,6 +3000,8 @@ async def _prewarm_all(client) -> None:
             for c in NEC_STATES
         ]
         for code, (_n, _b, fetcher) in KEYLESS_STATES.items():
+            if _keyless_superseded(code):
+                continue
             lookups.append(_cache.get(f"{code}:all", TTL, MAX_SERVE,
                                       _capped(lambda f=fetcher: f(client))))
         for code, (_n, _b, fetcher, ready) in KEYED_STATES.items():
@@ -3061,7 +3083,7 @@ def _expected_keys(box=None, want=None) -> list[str]:
     keys += [f"wzdx:{c}" for c, (_s, _l, b, _u) in WZDX_FEEDS.items()
              if not _wzdx_superseded(c) and near(b)]
     keys += [f"{c}:all" for c, (_n, b, _f) in KEYLESS_STATES.items()
-             if near(b)]
+             if not _keyless_superseded(c) and near(b)]
     keys += [f"{c}:all" for c, (_n, b, _f, ready) in KEYED_STATES.items()
              if ready() and near(b)]
     keys += [f"toll:{c}" for c, (_s, b, _f, ready, _t)
@@ -3168,6 +3190,8 @@ def source_status() -> list[dict]:
             continue
         out.append(_status_entry(f"wzdx:{code}", "Roadwork (WZDx)", src, st))
     for code, (st, _b, _f) in KEYLESS_STATES.items():
+        if _keyless_superseded(code):
+            continue
         out.append(_status_entry(f"{code}:all", "Live feeds",
                                  {"md": "MDOT CHART",
                                   "il": "TravelMidwest (IDOT)",
@@ -3190,7 +3214,7 @@ def source_status() -> list[dict]:
                   "akk": "Alaska DOT&PF", "cok": "CDOT",
                   "vak": "VDOT SmarterRoads", "ctk": "CTDOT",
                   "idk": "ITD", "nvk": "NDOT",
-                  "nck": "NCDOT"}.get(code, name)
+                  "nck": "NCDOT", "flk": "FDOT (FL511)"}.get(code, name)
         out.append(_status_entry(f"{code}:all", "All feeds", agency, name))
     from ca_roads_demo import freshness
 
