@@ -106,9 +106,24 @@
 .watch .witem > button { background:none; border:0;
   color:var(--dim); cursor:pointer; font-size:.95rem; padding:4px 6px }
 .watch .witem > button:first-of-type { margin-left:auto }
+.watch .witem > button { min-width:32px; min-height:32px; display:inline-grid; place-items:center }
 .watch .witem > button:hover { color:var(--sky) }
 .watch .witem > button:last-of-type:hover { color:var(--red) }
 .watch .witem.paused .wname { color:var(--dim) }
+/* The row's parts: the name is a button that frames the area, then a
+   meta line, the alert kinds as chips, and icon buttons with labels. */
+.watch .witem .wtext { flex:1; min-width:0 }
+.watch .witem button.wname { display:block; background:none; border:0; padding:0;
+  font:600 .86rem Inter; color:var(--ink); text-align:left; cursor:pointer }
+.watch .witem .wstate { font:600 .66rem Inter; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--dim); border:1px solid var(--line); border-radius:99px; padding:1px 7px;
+  vertical-align:1px }
+.watch .wkinds { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px }
+.watch .wkinds span { font-size:.7rem; line-height:1.5; padding:0 7px; border-radius:99px;
+  border:1px solid var(--line); color:var(--dim) }
+.watch .witem > button svg { display:block }
+.watch .weditor .wlabel { font:600 .72rem Inter; letter-spacing:.6px; text-transform:uppercase;
+  color:var(--dim); margin-bottom:-4px }
 .watch .weditor { flex-basis:100%; border-top:1px dashed var(--line);
   margin-top:8px; padding-top:10px; display:flex; flex-direction:column;
   gap:8px; cursor:default }

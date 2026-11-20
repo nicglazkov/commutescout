@@ -25,3 +25,106 @@
   --cs-line: #dbe3ec;   /* borders */
   --cs-font: Inter, system-ui, sans-serif;
 }
+
+/* Clear Coat, the site's full token set (site/app/globals.css), for the
+   static app pages that adopt the site's look. Opt-in per page with
+   <html class="cc">, so the pages that still use the older palette above
+   (map, trip, admin) do not move. Names and values match globals.css
+   one for one; tests/test_watch_page.py checks they stay in step.
+   Theme: data-theme on <html> (set before paint by basemap-early.js,
+   the same rule as the site), with the OS setting as the no-JS fallback. */
+:root.cc {
+  color-scheme: light;
+  --cs-bg: #f5f7fa;
+  --cs-surface: #ffffff;
+  --cs-surface-2: #eef2f7;
+  --cs-inset: #e7ecf3;
+  --cs-ink: #0b1a2c;
+  --cs-ink-2: #475569;
+  --cs-ink-3: #5f6e82;
+  --cs-line: #e1e7ef;
+  --cs-line-strong: #c9d3df;
+  --cs-accent: #1a63d6;
+  --cs-accent-hover: #1555bb;
+  --cs-accent-ink: #ffffff;
+  --cs-accent-soft: #e8f0fd;
+  --cs-incident: #ab4d0d;
+  --cs-incident-soft: #fdf0e6;
+  --cs-closure: #a1262e;
+  --cs-closure-soft: #fcebec;
+  --cs-chain: #4053a8;
+  --cs-chain-soft: #eceffb;
+  --cs-fire: #946200;
+  --cs-fire-soft: #fbf3df;
+  --cs-ok: #1a774f;
+  --cs-ok-soft: #e4f4ec;
+  --cs-font-sans: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cs-font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --cs-radius-sm: 6px;
+  --cs-radius-md: 10px;
+  --cs-radius-lg: 16px;
+  --cs-shadow-sm: 0 1px 2px rgb(11 26 44 / 0.06), 0 1px 1px rgb(11 26 44 / 0.03);
+  --cs-shadow-md: 0 1px 2px rgb(11 26 44 / 0.05), 0 16px 40px -16px rgb(11 26 44 / 0.22);
+  --cs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --cs-paper: var(--cs-surface);
+  --cs-sky: var(--cs-accent);
+  --cs-font: var(--cs-font-sans);
+}
+@media (prefers-color-scheme: dark) {
+  :root.cc:not([data-theme="light"]) {
+    color-scheme: dark;
+    --cs-bg: #0a111b;
+    --cs-surface: #111a26;
+    --cs-surface-2: #172231;
+    --cs-inset: #0d1520;
+    --cs-ink: #e6edf5;
+    --cs-ink-2: #a3b2c4;
+    --cs-ink-3: #8091a6;
+    --cs-line: #223042;
+    --cs-line-strong: #33445b;
+    --cs-accent: #5b9cff;
+    --cs-accent-hover: #7aafff;
+    --cs-accent-ink: #06101e;
+    --cs-accent-soft: #14284a;
+    --cs-incident: #f0914f;
+    --cs-incident-soft: #33200f;
+    --cs-closure: #ff8a8f;
+    --cs-closure-soft: #3a1619;
+    --cs-chain: #98a6f0;
+    --cs-chain-soft: #1c2244;
+    --cs-fire: #e3b341;
+    --cs-fire-soft: #2f2610;
+    --cs-ok: #4fc98e;
+    --cs-ok-soft: #10301f;
+    --cs-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --cs-shadow-md: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 18px 44px -18px rgb(0 0 0 / 0.7);
+  }
+}
+:root.cc[data-theme="dark"] {
+  color-scheme: dark;
+  --cs-bg: #0a111b;
+  --cs-surface: #111a26;
+  --cs-surface-2: #172231;
+  --cs-inset: #0d1520;
+  --cs-ink: #e6edf5;
+  --cs-ink-2: #a3b2c4;
+  --cs-ink-3: #8091a6;
+  --cs-line: #223042;
+  --cs-line-strong: #33445b;
+  --cs-accent: #5b9cff;
+  --cs-accent-hover: #7aafff;
+  --cs-accent-ink: #06101e;
+  --cs-accent-soft: #14284a;
+  --cs-incident: #f0914f;
+  --cs-incident-soft: #33200f;
+  --cs-closure: #ff8a8f;
+  --cs-closure-soft: #3a1619;
+  --cs-chain: #98a6f0;
+  --cs-chain-soft: #1c2244;
+  --cs-fire: #e3b341;
+  --cs-fire-soft: #2f2610;
+  --cs-ok: #4fc98e;
+  --cs-ok-soft: #10301f;
+  --cs-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --cs-shadow-md: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 18px 44px -18px rgb(0 0 0 / 0.7);
+}

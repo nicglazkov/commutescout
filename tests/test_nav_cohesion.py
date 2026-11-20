@@ -156,7 +156,9 @@ def _check_surface(name: str, anchors: list[dict], omit: set | None = None) -> N
 @pytest.mark.parametrize("page", STATIC_PAGES)
 def test_static_page_header_matches_target_nav(page):
     html_text = (STATIC_DIR / f"{page}.html").read_text(encoding="utf-8")
-    block = _extract_header_block(html_text, '<header class="topbar">')
+    # Prefix match: /watch's header is `<header class="topbar sitebar">`
+    # (the Clear Coat site header; see tests/test_watch_page.py).
+    block = _extract_header_block(html_text, '<header class="topbar')
     _check_surface(page, _anchors_in(block), OMITTED_ON.get(page))
 
 

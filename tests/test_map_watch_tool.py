@@ -76,7 +76,7 @@ def test_map_page_loads_the_tool_on_first_use():
 def test_watch_styles_are_scoped_and_shared():
     assert '<link rel="stylesheet" href="/static/watch.css?v=__ASSET_V__">' in HTML
     assert '<link rel="stylesheet" href="/static/watch.css?v=__ASSET_V__">' in WATCH_HTML
-    assert '<main class="watch">' in WATCH_HTML
+    assert '<main class="watch"' in WATCH_HTML
     rules = re.findall(r"^([^@\s/][^{]*)\{", WATCH_CSS, re.M)
     unscoped = [r.strip() for r in rules if not r.startswith(".watch")
                 and not r.startswith((".vhandle", ".mhandle"))]
