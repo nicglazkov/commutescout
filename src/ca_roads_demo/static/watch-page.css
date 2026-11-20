@@ -278,7 +278,13 @@
 }
 @media (max-width: 900px) {
   .wp-app { grid-template-columns:1fr; height:auto; min-height:0 }
-  .wp-mapwrap { order:-1; height:46dvh; min-height:300px; border-bottom:1px solid var(--cs-line) }
+  /* Full width, a steady height: svh does not change as the phone's
+     address bar slides, and the cap keeps the map from growing on tall
+     screens, so the base map never has to catch up with a resize. */
+  .wp-mapwrap { order:-1; width:100%; height:clamp(300px, 46svh, 440px); border-bottom:1px solid var(--cs-line) }
+  /* The credit sits on the map as one small line in the corner. */
+  .wp .leaflet-control-attribution { max-width:calc(100% - 16px); margin:0 !important; padding:1px 6px;
+    border-top-left-radius:6px; font-size:10px; line-height:1.5 }
   .wp-panel { overflow:visible; border-right:0 }
   .wp-head, .wp-sec, .wp .watch .wp-sec.card, .wp .watch .footer-note { padding-left:20px; padding-right:20px }
   .wp .watch .footer-note { padding-bottom:calc(28px + env(safe-area-inset-bottom)) }

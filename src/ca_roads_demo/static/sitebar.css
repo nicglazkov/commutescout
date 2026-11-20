@@ -113,7 +113,9 @@
   .cc .sitebar.open nav { display:block }
   .cc .sitebar nav > ul { flex-direction:column; align-items:stretch; gap:0 }
   .cc .sitebar nav > ul > li { border-bottom:1px solid var(--cs-line) }
-  .cc .sitebar nav > ul > li:last-child { border-bottom:0 }
+  /* No rule under the last shown item (the account item is hidden
+     while signed out). */
+  .cc .sitebar nav > ul > li:not(:has(~ li:not([hidden]))) { border-bottom:0 }
   .cc .sitebar .tl { min-height:44px; font-size:.9375rem }
   .cc .sitebar .devmenu { padding:8px 0 }
   .cc .sitebar .devbtn { display:none }
