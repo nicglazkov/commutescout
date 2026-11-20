@@ -13,14 +13,14 @@ import { Coverage, DeveloperBand, DriveBand, FourWays } from "@/components/home/
 export const metadata: Metadata = {
   title: "CommuteScout: live road conditions, traffic map, and route planner",
   description:
-    "CommuteScout tracks live road conditions from 54 official sources across 37 states and plans routes that avoid closures and chain controls.",
+    "CommuteScout tracks live road conditions from 55 official sources across 37 states and plans routes that avoid closures and chain controls.",
   alternates: {
     canonical: "https://commutescout.com/",
   },
   openGraph: {
     title: "CommuteScout: live road conditions, traffic map, and route planner",
     description:
-      "CommuteScout tracks live road conditions from 54 official sources across 37 states and plans routes that avoid closures and chain controls.",
+      "CommuteScout tracks live road conditions from 55 official sources across 37 states and plans routes that avoid closures and chain controls.",
     // The brief pins this to exactly "https://commutescout.com/" (trailing
     // slash). Next 16's metadata resolver unconditionally normalizes a
     // root-path absolute URL to origin-only (see resolveAbsoluteUrlWithPathname

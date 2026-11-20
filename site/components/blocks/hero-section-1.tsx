@@ -40,7 +40,7 @@ export default function HeroSection() {
             Live road conditions, straight from the source
           </h1>
           <p className="cs-lede cs-rise mt-6 max-w-[32rem] [animation-delay:120ms]">
-            Incidents, closures, chain controls, cameras and wildfires from 54 official sources
+            Incidents, closures, chain controls, cameras and wildfires from 55 official sources
             across 37 states, on one live map.
           </p>
 

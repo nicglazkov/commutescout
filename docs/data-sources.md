@@ -83,7 +83,7 @@ learned running them:
 
 ## Beyond California
 
-The map shows live data across 37 states, from 54 official agency feeds
+The map shows live data across 37 states, from 55 official agency feeds
 in total (CHP and Caltrans among them). Out-of-state feeds are fetched
 only when the viewport touches the state and carry a source label in
 every popup. Coverage is not uniform: some states have full incidents,
