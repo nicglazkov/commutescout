@@ -51,7 +51,8 @@ def test_rail_has_five_primary_tools_and_the_rest_behind_more():
     tools = re.findall(r'data-tool="([a-z]+)"', rail)
     assert tools == ["places", "route", "alerts", "layers", "ask", "watch", "about", "settings"]
     primary, adv = rail.split('<div class="railadv"')
-    assert re.findall(r'data-tool="([a-z]+)"', primary) == ["places", "route", "alerts", "layers", "ask"]
+    main_tools = re.findall(r'data-tool="([a-z]+)"', primary)
+    assert main_tools == ["places", "route", "alerts", "layers", "ask"]
     for name in ("Places", "Route", "Live", "Layers", "Ask", "Watch areas", "Settings", "Data"):
         assert f"<span>{name}</span>" in rail
     # Links only in the expanded part; one expand toggle, last.

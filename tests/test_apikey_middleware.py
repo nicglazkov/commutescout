@@ -281,7 +281,8 @@ async def test_mcp_protocol_traffic_is_not_billed_but_tool_calls_are(monkeypatch
         assert r.status_code == 200 and r.json()["len"] == len(call)
     assert c.post("/mcp", content=call, headers=h).status_code == 429
     # A batch hiding a tool call among free methods counts; junk counts.
-    assert c.post("/mcp", content=json.dumps([free[0], json.loads(call)]), headers=h).status_code == 429
+    batch = json.dumps([free[0], json.loads(call)])
+    assert c.post("/mcp", content=batch, headers=h).status_code == 429
     assert c.post("/mcp", content=b"not json", headers=h).status_code == 429
     # Protocol traffic still works after the tier is spent.
     assert c.post("/mcp", content=json.dumps(free[2]), headers=h).status_code == 200
