@@ -74,7 +74,7 @@ def test_the_route_is_mounted():
 def test_both_sign_in_pages_have_an_unticked_agreement_with_links():
     for page in ("map.html", "watch.html"):
         html = (STATIC / page).read_text(encoding="utf-8")
-        card = re.search(r'<div class="card signin-card">(.*?)<div class="msg" id="signinmsg">',
+        card = re.search(r'<div class="card signin-card">(.*?)<div class="msg" id="signinmsg"',
                          html, re.S).group(1)
         box = re.search(r'<input type="checkbox" id="agree"[^>]*>', card).group(0)
         assert "checked" not in box, page

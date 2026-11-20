@@ -1,315 +1,241 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="cc">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b1f33">
+<meta name="theme-color" content="#f5f7fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a111b" media="(prefers-color-scheme: dark)">
 <title>Watch areas - CommuteScout</title>
-<meta name="description" content="Get alerted when incidents, closures, chain controls, or wildfires appear in an area you care about.">
+<meta name="description" content="Draw an area once and get an alert when an incident, closure, chain control or wildfire shows up inside it.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
+<!-- Sets the colour theme before first paint (the site's rule: the saved
+     cs-theme choice, else the system setting) and asks for the base
+     map's style early. -->
+<script src="/static/basemap-early.js?v=__ASSET_V__"></script>
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/leaflet.css?v=__ASSET_V__">
 <link rel="stylesheet" href="/static/vendor/maplibre-gl.css?v=__ASSET_V__">
-<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/tokens.css?v=__ASSET_V__">
+<link rel="stylesheet" href="/static/sitebar.css?v=__ASSET_V__">
 <link rel="stylesheet" href="/static/watch.css?v=__ASSET_V__">
-<style>
-:root {
-  /* Aliased to the shared token sheet (tokens.css) so this page moves
-     with the map app and the marketing site; the many existing
-     --navy/--navy2/--ink/--line/--bg/--sky usages below are unchanged. */
-  --navy:var(--cs-navy); --navy2:var(--cs-navy2); --ink:var(--cs-ink); --dim:#5b6b7d;
-  --bg:var(--cs-bg); --card:var(--cs-paper); --line:var(--cs-line);
-  --sky:var(--cs-sky); --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
-  --red-soft:#fbe9e9; --green:#2f9e6e; --green-soft:#e2f5ec;
-}
-* { box-sizing:border-box; margin:0 }
-html, body { height:100% }
-* { -webkit-tap-highlight-color: transparent }
-button:active { transform:scale(.985) }
-body { background:var(--bg); color:var(--ink);
-  font:14.5px/1.55 Inter, system-ui, sans-serif }
-.topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
-  flex-wrap:wrap; gap:14px; padding:0 20px; height:56px; flex:none }
-.topbar a.brand { display:flex; align-items:center; gap:14px; color:inherit;
-  text-decoration:none }
-.topbar img.mark { width:30px; height:30px; border-radius:7px }
-.topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
-.topbar nav { display:flex; gap:4px; margin-left:14px }
-/* .navcta is the Live map / current-page pill: a topbar-level sibling of
-   nav (not nested inside it), same as the site's Next.js header, so it
-   can sit beside the brand on its own row at <=640px (see that media
-   query below). Shares nav a's base look. */
-.topbar nav a, .topbar .navcta { color:#b7c4d4; font-size:.85rem; padding:7px 12px;
-  border-radius:8px; text-decoration:none }
-.topbar nav a:hover, .topbar .navcta:hover { color:#fff }
-.topbar .navmenu { display:none; background:none; border:0; color:#b7c4d4;
-  width:40px; height:40px; border-radius:8px; align-items:center;
-  justify-content:center; cursor:pointer }
-.topbar .navmenu:hover { color:#fff; background:rgba(255,255,255,.08) }
-.topbar .navcta.live { background:var(--sky); color:#fff }
-.topbar nav a.on, .topbar .navcta.on { background:var(--navy2); color:#fff }
-.topbar .who { margin-left:auto; font-size:.78rem; color:#9fb4c9;
-  display:flex; gap:10px; align-items:center; white-space:nowrap }
-.topbar .who button { background:none; border:1px solid #33506e;
-  color:#b7c4d4; border-radius:7px; padding:3px 10px; font:500 .76rem Inter;
-  cursor:pointer }
-.topbar .who button:hover { color:#fff; border-color:#5b7898 }
-main { max-width:1180px; margin:0 auto; padding:22px 16px 50px }
-h1 { font-size:1.3rem; margin:6px 0 2px; letter-spacing:-.2px }
-.sub { color:var(--dim); font-size:.86rem; margin-bottom:18px }
-.split { display:grid; grid-template-columns:400px 1fr; gap:16px; align-items:start }
-#wmap { height:520px; min-height:320px; border-radius:14px; border:1px solid var(--line) }
-/* Always-visible page footer: footer-note above lives inside the
-   signed-in appzone, so a visitor who never signs in would otherwise
-   never see a GitHub link on this page. */
-.pagefoot { max-width:1180px; margin:0 auto; padding:14px 16px 22px;
-  color:var(--dim); font-size:.72rem }
-.pagefoot a { color:var(--dim) }
-
-/* ── Signed-out pitch ───────────────────────────────────────────── */
-.pitch { display:grid; grid-template-columns:1.1fr 1fr; gap:30px;
-  align-items:center; max-width:980px; margin:6vh auto 28px }
-.pitch-copy .lead { color:var(--dim); font-size:.95rem; line-height:1.6;
-  margin:12px 0 18px }
-.pitchlist { list-style:none; display:flex; flex-direction:column; gap:11px }
-.pitchlist li { font-size:.86rem; color:var(--ink); padding-left:26px;
-  position:relative }
-.pitchlist li::before { content:""; position:absolute; left:0; top:4px;
-  width:16px; height:16px; border-radius:99px; background:var(--sky-soft);
-  border:1px solid #cfe2fd }
-.pitchlist li b { font-weight:700 }
-.signin-card { max-width:380px; margin:0 auto 8vh; text-align:left }
-
-/* Screenshot-free illustrative panel: a stylized watch circle over a
-   faux road grid with a floating alert toast, built entirely from
-   CSS shapes so it never goes stale like a real capture would. */
-.illustrate { position:relative; height:230px; border-radius:16px;
-  overflow:hidden; border:1px solid var(--navy);
-  background:linear-gradient(165deg, var(--navy) 0%, var(--navy2) 100%) }
-.ill-roads { position:absolute; inset:0; opacity:.4;
-  background-image:
-    linear-gradient(90deg, transparent 46%, #ffffff33 46% 54%, transparent 54%),
-    linear-gradient(0deg, transparent 28%, #ffffff22 28% 31%, transparent 31%),
-    linear-gradient(0deg, transparent 68%, #ffffff22 68% 71%, transparent 71%) }
-.ill-watch { position:absolute; left:38%; top:38%; width:130px; height:130px;
-  transform:translate(-50%,-50%); border-radius:99px; border:2px dashed #7fb0ec;
-  background:radial-gradient(circle, rgba(47,129,247,.32), transparent 70%) }
-.ill-pin { position:absolute; left:38%; top:38%; width:11px; height:11px;
-  transform:translate(-50%,-50%); border-radius:99px; background:#fff;
-  box-shadow:0 0 0 4px rgba(255,255,255,.22) }
-.ill-toast { position:absolute; right:14px; bottom:14px; left:14px;
-  max-width:250px; margin-left:auto; background:#fff; border-radius:12px;
-  padding:10px 12px; display:flex; gap:10px; align-items:center;
-  box-shadow:0 8px 20px rgba(0,0,0,.3) }
-.ill-toast-dot { width:9px; height:9px; border-radius:99px;
-  background:var(--amber); flex:none }
-.ill-toast-title { font-size:.8rem; font-weight:700; color:var(--ink) }
-.ill-toast-sub { font-size:.72rem; color:var(--dim) }
-
-/* ── Access-gate card ───────────────────────────────────────────── */
-.authwrap { max-width:420px; margin:9vh auto 0 }
-.authwrap h1 { text-align:center; margin-bottom:14px }
-
-/* ── Mobile: kept last so it wins the cascade over every component
-   rule above (all same specificity, so source order decides). ───── */
-@media (max-width: 900px) {
-  .split { grid-template-columns:1fr }
-  /* Map above the form on a phone: draw first, describe after. */
-  #wmap { order:-1; height:48vh; min-height:320px }
-  .split > div { order:1 }
-  main { padding:14px 12px 40px }
-  input, select, textarea { font-size:16px !important }
-  #wmap { height:48dvh }
-  body { overflow-x:clip }
-  main { padding-bottom:calc(40px + env(safe-area-inset-bottom)) }
-  .pitch { grid-template-columns:1fr; margin-top:3vh }
-  .illustrate { order:-1 }
-  .pitch-copy h1 { font-size:1.4rem }
-}
-/* ── Topbar: two rows below 640px ──────────────────────────────
-   Row 1 (unchanged flex row, just tighter): brand left, the Live
-   map/current-page pill right. Row 2: the four text nav links, one
-   row, four equal columns, each a >=40px tap target - full width,
-   evenly distributed, no scrolling (the 375px horizontal-scroll strip
-   this replaced hid 3 of 4 destinations with no visible affordance).
-   flex-wrap on .topbar plus flex-basis:100% on nav is what forces nav
-   onto its own line: brand + the pill fit on row 1 with room to
-   spare, so wrap only breaks before the item that alone demands the
-   full row width. */
-@media (max-width: 640px) {
-  .topbar { height:auto; flex-wrap:wrap; gap:8px; row-gap:4px;
-    padding:8px 12px;
-    padding-left:max(12px, env(safe-area-inset-left));
-    padding-right:max(12px, env(safe-area-inset-right)) }
-  .topbar a.brand { gap:8px }
-  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
-  .topbar .navcta { flex:0 0 auto; margin-left:auto; min-height:36px;
-    display:flex; align-items:center }
-  .topbar .who { display:none }
-  /* One row on phones: the nav opens under the bar from the Menu
-     button (topbar.js), as on the site header. */
-  .topbar .navmenu { display:flex }
-  .topbar nav { order:3; flex:1 1 100%; margin-left:0; display:none;
-    grid-template-columns:repeat(2, 1fr); gap:4px; padding-bottom:4px }
-  .topbar.open nav { display:grid }
-  .topbar nav a { padding:0 12px; font-size:.88rem; min-height:44px;
-    display:flex; align-items:center }
-}
-
-.hidden { display:none !important }
-</style>
+<link rel="stylesheet" href="/static/watch-page.css?v=__ASSET_V__">
 </head>
-<body>
-<header class="topbar">
+<body class="wp">
+<a class="skip" href="#main">Skip to content</a>
+<!-- The site header (site/components/site-header.tsx), item for item:
+     the same links, labels and order, the Developers menu with its
+     three notes, the theme switch and the Live map button. Below 1024px
+     the nav folds behind the Menu button, as on the site. The account
+     menu is this page's one addition. tests/test_watch_page.py pins the
+     items to the site's source. -->
+<header class="topbar sitebar">
+ <div class="sb-in">
   <a class="brand" href="/" aria-label="CommuteScout home">
     <img class="mark" src="/logo.svg" alt="">
     <span class="wordmark">CommuteScout</span>
   </a>
-  <nav id="topnav">
-    <a href="/watch" class="on">Watch areas</a>
-    <a href="/data-sources">Data sources</a>
-    <a href="/developers">Developers</a>
-    <a href="/mcp">MCP Server</a>
-    <a href="/marketplace">Marketplace</a>
-    <a href="/app">Get the app</a>
-    <a href="/pricing">Pricing</a>
-  </nav>
-  <a class="navcta live" href="/map">Live map</a>
-  <button type="button" class="navmenu" aria-expanded="false" aria-controls="topnav" aria-label="Menu"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-  <span class="who" id="who"></span>
-</header>
-<main class="watch">
-
-  <!-- signed out -->
-  <section id="signin" class="hidden">
-    <div class="pitch">
-      <div class="pitch-copy">
-        <span class="badge">TRIAL</span>
-        <h1>Never miss a closure on your commute</h1>
-        <p class="lead">Draw an area anywhere CommuteScout covers, once.
-          CommuteScout checks it about every 5 minutes and sends an alert
-          when an incident, closure, chain control, or wildfire shows
-          up inside it, so you find out before you are already stuck in
-          it.</p>
-        <ul class="pitchlist">
-          <li><b>Draw it.</b> A circle around home or work, a polygon
-            around a region, or a route with a buffer along your
-            commute.</li>
-          <li><b>Pick what matters.</b> Incidents, closures, chain
-            controls, wildfires: choose any combination.</li>
-          <li><b>Get notified.</b> Push notification, email, or both,
-            at the next check after something changes.</li>
-        </ul>
+  <nav id="topnav" aria-label="Site">
+   <ul>
+    <li><a class="tl" href="/watch" aria-current="page">Watch areas</a></li>
+    <li><a class="tl" href="/data-sources">Data sources</a></li>
+    <li class="devmenu">
+      <button type="button" class="tl devbtn" aria-expanded="false" aria-controls="devpop">Developers<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+      <p class="devlabel">For developers</p>
+      <div class="devpop" id="devpop">
+       <ul>
+        <li><span class="devico"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span><a href="/developers">Developers</a><span class="devnote">REST API reference, keys and daily limits</span></span></li>
+        <li><span class="devico"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg></span><span><a href="/mcp">MCP Server</a><span class="devnote">Connect Claude, Cursor or any MCP client</span></span></li>
+        <li><span class="devico"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></svg></span><span><a href="/marketplace">Marketplace</a><span class="devnote">Plugins that add alerts to the map and the apps</span></span></li>
+       </ul>
       </div>
-      <div class="illustrate" aria-hidden="true">
-        <div class="ill-roads"></div>
-        <div class="ill-watch"></div>
-        <div class="ill-pin"></div>
-        <div class="ill-toast">
-          <div class="ill-toast-dot"></div>
-          <div>
-            <div class="ill-toast-title">Chain control active</div>
-            <div class="ill-toast-sub">Inside your watch area</div>
+    </li>
+    <li><a class="tl" href="/app">Get the app</a></li>
+    <li><a class="tl" href="/pricing">Pricing</a></li>
+    <li class="acct" hidden>
+      <button type="button" class="tl acctbtn" aria-expanded="false" aria-controls="acctpop" aria-label="Account"><span class="avatar" aria-hidden="true"></span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+      <div class="acctpop" id="acctpop">
+        <div class="acctcard">
+          <p class="acctlabel">Signed in as</p>
+          <div class="who" id="who"></div>
+        </div>
+      </div>
+    </li>
+   </ul>
+  </nav>
+  <div class="sb-act">
+    <button type="button" class="themetoggle" aria-label="Switch color theme" title="Switch color theme"><svg class="moon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg><svg class="sun" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+    <a class="navcta" href="/map">Live map</a>
+    <button type="button" class="navmenu" aria-expanded="false" aria-controls="topnav" aria-label="Menu"><svg class="bars" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg><svg class="x" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+ </div>
+</header>
+
+<main class="watch" id="main" tabindex="-1">
+
+  <!-- Signed out. With .consent (signed in, agreement missing) only the
+       sign-in card shows, as the agreement. -->
+  <section id="signin" class="hidden">
+    <div class="wp-hero">
+      <div class="wp-intro">
+        <p class="eyebrow">Watch areas <span class="dot" aria-hidden="true"></span> Trial</p>
+        <h1>Alerts for the roads you drive</h1>
+        <p class="lead">Draw an area once, anywhere CommuteScout covers: around
+          home, along your commute or over a mountain pass. CommuteScout checks
+          it about every 5 minutes and tells you when an incident, closure,
+          chain control or wildfire shows up inside it.</p>
+        <ol class="wp-steps">
+          <li><span class="num" aria-hidden="true">01</span><div><b>Draw it</b>
+            <span>A circle, a shape of your own, or a route with a buffer.</span></div></li>
+          <li><span class="num" aria-hidden="true">02</span><div><b>Pick what matters</b>
+            <span>Incidents, closures, chain controls, wildfires, in any mix.</span></div></li>
+          <li><span class="num" aria-hidden="true">03</span><div><b>Get the alert</b>
+            <span>By push notification, email or both, at the next check after something changes.</span></div></li>
+        </ol>
+      </div>
+
+      <div class="wp-signin">
+        <div class="card signin-card">
+          <h2 class="si-title">Sign in to set up alerts</h2>
+          <p class="si-sub">Free during the trial, up to 3 watch areas.</p>
+          <p class="eyebrow si-consent">One more step</p>
+          <h1 class="si-consent">Agree to the terms to continue</h1>
+          <label class="agree" id="agreerow"><input type="checkbox" id="agree">
+            <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Use</a>
+            and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a></span></label>
+          <p class="agreenote" id="agreenote" hidden>By continuing you agree to the
+            <a href="/terms" target="_blank" rel="noopener">Terms of Use</a> and
+            <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+          <div id="signinbtns">
+            <button type="button" class="primary" id="googlebtn">Continue with Google</button>
+            <div class="or">or get a link by email</div>
+            <label class="flabel" for="email">Email</label>
+            <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+            <button type="button" class="ghost" id="emailbtn">Email me a sign-in link</button>
           </div>
+          <button type="button" class="primary hidden" id="termsbtn">Continue</button>
+          <p class="si-hint si-consent">Tick the box to turn on Continue.</p>
+          <div class="msg" id="signinmsg" role="status" aria-live="polite"></div>
         </div>
       </div>
     </div>
-    <div class="card signin-card">
-      <label class="agree" id="agreerow"><input type="checkbox" id="agree">
-        <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Use</a>
-        and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a></span></label>
-      <p class="agreenote" id="agreenote" hidden>By continuing you agree to the
-        <a href="/terms" target="_blank" rel="noopener">Terms of Use</a> and
-        <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
-      <div id="signinbtns">
-      <button class="primary" id="googlebtn">Continue with Google</button>
-      <div class="or">or use an email link</div>
-      <input type="email" id="email" placeholder="you@example.com"
-             aria-label="Email address" autocomplete="email">
-      <div style="height:8px"></div>
-      <button class="ghost" id="emailbtn" style="width:100%">
-        Email me a sign-in link</button>
+
+    <!-- What a free watch area can be. Figures come from the server's
+         free-tier limits (src/ca_roads_demo/watch.py, FREE_MAX_*), and
+         tests/test_watch_page.py checks them against it. -->
+    <section class="wp-specs" aria-labelledby="specs-h">
+      <div class="wp-specs-head">
+        <h2 id="specs-h">What you can watch</h2>
+        <p>Three shapes, any of the four kinds of alert, sent the way you choose.</p>
       </div>
-      <button class="primary hidden" id="termsbtn">Continue</button>
-      <div class="msg" id="signinmsg"></div>
-    </div>
+      <ul class="wp-shapes">
+        <li>
+          <svg viewBox="0 0 120 72" aria-hidden="true"><path class="g" d="M0 52h120M34 0v72M86 0v72"/><circle class="a" cx="60" cy="36" r="26"/><circle class="p" cx="60" cy="36" r="3.5"/></svg>
+          <h3>Circle</h3>
+          <p>Around home, work or a school, up to 25&nbsp;mi (40&nbsp;km) out from the center.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 120 72" aria-hidden="true"><path class="g" d="M0 22h120M0 58h120M70 0v72"/><path class="a" d="M24 18 76 8 100 40 64 64 30 52Z"/><g class="p"><circle cx="24" cy="18" r="3.5"/><circle cx="76" cy="8" r="3.5"/><circle cx="100" cy="40" r="3.5"/><circle cx="64" cy="64" r="3.5"/><circle cx="30" cy="52" r="3.5"/></g></svg>
+          <h3>Your own shape</h3>
+          <p>3 to 20 corners around a valley, a pass or a neighborhood, up to 2,000&nbsp;sq&nbsp;mi.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 120 72" aria-hidden="true"><path class="g" d="M0 36h120M44 0v72"/><path class="buf" d="M10 58C34 58 38 22 62 22S92 46 112 14"/><path class="r" d="M10 58C34 58 38 22 62 22S92 46 112 14"/><circle class="p" cx="10" cy="58" r="3.5"/><circle class="p" cx="112" cy="14" r="3.5"/></svg>
+          <h3>Route</h3>
+          <p>Your drive from start to end, up to 250&nbsp;mi long, watched up to 2&nbsp;mi either side.</p>
+        </li>
+      </ul>
+      <ul class="wp-kinds" aria-label="Kinds of alert">
+        <li data-kind="incident">Incidents</li>
+        <li data-kind="closure">Closures</li>
+        <li data-kind="chain">Chain controls</li>
+        <li data-kind="fire">Wildfires</li>
+      </ul>
+    </section>
   </section>
 
-  <!-- signed in, not approved -->
-  <section id="gate" class="hidden">
-    <div class="authwrap">
-      <h1>Almost there</h1>
+  <!-- Signed in, not approved yet: the access code. -->
+  <section id="gate" class="hidden" aria-labelledby="gate-h">
+    <div class="wp-narrow">
+      <p class="eyebrow">Watch areas <span class="dot" aria-hidden="true"></span> Trial</p>
+      <h1 id="gate-h">Unlock watch areas</h1>
       <div class="card">
         <p id="gatetext" class="gate-copy">Watch areas are in a limited
           trial. Enter an access code to unlock them, or check back once
           your account is approved.</p>
-        <input type="text" id="code" placeholder="Access code"
-               aria-label="Access code"
-               autocomplete="off" style="text-transform:uppercase">
-        <div style="height:8px"></div>
-        <button class="primary" id="redeembtn">Unlock watch areas</button>
-        <div class="msg" id="gatemsg"></div>
+        <label class="flabel" for="code">Access code</label>
+        <input type="text" id="code" placeholder="ABCD-1234" autocomplete="off"
+               autocapitalize="characters" spellcheck="false">
+        <button type="button" class="primary" id="redeembtn">Unlock watch areas</button>
+        <div class="msg" id="gatemsg" role="status" aria-live="polite"></div>
         <p class="gate-ask">No code? <a href="/contact">Ask for access</a>
           and we'll reply to the email you signed in with.</p>
       </div>
     </div>
   </section>
 
-  <!-- approved -->
+  <!-- Approved: the panel and the map. -->
   <section id="appzone" class="hidden">
-    <h1>Watch areas <span class="badge">TRIAL</span></h1>
-    <div class="sub">Alerts are checked about every 5 minutes.
-      Informational only - verify with 511 before you drive.</div>
-    <div class="split">
-      <div>
-        <div class="card newwatch-card">
-          <h2>New watch</h2>
+    <div class="wp-app">
+      <div class="wp-panel">
+        <div class="wp-head">
+          <h1>Watch areas <span class="badge">Trial</span></h1>
+          <p class="sub">Checked about every 5 minutes. Alerts are informational:
+            check your state's 511 before you drive.</p>
+        </div>
+
+        <section class="wp-sec wp-list" aria-labelledby="list-h">
+          <div class="cardhead">
+            <h2 id="list-h">Your watch areas</h2>
+            <span class="usage" id="wcount"></span>
+          </div>
+          <div class="usagebar" aria-hidden="true"><div class="usagefill" id="usagefill"></div></div>
+          <div class="wlist" id="wlist"></div>
+          <div class="msg" id="listmsg" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="wp-sec card newwatch-card" aria-labelledby="new-h">
+          <h2 id="new-h">New watch area</h2>
 
           <div class="stepblock">
-            <div class="stepnum">1</div>
+            <div class="stepnum" aria-hidden="true">1</div>
             <div class="stepbody">
-              <div class="steplabel">Choose a shape</div>
-              <div class="modes">
-                <button id="mode-circle" class="on">Circle</button>
-                <button id="mode-polygon">Polygon</button>
-                <button id="mode-route">Route</button>
+              <div class="steplabel" id="shape-l">Choose a shape</div>
+              <div class="modes" role="group" aria-labelledby="shape-l">
+                <button type="button" id="mode-circle" class="on" aria-pressed="true">Circle</button>
+                <button type="button" id="mode-polygon" aria-pressed="false">Polygon</button>
+                <button type="button" id="mode-route" aria-pressed="false">Route</button>
               </div>
             </div>
           </div>
 
           <div class="stepblock">
-            <div class="stepnum">2</div>
+            <div class="stepnum" aria-hidden="true">2</div>
             <div class="stepbody">
-              <div class="steplabel">Draw it in</div>
-              <div class="hint" id="shapehint">Click the map to place the
+              <div class="steplabel">Draw it on the map</div>
+              <div class="hint" id="shapehint" aria-live="polite">Click the map to place the
                 center, then set the radius.</div>
-              <div class="devrow hidden" id="polytools" style="margin-top:8px">
-                <button class="ghost" id="undopt">Undo corner</button>
-                <button class="ghost" id="clearpts">Start over</button>
+              <div class="devrow hidden" id="polytools">
+                <button type="button" class="ghost" id="undopt">Undo corner</button>
+                <button type="button" class="ghost" id="clearpts">Start over</button>
               </div>
-              <div class="field hidden" id="routerow" style="margin-top:12px">
+              <div class="field hidden" id="routerow">
                 <label for="rw-from">From</label>
                 <input type="text" id="rw-from" maxlength="200"
-                       placeholder="Address, place or city">
-                <div style="height:8px"></div>
+                       placeholder="Address, place or city" autocomplete="off">
                 <label for="rw-to">To</label>
                 <input type="text" id="rw-to" maxlength="200"
-                       placeholder="Address, place or city">
-                <div style="height:8px"></div>
-                <button class="ghost" id="rw-preview" style="width:100%">
-                  Preview route</button>
-                <div class="field" style="margin:12px 0 0">
-                  <label for="rw-buffer">Alert distance from route</label>
-                  <div class="radius">
-                    <input type="range" id="rw-buffer" min="1" max="2" value="2">
-                    <b id="rw-bufferlabel">2 mi</b>
-                  </div>
+                       placeholder="Address, place or city" autocomplete="off">
+                <button type="button" class="ghost" id="rw-preview">Preview route</button>
+                <label for="rw-buffer">Alert distance from the route</label>
+                <div class="radius">
+                  <input type="range" id="rw-buffer" min="1" max="2" value="2">
+                  <b id="rw-bufferlabel">2 mi</b>
                 </div>
               </div>
-              <div class="field" id="radiusrow" style="margin-top:12px">
+              <div class="field" id="radiusrow">
                 <label for="radius">Radius</label>
                 <div class="radius">
                   <input type="range" id="radius" min="1" max="40.2" value="15">
@@ -320,86 +246,105 @@ h1 { font-size:1.3rem; margin:6px 0 2px; letter-spacing:-.2px }
           </div>
 
           <div class="stepblock">
-            <div class="stepnum">3</div>
+            <div class="stepnum" aria-hidden="true">3</div>
             <div class="stepbody">
               <div class="steplabel">Name it and choose alerts</div>
               <div class="field">
                 <label for="wname">Name</label>
                 <input type="text" id="wname" maxlength="60"
-                       placeholder="e.g. My commute">
+                       placeholder="For example, My commute" autocomplete="off">
               </div>
-              <div class="field">
-                <label>Alert me about</label>
+              <fieldset class="field">
+                <legend>Alert me about</legend>
                 <div class="kinds">
-                  <label><input type="checkbox" data-kind="incident" checked>Incidents</label>
-                  <label><input type="checkbox" data-kind="closure" checked>Closures</label>
-                  <label><input type="checkbox" data-kind="chain">Chain controls</label>
-                  <label><input type="checkbox" data-kind="fire" checked>Wildfires</label>
+                  <label data-kind="incident"><input type="checkbox" data-kind="incident" checked>Incidents</label>
+                  <label data-kind="closure"><input type="checkbox" data-kind="closure" checked>Closures</label>
+                  <label data-kind="chain"><input type="checkbox" data-kind="chain">Chain controls</label>
+                  <label data-kind="fire"><input type="checkbox" data-kind="fire" checked>Wildfires</label>
                 </div>
-              </div>
-              <div class="field">
-                <label>Deliver via</label>
+              </fieldset>
+              <fieldset class="field">
+                <legend>Send alerts by</legend>
                 <div class="chans">
                   <label><input type="checkbox" id="ch-push" checked>Push notification</label>
                   <label id="emailchan" class="hidden">
                     <input type="checkbox" id="ch-email">Email</label>
                 </div>
-              </div>
+              </fieldset>
             </div>
           </div>
 
-          <button class="primary" id="createbtn">Create watch</button>
-          <button class="ghost hidden" id="canceledit"
-                  style="width:100%;margin-top:8px">Cancel shape edit</button>
-          <div class="msg" id="createmsg"></div>
-        </div>
-        <div class="card">
-          <div class="cardhead">
-            <h2>Your watches</h2>
-            <span class="usage" id="wcount"></span>
-          </div>
-          <div class="usagebar"><div class="usagefill" id="usagefill"></div></div>
-          <div class="wlist" id="wlist"></div>
-          <div class="msg" id="listmsg"></div>
-        </div>
-        <div class="card">
-          <h2>This device</h2>
+          <button type="button" class="primary" id="createbtn">Create watch</button>
+          <button type="button" class="ghost hidden" id="canceledit">Cancel shape edit</button>
+          <div class="msg" id="createmsg" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="wp-sec" aria-labelledby="dev-h">
+          <h2 id="dev-h">Notifications on this device</h2>
+          <p class="hint">Push alerts arrive on each browser or phone you turn
+            them on for.</p>
           <div class="devrow">
-            <button class="ghost" id="notifbtn">Enable notifications</button>
-            <button class="ghost" id="testbtn">Send test alert</button>
+            <button type="button" class="ghost" id="notifbtn">Turn on notifications</button>
+            <button type="button" class="ghost" id="testbtn">Send a test alert</button>
           </div>
-          <div class="msg" id="devmsg"></div>
-          <div class="hint">On iPhone or iPad, first add this page to
-            your home screen (Share &rarr; Add to Home Screen), then open
-            it from there and enable notifications.</div>
-        </div>
-        <div class="card">
-          <h2>Account</h2>
-          <p class="hint" style="margin-bottom:10px">Deleting your
-            account removes it completely and immediately: every watch
-            area, alert state, and registered device. There is no undo.</p>
-          <button class="ghost" id="deleteacct"
-                  style="color:var(--red);border-color:#e8c9c9">
-            Delete my account</button>
-          <div class="msg" id="acctmsg"></div>
-        </div>
+          <div class="msg" id="devmsg" role="status" aria-live="polite"></div>
+          <p class="hint">On iPhone or iPad, add this page to your Home Screen
+            first (Share, then Add to Home Screen), open it from there, then
+            turn on notifications.</p>
+        </section>
+
+        <section class="wp-sec" aria-labelledby="acct-h">
+          <h2 id="acct-h">Account</h2>
+          <p class="hint">Deleting your account removes it at once, with every
+            watch area, alert record and registered device. This can't be undone.</p>
+          <button type="button" class="ghost danger" id="deleteacct">Delete my account</button>
+          <div class="msg" id="acctmsg" role="status" aria-live="polite"></div>
+        </section>
+
+        <p class="footer-note">Alerts are informational only and can be late,
+          incomplete or wrong. Check your state's 511 before you drive, and never
+          rely on CommuteScout for evacuation or emergency decisions. We store your
+          account email and the areas you draw to run your alerts: see the
+          <a href="/privacy">privacy page</a> and the <a href="/terms">terms</a>.</p>
       </div>
-      <div id="wmap"></div>
-    </div>
-    <div class="footer-note">
-      Alerts are informational only and may be delayed, incomplete, or
-      wrong. Always verify with <a href="tel:511">511</a> or
-      quickmap.dot.ca.gov before you drive, and never rely on this
-      service for evacuation or emergency decisions. Your account email
-      and the areas you draw are stored to run your alerts - see the
-      <a href="/privacy">privacy page</a> and <a href="/terms">terms</a>.
+      <div class="wp-mapwrap">
+        <div id="wmap" role="region" aria-label="Map. Click to place a watch area."></div>
+      </div>
     </div>
   </section>
 </main>
-<footer class="pagefoot">
-  <a href="/privacy">Privacy</a>
-  <a href="/terms">Terms</a>
-  <a href="https://github.com/nicglazkov/commutescout" target="_blank" rel="noopener">GitHub</a>
+
+<footer class="sitefoot">
+ <div class="sf-in">
+  <div class="sf-grid">
+    <div>
+      <a class="sf-brand" href="/"><img src="/logo.svg" alt=""><span>CommuteScout</span></a>
+      <p class="sf-tag">Live road conditions from official sources. Open source, MIT licensed.</p>
+      <p class="sf-pill"><i aria-hidden="true"></i>53 sources, 37 states</p>
+    </div>
+    <div class="sf-cols">
+      <div><h2>Product</h2><ul>
+        <li><a href="/map">Live map</a></li><li><a href="/watch">Watch areas</a></li>
+        <li><a href="/app">Get the app</a></li><li><a href="/pricing">Pricing</a></li></ul></div>
+      <div><h2>Developers</h2><ul>
+        <li><a href="/developers">REST API</a></li><li><a href="/mcp">MCP Server</a></li>
+        <li><a href="/plugins">Plugins</a></li><li><a href="/marketplace">Marketplace</a></li>
+        <li><a href="/data-sources">Data sources</a></li></ul></div>
+      <div><h2>Company</h2><ul>
+        <li><a href="/about">About</a></li><li><a href="/contact">Contact</a></li>
+        <li><a href="https://github.com/nicglazkov/commutescout">GitHub</a></li></ul></div>
+      <div><h2>Legal</h2><ul>
+        <li><a href="/privacy">Privacy</a></li><li><a href="/terms">Terms</a></li></ul></div>
+    </div>
+  </div>
+  <div class="sf-legal">
+    <p>Data from state transportation agencies, highway patrols, the National Weather
+      Service and national wildfire agencies, listed on the
+      <a href="/data-sources">data sources page</a>. Not affiliated with any government
+      agency. Check your state's 511 before you drive.</p>
+    <p class="sf-year">&copy; CommuteScout</p>
+  </div>
+ </div>
 </footer>
 
 <script src="/static/vendor/leaflet.js?v=__ASSET_V__"></script>
@@ -410,8 +355,25 @@ h1 { font-size:1.3rem; margin:6px 0 2px; letter-spacing:-.2px }
 <script src="/static/units.js?v=__ASSET_V__"></script>
 <script type="module">
 import { initWatch } from '/static/watch-app.js?v=__ASSET_V__';
-const map = L.map('wmap', { zoomControl: true }).setView([37.5, -120.5], 6);
-csBaseLayer(CS_BASEMAP_DEFAULT).addTo(map);
+// Opens on the whole covered country; the saved areas reframe it.
+const map = L.map('wmap', { zoomControl: true })
+  .setView([39.5, -98.5], matchMedia('(max-width: 640px)').matches ? 3 : 4);
+// The base map follows the theme unless one was chosen on the map page.
+const baseName = () => {
+  let n = null;
+  try { n = localStorage.getItem('cs-basemap'); } catch (e) { /* private mode */ }
+  if (n && CS_BASEMAPS.includes(n)) return n;
+  return document.documentElement.dataset.theme === 'dark' ? 'Dark' : CS_BASEMAP_DEFAULT;
+};
+let base = csBaseLayer(baseName()).addTo(map);
+// The map starts hidden (signed out) and changes size with the layout:
+// keep Leaflet and the vector base map in step with its box.
+new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById('wmap'));
+document.addEventListener('cs-theme', () => {
+  map.removeLayer(base);
+  base = csBaseLayer(baseName()).addTo(map);
+});
+document.querySelector('.sf-year').textContent = '© ' + new Date().getFullYear() + ' CommuteScout';
 initWatch({ map });
 </script>
 <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d2d77aff6dfe4462b09ca501c9151de4"}'></script>

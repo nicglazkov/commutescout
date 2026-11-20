@@ -1,0 +1,165 @@
+/* The site's header and footer (site/components/site-header.tsx and
+   site-footer.tsx) for the static app pages that use the Clear Coat look
+   (<html class="cc">, tokens in tokens.css). Same items, order, sizes,
+   colors and breakpoints as the site; topbar.js drives the Menu sheet,
+   the Developers menu, the theme switch and the account menu.
+   tests/test_watch_page.py pins the nav items to the site's source. */
+
+.cc .skip { position:absolute; left:12px; top:-60px; z-index:2000; padding:10px 14px;
+  border-radius:var(--cs-radius-md); background:var(--cs-accent); color:var(--cs-accent-ink);
+  font:500 .875rem var(--cs-font-sans); text-decoration:none }
+.cc .skip:focus { top:12px }
+
+/* ── Header ───────────────────────────────────────────────────── */
+.cc .sitebar { position:sticky; top:0; z-index:1100; height:auto; padding:0; display:block;
+  border-bottom:1px solid var(--cs-line); color:var(--cs-ink);
+  background:color-mix(in srgb, var(--cs-bg) 86%, transparent);
+  -webkit-backdrop-filter:blur(12px) saturate(1.5); backdrop-filter:blur(12px) saturate(1.5);
+  font-family:var(--cs-font-sans) }
+.cc .sb-in { max-width:1264px; margin:0 auto; padding:0 20px; height:64px;
+  display:flex; align-items:center; gap:24px }
+@media (min-width: 768px) { .cc .sb-in { padding:0 32px } }
+.cc .sitebar a.brand { display:flex; align-items:center; gap:10px; flex:none; margin-left:-4px;
+  padding:4px; border-radius:var(--cs-radius-md); color:var(--cs-ink); text-decoration:none }
+.cc .sitebar img.mark { width:28px; height:28px; border-radius:0 }
+.cc .sitebar .wordmark { font:600 .975rem/1 var(--cs-font-sans); letter-spacing:-.01em }
+
+.cc .sitebar nav { flex:1; margin:0; display:block }
+.cc .sitebar nav > ul { list-style:none; padding:0; display:flex; align-items:center; gap:2px }
+.cc .sitebar .tl { display:flex; align-items:center; gap:4px; min-height:36px; padding:0 12px;
+  border-radius:var(--cs-radius-md); border:0; background:none; cursor:pointer;
+  font:400 .875rem/1 var(--cs-font-sans); color:var(--cs-ink-2); text-decoration:none;
+  transition:color 150ms, background-color 150ms }
+.cc .sitebar .tl:hover { background:var(--cs-surface-2); color:var(--cs-ink) }
+.cc .sitebar .tl[aria-current="page"] { color:var(--cs-ink); font-weight:500 }
+.cc .sitebar .devbtn svg { width:14px; height:14px; color:var(--cs-ink-3); transition:transform 200ms }
+.cc .sitebar .devmenu.open .devbtn svg { transform:rotate(180deg) }
+.cc .sitebar .devmenu { position:relative }
+.cc .sitebar .devlabel { display:none }
+.cc .sitebar .devpop { position:absolute; left:50%; top:100%; width:23rem; padding-top:8px;
+  transform:translate(-50%, -4px); opacity:0; visibility:hidden;
+  transition:opacity 200ms var(--cs-ease), transform 200ms var(--cs-ease), visibility 200ms }
+.cc .sitebar .devmenu.open .devpop { opacity:1; visibility:visible; transform:translate(-50%, 0) }
+.cc .sitebar .devpop ul { list-style:none; margin:0; padding:6px; border:1px solid var(--cs-line);
+  border-radius:var(--cs-radius-lg); background:var(--cs-surface); box-shadow:var(--cs-shadow-md) }
+.cc .sitebar .devpop li { position:relative; display:flex; gap:12px; padding:10px 12px;
+  border-radius:var(--cs-radius-md); transition:background-color 150ms }
+.cc .sitebar .devpop li:hover, .cc .sitebar .devpop li:focus-within { background:var(--cs-surface-2) }
+.cc .sitebar .devico { flex:none; width:32px; height:32px; margin-top:2px; display:grid; place-items:center;
+  border:1px solid var(--cs-line); border-radius:var(--cs-radius-sm); background:var(--cs-surface);
+  color:var(--cs-ink-2); transition:color 150ms }
+.cc .sitebar .devpop li:hover .devico { color:var(--cs-accent) }
+.cc .sitebar .devico svg { width:16px; height:16px }
+.cc .sitebar .devpop a { display:inline; padding:0; min-height:0; background:none;
+  font:500 .875rem/1.3 var(--cs-font-sans); color:var(--cs-ink); text-decoration:none; outline:none }
+.cc .sitebar .devpop a::after { content:""; position:absolute; inset:0; border-radius:var(--cs-radius-md) }
+.cc .sitebar .devpop a:focus-visible::after { outline:2px solid var(--cs-accent) }
+.cc .sitebar .devpop a[aria-current="page"] { color:var(--cs-accent) }
+.cc .sitebar .devnote { display:block; margin-top:2px; font-size:.8125rem; line-height:1.35; color:var(--cs-ink-3) }
+
+/* Account: the site has no sign-in, so this is the one addition. It sits
+   at the end of the row, before the theme switch, and only while signed
+   in (topbar.js shows it once the watch module fills #who). */
+.cc .sitebar .acct { position:relative; margin-left:auto }
+.cc .sitebar .acct[hidden] { display:none }
+.cc .sitebar .acctbtn { gap:8px; padding:0 8px 0 4px }
+.cc .sitebar .avatar { width:28px; height:28px; border-radius:99px; display:grid; place-items:center;
+  background:var(--cs-accent-soft); color:var(--cs-accent); font:600 .8125rem/1 var(--cs-font-sans) }
+.cc .sitebar .acctpop { position:absolute; right:0; top:100%; padding-top:8px; width:17rem;
+  opacity:0; visibility:hidden; transform:translateY(-4px);
+  transition:opacity 200ms var(--cs-ease), transform 200ms var(--cs-ease), visibility 200ms }
+.cc .sitebar .acct.open .acctpop { opacity:1; visibility:visible; transform:none }
+.cc .sitebar .acctcard { padding:14px; border:1px solid var(--cs-line); border-radius:var(--cs-radius-lg);
+  background:var(--cs-surface); box-shadow:var(--cs-shadow-md) }
+.cc .sitebar .acctlabel { margin:0 0 2px; font:500 .75rem/1rem var(--cs-font-mono); letter-spacing:.08em;
+  text-transform:uppercase; color:var(--cs-ink-3) }
+.cc .sitebar .who { display:flex; flex-direction:column; align-items:stretch; gap:12px; margin:0;
+  font-size:.875rem; color:var(--cs-ink); white-space:normal }
+.cc .sitebar .who span { overflow-wrap:anywhere; font-weight:500 }
+.cc .sitebar .who button { min-height:36px; border:1px solid var(--cs-line-strong); border-radius:var(--cs-radius-md);
+  background:var(--cs-surface); color:var(--cs-ink); font:500 .875rem var(--cs-font-sans); cursor:pointer;
+  padding:0 12px; transition:background-color 150ms }
+.cc .sitebar .who button:hover { background:var(--cs-surface-2) }
+
+.cc .sb-act { display:flex; align-items:center; gap:6px; margin-left:auto }
+.cc .sitebar nav:has(.acct:not([hidden])) + .sb-act { margin-left:0 }
+.cc .themetoggle { width:36px; height:36px; display:grid; place-items:center; border:0; background:none;
+  border-radius:var(--cs-radius-md); color:var(--cs-ink-2); cursor:pointer; transition:color 150ms, background-color 150ms }
+.cc .themetoggle:hover { background:var(--cs-surface-2); color:var(--cs-ink) }
+.cc .themetoggle svg { width:18px; height:18px }
+.cc .themetoggle .sun, :root.cc[data-theme="dark"] .themetoggle .moon { display:none }
+:root.cc[data-theme="dark"] .themetoggle .sun { display:block }
+.cc .sitebar .navcta { margin-left:4px; height:36px; min-height:0; display:inline-flex; align-items:center;
+  padding:0 14px; border-radius:var(--cs-radius-md); background:var(--cs-accent); color:var(--cs-accent-ink);
+  font:500 .875rem/1 var(--cs-font-sans); text-decoration:none; white-space:nowrap;
+  box-shadow:var(--cs-shadow-sm); transition:background-color 150ms }
+.cc .sitebar .navcta:hover { background:var(--cs-accent-hover); color:var(--cs-accent-ink) }
+.cc .sitebar .navmenu { display:none; width:44px; height:44px; margin-right:-8px; align-items:center;
+  justify-content:center; border:0; background:none; border-radius:var(--cs-radius-md);
+  color:var(--cs-ink); cursor:pointer }
+.cc .sitebar .navmenu:hover { background:var(--cs-surface-2) }
+.cc .sitebar .navmenu .x, .cc .sitebar.open .navmenu .bars { display:none }
+.cc .sitebar.open .navmenu .x { display:block }
+.cc .sitebar a:focus-visible, .cc .sitebar button:focus-visible, .cc .themetoggle:focus-visible {
+  outline:2px solid var(--cs-accent); outline-offset:2px }
+
+/* Below 1024px, as on the site: the nav is a sheet under the bar,
+   opened by the Menu button, with the developer pages listed in place. */
+@media (max-width: 1023.98px) {
+  .cc .sitebar .navmenu { display:inline-flex }
+  .cc .sitebar nav { display:none; position:absolute; left:0; right:0; top:64px;
+    max-height:calc(100dvh - 64px); overflow-y:auto; padding:8px 20px 24px;
+    border-bottom:1px solid var(--cs-line); background:var(--cs-bg); box-shadow:var(--cs-shadow-md) }
+  .cc .sitebar.open nav { display:block }
+  .cc .sitebar nav > ul { flex-direction:column; align-items:stretch; gap:0 }
+  .cc .sitebar nav > ul > li { border-bottom:1px solid var(--cs-line) }
+  .cc .sitebar nav > ul > li:last-child { border-bottom:0 }
+  .cc .sitebar .tl { min-height:44px; font-size:.9375rem }
+  .cc .sitebar .devmenu { padding:8px 0 }
+  .cc .sitebar .devbtn { display:none }
+  .cc .sitebar .devlabel { display:block; margin:0; padding:8px 12px 4px; font:500 .75rem/1rem var(--cs-font-mono);
+    letter-spacing:.08em; text-transform:uppercase; color:var(--cs-ink-3) }
+  .cc .sitebar .devpop { position:static; width:auto; padding:0; transform:none; opacity:1; visibility:visible; transition:none }
+  .cc .sitebar .devpop ul { padding:0; border:0; background:none; box-shadow:none }
+  .cc .sitebar .acct { margin:0; padding:8px 0 }
+  .cc .sitebar .acctbtn { display:none }
+  .cc .sitebar .acctpop { position:static; width:auto; padding:8px 12px 0; transform:none; opacity:1; visibility:visible; transition:none }
+  .cc .sitebar .acctcard { padding:0; border:0; background:none; box-shadow:none }
+  .cc .sitebar .who { flex-direction:row; align-items:center; justify-content:space-between; flex-wrap:wrap }
+}
+@media (max-width: 380px) {
+  .cc .sb-in { gap:12px }
+  .cc .sitebar .wordmark { font-size:.9rem }
+}
+
+/* ── Footer (site-footer.tsx) ─────────────────────────────────── */
+.cc .sitefoot { border-top:1px solid var(--cs-line); background:var(--cs-surface);
+  font-family:var(--cs-font-sans); color:var(--cs-ink) }
+.cc .sf-in { max-width:1264px; margin:0 auto; padding:56px 20px 40px }
+@media (min-width: 768px) { .cc .sf-in { padding:64px 32px 40px } }
+.cc .sf-grid { display:grid; gap:40px 32px }
+@media (min-width: 768px) { .cc .sf-grid { grid-template-columns:4fr 8fr } }
+.cc .sf-brand { display:inline-flex; align-items:center; gap:10px; color:var(--cs-ink); text-decoration:none }
+.cc .sf-brand img { width:28px; height:28px }
+.cc .sf-brand span { font:600 .975rem var(--cs-font-sans); letter-spacing:-.01em }
+.cc .sf-tag { max-width:30ch; margin:16px 0 0; font-size:.875rem; line-height:1.6; color:var(--cs-ink-2) }
+.cc .sf-pill { display:inline-flex; align-items:center; gap:8px; margin-top:20px; padding:6px 12px;
+  border:1px solid var(--cs-line); border-radius:99px; font:400 .75rem var(--cs-font-mono); color:var(--cs-ink-2) }
+.cc .sf-pill i { width:6px; height:6px; border-radius:99px; background:var(--cs-ok) }
+.cc .sf-cols { display:grid; grid-template-columns:repeat(2, 1fr); gap:40px 24px }
+@media (min-width: 640px) { .cc .sf-cols { grid-template-columns:repeat(4, 1fr) } }
+.cc .sf-cols h2 { margin:0; font:500 .8125rem var(--cs-font-sans); color:var(--cs-ink) }
+.cc .sf-cols ul { list-style:none; margin:16px 0 0; padding:0; display:flex; flex-direction:column; gap:12px }
+.cc .sf-cols a { font-size:.875rem; color:var(--cs-ink-2); text-decoration:none; transition:color 150ms }
+.cc .sf-cols a:hover { color:var(--cs-ink) }
+.cc .sf-legal { display:flex; flex-direction:column; gap:12px; margin-top:56px; padding-top:24px;
+  border-top:1px solid var(--cs-line); font-size:.8125rem; line-height:1.6; color:var(--cs-ink-3) }
+.cc .sf-legal p { margin:0; max-width:72ch }
+.cc .sf-legal a { color:inherit; text-underline-offset:2px }
+.cc .sf-legal a:hover { color:var(--cs-ink) }
+@media (min-width: 768px) { .cc .sf-legal { flex-direction:row; justify-content:space-between; align-items:flex-start } }
+.cc .sitefoot a:focus-visible { outline:2px solid var(--cs-accent); outline-offset:2px; border-radius:4px }
+
+@media (prefers-reduced-motion: reduce) {
+  .cc .sitebar *, .cc .sitefoot * { transition:none !important }
+}

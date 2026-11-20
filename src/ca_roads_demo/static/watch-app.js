@@ -90,6 +90,8 @@ export async function initWatch(opts) {
     $('termsbtn').disabled = !$('agree').checked;
     $('signinbtns').classList.toggle('hidden', termsGate);
     $('termsbtn').classList.toggle('hidden', !termsGate);
+    // Signed in, agreement missing: the page shows only the agreement.
+    $('signin').classList.toggle('consent', termsGate);
   }
   $('agree').addEventListener('change', syncAgree);
   syncAgree();
@@ -368,6 +370,11 @@ export async function initWatch(opts) {
     mode = 'polygon';
     $('mode-circle').classList.remove('on');
     $('mode-polygon').classList.add('on');
+    $('mode-circle').setAttribute('aria-pressed', 'false');
+    $('mode-polygon').setAttribute('aria-pressed', 'true');
+    $('mode-route').classList.remove('on');
+    $('mode-route').setAttribute('aria-pressed', 'false');
+    $('routerow').classList.add('hidden');
     $('radiusrow').classList.add('hidden');
     center = null;
     polyPoints = (w.points || []).map(
@@ -403,6 +410,9 @@ export async function initWatch(opts) {
     $('mode-circle').classList.toggle('on', m === 'circle');
     $('mode-polygon').classList.toggle('on', m === 'polygon');
     $('mode-route').classList.toggle('on', m === 'route');
+    for (const k of ['circle', 'polygon', 'route']) {
+      $('mode-' + k).setAttribute('aria-pressed', String(m === k));
+    }
     $('radiusrow').classList.toggle('hidden', m !== 'circle');
     $('routerow').classList.toggle('hidden', m !== 'route');
     $('shapehint').textContent = HINTS[m];
@@ -535,12 +545,16 @@ export async function initWatch(opts) {
     form.className = 'weditor';
     const nameIn = document.createElement('input');
     nameIn.type = 'text'; nameIn.maxLength = 60; nameIn.value = w.name || '';
+    nameIn.setAttribute('aria-label', 'Name');
     const kindsBox = document.createElement('div');
     kindsBox.className = 'kinds';
+    kindsBox.setAttribute('role', 'group');
+    kindsBox.setAttribute('aria-label', 'Alert me about');
     for (const [kind, label] of [['incident', 'Incidents'],
         ['closure', 'Closures'], ['chain', 'Chain controls'],
         ['fire', 'Wildfires']]) {
       const lab = document.createElement('label');
+      lab.dataset.kind = kind;
       const cb = document.createElement('input');
       cb.type = 'checkbox'; cb.dataset.kind = kind;
       cb.checked = (w.kinds || []).includes(kind);
@@ -549,6 +563,8 @@ export async function initWatch(opts) {
     }
     const chanBox = document.createElement('div');
     chanBox.className = 'chans';
+    chanBox.setAttribute('role', 'group');
+    chanBox.setAttribute('aria-label', 'Send alerts by');
     const mkChan = (key, label, checked) => {
       const lab = document.createElement('label');
       const cb = document.createElement('input');
@@ -561,9 +577,11 @@ export async function initWatch(opts) {
       chanBox.append(mkChan('email', 'Email', !!(w.channels || {}).email));
     }
     const save = document.createElement('button');
-    save.className = 'primary'; save.textContent = 'Save';
+    save.type = 'button';
+    save.className = 'primary'; save.textContent = 'Save changes';
     save.style.width = 'auto'; save.style.padding = '7px 16px';
     const cancel = document.createElement('button');
+    cancel.type = 'button';
     cancel.className = 'ghost'; cancel.textContent = 'Cancel';
     const errBox = document.createElement('div');
     errBox.className = 'msg';
@@ -581,13 +599,19 @@ export async function initWatch(opts) {
         await reloadWatches();
       } catch (err) { msg('listmsg', err.message, 'err'); }
     });
-    cancel.addEventListener('click', (e) => { e.stopPropagation(); form.remove(); });
+    cancel.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const toggle = form.closest('.witem')?.querySelector('.wedit');
+      form.remove();
+      if (toggle) { toggle.setAttribute('aria-expanded', 'false'); toggle.focus(); }
+    });
     form.addEventListener('click', (e) => e.stopPropagation());
     const btnRow = document.createElement('div');
     btnRow.className = 'devrow';
     btnRow.append(save, cancel);
     if (w.type === 'polygon') {
       const shapeBtn = document.createElement('button');
+      shapeBtn.type = 'button';
       shapeBtn.className = 'ghost';
       shapeBtn.textContent = 'Edit shape on map';
       shapeBtn.addEventListener('click', (e) => {
@@ -597,9 +621,39 @@ export async function initWatch(opts) {
       });
       btnRow.append(shapeBtn);
     }
-    form.append(nameIn, kindsBox, chanBox, btnRow, errBox);
+    const cap = (t) => { const d = document.createElement('div');
+      d.className = 'wlabel'; d.textContent = t; d.setAttribute('aria-hidden', 'true'); return d; };
+    form.append(cap('Name'), nameIn, cap('Alert me about'), kindsBox,
+      cap('Send alerts by'), chanBox, btnRow, errBox);
     return form;
   }
+
+  // Saved areas take the page's "ok" green when it has the site's tokens
+  // (the /watch page), so they read in both themes; the map page keeps
+  // the darker green it always had.
+  const savedColor = () => getComputedStyle(document.documentElement)
+    .getPropertyValue('--cs-ok').trim() || '#1c3a2e';
+  const KIND_LABELS = { incident: 'Incidents', closure: 'Closures',
+    chain: 'Chain controls', fire: 'Wildfires' };
+  const ICONS = {
+    pause: '<path d="M8 5v14M16 5v14"/>',
+    play: '<path d="M7 4.5v15l12-7.5z"/>',
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+    del: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  };
+  const iconBtn = (icon, label) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" '
+      + 'fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" '
+      + 'stroke-linejoin="round">' + ICONS[icon] + '</svg>';
+    return b;
+  };
+  document.addEventListener('cs-theme', () => {
+    if (me && me.status === 'approved') renderWatches();
+  });
 
   function renderWatches() {
     const list = $('wlist');
@@ -612,8 +666,8 @@ export async function initWatch(opts) {
     if (!me.watches.length) {
       list.innerHTML = '<div class="empty"><div class="empty-ico"></div>'
         + '<div class="empty-title">No watch areas yet</div>'
-        + '<div class="empty-sub">Pick a shape above, draw it on the map, '
-        + 'then give it a name to start getting alerts.</div></div>';
+        + '<div class="empty-sub">Choose a shape, draw it on the map, '
+        + 'then name it to start getting alerts.</div></div>';
       return;
     }
     for (const w of me.watches) {
@@ -621,8 +675,8 @@ export async function initWatch(opts) {
       const style = paused
         ? { color: '#8a94a3', weight: 1.5, dashArray: '6 6',
             fillColor: '#8a94a3', fillOpacity: 0.05 }
-        : { color: '#1c3a2e', weight: 1.5,
-            fillColor: '#1c3a2e', fillOpacity: 0.08 };
+        : { color: savedColor(), weight: 1.5,
+            fillColor: savedColor(), fillOpacity: 0.08 };
       let shape;
       if (w.type === 'circle') {
         shape = L.circle([w.center.lat, w.center.lon],
@@ -642,11 +696,21 @@ export async function initWatch(opts) {
       const row = document.createElement('div');
       row.className = 'witem' + (paused ? ' paused' : '');
       const dot = document.createElement('i');
-      dot.style.background = paused ? '#8a94a3' : '#1c3a2e';
+      dot.style.background = paused ? '#8a94a3' : savedColor();
       const text = document.createElement('div');
-      const name = document.createElement('div');
+      text.className = 'wtext';
+      // The name is the row's own button: it frames the area on the map.
+      const name = document.createElement('button');
+      name.type = 'button';
       name.className = 'wname';
-      name.textContent = w.name + (paused ? ' (paused)' : '');
+      name.textContent = w.name;
+      name.title = 'Show on the map';
+      if (paused) {
+        const st = document.createElement('span');
+        st.className = 'wstate';
+        st.textContent = 'Paused';
+        name.append(' ', st);
+      }
       const meta = document.createElement('div');
       meta.className = 'wmeta';
       const chans = [];
@@ -656,14 +720,20 @@ export async function initWatch(opts) {
       meta.textContent = (w.type === 'circle'
         ? fmt(w.radius_km) + ' circle'
         : w.type === 'route'
-          ? fmt(w.length_km || 0, 0) + ' route \u00b7 ' + fmt(w.buffer_km || 3, 1) + ' buffer'
-          : 'polygon') +
-        ' - ' + (w.kinds || []).join(', ') +
-        ' - ' + (chans.join(' + ') || 'no delivery');
-      text.append(name, meta);
-      const pause = document.createElement('button');
-      pause.textContent = paused ? '\u25b6' : '\u23f8';
-      pause.title = paused ? 'Resume alerts' : 'Pause alerts';
+          ? fmt(w.length_km || 0, 0) + ' route \u00b7 ' + fmt(w.buffer_km || 3, 1) + ' either side'
+          : 'Polygon') +
+        ' \u00b7 ' + (chans.length ? chans.join(' and ') : 'no delivery');
+      const kindsRow = document.createElement('div');
+      kindsRow.className = 'wkinds';
+      for (const k of (w.kinds || [])) {
+        const chip = document.createElement('span');
+        chip.dataset.kind = k;
+        chip.textContent = KIND_LABELS[k] || k;
+        kindsRow.append(chip);
+      }
+      text.append(name, meta, kindsRow);
+      const pause = iconBtn(paused ? 'play' : 'pause',
+        (paused ? 'Resume alerts for ' : 'Pause alerts for ') + w.name);
       pause.addEventListener('click', async (e) => {
         e.stopPropagation();
         try {
@@ -672,18 +742,18 @@ export async function initWatch(opts) {
           await reloadWatches();
         } catch (err) { msg('listmsg', err.message, 'err'); }
       });
-      const edit = document.createElement('button');
-      edit.textContent = '\u270e';
-      edit.title = 'Edit name, kinds, delivery';
+      const edit = iconBtn('edit', 'Edit ' + w.name);
+      edit.classList.add('wedit');
+      edit.setAttribute('aria-expanded', 'false');
       edit.addEventListener('click', (e) => {
         e.stopPropagation();
         const open = row.querySelector('.weditor');
-        if (open) { open.remove(); return; }
+        if (open) { open.remove(); edit.setAttribute('aria-expanded', 'false'); return; }
         row.append(watchEditor(w));
+        edit.setAttribute('aria-expanded', 'true');
+        row.querySelector('.weditor input').focus();
       });
-      const del = document.createElement('button');
-      del.textContent = '\u00d7';
-      del.title = 'Delete watch';
+      const del = iconBtn('del', 'Delete ' + w.name);
       del.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!confirm('Delete "' + w.name + '"? Alerts for this area stop immediately.')) return;
@@ -731,7 +801,9 @@ export async function initWatch(opts) {
       } catch (e) { msg('createmsg', e.message, 'err'); }
       return;
     }
+    // The create form's kinds only, not those of a row being edited.
     const kinds = [...document.querySelectorAll('.kinds input:checked')]
+      .filter((c) => !c.closest('.weditor'))
       .map((c) => c.dataset.kind);
     const body = {
       name: $('wname').value.trim(),

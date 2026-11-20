@@ -1,0 +1,296 @@
+/* The /watch page in the site's Clear Coat look (tokens.css, html.cc).
+   watch.css stays the shared base for the watch components on both
+   /watch and the map page's Watch tool; the rules here sit under
+   body.wp, so they only restyle this page and win over the base. */
+
+.wp, .wp * { box-sizing:border-box }
+.wp { margin:0; min-height:100vh; background:var(--cs-bg); color:var(--cs-ink);
+  font:400 .9375rem/1.6 var(--cs-font-sans); -webkit-font-smoothing:antialiased }
+.wp :where(h1, h2, h3, p, ol, ul, fieldset) { margin:0 }
+.wp main:focus { outline:none }
+.wp .hidden { display:none !important }
+.wp a { color:var(--cs-accent) }
+.wp ::selection { background:var(--cs-accent-soft) }
+.wp :focus-visible { outline:2px solid var(--cs-accent); outline-offset:2px }
+
+/* Shared type */
+.wp .eyebrow { display:flex; align-items:center; gap:8px; font:500 .75rem/1rem var(--cs-font-mono);
+  letter-spacing:.08em; text-transform:uppercase; color:var(--cs-ink-3) }
+.wp .eyebrow .dot { width:3px; height:3px; border-radius:99px; background:currentColor }
+
+/* ── Controls (this page's versions of the shared components) ───── */
+.wp .watch button.primary { width:100%; min-height:44px; padding:0 18px; border:0;
+  border-radius:var(--cs-radius-md); background:var(--cs-accent); color:var(--cs-accent-ink);
+  font:500 .9375rem var(--cs-font-sans); cursor:pointer; box-shadow:var(--cs-shadow-sm);
+  transition:background-color 150ms }
+.wp .watch button.primary:hover:not(:disabled) { background:var(--cs-accent-hover) }
+.wp .watch button.primary:disabled { opacity:1; background:var(--cs-surface-2); color:var(--cs-ink-3);
+  box-shadow:none; cursor:not-allowed }
+.wp .watch button.ghost { min-height:40px; padding:0 14px; border:1px solid var(--cs-line-strong);
+  border-radius:var(--cs-radius-md); background:var(--cs-surface); color:var(--cs-ink);
+  font:500 .875rem var(--cs-font-sans); cursor:pointer; transition:background-color 150ms, border-color 150ms }
+.wp .watch button.ghost:hover:not(:disabled) { background:var(--cs-surface-2); color:var(--cs-ink); border-color:var(--cs-line-strong) }
+.wp .watch button.ghost:disabled { opacity:1; color:var(--cs-ink-3); background:var(--cs-surface-2);
+  border-color:var(--cs-line); cursor:not-allowed }
+.wp .watch button.ghost.danger { color:var(--cs-closure); border-color:color-mix(in srgb, var(--cs-closure) 35%, var(--cs-line)) }
+.wp .watch button.ghost.danger:hover { background:var(--cs-closure-soft); color:var(--cs-closure) }
+.wp .watch button:active { transform:none }
+
+.wp .watch input[type=text], .wp .watch input[type=email] { width:100%; min-height:42px; padding:0 12px;
+  border:1px solid var(--cs-line-strong); border-radius:var(--cs-radius-md); background:var(--cs-surface);
+  color:var(--cs-ink); font:400 .9375rem var(--cs-font-sans); outline:none;
+  transition:border-color 150ms, box-shadow 150ms }
+.wp .watch input::placeholder { color:var(--cs-ink-3) }
+.wp .watch input[type=text]:focus, .wp .watch input[type=email]:focus { border-color:var(--cs-accent);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--cs-accent) 22%, transparent) }
+.wp .watch input[type=range] { width:100%; accent-color:var(--cs-accent) }
+.wp .watch input[type=checkbox] { accent-color:var(--cs-accent) }
+.wp .flabel, .wp .watch .field label, .wp .watch .field legend { display:block; padding:0; margin:0 0 6px;
+  font:500 .8125rem/1.4 var(--cs-font-sans); letter-spacing:0; text-transform:none; color:var(--cs-ink-2) }
+.wp .watch fieldset { border:0; padding:0; min-width:0 }
+.wp .watch .hint { margin-top:6px; font-size:.8125rem; line-height:1.55; color:var(--cs-ink-3) }
+
+/* Messages: an empty one takes no space; a filled one is a tinted panel. */
+.wp .watch .msg:not(:empty) { margin-top:12px; padding:10px 12px; border-radius:var(--cs-radius-md);
+  font-size:.875rem; line-height:1.5; color:var(--cs-ink);
+  background:var(--cs-accent-soft); border:1px solid color-mix(in srgb, var(--cs-accent) 25%, transparent) }
+.wp .watch .msg.err:not(:empty) { color:var(--cs-closure); background:var(--cs-closure-soft);
+  border-color:color-mix(in srgb, var(--cs-closure) 30%, transparent) }
+.wp .watch .msg.ok:not(:empty) { color:var(--cs-ok); background:var(--cs-ok-soft);
+  border-color:color-mix(in srgb, var(--cs-ok) 30%, transparent) }
+
+/* ── Signed out ───────────────────────────────────────────────── */
+.wp-hero { max-width:1264px; margin:0 auto; padding:72px 32px 72px;
+  display:grid; grid-template-columns:minmax(0, 7fr) minmax(0, 5fr); gap:72px; align-items:start }
+.wp-intro h1 { margin:18px 0 20px; max-width:13ch; font:600 clamp(2.5rem, 4.4vw, 4rem)/1.02 var(--cs-font-sans);
+  letter-spacing:-.035em; color:var(--cs-ink); text-wrap:balance }
+.wp-intro .lead { max-width:56ch; font-size:1.125rem; line-height:1.65; color:var(--cs-ink-2) }
+.wp .wp-steps { list-style:none; padding:0; margin-top:40px; max-width:600px; border-bottom:1px solid var(--cs-line) }
+.wp-steps li { display:grid; grid-template-columns:52px 1fr; gap:0 8px; padding:16px 0;
+  border-top:1px solid var(--cs-line) }
+.wp-steps .num { font:500 .75rem/1.6rem var(--cs-font-mono); letter-spacing:.06em; color:var(--cs-ink-3) }
+.wp-steps b { display:block; font-weight:600; color:var(--cs-ink) }
+.wp-steps li span:not(.num) { color:var(--cs-ink-2) }
+
+/* The sign-in card sits in the same double frame as the home page's
+   live map card. */
+.wp-signin { padding:8px; border:1px solid var(--cs-line); border-radius:24px;
+  background:color-mix(in srgb, var(--cs-surface) 55%, var(--cs-bg)) }
+.wp .watch .signin-card, .wp .watch .wp-narrow .card { max-width:none; margin:0; padding:28px;
+  border:1px solid var(--cs-line); border-radius:var(--cs-radius-lg); background:var(--cs-surface);
+  box-shadow:var(--cs-shadow-md) }
+.wp .watch .si-title { margin:0; font:600 1.25rem/1.3 var(--cs-font-sans); letter-spacing:-.015em }
+.wp .si-sub { margin:4px 0 20px; color:var(--cs-ink-2) }
+.wp .si-consent { display:none }
+.wp .si-hint { margin-top:10px; font-size:.8125rem; color:var(--cs-ink-3); text-align:center }
+.wp .watch .agree { gap:10px; margin:0 0 16px; font-size:.9375rem; line-height:1.45; color:var(--cs-ink) }
+.wp .watch .agree input { width:18px; height:18px; margin-top:2px }
+.wp .watch .agree a, .wp .watch .agreenote a { color:var(--cs-accent); text-underline-offset:2px }
+.wp .watch .agreenote { margin:0 0 16px; font-size:.8125rem; color:var(--cs-ink-3) }
+.wp .watch .or { margin:18px 0 14px; font-size:.8125rem; color:var(--cs-ink-3) }
+.wp .watch .or::before, .wp .watch .or::after { background:var(--cs-line) }
+.wp #signinbtns #email { margin-bottom:10px }
+.wp #signinbtns #emailbtn { width:100% }
+
+/* Signed in with the agreement missing: the card alone, as a step. */
+#signin.consent .wp-intro, #signin.consent .wp-specs,
+#signin.consent .si-title, #signin.consent .si-sub { display:none }
+#signin.consent .wp-hero { grid-template-columns:minmax(0, 480px); justify-content:center; padding-top:88px; padding-bottom:120px }
+#signin.consent .si-consent { display:block }
+#signin.consent p.eyebrow.si-consent { display:flex; margin-bottom:12px }
+#signin.consent h1.si-consent { margin-bottom:20px; font:600 1.75rem/1.15 var(--cs-font-sans); letter-spacing:-.025em }
+#signin.consent:has(#agree:checked) .si-hint { visibility:hidden }
+
+.wp-specs { max-width:1264px; margin:0 auto; padding:64px 32px 104px; border-top:1px solid var(--cs-line) }
+.wp-specs-head { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px 32px; margin-bottom:32px }
+.wp-specs-head h2 { font:600 1.5rem/1.2 var(--cs-font-sans); letter-spacing:-.02em }
+.wp-specs-head p { color:var(--cs-ink-2) }
+.wp-shapes { list-style:none; padding:0; display:grid; grid-template-columns:repeat(3, minmax(0, 1fr));
+  border-top:1px solid var(--cs-line); border-bottom:1px solid var(--cs-line) }
+.wp-shapes li { padding:28px 28px 32px; border-left:1px solid var(--cs-line) }
+.wp-shapes li:first-child { border-left:0; padding-left:0 }
+.wp-shapes svg { display:block; width:120px; height:72px; margin-bottom:20px; overflow:visible }
+.wp-shapes .g { stroke:var(--cs-line); stroke-width:1.5; fill:none }
+.wp-shapes .a { stroke:var(--cs-accent); stroke-width:1.5; stroke-dasharray:4 3;
+  fill:color-mix(in srgb, var(--cs-accent) 12%, transparent) }
+.wp-shapes .p { fill:var(--cs-accent) }
+.wp-shapes .r { stroke:var(--cs-accent); stroke-width:2.5; fill:none; stroke-linecap:round }
+.wp-shapes .buf { stroke:color-mix(in srgb, var(--cs-accent) 18%, transparent); stroke-width:16; fill:none; stroke-linecap:round }
+.wp-shapes h3 { font:600 1rem/1.4 var(--cs-font-sans); margin-bottom:6px }
+.wp-shapes p { max-width:34ch; color:var(--cs-ink-2) }
+.wp .wp-kinds { list-style:none; padding:0; display:flex; flex-wrap:wrap; gap:8px; margin-top:24px }
+
+/* Kind chips: one hue per kind, the live map's families. */
+.wp [data-kind] { --k:var(--cs-ink-2); --ks:var(--cs-surface-2) }
+.wp [data-kind="incident"] { --k:var(--cs-incident); --ks:var(--cs-incident-soft) }
+.wp [data-kind="closure"] { --k:var(--cs-closure); --ks:var(--cs-closure-soft) }
+.wp [data-kind="chain"] { --k:var(--cs-chain); --ks:var(--cs-chain-soft) }
+.wp [data-kind="fire"] { --k:var(--cs-fire); --ks:var(--cs-fire-soft) }
+.wp-kinds li { display:inline-flex; align-items:center; gap:8px; height:32px; padding:0 12px;
+  border-radius:99px; background:var(--ks); color:var(--k); font-size:.875rem; font-weight:500 }
+.wp-kinds li::before { content:""; width:7px; height:7px; border-radius:99px; background:currentColor }
+
+/* ── Access code ──────────────────────────────────────────────── */
+.wp-narrow { max-width:480px; margin:0 auto; padding:88px 20px 120px }
+.wp-narrow h1 { margin:12px 0 24px; font:600 1.75rem/1.15 var(--cs-font-sans); letter-spacing:-.025em }
+.wp .watch .gate-copy { margin:0 0 20px; font-size:.9375rem; color:var(--cs-ink-2) }
+.wp #code { margin-bottom:12px; font-family:var(--cs-font-mono); letter-spacing:.06em; text-transform:uppercase }
+.wp #code::placeholder { text-transform:none; letter-spacing:.06em }
+.wp .watch .gate-ask { margin-top:16px; font-size:.875rem; color:var(--cs-ink-3) }
+
+/* ── Approved: panel left, map right ──────────────────────────── */
+.wp-app { display:grid; grid-template-columns:448px minmax(0, 1fr); height:calc(100dvh - 65px); min-height:560px }
+.wp-panel { display:flex; flex-direction:column; min-height:0; overflow-y:auto; overscroll-behavior:contain;
+  background:var(--cs-surface); border-right:1px solid var(--cs-line) }
+.wp-head { order:-1; padding:24px 24px 18px }
+.wp-head h1 { display:flex; align-items:center; gap:10px; font:600 1.5rem/1.2 var(--cs-font-sans); letter-spacing:-.02em }
+.wp .watch .badge { display:inline-flex; align-items:center; height:22px; padding:0 8px; border-radius:99px;
+  background:var(--cs-accent-soft); color:var(--cs-accent); font:500 .6875rem/1 var(--cs-font-mono);
+  letter-spacing:.08em; text-transform:uppercase; vertical-align:0 }
+.wp .watch .sub { margin:6px 0 0; font-size:.875rem; color:var(--cs-ink-2) }
+.wp-sec { padding:20px 24px 22px; border-top:1px solid var(--cs-line) }
+.wp-sec h2 { margin-bottom:6px; font:600 1rem/1.4 var(--cs-font-sans); letter-spacing:-.01em }
+.wp-sec > .devrow { margin-top:12px }
+.wp-list { order:1 }
+.wp .watch .newwatch-card { order:2 }
+.wp-panel > .wp-sec:not(.wp-list):not(.newwatch-card) { order:3 }
+.wp-panel > .footer-note { order:4 }
+/* With nothing saved yet, the form comes first. */
+.wp-panel:has(.wlist .empty) .newwatch-card { order:0 }
+.wp .watch .wp-sec.card { margin:0; padding:20px 24px 24px; border:0; border-top:1px solid var(--cs-line);
+  border-radius:0; background:none; box-shadow:none }
+.wp .watch .newwatch-card h2 { margin-bottom:4px }
+
+.wp .watch .cardhead { margin-bottom:10px }
+.wp .watch .cardhead h2 { margin:0 }
+.wp .watch .usage { padding:3px 10px; border:1px solid var(--cs-line); border-radius:99px; background:none;
+  font:500 .75rem var(--cs-font-mono); color:var(--cs-ink-2) }
+.wp .watch .usagebar { height:4px; margin:0 0 14px; background:var(--cs-surface-2) }
+.wp .watch .usagefill { background:var(--cs-accent); transition:width 260ms var(--cs-ease) }
+
+/* Steps */
+.wp .watch .stepblock { gap:14px; padding:18px 0 0; border-top:0 }
+.wp .watch .stepnum { width:24px; height:24px; margin-top:0; border:1px solid var(--cs-line-strong);
+  background:var(--cs-surface); color:var(--cs-ink-2); font:500 .75rem var(--cs-font-mono) }
+.wp .watch .steplabel { margin:2px 0 10px; font:600 .9375rem/1.3 var(--cs-font-sans); color:var(--cs-ink) }
+.wp .watch .stepbody .hint:first-of-type { margin:-4px 0 0 }
+.wp .watch .stepbody > .field, .wp #polytools { margin-top:14px }
+.wp #routerow input[type=text] { margin-bottom:10px }
+.wp #routerow #rw-preview { width:100%; margin-bottom:14px }
+.wp .watch .radius b { min-width:56px; font:500 .875rem var(--cs-font-mono); color:var(--cs-ink) }
+.wp .watch #createbtn { margin-top:22px }
+.wp .watch #canceledit { width:100%; margin-top:8px }
+
+/* Shape picker: a segmented control. */
+.wp .watch .modes { gap:2px; padding:3px; border-radius:var(--cs-radius-md); background:var(--cs-surface-2) }
+.wp .watch .modes button { min-height:34px; padding:0 8px; border:0; border-radius:8px; background:none;
+  color:var(--cs-ink-2); font:500 .875rem var(--cs-font-sans); transition:background-color 150ms, color 150ms }
+.wp .watch .modes button:hover { color:var(--cs-ink) }
+.wp .watch .modes button.on { background:var(--cs-surface); color:var(--cs-ink); box-shadow:var(--cs-shadow-sm) }
+
+/* Alert kinds: toggle chips over real checkboxes. */
+.wp .watch .kinds { display:flex; flex-wrap:wrap; gap:8px }
+.wp .watch .kinds label { position:relative; display:inline-flex; align-items:center; gap:8px; margin:0;
+  min-height:36px; padding:0 14px 0 12px; border:1px solid var(--cs-line-strong); border-radius:99px;
+  background:var(--cs-surface); color:var(--cs-ink-2); font:500 .875rem var(--cs-font-sans); cursor:pointer;
+  transition:background-color 150ms, border-color 150ms, color 150ms }
+.wp .watch .kinds label::before { content:""; width:8px; height:8px; border-radius:99px;
+  border:1.5px solid var(--k); background:transparent }
+.wp .watch .kinds label input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer }
+.wp .watch .kinds label:has(input:checked) { border-color:color-mix(in srgb, var(--k) 45%, transparent);
+  background:var(--ks); color:var(--k) }
+.wp .watch .kinds label:has(input:checked)::before { background:var(--k) }
+.wp .watch .kinds label:has(input:focus-visible) { outline:2px solid var(--cs-accent); outline-offset:2px }
+.wp .watch .chans { display:flex; flex-wrap:wrap; gap:6px 20px }
+.wp .watch .chans label { display:inline-flex; gap:8px; margin:0; font:400 .9375rem var(--cs-font-sans);
+  text-transform:none; letter-spacing:0; color:var(--cs-ink) }
+.wp .watch .chans input { width:17px; height:17px }
+
+/* Saved areas */
+.wp .watch .wlist { gap:8px }
+.wp .watch .witem { display:flex; flex-wrap:wrap; align-items:flex-start; gap:4px 10px; padding:12px 8px 12px 14px;
+  border:1px solid var(--cs-line); border-radius:var(--cs-radius-md); background:var(--cs-surface);
+  cursor:default; transition:border-color 150ms }
+.wp .watch .witem:hover { border-color:var(--cs-line-strong) }
+.wp .watch .witem i { width:9px; height:9px; margin-top:7px }
+.wp .watch .witem button.wname { font:600 .9375rem/1.45 var(--cs-font-sans); color:var(--cs-ink); border-radius:4px }
+.wp .watch .witem button.wname:hover { color:var(--cs-accent) }
+.wp .watch .witem.paused button.wname { color:var(--cs-ink-3) }
+.wp .watch .witem .wstate { margin-left:4px; padding:1px 7px; border-color:var(--cs-line-strong);
+  font:500 .6875rem var(--cs-font-mono); letter-spacing:.06em; color:var(--cs-ink-3) }
+.wp .watch .witem .wmeta { margin-top:1px; font-size:.8125rem; color:var(--cs-ink-3) }
+.wp .watch .wkinds { gap:6px; margin-top:8px }
+.wp .watch .wkinds span { padding:1px 8px; border:0; background:var(--ks); color:var(--k);
+  font:500 .75rem/1.5 var(--cs-font-sans) }
+.wp .watch .witem.paused .wkinds span { background:var(--cs-surface-2); color:var(--cs-ink-3) }
+.wp .watch .witem > button { width:34px; height:34px; padding:0; border-radius:8px; color:var(--cs-ink-3);
+  transition:background-color 150ms, color 150ms }
+.wp .watch .witem > button:hover { background:var(--cs-surface-2); color:var(--cs-ink) }
+.wp .watch .witem > button:last-of-type:hover { background:var(--cs-closure-soft); color:var(--cs-closure) }
+.wp .watch .witem > button[aria-expanded="true"] { background:var(--cs-accent-soft); color:var(--cs-accent) }
+.wp .watch .weditor { gap:10px; margin:10px 6px 4px 0; padding-top:14px; border-top:1px solid var(--cs-line) }
+.wp .watch .weditor .wlabel { margin:2px 0 -4px; font:500 .8125rem var(--cs-font-sans); letter-spacing:0;
+  text-transform:none; color:var(--cs-ink-2) }
+.wp .watch .weditor .kinds label { min-height:32px }
+.wp .watch .weditor .devrow { margin-top:4px }
+.wp .watch .weditor button.primary { width:auto !important; min-height:40px; padding:0 16px !important }
+
+.wp .watch .empty { padding:26px 16px; border:1px dashed var(--cs-line-strong); border-radius:var(--cs-radius-md) }
+.wp .watch .empty-ico::before { border-color:var(--cs-line-strong) }
+.wp .watch .empty-ico::after { border-color:var(--cs-accent) }
+.wp .watch .empty-title { font-size:.9375rem; font-weight:600; color:var(--cs-ink) }
+.wp .watch .empty-sub { font-size:.875rem; color:var(--cs-ink-2) }
+
+.wp .watch .footer-note { margin:0; padding:20px 24px 28px; border-top:1px solid var(--cs-line);
+  font-size:.75rem; line-height:1.6; color:var(--cs-ink-3) }
+.wp .watch .footer-note a { color:inherit }
+
+/* Map */
+.wp-mapwrap { position:relative; min-width:0; min-height:0 }
+.wp #wmap { position:absolute; inset:0; height:auto; min-height:0; border:0; border-radius:0;
+  background:var(--cs-bg) }
+.wp .leaflet-bar { border:1px solid var(--cs-line) !important; border-radius:var(--cs-radius-md); box-shadow:var(--cs-shadow-sm) !important; overflow:hidden }
+.wp .leaflet-bar a { width:34px; height:34px; line-height:34px; background:var(--cs-surface); color:var(--cs-ink);
+  border-bottom-color:var(--cs-line) }
+.wp .leaflet-bar a:hover { background:var(--cs-surface-2); color:var(--cs-ink) }
+.wp .leaflet-control-attribution { background:color-mix(in srgb, var(--cs-surface) 82%, transparent) !important;
+  color:var(--cs-ink-3) }
+.wp .leaflet-control-attribution a { color:var(--cs-ink-2) }
+.wp .leaflet-popup-content-wrapper, .wp .leaflet-popup-tip { background:var(--cs-surface); color:var(--cs-ink) }
+.wp .leaflet-container { font-family:var(--cs-font-sans) }
+
+/* ── Phones and small tablets ─────────────────────────────────── */
+@media (max-width: 1023.98px) {
+  .wp-hero { grid-template-columns:1fr; gap:0; padding:48px 20px 56px }
+  /* Narrow screens: the sign-in card comes straight after the lead, the
+     three steps after it, so the one action is near the top. */
+  .wp-intro { display:contents }
+  .wp-intro > * { order:0 }
+  .wp-signin { order:1; margin-top:28px }
+  .wp .wp-steps { order:2 }
+  .wp-intro h1 { max-width:16ch }
+  .wp-signin { max-width:520px }
+  .wp-specs { padding:48px 20px 72px }
+  .wp-shapes { grid-template-columns:1fr }
+  .wp-shapes li, .wp-shapes li:first-child { padding:24px 0; border-left:0; border-top:1px solid var(--cs-line) }
+  .wp-shapes li:first-child { border-top:0 }
+  .wp-shapes svg { margin-bottom:14px }
+}
+@media (max-width: 900px) {
+  .wp-app { grid-template-columns:1fr; height:auto; min-height:0 }
+  .wp-mapwrap { order:-1; height:46dvh; min-height:300px; border-bottom:1px solid var(--cs-line) }
+  .wp-panel { overflow:visible; border-right:0 }
+  .wp-head, .wp-sec, .wp .watch .wp-sec.card, .wp .watch .footer-note { padding-left:20px; padding-right:20px }
+  .wp .watch .footer-note { padding-bottom:calc(28px + env(safe-area-inset-bottom)) }
+  .wp .watch input, .wp .watch select, .wp .watch textarea { font-size:16px !important }
+  .wp .watch .witem > button { width:40px; height:40px }
+}
+@media (max-width: 640px) {
+  #signin.consent .wp-hero, .wp-narrow { padding-top:48px; padding-bottom:72px }
+  .wp .watch .signin-card, .wp .watch .wp-narrow .card { padding:22px }
+  .wp-signin { padding:6px; border-radius:20px }
+  .wp-intro h1 { font-size:2.5rem }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wp *, .wp *::before { transition:none !important; scroll-behavior:auto !important }
+}
