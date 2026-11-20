@@ -36,7 +36,7 @@ packaging==26.2
 pillow==13.0.0
 pluggy==1.6.0
 proto-plus==1.28.1
-protobuf==7.35.1
+protobuf==7.36.2
 py-vapid==1.9.4
 pyasn1==0.6.5
 pyasn1_modules==0.4.2
