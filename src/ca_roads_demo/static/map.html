@@ -64,16 +64,29 @@
     <img class="mark" src="/logo.svg" alt="">
     <span class="wordmark">CommuteScout</span>
   </a>
-  <nav>
+  <!-- The same items, labels and order as the site header
+       (site/components/site-header.tsx): the three developer pages sit in
+       a Developers menu. Every link is in the HTML whether or not the menu
+       is open; topbar.js only flips the open state. Below 640px the nav
+       folds behind the Menu button, as on the site. -->
+  <nav id="topnav" aria-label="Site">
+    <a href="/watch">Watch areas</a>
     <a href="/data-sources">Data sources</a>
-    <a href="/developers">Developers</a>
-    <a href="/mcp">MCP server</a>
-    <a href="/marketplace">Marketplace</a>
+    <div class="devmenu">
+      <button type="button" class="devbtn" aria-expanded="false" aria-controls="devpop">Developers<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+      <p class="devlabel">For developers</p>
+      <ul class="devpop" id="devpop">
+        <li><a href="/developers">Developers</a><span>REST API reference, keys and daily limits</span></li>
+        <li><a href="/mcp">MCP Server</a><span>Connect Claude, ChatGPT, Cursor or any MCP client</span></li>
+        <li><a href="/marketplace">Marketplace</a><span>Plugins that add alerts to the map and the apps</span></li>
+      </ul>
+    </div>
     <a href="/app">Get the app</a>
     <a href="/pricing">Pricing</a>
   </nav>
   <!-- Current page: .on intentionally wins over .live in the CSS cascade above (declared after it) if a link ever carries both classes. -->
-  <a class="navcta on" href="/map">Live map</a>
+  <a class="navcta on" href="/map" aria-current="page">Live map</a>
+  <button type="button" class="navmenu" aria-expanded="false" aria-controls="topnav" aria-label="Menu"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <span class="sysok" id="sysok" title="Click for live data-source status"><i></i><span id="feedsok">checking live feeds&hellip;</span></span>
   <!-- Data age. On a map left open on a wall monitor this is the health
        indicator: if the publisher or the network stops, this ages in
@@ -100,10 +113,10 @@
     <button type="button" class="tool" data-tool="alerts" aria-pressed="false" title="What is live right now">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 16.5v.01"/></svg><span>Alerts</span></button>
     <span class="railgap" aria-hidden="true"></span>
-    <button type="button" class="tool small" data-tool="settings" aria-pressed="false" title="Settings">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
     <button type="button" class="tool small" data-tool="about" aria-pressed="false" title="About the data">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.01"/></svg><span>Data</span></button>
+    <button type="button" class="tool small" data-tool="settings" aria-pressed="false" title="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
   </nav>
   <div class="resizer" id="railresize" role="separator" aria-orientation="vertical" aria-label="Resize the tool rail" tabindex="0"></div>
   <aside id="panel">
@@ -523,6 +536,7 @@
 <script src="/static/plugin-badges.js?v=__ASSET_V__"></script>
 <script src="/static/map-assistant.js?v=__ASSET_V__"></script>
 <script src="/static/map-app.js?v=__ASSET_V__"></script>
+<script src="/static/topbar.js?v=__ASSET_V__"></script>
 <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d2d77aff6dfe4462b09ca501c9151de4"}'></script>
 </body>
 </html>

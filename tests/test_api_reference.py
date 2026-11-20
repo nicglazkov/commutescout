@@ -9,6 +9,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 JSON_PATH = REPO / "site" / "lib" / "api-reference.json"
 PAGE = (REPO / "site" / "app" / "developers" / "page.tsx").read_text(encoding="utf-8")
+# The Quickstart band is its own component, rendered by the page as the docs lead.
+QUICKSTART = (REPO / "site" / "components" / "docs" / "quickstart.tsx").read_text(encoding="utf-8")
 
 
 def _generator():
@@ -32,7 +34,8 @@ def test_page_renders_the_reference_and_covers_the_contract():
     assert 'from "@/lib/api-reference.json"' in PAGE
     for anchor in ("quickstart", "basics", "keys", "responses", "errors", "rules", "tools",
                    "mcp", "bulk", "flare", "terms"):
-        assert f'id="{anchor}"' in PAGE, anchor
+        assert f'id="{anchor}"' in PAGE + QUICKSTART, anchor
+    assert "<Quickstart " in PAGE
     # The error table names every code the bridge and the key middleware emit.
     rest = (REPO / "src" / "ca_roads_mcp" / "rest.py").read_text(encoding="utf-8")
     limiter = (REPO / "src" / "ca_roads_mcp" / "ratelimit.py").read_text(encoding="utf-8")
@@ -42,4 +45,4 @@ def test_page_renders_the_reference_and_covers_the_contract():
     for code in ("invalid_key", "rate_limited", "daily_limit", "keys_unavailable"):
         assert code in limiter and f'"{code}"' in PAGE, code
     assert '"2,000"' in PAGE and '"10,000"' in PAGE  # the published tiers
-    assert "Do not put a key in a web page" in PAGE
+    assert "not from a web page or a mobile app" in PAGE  # keys stay server-side

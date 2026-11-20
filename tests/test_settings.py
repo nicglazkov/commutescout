@@ -21,10 +21,12 @@ WATCH_JS = (STATIC / "watch-app.js").read_text(encoding="utf-8")
 UNITS = (STATIC / "units.js").read_text(encoding="utf-8")
 
 
-def test_settings_is_a_rail_tool_above_data_with_units_and_account():
+def test_settings_is_the_last_rail_tool_below_data_with_units_and_account():
     rail = re.search(r'<nav class="rail"[^>]*>(.*?)</nav>', HTML, re.S).group(1)
-    assert rail.index('data-tool="settings"') > rail.index('class="railgap"')
-    assert rail.index('data-tool="settings"') < rail.index('data-tool="about"')
+    assert rail.index('data-tool="about"') > rail.index('class="railgap"')
+    # Data sits above Settings; Settings is the rail's last tool.
+    assert rail.index('data-tool="settings"') > rail.index('data-tool="about"')
+    assert rail.rindex('data-tool=') == rail.index('data-tool="settings"')
     pane = re.search(r'<section id="pane-settings"[^>]*>(.*?)\n    </section>', HTML, re.S).group(1)
     assert pane.count('name="units"') == 2 and 'value="mi"' in pane and 'value="km"' in pane
     for i in ("unitpick", "unitnote", "who", "acctnote", "settingssignin", "acctcard",

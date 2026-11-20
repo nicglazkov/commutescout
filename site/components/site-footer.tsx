@@ -22,7 +22,7 @@ const columns: { name: string; links: FooterLink[] }[] = [
     name: "Developers",
     links: [
       { href: "/developers", label: "REST API" },
-      { href: "/mcp", label: "MCP server" },
+      { href: "/mcp", label: "MCP Server" },
       { href: "/plugins", label: "Plugins" },
       { href: "/marketplace", label: "Marketplace" },
       { href: "/data-sources", label: "Data sources" },

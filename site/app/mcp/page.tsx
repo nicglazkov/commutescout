@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Briefcase, Dumbbell, House, MapPin, Plus } from "lucide-react";
 import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
 import { C, CodeBlock, CopyField } from "@/components/docs/code-block";
-import { Callout } from "@/components/docs/callout";
 import { Tabs } from "@/components/docs/tabs";
 import { DocFigure } from "@/components/docs/doc-figure";
 // Per-client setup, generated from src/ca_roads_mcp/connect.py by
@@ -27,14 +26,14 @@ import { AGENCY_FEED_COUNT, STATE_COUNT } from "@/lib/stats";
 // The per-client steps render site/lib/mcp-clients.json as-is; that file
 // is generated from src/ca_roads_mcp/connect.py, which owns the wording.
 export const metadata: Metadata = {
-  title: "MCP server - CommuteScout",
+  title: "MCP Server - CommuteScout",
   description:
     "Connect Claude or any MCP client to CommuteScout: plan any US drive, find the best time to leave, and read live road data, weather and history.",
   alternates: {
     canonical: "https://commutescout.com/mcp",
   },
   openGraph: {
-    title: "MCP server - CommuteScout",
+    title: "MCP Server - CommuteScout",
     description:
       "Connect Claude or any MCP client to CommuteScout: plan any US drive, find the best time to leave, and read live road data, weather and history.",
     url: "https://commutescout.com/mcp",
@@ -103,20 +102,20 @@ const PROMPTS = [
 const TOC: TocItem[] = [
   { id: "how", label: "How it works" },
   { id: "connect", label: "Setup" },
-  { id: "saved-places", label: "Your places" },
+  { id: "saved-places", label: "Saved places" },
   { id: "tools", label: "Tools and prompts" },
   { id: "local", label: "Self-hosting" },
-  { id: "quality", label: "Evals and registry" },
+  { id: "registry", label: "MCP Registry" },
 ];
 
 export default function McpPage() {
   return (
     <DocsShell
       current="/mcp"
-      title="MCP server"
+      title="MCP Server"
       dek={
         <>
-          Give Claude, ChatGPT, Cursor or any MCP client live road data in 37 states. Plan a drive, find the
+          Give Claude, Cursor or any MCP client live road data in 37 states. Plan a drive, find the
           best time to leave, or check what is on the road right now.
         </>
       }
@@ -183,22 +182,43 @@ export default function McpPage() {
         />
       </Section>
 
-      <Section id="saved-places" title="Home, work and saved places">
+      <Section id="saved-places" title="Saved places">
         <div className="dx-prose dx-lead">
           <p>
-            With your key, &ldquo;home&rdquo;, &ldquo;work&rdquo; and the names of your saved places work in
-            every trip tool, and a trip with no start begins at Home. Save places on the map or in the app.
-            They are only read for your own account.
+            Save Home, Work and any other place you like, such as the gym, school or a friend&apos;s place, on
+            the map or in the app. With your key connected, your assistant can use those names in every trip
+            tool: &ldquo;from home to the gym&rdquo; just works, and a trip with no starting point begins at
+            Home. Your places are only read for your own account.
           </p>
         </div>
-        <Callout>
-          No MCP server can see where your device is. For &ldquo;from here&rdquo;, the assistant uses a place
-          you name or asks you.{" "}
-          <Link href="/developers#keys" prefetch={false} className="dx-link">
-            Keys and limits
-          </Link>{" "}
-          are the same as for the REST API.
-        </Callout>
+        <ul className="dx-places" aria-label="Examples of saved places">
+          <li>
+            <House aria-hidden="true" /> Home
+          </li>
+          <li>
+            <Briefcase aria-hidden="true" /> Work
+          </li>
+          <li>
+            <Dumbbell aria-hidden="true" /> The gym
+          </li>
+          <li>
+            <MapPin aria-hidden="true" /> A friend&apos;s place
+          </li>
+          <li data-any="">
+            <Plus aria-hidden="true" /> Any place you name
+          </li>
+        </ul>
+        <div className="dx-prose dx-mt-20">
+          <p>
+            The server never sees where your device is. When you say &ldquo;from here&rdquo;, your assistant
+            uses a place you have named in the conversation, or asks you. Keys and limits are the same as for
+            the{" "}
+            <Link href="/developers#keys" prefetch={false} className="dx-link">
+              REST API
+            </Link>
+            .
+          </p>
+        </div>
       </Section>
 
       <Section id="tools" title={`${TOOLS.length} tools and ${PROMPTS.length} prompts`}>
@@ -288,32 +308,19 @@ export default function McpPage() {
         </div>
       </Section>
 
-      <Section id="quality" title="Evals and registry">
-        <div className="dx-cards">
-          <div className="dx-card">
-            <h3>How good are the answers?</h3>
-            <p>
-              An eval suite of 91 golden questions checks the answers. Each scorecard names the version it
-              reflects.
-            </p>
-            <p>
-              <a href="https://github.com/nicglazkov/commutescout/blob/main/EVALS.md" className="dx-textlink">
-                See the scorecard <ArrowUpRight aria-hidden="true" />
-              </a>
-            </p>
-          </div>
-          <div className="dx-card">
-            <h3>MCP Registry</h3>
-            <p>
-              Published as <C>io.github.nicglazkov/commutescout</C>, with the server card at{" "}
+      <Section id="registry" title="MCP Registry">
+        <div className="dx-registry">
+          <div className="dx-registry-main">
+            <p className="dx-registry-k">Listed in the official MCP Registry as</p>
+            <CopyField value="io.github.nicglazkov/commutescout" label="Registry name" />
+            <p className="dx-registry-note">
+              Clients that browse the registry find CommuteScout under this name. The server card is served at{" "}
               <C>/.well-known/mcp/server-card.json</C> on the MCP host.
             </p>
-            <p>
-              <a href="https://github.com/nicglazkov/commutescout/blob/main/docs/registry.md" className="dx-textlink">
-                Registry notes <ArrowUpRight aria-hidden="true" />
-              </a>
-            </p>
           </div>
+          <a href="https://github.com/nicglazkov/commutescout/blob/main/docs/registry.md" className="dx-textlink">
+            Registry notes <ArrowUpRight aria-hidden="true" />
+          </a>
         </div>
         <div className="dx-prose dx-mt-20">
           <p>

@@ -1,13 +1,11 @@
 import Link from "next/link";
-import { Apple, ArrowRight, ArrowUpRight, Smartphone } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Bell, Navigation, Volume2 } from "lucide-react";
+import { BrandMark } from "@/components/brand/brand-mark";
+import { InstallButton } from "@/components/brand/app-install";
+import { PhoneShot } from "@/components/phone-shot";
 import { CopyField } from "@/components/copy-field";
 import { AGENCY_FEED_COUNT, STATE_COUNT } from "@/lib/stats";
-import {
-  ANDROID_RELEASES,
-  TESTFLIGHT_IN_REVIEW,
-  TESTFLIGHT_IN_REVIEW_NOTE,
-  TESTFLIGHT_PUBLIC,
-} from "@/lib/app-links";
+import { TESTFLIGHT_IN_REVIEW, TESTFLIGHT_IN_REVIEW_NOTE } from "@/lib/app-links";
 
 // Homepage sections below the hero. Each claim is checked against the code:
 // - map rebuilt about every 30 s: src/ca_roads_demo/snapshot.py (live.json.gz, 30 s)
@@ -44,7 +42,7 @@ const WAYS = [
   {
     n: "04",
     title: "AI assistants",
-    body: "Ask Claude, ChatGPT or another assistant about a drive. It answers from the same official sources.",
+    body: "Ask Claude or another AI assistant about a drive. It answers from the same official sources.",
     href: "/mcp",
     cta: "Connect an assistant",
   },
@@ -135,7 +133,7 @@ export function Coverage() {
       <div className="cs-container grid gap-12 lg:grid-cols-12 lg:gap-10">
         <div className="lg:col-span-5">
           <h2 id="coverage-title" className="cs-h2">
-            Clear answers, state by state.
+            Clear answers, state by state
           </h2>
           <p className="cs-lede mt-5 max-w-[30rem]">
             Road reports come from each state&rsquo;s own agencies. Weather alerts, wildfires and
@@ -173,40 +171,70 @@ export function Coverage() {
   );
 }
 
-/* ---------------- The app: one compact band ---------------- */
+/* ---------------- The app ---------------- */
+
+// Each line matches the app: spoken alerts per kind with a lead distance,
+// routing around closures with alternates, watch-area pushes (see /app).
+const DRIVE_POINTS = [
+  { icon: Volume2, text: "Closures, chain controls, crashes and reports on your route, read out before you reach them." },
+  { icon: Navigation, text: "Turn-by-turn directions that route around closures, with alternates to pick from." },
+  { icon: Bell, text: "A push notification when something new appears in one of your watch areas." },
+];
 
 export function DriveBand() {
   return (
-    <section aria-labelledby="drive-title" className="border-t border-cs-line bg-cs-surface py-12 md:py-14">
-      <div className="cs-container flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
-        <div className="max-w-[36rem]">
-          <h2 id="drive-title" className="text-[1.375rem] font-semibold leading-tight tracking-[-0.02em] text-cs-ink">
+    <section aria-labelledby="drive-title" className="overflow-hidden border-t border-cs-line bg-cs-surface">
+      <div className="cs-container grid grid-cols-1 items-center gap-12 py-20 md:py-24 lg:grid-cols-12 lg:gap-10 lg:py-0">
+        <div className="lg:col-span-6 lg:py-24">
+          <p className="flex items-center gap-2.5">
+            <BrandMark className="size-8" />
+            <span className="cs-eyebrow">CommuteScout Drive</span>
+          </p>
+          <h2 id="drive-title" className="cs-h2 mt-5">
             Also on iPhone and Android
           </h2>
-          <p className="mt-2 text-[0.9375rem] leading-relaxed text-cs-ink-2">
-            CommuteScout Drive gives turn-by-turn directions and reads out alerts on your route
-            before you reach them. Free while in beta.
+          <p className="cs-lede mt-5 max-w-[32rem]">
+            The same live road data, with turn-by-turn directions and alerts spoken ahead of
+            time. Free while in beta.
           </p>
-          {TESTFLIGHT_IN_REVIEW && <p className="mt-2 text-sm text-cs-ink-3">{TESTFLIGHT_IN_REVIEW_NOTE}</p>}
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <a
-            href={TESTFLIGHT_PUBLIC}
-            className="inline-flex h-11 items-center gap-2 rounded-[var(--cs-radius-md)] bg-cs-ink px-4 text-[0.9375rem] font-medium text-cs-bg transition-opacity hover:opacity-90"
-          >
-            <Apple aria-hidden className="size-4" />
-            iPhone beta
-          </a>
-          <a
-            href={ANDROID_RELEASES}
-            className="inline-flex h-11 items-center gap-2 rounded-[var(--cs-radius-md)] border border-cs-line-strong bg-cs-surface px-4 text-[0.9375rem] font-medium text-cs-ink transition-colors hover:bg-cs-surface-2"
-          >
-            <Smartphone aria-hidden className="size-4" />
-            Android APK
-          </a>
-          <Link href="/app" prefetch={false} className="cs-link inline-flex min-h-6 items-center text-[0.9375rem] lg:ml-1">
-            About the app
+          <ul className="mt-8 max-w-[32rem] space-y-4">
+            {DRIVE_POINTS.map(({ icon: Icon, text }) => (
+              <li key={text} className="flex gap-3.5 text-[0.9375rem] leading-relaxed text-cs-ink-2">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--cs-radius-md)] bg-cs-accent-soft text-cs-accent">
+                  <Icon aria-hidden className="size-4" strokeWidth={2} />
+                </span>
+                <span className="pt-1">{text}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-9 flex flex-wrap items-center gap-3">
+            <InstallButton platform="ios" />
+            <InstallButton platform="android" />
+          </div>
+          {TESTFLIGHT_IN_REVIEW && <p className="mt-3 text-sm text-cs-ink-3">{TESTFLIGHT_IN_REVIEW_NOTE}</p>}
+          <Link href="/app" prefetch={false} className="cs-link mt-6 inline-flex min-h-6 items-center gap-1 text-[0.9375rem]">
+            Features, screenshots and install steps
+            <ArrowRight aria-hidden className="size-3.5" />
           </Link>
+        </div>
+
+        {/* Two real screenshots, one per platform, rising out of a tinted
+            panel that runs to the section's bottom edge. */}
+        <div className="min-w-0 lg:col-span-6 lg:self-stretch lg:pt-16">
+          <div className="relative flex h-full min-h-[24rem] items-start justify-center gap-5 overflow-hidden rounded-t-[calc(var(--cs-radius-lg)+8px)] border border-b-0 border-cs-line bg-cs-accent-soft px-6 pt-10 sm:gap-7 sm:pt-12">
+            <PhoneShot
+              src="/shots/app/ios-alert.webp"
+              alt="CommuteScout Drive on iPhone: a reported hazard ahead on the route, with how far ahead it is"
+              width={270}
+              className="-mb-28 w-[47%]"
+            />
+            <PhoneShot
+              src="/shots/app/android-nav.webp"
+              alt="CommuteScout Drive on Android: a closure ahead on the route in an alert strip above the arrival time"
+              width={270}
+              className="-mb-44 mt-14 w-[47%]"
+            />
+          </div>
         </div>
       </div>
     </section>

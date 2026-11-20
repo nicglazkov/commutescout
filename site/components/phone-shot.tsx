@@ -12,7 +12,9 @@ import Image from "next/image";
 type Props = {
   src: string;
   alt: string;
-  /** Rendered width in px at the largest breakpoint; height follows. */
+  /** Largest rendered width in px (a cap and the image `sizes`); height follows.
+   *  The width itself comes from className (e.g. "w-full", "w-[46%]"), so it
+   *  can shrink with its container on a phone. */
   width?: number;
   className?: string;
   priority?: boolean;
@@ -21,8 +23,8 @@ type Props = {
 export function PhoneShot({ src, alt, width = 300, className = "", priority }: Props) {
   return (
     <div
-      className={`shrink-0 overflow-hidden rounded-[13%/6%] border border-cs-line-strong bg-cs-surface-2 shadow-[var(--cs-shadow-md)] ${className}`}
-      style={{ width, maxWidth: "100%" }}
+      className={`min-w-0 overflow-hidden rounded-[13%/6%] border border-cs-line-strong bg-cs-surface-2 shadow-[var(--cs-shadow-md)] ${className}`}
+      style={{ maxWidth: width }}
     >
       <Image
         src={src}

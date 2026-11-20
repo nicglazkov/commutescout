@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
 import { C, CodeBlock, CopyField } from "@/components/docs/code-block";
 import { Callout } from "@/components/docs/callout";
+import { Quickstart } from "@/components/docs/quickstart";
 import reference from "@/lib/api-reference.json";
 import { AGENCY_FEED_COUNT, STATE_COUNT } from "@/lib/stats";
 
 // The developer documentation: the REST API in full (base URL, keys,
 // limits, errors, conventions, every tool with every parameter), the
-// MCP server, bulk snapshots, and what not to do. The tool reference is
+// MCP server, bulk snapshots, and guidelines for using the data. The tool reference is
 // rendered from site/lib/api-reference.json, which
 // scripts/gen_api_reference.py generates from the tools' own schemas;
 // tests/test_api_reference.py fails when the JSON is stale, so the
@@ -113,53 +113,17 @@ const TOC: TocItem[] = [
   { id: "keys", label: "Keys and limits" },
   { id: "responses", label: "Responses" },
   { id: "errors", label: "Errors" },
-  { id: "rules", label: "What not to do" },
   {
     id: "tools",
     label: "Tool reference",
     children: GROUPS.flatMap((g) => g.tools).map((n) => ({ id: `tool-${n}`, label: n })),
   },
-  { id: "mcp", label: "MCP server" },
+  { id: "mcp", label: "MCP Server" },
   { id: "bulk", label: "Bulk snapshots" },
   { id: "flare", label: "Flare plugins" },
+  { id: "rules", label: "Guidelines" },
   { id: "terms", label: "Attribution and terms" },
 ];
-
-const CURL_QUICK = `curl -H "X-API-Key: YOUR_KEY" \\
-  "${API_ROOT}/tools/get_incidents?center=LAT,LON&radius_km=20"`;
-
-// A sample, not a record: the id keeps the real shape (date, then a
-// dispatch-center code, then a sequence) with a placeholder center code.
-const RESPONSE_SHAPE = `{
-  "count": 1,
-  "filters": { "highway": null, "area": null, "center": "LAT,LON" },
-  "incidents": [
-    {
-      "id": "260916XX0001",
-      "type": "1182-Trfc Collision-No Inj",
-      "location": "ROUTE / Cross St Onr",
-      "direction_hint": "eastbound",
-      "area": "Dispatch area",
-      "lat": LAT, "lon": LON,
-      "reported_at": "2026-09-16T12:00:00+00:00"
-    }
-  ],
-  "sources": [
-    { "source": "chp",
-      "description": "CHP live incidents (media.chp.ca.gov, refreshes ~1/min)",
-      "ok": true, "data_as_of": "2026-09-16T12:00:41+00:00" }
-  ],
-  "signs": [
-    { "route": "ROUTE", "direction": "N", "near": "Nearest town",
-      "county": "County", "lat": LAT, "lon": LON,
-      "message": "CRASH AHEAD / EXPECT DELAYS" }
-  ],
-  "cameras": [
-    { "name": "ROUTE at Cross St", "route": "ROUTE", "direction": "E",
-      "near": "Nearest town", "lat": LAT, "lon": LON,
-      "image_url": "https://cwwp2.dot.ca.gov/.../image.jpg", "stream_url": null }
-  ]
-}`;
 
 const CURL_BEARER = `curl -H "Authorization: Bearer YOUR_KEY" \\
   "${API_ROOT}/tools/plan_trip?origin=home&destination=work"`;
@@ -193,36 +157,37 @@ const TIERS = [
   ["Pro (coming soon)", "120 a minute", "60", "10,000"],
 ];
 
+// Phrased as what to do; the one hard "no" (reselling) says so plainly.
 const RULES = [
   {
-    title: "Do not poll faster than the data changes.",
+    title: "Poll no faster than the data changes.",
     body:
-      "Every tool below says how often its source refreshes. Asking more often returns the same answer and spends your limit. A dashboard that re-reads incidents every 60 seconds and closures every five minutes is doing it right.",
+      "Every tool in the reference says how often its source refreshes. Asking more often returns the same answer and spends your limit. A dashboard that re-reads incidents every 60 seconds and closures every five minutes is doing it right.",
   },
   {
-    title: "Do not put a key in a web page or a mobile app.",
+    title: "Keep your key on a server you control.",
     body:
-      "A key is a secret. Anyone who can open your page or app can read it and spend your limit. Call the API from a server you control.",
+      "A key is a secret. Call the API from your own server, not from a web page or a mobile app, where anyone can read the key and spend your limit.",
   },
   {
-    title: "Do not call the map's private endpoints.",
+    title: "Use one key per app or job.",
     body:
-      "Everything under commutescout.com/api is for the site's own pages and changes without notice. The supported surface is this API, the MCP server, and the bulk snapshots below.",
+      "Then a leak only costs one key. Revoke a leaked key in Settings. Requests with it stop within a minute.",
   },
   {
-    title: "Do not present the data as complete or official.",
+    title: "Build on the supported surface.",
     body:
-      "It is a live compilation of agency feeds, each with its own delay. Show the data_as_of time next to what you display, name the source, and tell your users to verify with 511 or the state DOT before they drive. Never use it for evacuation or emergency decisions.",
+      "That is this API, the MCP server and the bulk snapshots. Everything under commutescout.com/api serves the site's own pages and changes without notice.",
   },
   {
-    title: "Do not resell the raw feeds.",
+    title: "Show how fresh the data is, and where it came from.",
     body:
-      "Build on the data, do not redistribute it as a feed of your own. If your product needs the whole stream, use the bulk snapshots with attribution, or contact us.",
+      "It is a live compilation of agency feeds, each with its own delay, so it is neither complete nor official. Show the data_as_of time next to what you display, name the source, and tell your users to verify with 511 or the state DOT before they drive. It is not for evacuation or emergency decisions.",
   },
   {
-    title: "Do not share one key across products.",
+    title: "Build on the data rather than reselling it.",
     body:
-      "One key per app or job. When a key leaks, revoke it in Settings. Requests with it stop within a minute.",
+      "Use it inside your product. Redistributing the raw feeds as a feed of your own is not allowed. If your product needs the whole stream, use the bulk snapshots with attribution, or contact us.",
   },
 ];
 
@@ -310,70 +275,18 @@ export default function DevelopersPage() {
           API key.
         </>
       }
-      actions={
-        <>
-          <CopyField method="GET" value={`${API_ROOT}/tools/{tool}`} label="Tool URL pattern" />
-          <a href={`${API_ROOT}/docs`} className="dx-textlink">
-            Browse the OpenAPI reference <ArrowUpRight aria-hidden="true" />
-          </a>
-        </>
-      }
       facts={[
         { value: String(TOOLS.length), label: "tools" },
         { value: String(STATE_COUNT), label: "states" },
         { value: String(AGENCY_FEED_COUNT), label: "official feeds" },
       ]}
       toc={TOC}
+      lead={<Quickstart apiRoot={API_ROOT} docsHref={`${API_ROOT}/docs`} />}
     >
-      <Section id="quickstart" title="Quickstart">
-        <ol className="dx-rules dx-rules--compact">
-          <li>
-            <span>
-              <b>Get a free key.</b> Open the{" "}
-              <Link href="/map" prefetch={false} className="dx-link">
-                live map
-              </Link>
-              , choose Settings, sign in, and create a key under API keys. Copy it right away. It is only
-              shown once.
-            </span>
-          </li>
-          <li>
-            <span>
-              <b>Send a request.</b> Put the key in the <C>X-API-Key</C> header and replace <C>LAT,LON</C>{" "}
-              with a point. Highlighted capitals in every example are placeholders.
-            </span>
-          </li>
-        </ol>
-        <CodeBlock code={CURL_QUICK} lang="bash" title="Request" />
-        <div className="dx-prose dx-mt-20">
-          <p>
-            Every response has the records you asked for, the filters the server understood, and a{" "}
-            <C>sources</C> list with each source&apos;s own <C>data_as_of</C> time. Show that time to your
-            users. Incident, closure and chain control answers filtered by route or center also include the
-            nearby <C>signs</C> and <C>cameras</C>, when there are any.
-          </p>
-        </div>
-        <CodeBlock code={RESPONSE_SHAPE} lang="json" title="200 OK · sample response" />
-        <div className="dx-prose dx-mt-20">
-          <p>
-            The full contract is the OpenAPI document at{" "}
-            <a href={`${API_ROOT}/openapi.json`} className="dx-link">
-              {API_ROOT_TEXT}/openapi.json
-            </a>
-            , with a browsable reference at{" "}
-            <a href={`${API_ROOT}/docs`} className="dx-link">
-              {API_ROOT_TEXT}/docs
-            </a>{" "}
-            and an index at{" "}
-            <a href={API_ROOT} className="dx-link">
-              {API_ROOT_TEXT}
-            </a>
-            . It is generated from the tools&apos; own schemas.
-          </p>
-        </div>
-      </Section>
-
       <Section id="basics" title="Base URL and versioning">
+        <div className="dx-mt-20">
+          <CopyField method="GET" value={`${API_ROOT}/tools/{tool}`} label="Tool URL pattern" />
+        </div>
         <dl className="dx-defs">
           <div>
             <dt>Base URL</dt>
@@ -403,6 +316,24 @@ export default function DevelopersPage() {
             <dd>
               Tool responses are <C>Cache-Control: no-store</C>. Cache them yourself for as long as the
               tool&apos;s refresh interval says.
+            </dd>
+          </div>
+          <div>
+            <dt>Contract</dt>
+            <dd>
+              The OpenAPI document at{" "}
+              <a href={`${API_ROOT}/openapi.json`} className="dx-link">
+                {API_ROOT_TEXT}/openapi.json
+              </a>
+              , generated from the tools&apos; own schemas, with a browsable reference at{" "}
+              <a href={`${API_ROOT}/docs`} className="dx-link">
+                {API_ROOT_TEXT}/docs
+              </a>{" "}
+              and an index of every tool at{" "}
+              <a href={API_ROOT} className="dx-link">
+                {API_ROOT_TEXT}
+              </a>
+              .
             </dd>
           </div>
         </dl>
@@ -452,7 +383,7 @@ export default function DevelopersPage() {
           <li>
             The same key and limits work for the REST API and the{" "}
             <Link href="/mcp" prefetch={false} className="dx-link">
-              MCP server
+              MCP Server
             </Link>
             .
           </li>
@@ -561,17 +492,6 @@ export default function DevelopersPage() {
         </Callout>
       </Section>
 
-      <Section id="rules" title="What not to do">
-        <ol className="dx-rules">
-          {RULES.map((r) => (
-            <li key={r.title}>
-              <b>{r.title}</b>
-              <p>{r.body}</p>
-            </li>
-          ))}
-        </ol>
-      </Section>
-
       <Section id="tools" title="Tool reference">
         <div className="dx-prose dx-lead">
           <p>
@@ -612,7 +532,7 @@ export default function DevelopersPage() {
           <p>
             Setup for each client is on the{" "}
             <Link href="/mcp#connect" prefetch={false} className="dx-link">
-              MCP server page
+              MCP Server page
             </Link>
             . Agents can read the same steps as plain text at{" "}
             <a href="/llms.txt" className="dx-link">
@@ -676,6 +596,20 @@ export default function DevelopersPage() {
           </p>
         </div>
         <CodeBlock code="python -m ca_roads.flare check https://your-plugin.example" lang="bash" />
+      </Section>
+
+      <Section id="rules" title="Guidelines">
+        <div className="dx-prose dx-lead">
+          <p>Six habits that keep your app fast, within its limits, and honest with the people using it.</p>
+        </div>
+        <ol className="dx-rules">
+          {RULES.map((r) => (
+            <li key={r.title}>
+              <b>{r.title}</b>
+              <p>{r.body}</p>
+            </li>
+          ))}
+        </ol>
       </Section>
 
       <Section id="terms" title="Attribution and terms">

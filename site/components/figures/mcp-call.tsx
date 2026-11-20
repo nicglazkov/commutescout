@@ -21,7 +21,7 @@ const TIMES = [300, 1200, 2300, 2900, 3400, 3900, 4200, 4500, 4800, 5400, 6100, 
 const LOOP = 14500;
 const HOLD = 13400;
 
-const STEPS = ["Find Home and Cabin", "Route the 7:30 AM drive with traffic", "Pin live reports to the route", "Read the forecast on arrival", "Write the summary"];
+const STEPS = ["Look up Home and the destination", "Route the 7:30 AM drive with traffic", "Pin live reports to the route", "Read the forecast on arrival", "Write the summary"];
 const STEP_AT = [3, 4, 6, 10, 11];
 const SOURCES: [string, string, number][] = [
   ["traffic", "Traffic speeds", 5],
@@ -90,7 +90,7 @@ export default function McpCall({ n = 7 }: { n?: number | string }) {
             <b>Assistant</b>
           </div>
           <p className="mx-bubble mx-q" data-step={1}>
-            How&apos;s the drive from home to the cabin if I leave at 7:30?
+            How&apos;s the drive from home to my friend&apos;s place if I leave at 7:30?
           </p>
           <span className="mx-typing" data-step={12} data-off-at={13} aria-hidden="true">
             <i />

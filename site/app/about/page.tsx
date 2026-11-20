@@ -27,15 +27,15 @@ export const metadata: Metadata = {
 
 const principles = [
   {
-    title: "Only official sources.",
+    title: "Only official sources",
     body: "Every layer comes from the agency that publishes it, such as a state transportation department, a highway patrol or the National Weather Service. Nothing is scraped.",
   },
   {
-    title: "Every answer names its sources.",
+    title: "Every answer names its sources",
     body: "You can see where each answer came from, and when each source last updated.",
   },
   {
-    title: "Old data is labeled.",
+    title: "Old data is labeled",
     body: "If a source has not updated in a while, its data still shows, marked as out of date. If a source is down, CommuteScout says which one.",
   },
 ];
@@ -45,7 +45,7 @@ export default function AboutPage() {
     <>
       <section className="cs-container pb-16 pt-14 md:pb-24 md:pt-20">
         <div className="grid gap-8 lg:grid-cols-12 lg:items-end lg:gap-10">
-          <h1 className="cs-display cs-rise lg:col-span-6">Official road data.</h1>
+          <h1 className="cs-display cs-rise lg:col-span-6">Built on official road data</h1>
           <p className="cs-lede cs-rise max-w-[34rem] [animation-delay:120ms] lg:col-span-6">
             CommuteScout puts 53 official sources on one live map: state transportation
             departments, highway patrols, the National Weather Service and wildfire agencies.

@@ -5,6 +5,9 @@ import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
 import { C, CodeBlock } from "@/components/docs/code-block";
 import { Callout } from "@/components/docs/callout";
 import { DocFigure } from "@/components/docs/doc-figure";
+import { ArrowRight, Lock, ShieldAlert, ShieldCheck } from "lucide-react";
+import { InstallFlow } from "./install-flow";
+import "./plugins.css";
 
 // The plugins section: what Flare is, how a plugin is run (private,
 // unlisted or public), the full protocol, the rules, the conformance
@@ -34,11 +37,12 @@ export const metadata: Metadata = {
 };
 
 const TOC: TocItem[] = [
+  { id: "install", label: "Install a plugin" },
+  { id: "ways", label: "Trust levels" },
+  { id: "catalog", label: "Public catalog" },
   { id: "what", label: "What a plugin is" },
   { id: "topology", label: "Who talks to whom" },
-  { id: "ways", label: "Three tiers" },
-  { id: "catalog", label: "Public catalog" },
-  { id: "start", label: "Run one locally" },
+  { id: "start", label: "Build one" },
   {
     id: "endpoints",
     label: "Endpoints",
@@ -60,6 +64,48 @@ const TOC: TocItem[] = [
   { id: "listing", label: "Get listed" },
   { id: "roadmap", label: "Roadmap" },
 ];
+
+// The three levels a plugin is shown as (tier_of in src/ca_roads/flare.py),
+// each with its own color so a reader can tell them apart at a glance. The
+// same color marks the level everywhere on this page.
+const TIERS = [
+  {
+    id: "approved",
+    icon: ShieldCheck,
+    name: "Approved",
+    meta: "public · official or verified",
+    body: "Reviewed by CommuteScout: the operator is known and the feed passed review. Drawn by default and badged as approved.",
+    rows: ["Reviewed by CommuteScout", "Found in the marketplace", "No notice to tick", "Read through CommuteScout"],
+  },
+  {
+    id: "unreviewed",
+    icon: ShieldAlert,
+    name: "Public, not reviewed",
+    meta: "public or unlisted · community",
+    body: "Anyone whose plugin passes the conformance check can be listed. It shows on the map, labelled as not reviewed, and alerts only after you tick the notice at install. Unlisted plugins are this level too, shared by link instead of listed.",
+    rows: ["Passed the conformance check", "In the marketplace, or shared by link", "Notice ticked at install", "Read through CommuteScout"],
+  },
+  {
+    id: "private",
+    icon: Lock,
+    name: "Private",
+    meta: "added by URL on one device",
+    body: "Something you run for your own devices, called straight from the app, with your own bearer token if you want one. It needs the same notice ticked at install, and may show anything, including personal data.",
+    rows: ["Not reviewed", "Added by its URL in the app", "Notice ticked at install", "Called straight from your app"],
+  },
+] as const;
+
+const KIND_TONE: Record<string, string> = {
+  Police: "police",
+  Crash: "incident",
+  Hazard: "hazard",
+  Weather: "weather",
+  Closures: "closure",
+  Traffic: "traffic",
+  Chains: "chain",
+  Cameras: "camera",
+  Other: "other",
+};
 
 const CAPABILITIES: [string, string, boolean][] = [
   ["alerts", "Serve alerts near a point.", true],
@@ -252,17 +298,20 @@ export default function PluginsPage() {
       title="Plugins"
       dek={
         <>
-          Flare is the open protocol for adding your own road alerts to CommuteScout. A plugin is a small
-          HTTPS server that the map and the apps read.
+          Plugins add community alerts to the map and the apps, from sources beyond the official feeds. Browse
+          and install them in a minute, or build your own on Flare, the open protocol behind them.
         </>
       }
       actions={
         <>
-          <a href="#start" className="dx-btn dx-btn-primary">
-            Run one locally
+          <Link href="/marketplace" prefetch={false} className="dx-btn dx-btn-primary">
+            Browse plugins <ArrowRight aria-hidden="true" className="pg-btn-arrow" />
+          </Link>
+          <a href="#install" className="dx-btn dx-btn-ghost">
+            How to install
           </a>
-          <a href="#endpoints" className="dx-textlink">
-            Read the protocol
+          <a href="#start" className="dx-textlink">
+            Build a plugin
           </a>
         </>
       }
@@ -273,6 +322,73 @@ export default function PluginsPage() {
       ]}
       toc={TOC}
     >
+      <Section id="install" title="Install a plugin">
+        <div className="dx-prose dx-lead">
+          <p>
+            Plugins are free. Pick one in the{" "}
+            <Link href="/marketplace" prefetch={false} className="dx-link">
+              marketplace
+            </Link>
+            , install it, and decide whether it may alert you.
+          </p>
+        </div>
+        <InstallFlow />
+      </Section>
+
+      <Section id="ways" title="Three trust levels">
+        <div className="dx-prose dx-lead">
+          <p>
+            Every plugin is shown as one of three levels, so you can always see who is behind an alert. The
+            level comes from the plugin&apos;s manifest and travels on every marker as <C>tier</C>. Official
+            agency data is not a plugin and always outranks all three.
+          </p>
+        </div>
+        <div className="pg-tiers">
+          {TIERS.map((t) => (
+            <article key={t.id} className="pg-tier" data-tier={t.id} aria-labelledby={`tier-${t.id}`}>
+              <div className="pg-tier-head">
+                <span className="pg-tier-icon">
+                  <t.icon aria-hidden="true" />
+                </span>
+                <div>
+                  <h3 id={`tier-${t.id}`}>{t.name}</h3>
+                  <p className="pg-tier-meta">{t.meta}</p>
+                </div>
+              </div>
+              <p className="pg-tier-body">{t.body}</p>
+              <ul className="pg-tier-rows">
+                {t.rows.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </Section>
+
+      <Section id="catalog" title="Public catalog">
+        <div className="dx-prose dx-lead">
+          <p>
+            The public plugins the map and the apps read right now. CommuteScout&apos;s own community reports
+            (the Report button on the map and in the apps) are a source like any other, marked as community
+            rather than official. To install one, open it in the{" "}
+            <Link href="/marketplace" prefetch={false} className="dx-link">
+              marketplace
+            </Link>
+            .
+          </p>
+        </div>
+        <PluginCatalog />
+      </Section>
+
+      <div className="pg-part">
+        <span className="pg-part-k">For builders</span>
+        <p>
+          A plugin is a small HTTPS server that the map and the apps read. Everything below is the Flare protocol,
+          version 1.
+        </p>
+      </div>
+
       <Section id="what" title="A plugin says what it can do">
         <div className="dx-prose dx-lead">
           <p>
@@ -330,76 +446,7 @@ export default function PluginsPage() {
         </div>
       </Section>
 
-      <Section id="ways" title="Three tiers">
-        <div className="dx-prose dx-lead">
-          <p>
-            Every plugin is shown as one of three levels, so people can always see who is behind an alert.
-            The level comes from the manifest and travels on every marker as <C>tier</C>.
-          </p>
-        </div>
-        <div className="dx-cards dx-cards--3">
-          <div className="dx-card dx-card--ok">
-            <h3>Approved</h3>
-            <p className="dx-card-meta">public · official or verified</p>
-            <p>
-              Reviewed by CommuteScout: the operator is known and the feed passed review. Drawn by default
-              and badged as approved, with no notice to tick. Always mediated.
-            </p>
-          </div>
-          <div className="dx-card dx-card--warn">
-            <h3>Public, not reviewed</h3>
-            <p className="dx-card-meta">public or unlisted · community</p>
-            <p>
-              Anyone who passes the conformance check can be listed, labelled &ldquo;public, not
-              reviewed&rdquo;. It stays on the map, but it does not alert until the person ticks a required
-              notice at install. Unlisted plugins are the same tier, reachable by id for a group that knows
-              they exist.
-            </p>
-          </div>
-          <div className="dx-card dx-card--plain">
-            <h3>Private</h3>
-            <p className="dx-card-meta">added by URL on one device</p>
-            <p>
-              Something you run for your own devices, called directly from the app, with your own bearer
-              token if you want one. Like any plugin CommuteScout has not reviewed, it needs the same notice
-              ticked at install. It may show anything, including personal data.
-            </p>
-          </div>
-        </div>
-        <h3 className="dx-mt-8">Turning a plugin on</h3>
-        <ul className="dx-list dx-measure">
-          <li>
-            A plugin CommuteScout has not reviewed needs one required notice ticked at install: &ldquo;This
-            plugin hasn&apos;t been reviewed by CommuteScout. Its alerts come from its operator, not from
-            official sources.&rdquo;
-          </li>
-          <li>
-            Each plugin then has two switches in the app under Settings &gt; Alerts: <b>Alerts</b>, and{" "}
-            <b>Speak its alerts</b>, which is off until you turn it on.
-          </li>
-          <li>Plugin alerts appear in the iOS and Android apps only. They are never sent as push notifications and do not alert on the website.</li>
-        </ul>
-        <p className="dx-small dx-mt-16">
-          Official agency data (the state feeds) is not a plugin and always outranks all three.
-        </p>
-      </Section>
-
-      <Section id="catalog" title="Public catalog">
-        <div className="dx-prose dx-lead">
-          <p>
-            The public plugins the map and the apps read right now. CommuteScout&apos;s own community reports
-            (the Report button on the map and in the apps) are a source like any other, marked as community
-            rather than official. Browsing, not building? The{" "}
-            <Link href="/marketplace" prefetch={false} className="dx-link">
-              marketplace
-            </Link>{" "}
-            shows every listed plugin as a tile with an Install button.
-          </p>
-        </div>
-        <PluginCatalog />
-      </Section>
-
-      <Section id="start" title="Run one locally">
+      <Section id="start" title="Build one from the example">
         <div className="dx-prose dx-lead">
           <p>
             The example plugin is one file with every endpoint, an in-memory store and a passing conformance
@@ -543,7 +590,7 @@ export default function PluginsPage() {
         </div>
         <ul className="dx-chips">
           {KIND_GROUPS.map(([group, kinds]) => (
-            <li key={group}>
+            <li key={group} className="pg-kind" data-tone={KIND_TONE[group] ?? "other"}>
               <span>{group}</span>
               <ul>
                 {kinds.map((k) => (

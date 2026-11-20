@@ -20,6 +20,13 @@ const nextConfig: NextConfig = {
   // absent.
   trailingSlash: false,
   images: { unoptimized: true },
+  // Local-only brainstorm pages (app/lab/**/page.lab.tsx). The "lab.tsx"
+  // extension is recognised only by the dev server, so production builds
+  // and the static export never contain them.
+  pageExtensions:
+    process.env.NODE_ENV === "development"
+      ? ["tsx", "ts", "jsx", "js", "lab.tsx"]
+      : ["tsx", "ts", "jsx", "js"],
   // site/ has its own package-lock.json, so Turbopack would otherwise
   // infer site/ as the project root and refuse to resolve the shared
   // token sheet at ../src/ca_roads_demo/static/tokens.css (imported

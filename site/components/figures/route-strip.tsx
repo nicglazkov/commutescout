@@ -21,7 +21,7 @@ type Item = { mile: number; kind: Kind; section: string; text: string };
 const TOTAL = 46.8;
 // A winter mountain drive, in an order that happens: a crash in town, the signs warn of chains,
 // a lane closed for plowing, the chain-up area and its camera, the road weather station at the pass,
-// then the drop to the cabin. No wildfire, no roadwork: wrong season.
+// then the drop to a friend's place on the far side. No wildfire, no roadwork: wrong season.
 const ITEMS: Item[] = [
   { mile: 6.2, kind: "toll", section: "tolls", text: "Toll plaza, $3.50" },
   { mile: 12.4, kind: "incident", section: "incidents", text: "Crash, right lane blocked" },
@@ -47,6 +47,16 @@ const X0 = 56;
 const X1 = 944;
 const LINE_Y = 104;
 const xOf = (mile: number) => X0 + (mile / TOTAL) * (X1 - X0);
+// A pin's mile label sits to the right of its head unless the next pin's stem is close enough
+// for the label to run into it (it did at mile 28.9, one stem before the chain control); then
+// it sits on the left, where there is room.
+const LABEL_ROOM = 52;
+const labelLeft = (i: number) => {
+  const x = xOf(ITEMS[i].mile);
+  const next = ITEMS[i + 1] ? xOf(ITEMS[i + 1].mile) - x : Infinity;
+  const prev = i > 0 ? x - xOf(ITEMS[i - 1].mile) : Infinity;
+  return next < LABEL_ROOM && prev >= LABEL_ROOM;
+};
 
 export default function RouteStrip({ n = 4 }: { n?: number | string }) {
   const [hot, setHot] = useState<number | null>(null);
@@ -71,7 +81,7 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
         <div className="rs-head">
           <p className="rs-summary">
             <span className="rs-key csf-mono">summary</span>
-            Home to Cabin: {TOTAL} mi via Interstate; about 1 h 4 min leaving 7:30 AM, arriving around 8:34 AM; 11 min of that is
+            Home to a friend&apos;s place: {TOTAL} mi via Interstate; about 1 h 4 min leaving 7:30 AM, arriving around 8:34 AM; 11 min of that is
             traffic; on the route right now: 1 closure, 1 incident, 1 chain control.
           </p>
           <dl className="rs-times" aria-label="Drive time for this departure">
@@ -95,7 +105,7 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
           </dl>
         </div>
 
-        <svg className="csf-svg rs-strip csf-desk" viewBox="0 0 1000 150" role="img" aria-label={`Strip map of a ${TOTAL}-mile route from Home to Cabin with ${ITEMS.length} live items pinned at their mile.`}>
+        <svg className="csf-svg rs-strip csf-desk" viewBox="0 0 1000 150" role="img" aria-label={`Strip map of a ${TOTAL}-mile route from Home to a friend's place with ${ITEMS.length} live items pinned at their mile.`}>
           {/* mileposts */}
           {Array.from({ length: Math.floor(TOTAL) + 1 }, (_, m) => m).map((m) => (
             <line key={m} x1={xOf(m)} x2={xOf(m)} y1={LINE_Y + 10} y2={LINE_Y + (m % 5 === 0 ? 18 : 14)} className={m % 5 === 0 ? "rs-tick-major" : "rs-tick"} />
@@ -131,7 +141,7 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
                 <text x={x} y={y + 4} textAnchor="middle" className="rs-num">
                   {i + 1}
                 </text>
-                <text x={x + 16} y={y + 4} className="rs-pin-mile">
+                <text x={labelLeft(i) ? x - 16 : x + 16} y={y + 4} textAnchor={labelLeft(i) ? "end" : "start"} className="rs-pin-mile">
                   {item.mile.toFixed(1)}
                 </text>
               </g>
@@ -147,7 +157,7 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
           <g className="rs-end">
             <rect x={X1 - 7} y={LINE_Y - 7} width={14} height={14} rx={3} />
             <text x={X1} y={LINE_Y - 16} textAnchor="middle">
-              Cabin
+              Friend&apos;s place
             </text>
           </g>
         </svg>
@@ -186,11 +196,11 @@ export default function RouteStrip({ n = 4 }: { n?: number | string }) {
               </span>
             </li>
           ))}
-          <li className="rs-row rs-row-end" aria-label={`Cabin at mile ${TOTAL}`}>
+          <li className="rs-row rs-row-end" aria-label={`Friend's place at mile ${TOTAL}`}>
             <span className="rs-row-num rs-row-num-end" aria-hidden="true" />
             <span className="rs-row-mile csf-mono">{TOTAL}</span>
             <span className="rs-row-body">
-              <span className="rs-row-kind">Cabin</span>
+              <span className="rs-row-kind">Friend&apos;s place</span>
               <span className="rs-row-text">Forecast on arrival: snow showers, 30°F. Alert along the route: winter storm warning.</span>
             </span>
           </li>

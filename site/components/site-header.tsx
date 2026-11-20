@@ -43,8 +43,8 @@ const developers: DevItem[] = [
   },
   {
     href: "/mcp",
-    label: "MCP server",
-    note: "Connect Claude, ChatGPT, Cursor or any MCP client",
+    label: "MCP Server",
+    note: "Connect Claude, Cursor or any MCP client",
     icon: Plug,
   },
   {

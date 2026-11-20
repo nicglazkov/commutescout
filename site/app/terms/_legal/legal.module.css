@@ -138,6 +138,32 @@
   font-weight: 600;
 }
 
+/* A key point of the summary, highlighted where it stands (the order of
+   the list never changes, so the reviewed text reads the same): a tinted
+   cell with an accent rule, ink text and a larger size. */
+.summaryList li.summaryKey {
+  padding: 14px 16px 14px 20px;
+  margin: -2px 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--l-ink);
+  background: var(--l-accent-soft);
+  border-radius: var(--l-radius);
+  box-shadow: inset 3px 0 0 var(--l-accent);
+}
+
+.summaryList li.summaryKey::before {
+  display: none;
+}
+
+.summaryList li.summaryKey strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--l-accent);
+}
+
 /* ---------- body grid ---------- */
 
 .grid {

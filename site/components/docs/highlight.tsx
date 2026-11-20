@@ -14,7 +14,7 @@ export type Lang = "json" | "bash" | "http" | "text" | "toml";
 type Tok = [cls: string | null, text: string];
 
 const PLACEHOLDER = /^(?:[A-Z][A-Z0-9_]{2,}|LAT2?|LON2?)$/;
-const IS_PH_WORD = /\b(?:MIN_LAT|MIN_LON|MAX_LAT|MAX_LON|LAT2|LON2|LAT|LON|ROUTE|START|END|PLACE|REGION|ADDRESS|DESTINATION)\b/g;
+const IS_PH_WORD = /\b(?:YOUR_KEY|MIN_LAT|MIN_LON|MAX_LAT|MAX_LON|LAT2|LON2|LAT|LON|ROUTE|START|END|PLACE|REGION|ADDRESS|DESTINATION)\b/g;
 
 function placeholders(text: string, base: string | null): Tok[] {
   const out: Tok[] = [];

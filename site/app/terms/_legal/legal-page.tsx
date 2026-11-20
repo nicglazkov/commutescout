@@ -22,6 +22,7 @@ export function LegalPage({
   summaryTitle,
   summaryNote,
   summary,
+  summaryKeys = [],
   sections,
   foot,
 }: {
@@ -33,6 +34,8 @@ export function LegalPage({
   summaryTitle: string;
   summaryNote: string;
   summary: ReactNode[];
+  /** Indexes of summary items to highlight as key points (wording and order unchanged). */
+  summaryKeys?: number[];
   sections: LegalSection[];
   foot?: ReactNode;
 }) {
@@ -58,7 +61,9 @@ export function LegalPage({
           <p className={styles.summaryNote}>{summaryNote}</p>
           <ul className={styles.summaryList}>
             {summary.map((item, i) => (
-              <li key={i}>{item}</li>
+              <li key={i} className={summaryKeys.includes(i) ? styles.summaryKey : undefined}>
+                {item}
+              </li>
             ))}
           </ul>
         </section>

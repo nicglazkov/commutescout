@@ -47,7 +47,7 @@ def test_every_pinned_id_survives():
 def test_rail_has_the_five_tools_plus_data_once_each():
     rail = re.search(r'<nav class="rail"[^>]*>(.*?)</nav>', HTML, re.S).group(1)
     tools = re.findall(r'data-tool="([a-z]+)"', rail)
-    assert tools == ["route", "ask", "layers", "watch", "alerts", "settings", "about"]
+    assert tools == ["route", "ask", "layers", "watch", "alerts", "about", "settings"]
     assert rail.count("<button") == 7 and "<a " not in rail
     for name in ("Route", "Ask", "Layers", "Watch", "Alerts", "Settings", "Data"):
         assert f"<span>{name}</span>" in rail

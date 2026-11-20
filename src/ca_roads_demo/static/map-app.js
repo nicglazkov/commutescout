@@ -2315,6 +2315,19 @@ railEl.addEventListener('click', (e) => {
   if (saved === '' && !isPhone()) setTool('route', { toggle: false }), setTool('route');
   else setTool(saved || 'route', { toggle: false });
 }
+// Deep link: /map?settings=keys opens Settings at the API keys card (the
+// docs' "Get a free key" button). Signed out, the card is hidden and the
+// account note with its sign-in button is shown instead, so scroll to
+// whichever of the two is visible once the account module has loaded.
+// No parameter, no change.
+if (new URLSearchParams(location.search).get('settings') === 'keys') {
+  setTool('settings', { toggle: false, reveal: true });
+  loadWatch().then(() => setTimeout(() => {
+    const card = document.getElementById('keycard');
+    const target = card && !card.hidden ? card : document.getElementById('acctnote');
+    if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, 400));
+}
 // Drag handles. Bounds from the spec: rail 56-88px; panel 300-520px
 // and never more than 40% of the viewport.
 const BOUNDS = {

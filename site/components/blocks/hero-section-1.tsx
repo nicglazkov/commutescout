@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandMark } from "@/components/brand/brand-mark";
 
 // The homepage hero. A left-aligned split: the claim, one line on what the
 // map shows, two actions, and a real screenshot of the live map on the
@@ -16,20 +17,27 @@ export default function HeroSection() {
     <section className="relative overflow-hidden">
       <div className="cs-container grid items-center gap-12 pb-16 pt-12 md:pb-24 md:pt-20 lg:grid-cols-12 lg:gap-10">
         <div className="lg:col-span-5">
+          {/* The launch announcement: a real pill with the app's icon, a
+              solid "New" tag and the product name, so it reads as news
+              and as a link at a glance. */}
           <Link
             href="/app"
             prefetch={false}
-            className="group cs-rise inline-flex min-h-6 items-center gap-2 text-[0.8125rem] text-cs-ink-2 transition-colors hover:text-cs-ink"
+            className="group cs-rise inline-flex max-w-full items-center gap-2.5 rounded-full border border-cs-line-strong bg-cs-surface py-1.5 pl-1.5 pr-3.5 shadow-[var(--cs-shadow-sm)] transition-[border-color,box-shadow] duration-150 hover:border-cs-accent hover:shadow-[var(--cs-shadow-md)] sm:pr-4"
           >
-            <span className="cs-data rounded-[var(--cs-radius-sm)] bg-cs-accent-soft px-1.5 py-0.5 text-[0.6875rem] font-medium uppercase tracking-[0.06em] text-cs-accent">
+            <span className="cs-data rounded-full bg-cs-accent px-2.5 py-1 text-[0.6875rem] font-semibold uppercase leading-none tracking-[0.08em] text-cs-accent-ink">
               New
             </span>
-            CommuteScout Drive for iPhone and Android
-            <ArrowRight aria-hidden className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+            <BrandMark className="size-6 shrink-0" />
+            <span className="min-w-0 truncate text-[0.9375rem] font-medium text-cs-ink">
+              CommuteScout Drive<span className="hidden sm:inline"> for iPhone and Android</span>
+              <span className="sm:hidden"> app</span>
+            </span>
+            <ArrowRight aria-hidden className="size-4 shrink-0 text-cs-accent transition-transform duration-150 group-hover:translate-x-0.5" />
           </Link>
 
           <h1 className="cs-display cs-rise mt-6 [animation-delay:60ms]">
-            Live road conditions, straight from the source.
+            Live road conditions, straight from the source
           </h1>
           <p className="cs-lede cs-rise mt-6 max-w-[32rem] [animation-delay:120ms]">
             Incidents, closures, chain controls, cameras and wildfires from 53 official sources

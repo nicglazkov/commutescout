@@ -85,6 +85,7 @@ export default function TermsPage() {
       summaryTitle="The short version"
       summaryNote="A summary for convenience. The numbered sections below are the terms."
       summary={summary}
+      summaryKeys={[3]}
       sections={[
         {
           id: "service",

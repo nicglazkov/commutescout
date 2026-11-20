@@ -20,25 +20,61 @@ body { background:var(--bg); color:var(--ink);
 
 /* ── App chrome ─────────────────────────────────────────────── */
 .topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
-  flex-wrap:wrap; gap:14px; padding:0 20px; height:56px; flex:none }
-.topbar a.brand { display:flex; align-items:center; gap:14px; color:inherit;
+  flex-wrap:wrap; gap:14px; padding:0 20px; height:56px; flex:none;
+  /* The site's type (Geist, site/app/layout.tsx), at the site header's
+     sizes and weights, so the bar reads the same on every page. */
+  font-family:Geist, Inter, system-ui, sans-serif; position:relative; z-index:1100 }
+.topbar a.brand { display:flex; align-items:center; gap:10px; color:inherit;
   text-decoration:none }
-.topbar img.mark { width:30px; height:30px; border-radius:7px }
-.topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
+.topbar img.mark { width:28px; height:28px; border-radius:7px }
+.topbar .wordmark { font-family:Geist, Inter, system-ui, sans-serif; font-size:.975rem;
+  font-weight:600; letter-spacing:-.01em }
 /* Present to crawlers and screen readers, absent from the layout. */
 .visually-hidden { position:absolute; width:1px; height:1px; padding:0;
   margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap;
   border:0 }
-.topbar nav { display:flex; gap:4px; margin-left:14px }
+.topbar nav { display:flex; align-items:center; gap:2px; margin-left:14px }
 /* .navcta is the Live map / current-page pill: a topbar-level sibling of
    nav (not nested inside it), same as the site's Next.js header, so it
    can sit beside the brand on its own row at <=640px (see that media
    query below). Shares nav a's base look. */
-.topbar nav a, .topbar .navcta { color:#b7c4d4; font-size:.85rem; padding:7px 12px;
-  border-radius:8px; text-decoration:none }
-.topbar nav a:hover, .topbar .navcta:hover { color:#fff }
+.topbar nav a, .topbar .navcta, .topbar .devbtn { color:#b7c4d4; font:400 .875rem/1 Geist, Inter, system-ui, sans-serif;
+  padding:0 12px; min-height:36px; display:inline-flex; align-items:center;
+  border-radius:10px; text-decoration:none; transition:color .15s, background-color .15s }
+.topbar nav a:hover, .topbar .devbtn:hover, .topbar .navcta:hover { color:#fff; background:rgba(255,255,255,.07) }
+.topbar .navcta { font-weight:500 }
 .topbar .navcta.live { background:var(--sky); color:#fff }
-.topbar nav a.on, .topbar .navcta.on { background:var(--navy2); color:#fff }
+.topbar nav a.on { background:var(--navy2); color:#fff }
+/* Live map is the site header's one accent button on every page, this
+   one included (aria-current marks it as the page you are on). */
+.topbar .navcta.on { background:var(--cs-accent, #1a63d6); color:#fff }
+.topbar .navcta.on:hover { background:var(--cs-accent-hover, #1555bb) }
+/* The Developers menu, as in the site header: a button, then a panel of
+   three destinations with a one-line note each. */
+.topbar .devmenu { position:relative }
+.topbar .devbtn { background:none; border:0; cursor:pointer; gap:4px }
+.topbar .devbtn svg { opacity:.7; transition:transform .2s }
+.topbar .devmenu.open .devbtn { color:#fff }
+.topbar .devmenu.open .devbtn svg { transform:rotate(180deg) }
+.topbar .devlabel { display:none }
+.topbar .devpop { list-style:none; padding:6px; position:absolute; left:50%; top:100%;
+  width:23rem; margin-top:8px; transform:translate(-50%, -4px); opacity:0; visibility:hidden;
+  background:var(--cs-paper, #fff); border:1px solid var(--line); border-radius:16px;
+  box-shadow:0 12px 32px rgba(11,31,51,.18), 0 2px 6px rgba(11,31,51,.08);
+  transition:opacity .2s cubic-bezier(.22,1,.36,1), transform .2s cubic-bezier(.22,1,.36,1), visibility .2s }
+.topbar .devmenu.open .devpop { opacity:1; visibility:visible; transform:translate(-50%, 0) }
+.topbar .devpop::before { content:""; position:absolute; left:0; right:0; top:-10px; height:10px }
+.topbar .devpop li { position:relative; padding:10px 12px; border-radius:10px }
+.topbar .devpop li:hover, .topbar .devpop li:focus-within { background:#eef2f7 }
+.topbar .devpop a { display:block; min-height:0; padding:0; color:var(--ink); font-weight:500; background:none }
+.topbar .devpop a:hover { color:var(--ink); background:none }
+.topbar .devpop a::after { content:""; position:absolute; inset:0; border-radius:10px }
+.topbar .devpop span { display:block; margin-top:3px; font-size:.8125rem; line-height:1.35; color:#5f6e82 }
+.topbar .navmenu { display:none; background:none; border:0; color:#b7c4d4;
+  width:40px; height:40px; border-radius:10px; align-items:center;
+  justify-content:center; cursor:pointer }
+.topbar .navmenu:hover { color:#fff; background:rgba(255,255,255,.08) }
+.topbar a:focus-visible, .topbar button:focus-visible { outline:2px solid var(--sky); outline-offset:2px }
 .sysok { margin-left:auto; display:flex; align-items:center; gap:7px;
   font-size:.78rem; color:#9fd8b7; white-space:nowrap }
 .sysok i { width:7px; height:7px; border-radius:99px; background:#3fcf8a; font-style:normal }
@@ -783,30 +819,34 @@ aside section[data-tool].on { display:block }
   input, select, textarea { font-size:16px !important }
   .examples button { padding:8px 12px }
 }
-/* ── Topbar: two rows below 640px ──────────────────────────────
-   Row 1 (unchanged flex row, just tighter): brand left, the Live
-   map/current-page pill right. Row 2: the four text nav links, one
-   row, four equal columns, each a >=40px tap target - full width,
-   evenly distributed, no scrolling (the 375px horizontal-scroll strip
-   this replaced hid 3 of 4 destinations with no visible affordance;
-   see git history on this file for that revision). flex-wrap on
-   .topbar plus flex-basis:100% on nav is what forces nav onto its own
-   line: brand + the pill fit on row 1 with room to spare, so wrap
-   only breaks before the item that alone demands the full row width. */
+/* ── Topbar below 640px ───────────────────────────────────────
+   One row, as on the site: brand left, the Live map pill and a Menu
+   button right. The Menu button (topbar.js) opens the nav as a sheet
+   under the bar, two columns of 44px targets, with the developer
+   pages listed in place under a "For developers" label. */
 @media (max-width: 640px) {
-  .topbar { height:auto; flex-wrap:wrap; gap:8px; row-gap:4px;
+  .topbar { height:auto; min-height:56px; gap:8px; row-gap:4px;
     padding:8px 12px;
     padding-left:max(12px, env(safe-area-inset-left));
     padding-right:max(12px, env(safe-area-inset-right)) }
   .topbar a.brand { gap:8px }
-  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
-  .topbar .navcta { flex:0 0 auto; margin-left:auto; min-height:36px;
-    display:flex; align-items:center }
-  .topbar nav { order:3; flex:1 1 100%; margin-left:0;
-    display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px }
-  .topbar nav a { padding:2px 4px; font-size:.72rem; text-align:center;
-    white-space:normal; line-height:1.2; min-height:40px;
-    display:flex; align-items:center; justify-content:center }
+  .topbar .wordmark { white-space:nowrap }
+  .topbar .navcta { flex:0 0 auto; margin-left:auto }
+  .topbar .navmenu { display:flex }
+  .topbar .sysok, .topbar #ver { display:none }
+  .topbar nav { order:3; flex:1 1 100%; margin-left:0; display:none;
+    grid-template-columns:repeat(2, 1fr); gap:2px 4px; padding-bottom:6px }
+  .topbar.open nav { display:grid }
+  .topbar nav a { padding:0 12px; min-height:44px; font-size:.9375rem }
+  .topbar .devmenu { display:contents }
+  .topbar .devbtn { display:none }
+  .topbar .devlabel { display:block; grid-column:1 / -1; margin:6px 12px 0;
+    font:500 .72rem/1.4 "Geist Mono", ui-monospace, monospace; text-transform:uppercase;
+    letter-spacing:.08em; color:#8fa2b8 }
+  .topbar .devpop { display:contents; visibility:visible; opacity:1; transform:none }
+  .topbar .devpop li { display:contents }
+  .topbar .devpop a { display:flex; color:#b7c4d4; font-weight:400; min-height:44px; padding:0 12px }
+  .topbar .devpop a::after, .topbar .devpop span { display:none }
 }
 
 /* Plugin alerts: a rounded badge, colored by plugin (plugin-badges.js).

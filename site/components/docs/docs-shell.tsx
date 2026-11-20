@@ -7,12 +7,13 @@ export type { TocItem };
 
 const DOCS_NAV = [
   { href: "/developers", label: "REST API" },
-  { href: "/mcp", label: "MCP server" },
+  { href: "/mcp", label: "MCP Server" },
   { href: "/plugins", label: "Plugins" },
   { href: "/data-sources", label: "Data sources" },
 ] as const;
 
 type DocsHref = (typeof DOCS_NAV)[number]["href"];
+type PagerLink = { href: string; label: string; kicker: string };
 
 // The frame shared by the four developer pages: a sub-nav between them, a
 // page head, an "On this page" rail (sticky on desktop, a disclosure on a
@@ -24,6 +25,7 @@ export function DocsShell({
   actions,
   facts,
   toc,
+  lead,
   children,
 }: {
   current: DocsHref;
@@ -32,11 +34,23 @@ export function DocsShell({
   actions?: React.ReactNode;
   facts?: { value: string; label: string }[];
   toc: TocItem[];
+  // A full-width band between the head and the body, for the one thing a
+  // page must show above the fold (the REST API quickstart).
+  lead?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  // Previous and next follow the sub-nav order. The two ends are never
+  // left half-empty: the first page looks back to the live map (the same
+  // data, before any code), and the last page leads back to the start.
   const i = DOCS_NAV.findIndex((n) => n.href === current);
-  const prev = i > 0 ? DOCS_NAV[i - 1] : null;
-  const next = i < DOCS_NAV.length - 1 ? DOCS_NAV[i + 1] : null;
+  const prev: PagerLink =
+    i > 0
+      ? { ...DOCS_NAV[i - 1], kicker: "Previous" }
+      : { href: "/map", label: "Live map", kicker: "See the data first" };
+  const next: PagerLink =
+    i < DOCS_NAV.length - 1
+      ? { ...DOCS_NAV[i + 1], kicker: "Next" }
+      : { ...DOCS_NAV[0], kicker: "Back to the start" };
   return (
     <div className="dx">
       <nav className="dx-subnav" aria-label="Developer documentation">
@@ -68,6 +82,8 @@ export function DocsShell({
         </div>
       </header>
 
+      {lead}
+
       <div className="dx-body">
         <aside className="dx-toc dx-toc-desk" aria-label="On this page">
           <p className="dx-toc-title">On this page</p>
@@ -85,28 +101,40 @@ export function DocsShell({
           </details>
           {children}
           <nav className="dx-next" aria-label="More developer documentation">
-            {prev ? (
-              <Link href={prev.href} prefetch={false}>
-                <small>
-                  <ArrowLeft size={12} aria-hidden="true" style={{ display: "inline", verticalAlign: "-1px" }} /> Previous
-                </small>
+            <PagerAnchor href={prev.href} className="dx-next-l">
+              <ArrowLeft aria-hidden="true" className="dx-next-arrow" />
+              <span className="dx-next-text">
+                <small>{prev.kicker}</small>
                 <span>{prev.label}</span>
-              </Link>
-            ) : (
-              <span />
-            )}
-            {next ? (
-              <Link href={next.href} prefetch={false} className="dx-next-r">
-                <small>
-                  Next <ArrowRight size={12} aria-hidden="true" style={{ display: "inline", verticalAlign: "-1px" }} />
-                </small>
+              </span>
+            </PagerAnchor>
+            <PagerAnchor href={next.href} className="dx-next-r">
+              <span className="dx-next-text">
+                <small>{next.kicker}</small>
                 <span>{next.label}</span>
-              </Link>
-            ) : null}
+              </span>
+              <ArrowRight aria-hidden="true" className="dx-next-arrow" />
+            </PagerAnchor>
           </nav>
         </div>
       </div>
     </div>
+  );
+}
+
+// /map is served by the Python app, not by Next, so it gets a plain link.
+function PagerAnchor({ href, className, children }: { href: string; className: string; children: React.ReactNode }) {
+  if (href === "/map") {
+    return (
+      <a href={href} className={className}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} prefetch={false} className={className}>
+      {children}
+    </Link>
   );
 }
 

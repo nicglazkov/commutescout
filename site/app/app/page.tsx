@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  Apple,
   Bell,
+  Download,
+  Link2,
   Megaphone,
   Navigation,
   Puzzle,
-  Smartphone,
+  RefreshCw,
+  ShieldCheck,
   UserRound,
   Volume2,
+  type LucideIcon,
 } from "lucide-react";
 import { PhoneShot } from "@/components/phone-shot";
+import { BrandMark } from "@/components/brand/brand-mark";
+import { AndroidGlyph, AppleGlyph, InstallButton, type Platform } from "@/components/brand/app-install";
+import { PlatformPair } from "@/components/brand/platform-pair";
+import shots from "@/public/shots/app/shots.json";
 import {
   ANDROID_RELEASES,
   APP_REPO,
@@ -68,8 +75,11 @@ const features = [
 ];
 
 // Every screenshot: captured from the simulator and the emulator with a
-// simulated location and a demo status bar (scripts/capture_app_shots.sh),
-// so they show the app and nothing about anybody.
+// simulated location and a demo status bar, so they show the app and
+// nothing about anybody. `scripts/capture_app_shots.sh --install out/`
+// recaptures all five, copies them into public/shots/app/ and rewrites
+// public/shots/app/shots.json (app version, date), which the caption under
+// the gallery prints; `--check` says whether they trail the newest release.
 const gallery = [
   {
     src: "/shots/app/ios-nav.webp",
@@ -93,53 +103,186 @@ const gallery = [
   },
 ];
 
-const installBtn =
-  "inline-flex h-11 items-center gap-2 rounded-[var(--cs-radius-md)] px-4 text-[0.9375rem] font-medium transition-colors duration-150";
+// "Captured September 2026, version 0.6.0" from shots.json.
+function capturedLine(): string {
+  const d = new Date(`${shots.captured}T12:00:00Z`);
+  const when = d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+  return shots.app_version ? `Captured ${when} from version ${shots.app_version}.` : `Captured ${when}.`;
+}
+
+type Step = { icon: LucideIcon; text: React.ReactNode };
+
+const INSTALL: Record<Platform, { name: string; sub: string; Glyph: typeof AppleGlyph; steps: Step[]; note: string | null }> = {
+  ios: {
+    name: "iPhone",
+    sub: "Public beta on TestFlight",
+    Glyph: AppleGlyph,
+    steps: [
+      { icon: Download, text: <>Install TestFlight from the App Store.</> },
+      {
+        icon: Link2,
+        text: (
+          <>
+            Open the{" "}
+            <a href={TESTFLIGHT_PUBLIC} className="cs-link">
+              public beta link
+            </a>{" "}
+            on your phone and tap Install.
+          </>
+        ),
+      },
+      { icon: RefreshCw, text: <>Updates arrive through TestFlight.</> },
+    ],
+    note: TESTFLIGHT_IN_REVIEW ? TESTFLIGHT_IN_REVIEW_NOTE : null,
+  },
+  android: {
+    name: "Android",
+    sub: "APK from the GitHub release",
+    Glyph: AndroidGlyph,
+    steps: [
+      {
+        icon: Download,
+        text: (
+          <>
+            Open the{" "}
+            <a href={ANDROID_RELEASES} className="cs-link">
+              latest release
+            </a>{" "}
+            on your phone and download the APK.
+          </>
+        ),
+      },
+      { icon: ShieldCheck, text: <>Open the file and allow installing from that source when asked.</> },
+      { icon: RefreshCw, text: <>New versions appear on the same page. Install them over the old one.</> },
+    ],
+    note: null,
+  },
+};
+
+// One platform's install card: a tinted header with the platform, then the
+// steps on a numbered rail, then the button. Both cards are identical in
+// weight; PlatformPair puts the visitor's own phone first.
+function InstallCard({ platform }: { platform: Platform }) {
+  const { name, sub, Glyph, steps, note } = INSTALL[platform];
+  return (
+    <article className="flex h-full flex-col overflow-hidden rounded-[calc(var(--cs-radius-lg)+4px)] border border-cs-line bg-cs-surface shadow-[var(--cs-shadow-sm)] in-data-[yours]:border-cs-accent in-data-[yours]:shadow-[var(--cs-shadow-md)]">
+      <header className="flex items-center gap-4 border-b border-cs-line bg-cs-accent-soft px-6 py-5 md:px-8">
+        <span className="flex size-12 shrink-0 items-center justify-center rounded-[var(--cs-radius-md)] bg-cs-accent text-cs-accent-ink shadow-[var(--cs-shadow-sm)]">
+          <Glyph className="size-6" />
+        </span>
+        <div>
+          <h3 className="text-[1.25rem] font-semibold leading-tight tracking-[-0.015em] text-cs-ink">{name}</h3>
+          <p className="mt-0.5 text-sm text-cs-ink-2">{sub}</p>
+        </div>
+      </header>
+      <ol className="flex-1 px-6 py-7 md:px-8">
+        {steps.map(({ icon: Icon, text }, i) => (
+          <li key={i} className="relative flex gap-4 pb-7 last:pb-0">
+            {/* The rail joining the step numbers. */}
+            {i < steps.length - 1 && (
+              <span aria-hidden className="absolute bottom-0 left-[17px] top-10 w-0.5 rounded-full bg-cs-accent-soft" />
+            )}
+            <span className="cs-data relative flex size-9 shrink-0 items-center justify-center rounded-full bg-cs-accent text-sm font-semibold text-cs-accent-ink">
+              {i + 1}
+            </span>
+            <div className="flex min-w-0 flex-1 items-start gap-3 rounded-[var(--cs-radius-md)] border border-cs-line bg-cs-bg px-4 py-3">
+              <Icon aria-hidden className="mt-0.5 size-[18px] shrink-0 text-cs-accent" strokeWidth={1.75} />
+              <p className="text-[0.9375rem] leading-relaxed text-cs-ink">{text}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="px-6 pb-7 md:px-8">
+        {note && <p className="mb-4 text-sm text-cs-ink-3">{note}</p>}
+        <InstallButton platform={platform} />
+      </div>
+    </article>
+  );
+}
 
 export default function AppPage() {
   return (
     <>
-      {/* Hero: the pitch and both install links beside the app itself. */}
-      <section className="overflow-hidden">
-        <div className="cs-container grid items-center gap-14 pb-16 pt-12 md:pb-24 md:pt-20 lg:grid-cols-12 lg:gap-10">
-          <div className="lg:col-span-6">
-            <h1 className="cs-display cs-rise">CommuteScout Drive</h1>
-            <p className="cs-lede cs-rise mt-6 max-w-[34rem] [animation-delay:120ms]">
+      {/* Hero, on the site's dark band: the pitch, one install button per
+          platform (equal weight; the visitor's own phone first), and one
+          real screenshot from each platform rising off the band's edge. */}
+      <section className="overflow-hidden border-b border-cs-band-line bg-cs-band text-cs-band-ink">
+        <div className="cs-container grid grid-cols-1 items-center gap-12 pt-14 md:pt-20 lg:grid-cols-12 lg:gap-10">
+          <div className="pb-4 lg:col-span-6 lg:pb-24">
+            <div className="cs-rise flex items-center gap-3">
+              <BrandMark className="size-12" />
+              <span className="cs-data rounded-full border border-cs-band-line px-2.5 py-1 text-xs uppercase tracking-[0.08em] text-cs-band-ink-2">
+                Free while in beta
+              </span>
+            </div>
+            <h1 className="cs-display cs-rise mt-7 text-cs-band-ink [animation-delay:60ms]">CommuteScout Drive</h1>
+            <p className="cs-lede cs-rise mt-6 max-w-[34rem] text-cs-band-ink-2 [animation-delay:120ms]">
               Turn-by-turn navigation for iPhone and Android. It reads out closures, chain controls,
               crashes and reports on your route before you reach them.
             </p>
-            <div className="cs-rise mt-8 flex flex-wrap gap-3 [animation-delay:180ms]">
-              <a href={TESTFLIGHT_PUBLIC} className={`${installBtn} bg-cs-accent text-cs-accent-ink shadow-[var(--cs-shadow-sm)] hover:bg-cs-accent-hover`}>
-                <Apple aria-hidden className="size-4" />
-                iPhone: join the TestFlight beta
+            <PlatformPair
+              className="cs-rise mt-9 flex flex-wrap gap-3 [animation-delay:180ms]"
+              badgeClassName="-top-2.5 right-2"
+              ios={<InstallButton platform="ios" tone="band" />}
+              android={<InstallButton platform="android" tone="band" />}
+            />
+            <p className="cs-rise mt-5 max-w-[36rem] text-sm text-cs-band-ink-2 [animation-delay:240ms]">
+              Open this page on your phone to install. Steps for each phone are{" "}
+              <a href="#install" className="text-cs-band-ink underline decoration-cs-band-line underline-offset-4 hover:decoration-cs-band-ink">
+                just below
               </a>
-              <a href={ANDROID_RELEASES} className={`${installBtn} border border-cs-line-strong bg-cs-surface text-cs-ink hover:bg-cs-surface-2`}>
-                <Smartphone aria-hidden className="size-4" />
-                Android: download the APK
-              </a>
-            </div>
-            <p className="cs-rise mt-5 max-w-[36rem] text-sm text-cs-ink-3 [animation-delay:240ms]">
-              Free while in beta. Open the link on your phone to install.
+              .
             </p>
-            {TESTFLIGHT_IN_REVIEW && <p className="mt-2 text-sm text-cs-ink-2">{TESTFLIGHT_IN_REVIEW_NOTE}</p>}
+            {TESTFLIGHT_IN_REVIEW && <p className="mt-2 text-sm text-cs-band-ink-2">{TESTFLIGHT_IN_REVIEW_NOTE}</p>}
           </div>
 
-          <div className="lg:col-span-6">
-            <div className="relative mx-auto flex max-w-[34rem] items-end justify-center gap-5 sm:gap-7">
-              <PhoneShot
-                src="/shots/app/android-nav.webp"
-                alt="CommuteScout Drive on Android with a closure alert ahead on the route"
-                width={230}
-                className="mb-12 hidden sm:block"
-              />
+          <div className="min-w-0 lg:col-span-6 lg:self-end">
+            <div className="mx-auto flex max-w-[34rem] items-start justify-center gap-5 sm:gap-7">
               <PhoneShot
                 src="/shots/app/ios-nav.webp"
                 alt="CommuteScout Drive on iPhone navigating with the next turn, the speed limit and the arrival time"
-                width={260}
+                width={250}
                 priority
+                className="-mb-16 w-[46%] lg:-mb-24"
+              />
+              <PhoneShot
+                src="/shots/app/android-nav.webp"
+                alt="CommuteScout Drive on Android with a closure alert ahead on the route"
+                width={250}
+                className="-mb-28 mt-12 w-[46%] lg:-mb-36"
               />
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Install, right under the hero: one card per phone. */}
+      <section id="install" aria-labelledby="install-title" className="scroll-mt-20 bg-cs-surface-2/60 py-20 md:py-24">
+        <div className="cs-container">
+          <div className="max-w-[40rem]">
+            <p className="cs-eyebrow">Install</p>
+            <h2 id="install-title" className="cs-h2 mt-3">
+              Three steps on either phone
+            </h2>
+          </div>
+          <PlatformPair
+            className="mt-10 grid gap-5 md:grid-cols-2 md:gap-6"
+            badgeClassName="-top-2.5 right-5"
+            ios={<InstallCard platform="ios" />}
+            android={<InstallCard platform="android" />}
+          />
+          <p className="mt-10 max-w-[44rem] text-[0.9375rem] leading-relaxed text-cs-ink-2">
+            Both apps are open source at{" "}
+            <a href={APP_REPO} className="cs-link">
+              github.com/nicglazkov/commutescout-app
+            </a>
+            . Your location stays on the phone, except what a route or a report needs. Details are
+            in the{" "}
+            <Link href="/privacy" prefetch={false} className="cs-link">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </div>
       </section>
 
@@ -152,8 +295,8 @@ export default function AppPage() {
           <ul className="mt-12 grid gap-x-10 sm:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, body }) => (
               <li key={title} className="border-t border-cs-line py-8">
-                <span className="flex size-9 items-center justify-center rounded-[var(--cs-radius-md)] border border-cs-line bg-cs-bg text-cs-accent">
-                  <Icon aria-hidden className="size-[18px]" strokeWidth={1.75} />
+                <span className="flex size-10 items-center justify-center rounded-[var(--cs-radius-md)] bg-cs-accent-soft text-cs-accent">
+                  <Icon aria-hidden className="size-5" strokeWidth={1.75} />
                 </span>
                 <h3 className="cs-h3 mt-5">{title}</h3>
                 <p className="mt-2 max-w-[38ch] text-[0.9375rem] leading-relaxed text-cs-ink-2">{body}</p>
@@ -167,7 +310,7 @@ export default function AppPage() {
       <section aria-labelledby="screens-title" className="border-t border-cs-line py-20 md:py-28">
         <div className="cs-container">
           <h2 id="screens-title" className="cs-h2">Screenshots</h2>
-          <p className="cs-lede mt-4 max-w-[40rem]">Taken on a simulated drive.</p>
+          <p className="cs-lede mt-4 max-w-[40rem]">Taken on a simulated drive. {capturedLine()}</p>
         </div>
         <div className="cs-container mt-12">
           <ul className="-mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 md:mx-0 md:grid md:grid-cols-4 md:gap-6 md:overflow-visible md:px-0">
@@ -180,87 +323,6 @@ export default function AppPage() {
               </li>
             ))}
           </ul>
-        </div>
-      </section>
-
-      {/* Install. */}
-      <section aria-labelledby="install-title" className="border-t border-cs-line bg-cs-surface py-20 md:py-28">
-        <div className="cs-container">
-          <h2 id="install-title" className="cs-h2">Install</h2>
-          <div className="mt-12 grid gap-4 md:grid-cols-2 md:gap-6">
-            {[
-              {
-                icon: Apple,
-                name: "iPhone",
-                steps: [
-                  <>Install TestFlight from the App Store.</>,
-                  <>
-                    Open the{" "}
-                    <a href={TESTFLIGHT_PUBLIC} className="cs-link">
-                      public beta link
-                    </a>{" "}
-                    on your phone and tap Install.
-                  </>,
-                  <>Updates arrive through TestFlight.</>,
-                ],
-                href: TESTFLIGHT_PUBLIC,
-                cta: "Join the TestFlight beta",
-                note: TESTFLIGHT_IN_REVIEW ? TESTFLIGHT_IN_REVIEW_NOTE : null,
-              },
-              {
-                icon: Smartphone,
-                name: "Android",
-                steps: [
-                  <>
-                    Open the{" "}
-                    <a href={ANDROID_RELEASES} className="cs-link">
-                      latest release
-                    </a>{" "}
-                    on your phone and download the APK.
-                  </>,
-                  <>Open the file and allow installing from that source when asked.</>,
-                  <>New versions appear on the same page. Install them over the old one.</>,
-                ],
-                href: ANDROID_RELEASES,
-                cta: "Download the APK",
-                note: null,
-              },
-            ].map(({ icon: Icon, name, steps, href, cta, note }) => (
-              <div key={name} className="flex flex-col rounded-[var(--cs-radius-lg)] border border-cs-line bg-cs-bg p-6 md:p-8">
-                <div className="flex items-center gap-2.5">
-                  <Icon aria-hidden className="size-5 text-cs-ink" />
-                  <h3 className="cs-h3">{name}</h3>
-                </div>
-                <ol className="mt-6 flex-1 space-y-4">
-                  {steps.map((step, i) => (
-                    <li key={i} className="flex gap-3.5 text-[0.9375rem] leading-relaxed text-cs-ink-2">
-                      <span aria-hidden className="cs-data mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-cs-line-strong text-xs text-cs-ink">
-                        {i + 1}
-                      </span>
-                      <span>{step}</span>
-                    </li>
-                  ))}
-                </ol>
-                {note && <p className="mt-4 text-sm text-cs-ink-3">{note}</p>}
-                <a href={href} className={`${installBtn} mt-8 w-fit border border-cs-line-strong bg-cs-surface text-cs-ink hover:bg-cs-surface-2`}>
-                  <Icon aria-hidden className="size-4" />
-                  {cta}
-                </a>
-              </div>
-            ))}
-          </div>
-          <p className="mt-10 max-w-[44rem] text-[0.9375rem] leading-relaxed text-cs-ink-2">
-            Both apps are open source at{" "}
-            <a href={APP_REPO} className="cs-link">
-              github.com/nicglazkov/commutescout-app
-            </a>
-            . Your location stays on the phone, except what a route or a report needs. Details are
-            in the{" "}
-            <Link href="/privacy" prefetch={false} className="cs-link">
-              Privacy Policy
-            </Link>
-            .
-          </p>
         </div>
       </section>
     </>

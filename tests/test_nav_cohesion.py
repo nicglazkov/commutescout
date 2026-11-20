@@ -40,7 +40,7 @@ TEXT_NAV_LABELS = {
     "/watch": "Watch areas",
     "/data-sources": "Data sources",
     "/developers": "Developers",
-    "/mcp": "MCP server",
+    "/mcp": "MCP Server",
     "/marketplace": "Marketplace",
     "/app": "Get the app",
     "/pricing": "Pricing",
@@ -51,9 +51,10 @@ LIVE_MAP_LABEL = "Live map"
 REQUIRED_NAV_DESTINATIONS = set(REQUIRED_TEXT_NAV_ORDER) | {LIVE_MAP_HREF}
 
 STATIC_PAGES = ["map", "watch", "trip", "admin"]
-# The map page carries the Watch tool in its rail, so its header drops
-# the /watch text link (one control per job); every other surface keeps it.
-OMITTED_ON = {"map": {"/watch"}}
+# Every surface carries the full nav, the map page included: its header
+# matches the site header item for item (the Watch tool in the map's rail
+# is the in-map control; the header link goes to the Watch areas page).
+OMITTED_ON: dict[str, set] = {}
 
 
 class _AnchorCollector(HTMLParser):

@@ -51,8 +51,8 @@ export default function Home() {
       <Coverage />
       <DriveBand />
       <DeveloperBand>
-        The MCP server&rsquo;s 18 tools and the REST API read the same sources as the map. Neither
-        needs a key. A free key gives your account 2,000 requests a day, shared by all of its keys.
+        The MCP server&rsquo;s 18 tools and the REST API read the same sources as the map. Both take
+        a free API key, which gives your account 2,000 requests a day, shared by all of its keys.
       </DeveloperBand>
     </>
   );

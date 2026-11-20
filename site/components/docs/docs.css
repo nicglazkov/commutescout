@@ -128,7 +128,7 @@
 .dx-head-inner {
   max-width: 1264px;
   margin: 0 auto;
-  padding: 56px var(--dx-gutter) 48px;
+  padding: 44px var(--dx-gutter) 36px;
 }
 .dx-head h1 {
   font-size: clamp(2.125rem, 1.4rem + 2.6vw, 3.25rem);
@@ -312,6 +312,7 @@
   color: var(--dx-ink-2);
   text-wrap: pretty;
 }
+.dx-prose > p + p { margin-top: 14px; }
 .dx-lead { margin-top: 14px; }
 .dx-prose strong, .dx-p strong, .dx-list strong { color: var(--dx-ink); font-weight: 600; }
 .dx-link {
@@ -815,17 +816,25 @@
 }
 @media (max-width: 640px) { .dx-next { grid-template-columns: minmax(0, 1fr); } }
 .dx-next a {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
   padding: 16px 18px;
   border: 1px solid var(--dx-line);
   border-radius: var(--dx-r-lg);
   background: var(--dx-surface);
   text-decoration: none;
-  transition: border-color 150ms ease;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 .dx-next a:hover { border-color: var(--dx-accent); }
+.dx-next-text { display: block; min-width: 0; flex: 1; }
 .dx-next small { display: block; font: 600 11.5px/1.2 var(--dx-mono); color: var(--dx-ink-3); }
-.dx-next span { display: block; margin-top: 6px; font-weight: 600; color: var(--dx-ink); }
+.dx-next-text > span { display: block; margin-top: 6px; font-weight: 600; font-size: 16px; color: var(--dx-ink); }
+.dx-next-arrow { flex: none; width: 18px; height: 18px; color: var(--dx-ink-3); transition: color 150ms ease, transform 150ms ease; }
+.dx-next a:hover .dx-next-arrow { color: var(--dx-accent); }
+.dx-next-l:hover .dx-next-arrow { transform: translateX(-2px); }
+.dx-next-r:hover .dx-next-arrow { transform: translateX(2px); }
 .dx-next-r { text-align: right; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -923,3 +932,143 @@
 .dx .dx-measure { max-width: 68ch; }
 .dx .dx-plain { text-decoration: none; }
 .dx .dx-code-quiet { font-weight: 400; color: var(--dx-ink-3); }
+
+/* ---------- REST API quickstart band (/developers) ----------
+   Sits between the page head and the body so the three steps are above
+   the fold on a desktop. Left: a numbered stepper with the one action
+   (get a key) and an optional key field. Right: the request and the
+   sample response, labelled with the step they belong to. */
+.dx-qs {
+  border-bottom: 1px solid var(--dx-line);
+  background: var(--dx-bg);
+}
+.dx-qs-inner {
+  max-width: 1264px;
+  margin: 0 auto;
+  padding: 24px var(--dx-gutter) 32px;
+}
+.dx-qs-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.dx-qs-head h2 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+.dx-qs-head p { margin: 0; font-size: 15px; color: var(--dx-ink-2); }
+.dx-qs-ref { margin-left: auto; }
+.dx-qs-grid {
+  margin-top: 18px;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1024px) {
+  .dx-qs-grid { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 28px; align-items: start; }
+}
+.dx-qs-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; }
+.dx-qs-steps > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 14px;
+  padding-bottom: 16px;
+}
+.dx-qs-steps > li:last-child { padding-bottom: 0; }
+/* the rail joining the numbers */
+.dx-qs-steps > li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 32px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--dx-line);
+}
+.dx-qs-n {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font: 600 13px/1 var(--dx-mono);
+  color: var(--dx-accent);
+  background: var(--dx-surface);
+  border: 1.5px solid var(--dx-accent);
+}
+.dx-qs-steps > li:first-child .dx-qs-n { background: var(--dx-accent); color: var(--dx-accent-ink); }
+.dx-qs-steps h3 { margin: 4px 0 0; font-size: 16px; line-height: 1.35; }
+.dx-qs-steps p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--dx-ink-2); text-wrap: pretty; }
+.dx-qs-act { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.dx-qs-act small { font-size: 13px; color: var(--dx-ink-3); }
+.dx-qs-cta svg { width: 16px; height: 16px; }
+/* the key field hangs under the request, inside the same dark panel */
+.dx-qs-req .dx-code { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.dx-qs-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--dx-code-line);
+  border-top: 0;
+  border-radius: 0 0 var(--dx-r-lg) var(--dx-r-lg);
+  background: var(--dx-code-head);
+}
+.dx-qs-key label { font: 500 12.5px/1.2 var(--dx-sans); color: var(--dx-code-ink); }
+.dx-qs-key input {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--dx-code-line);
+  border-radius: var(--dx-r-sm);
+  background: var(--dx-code-bg);
+  color: var(--dx-code-ink);
+  font: 400 13px/1 var(--dx-mono);
+}
+.dx-qs-key input::placeholder { color: var(--dx-code-mute); }
+.dx-qs-key input:focus-visible { outline: 2px solid var(--dx-tk-key); outline-offset: 1px; }
+.dx-qs-key p { margin: 0; font-size: 12px; color: var(--dx-code-mute); }
+.dx-qs-panels { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+.dx-qs-panels .dx-code { margin: 0; }
+.dx-qs-panels .dx-code pre { font-size: 13px; line-height: 1.6; padding: 12px 16px 14px; }
+.dx-qs-resp pre { max-height: 232px; overflow-y: auto; }
+@media (max-width: 640px) {
+  .dx-qs-inner { padding-top: 24px; }
+  .dx-qs-ref { margin-left: 0; }
+  .dx-qs-resp pre { max-height: 300px; }
+}
+
+/* ---------- MCP Registry (one card, full width) ---------- */
+.dx-registry {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 28px;
+  padding: 20px 22px;
+  border: 1px solid var(--dx-line);
+  border-left: 3px solid var(--dx-accent);
+  border-radius: var(--dx-r-lg);
+  background: var(--dx-surface);
+}
+.dx-registry-main { flex: 1 1 420px; min-width: 0; }
+.dx-registry-k { margin: 0 0 10px; font: 600 11.5px/1.2 var(--dx-mono); color: var(--dx-ink-3); }
+.dx-registry .dx-field { max-width: 520px; }
+.dx-registry-note { margin: 12px 0 0; font-size: 14.5px; line-height: 1.6; color: var(--dx-ink-2); max-width: 64ch; }
+
+/* Saved places on /mcp: the names an assistant can use, as chips */
+.dx-places { margin: 18px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+.dx-places li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--dx-line);
+  border-radius: 999px;
+  background: var(--dx-surface);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--dx-ink);
+}
+.dx-places svg { width: 15px; height: 15px; color: var(--dx-accent); }
+.dx-places li[data-any] { border-style: dashed; color: var(--dx-ink-2); }
+.dx-places li[data-any] svg { color: var(--dx-ink-3); }

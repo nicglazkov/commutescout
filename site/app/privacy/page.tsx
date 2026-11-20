@@ -124,6 +124,7 @@ export default function PrivacyPage() {
       summaryTitle="The short version"
       summaryNote="A summary for convenience. The numbered sections below are the policy."
       summary={summary}
+      summaryKeys={[1]}
       sections={[
         {
           id: "scope",

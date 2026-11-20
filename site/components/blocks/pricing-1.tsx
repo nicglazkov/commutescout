@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, Mail } from "lucide-react";
+import { ArrowRight, Check, Mail } from "lucide-react";
 import { AGENCY_FEED_COUNT, STATE_COUNT } from "@/lib/stats";
 import { FormNotice } from "@/components/form-notice";
 
@@ -20,13 +20,20 @@ const freeItems = [
   "Ask about your drive, with a daily cap",
   "3 watch areas (accounts need approval for now): circles up to 25 miles, polygons up to 2,000 square miles, or routes up to 250 miles with a 2 mile buffer",
   "CommuteScout Drive for iPhone and Android, free while in beta",
-  "MCP server and REST API: 2,000 requests a day per account, shared by all of its API keys",
 ];
 const proItems = [
   "More watch areas, and larger ones",
   "Event history and playback for any watch area",
   "Route briefings you can save and export",
-  "10,000 API requests a day per account",
+  "A higher daily API limit",
+];
+
+// The developer limits, in their own section under the plans. Keyed
+// limits are per account and shared by all of its keys
+// (src/ca_roads_mcp/ratelimit.py); the hosted service requires a key.
+const apiRows = [
+  { plan: "Free", value: "2,000", note: "requests a day per account" },
+  { plan: "Pro", value: "10,000", note: "requests a day per account" },
 ];
 
 function Item({ children }: { children: React.ReactNode }) {
@@ -45,7 +52,7 @@ export default function Pricing() {
         <h1 className="cs-display cs-rise">Pricing</h1>
       </section>
 
-      <section aria-label="Plans" className="cs-container pb-16 md:pb-24">
+      <section aria-label="Plans" className="cs-container pb-16 md:pb-20">
         <div className="grid overflow-hidden rounded-[var(--cs-radius-lg)] border border-cs-line bg-cs-surface shadow-[var(--cs-shadow-sm)] lg:grid-cols-2">
           {/* Free */}
           <div className="flex flex-col p-6 sm:p-8 lg:p-10">
@@ -149,13 +156,38 @@ export default function Pricing() {
           </div>
         </div>
 
-        <p className="mt-8 max-w-[44rem] text-sm leading-relaxed text-cs-ink-3">
-          The API and MCP server need a free key. Every limit is in{" "}
-          <Link href="/developers" prefetch={false} className="cs-link">
-            the developer docs
-          </Link>
-          .
-        </p>
+      </section>
+
+      {/* The API and MCP server: their own section, so the plan cards
+          stay about the product and developers find the limits in one place. */}
+      <section aria-labelledby="api-title" className="border-t border-cs-line bg-cs-surface py-16 md:py-20">
+        <div className="cs-container grid gap-10 lg:grid-cols-12 lg:items-center lg:gap-10">
+          <div className="lg:col-span-5">
+            <p className="cs-eyebrow">For developers</p>
+            <h2 id="api-title" className="cs-h2 mt-3">
+              API and MCP server
+            </h2>
+            <p className="mt-4 max-w-[30rem] text-[0.9375rem] leading-relaxed text-cs-ink-2">
+              Both take a free API key. The daily limit belongs to your account and is shared by
+              all of its keys.
+            </p>
+            <Link href="/developers" prefetch={false} className="cs-link mt-5 inline-flex min-h-6 items-center gap-1 text-[0.9375rem]">
+              Keys and every limit in the developer docs
+              <ArrowRight aria-hidden className="size-3.5" />
+            </Link>
+          </div>
+          <dl className="grid overflow-hidden rounded-[var(--cs-radius-lg)] border border-cs-line bg-cs-bg sm:grid-cols-2 lg:col-span-7">
+            {apiRows.map((r, i) => (
+              <div key={r.plan} className={`p-6 sm:p-7 ${i > 0 ? "border-t border-cs-line sm:border-l sm:border-t-0" : ""}`}>
+                <dt className="text-sm font-medium text-cs-ink-2">{r.plan}</dt>
+                <dd className="mt-3 flex flex-col gap-2">
+                  <span className="cs-data text-[2.25rem] font-medium leading-none tracking-[-0.04em] text-cs-ink">{r.value}</span>
+                  <span className="text-sm text-cs-ink-3">{r.note}</span>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       </section>
     </>
   );
