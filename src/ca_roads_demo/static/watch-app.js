@@ -1750,6 +1750,86 @@ export async function initWatch(opts) {
       }
     } catch (e) { msg('keymsg', e.message, 'err'); }
   }
+  // ------------------------------------------------- connect a new key
+  // Steps per AI app come from /api/mcp-setup (connect.py, the same
+  // source as /mcp and /llms.txt). The key is filled in here, in the
+  // browser; it is never sent anywhere but the clipboard.
+  let setupData = null;
+  let setupPick = 'chatgpt';
+  async function loadSetup() {
+    if (!setupData) {
+      const r = await fetch('/api/mcp-setup');
+      if (!r.ok) throw new Error('setup steps unavailable');
+      setupData = await r.json();
+    }
+    return setupData;
+  }
+  function el(tag, attrs, text) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, v);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function installLink(kind, url) {
+    if (kind === 'cursor') {
+      return 'cursor://anysphere.cursor-deeplink/mcp/install?name=commutescout&config='
+        + encodeURIComponent(btoa(JSON.stringify({ url })));
+    }
+    if (kind === 'vscode') {
+      return 'vscode:mcp/install?' + encodeURIComponent(
+        JSON.stringify({ name: 'commutescout', type: 'http', url }));
+    }
+    return null;
+  }
+  function copyButton(text) {
+    const b = el('button', { type: 'button' }, 'Copy');
+    b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(text); b.textContent = 'Copied'; }
+      catch (e) { b.textContent = 'Select it'; }
+      setTimeout(() => { b.textContent = 'Copy'; }, 1600);
+    });
+    return b;
+  }
+  function renderSetup(key) {
+    const d = setupData;
+    const fill = (t) => t.split(d.key_placeholder).join(key);
+    const tiles = $('ktiles');
+    tiles.replaceChildren(...d.clients.map((c) => {
+      const t = el('button', { type: 'button', class: 'ktile',
+        'aria-pressed': String(c.id === setupPick) });
+      t.append(el('b', {}, c.short || c.name), el('small', {}, c.hint || ''));
+      t.addEventListener('click', () => { setupPick = c.id; renderSetup(key); });
+      return t;
+    }));
+    const c = d.clients.find((x) => x.id === setupPick) || d.clients[0];
+    $('kapptitle').textContent = `Add it to ${c.short || c.name}`;
+    const body = [];
+    const url = fill(d.personal_url);
+    const link = c.install && installLink(c.install, url);
+    if (link) {
+      body.push(el('a', { class: 'kone', href: link },
+        `Add to ${c.short || c.name}`));
+    }
+    for (const step of c.steps) {
+      if (step.code) {
+        const pre = el('pre', { class: 'ksnip' }, fill(step.code));
+        pre.append(copyButton(fill(step.code)));
+        body.push(pre);
+      } else {
+        body.push(el('p', {}, fill(step.text)));
+      }
+    }
+    body.push(el('p', { class: 'knote' }, d.link_note));
+    $('kappbody').replaceChildren(...body);
+  }
+  async function showSetup(key) {
+    try { await loadSetup(); renderSetup(key); }
+    catch (e) {
+      $('kappbody').replaceChildren(el('p', {},
+        'See commutescout.com/mcp for setup steps.'));
+    }
+  }
+
   if ($('keycreate')) {
     $('keycreate').addEventListener('click', async () => {
       msg('keymsg', '');
@@ -1759,6 +1839,7 @@ export async function initWatch(opts) {
         $('keyvalue').textContent = r.key;
         $('keynew').hidden = false;
         $('keyname').value = '';
+        showSetup(r.key);
         await renderKeys();
       } catch (e) { msg('keymsg', e.message, 'err'); }
     });

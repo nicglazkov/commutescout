@@ -34,7 +34,7 @@ LINK_NOTE = ("Your link contains your key, so keep it private like a "
              "password. If it leaks, delete the key under Settings > API keys "
              "on the map and make a new one.")
 
-# Each client: name, a short hint shown beside it, whether it can use a
+# Each client: name, a short name and a hint for the app pickers, whether it can use a
 # key (the hosted server needs one), an optional one-click install
 # ("cursor" or "vscode": the site builds the deep link from the personal
 # link), and its steps. A step is {"text": ...} or {"code": ..., "lang": ...}.
@@ -42,7 +42,8 @@ CLIENTS: list[dict] = [
     {
         "id": "chatgpt",
         "name": "ChatGPT",
-        "hint": "chatgpt.com and the ChatGPT apps",
+        "short": "ChatGPT",
+        "hint": "chatgpt.com and apps",
         "key": True,
         "steps": [
             {"text": "On chatgpt.com, open Plugins, choose +, then Add custom "
@@ -57,7 +58,8 @@ CLIENTS: list[dict] = [
     {
         "id": "claude-ai",
         "name": "Claude",
-        "hint": "claude.ai, Claude Desktop and the mobile apps",
+        "short": "Claude",
+        "hint": "claude.ai and apps",
         "key": True,
         "steps": [
             {"text": "Open Customize > Connectors > + Add > Add custom connector."},
@@ -72,6 +74,7 @@ CLIENTS: list[dict] = [
     {
         "id": "claude-code",
         "name": "Claude Code",
+        "short": "Claude Code",
         "hint": "Terminal",
         "key": True,
         "steps": [
@@ -83,7 +86,8 @@ CLIENTS: list[dict] = [
     {
         "id": "cursor",
         "name": "Cursor",
-        "hint": "One-click install",
+        "short": "Cursor",
+        "hint": "One click",
         "key": True,
         "install": "cursor",
         "steps": [
@@ -97,7 +101,8 @@ CLIENTS: list[dict] = [
     {
         "id": "vscode",
         "name": "VS Code (GitHub Copilot)",
-        "hint": "One-click install",
+        "short": "VS Code",
+        "hint": "One click",
         "key": True,
         "install": "vscode",
         "steps": [
@@ -109,6 +114,7 @@ CLIENTS: list[dict] = [
     {
         "id": "codex",
         "name": "OpenAI Codex CLI",
+        "short": "Codex CLI",
         "hint": "Terminal",
         "key": True,
         "steps": [
@@ -118,6 +124,7 @@ CLIENTS: list[dict] = [
     {
         "id": "gemini",
         "name": "Gemini CLI",
+        "short": "Gemini CLI",
         "hint": "Terminal",
         "key": True,
         "steps": [
@@ -128,6 +135,7 @@ CLIENTS: list[dict] = [
     {
         "id": "windsurf",
         "name": "Windsurf",
+        "short": "Windsurf",
         "hint": "Config file",
         "key": True,
         "steps": [
@@ -141,7 +149,8 @@ CLIENTS: list[dict] = [
     {
         "id": "other",
         "name": "Any other MCP client",
-        "hint": "Streamable HTTP",
+        "short": "Other",
+        "hint": "Any MCP client",
         "key": True,
         "steps": [
             {"text": "Point the client at your personal link (streamable HTTP, "

@@ -625,10 +625,20 @@
                    aria-label="Key name" style="flex:1">
             <button type="button" class="ghost" id="keycreate">Create key</button>
           </div>
+          <!-- Right after a key is made: copy it, pick an app, follow its
+               steps with the key already filled in (watch-app.js renders the
+               tiles and steps from /api/mcp-setup, i.e. connect.py). -->
           <div class="keynew" id="keynew" hidden>
-            <b>Copy it now. It will not be shown again.</b>
-            <code id="keyvalue"></code>
-            <button type="button" class="ghost" id="keycopy">Copy</button>
+            <ol class="ksteps">
+              <li><h3>Copy your key</h3>
+                <div class="kkey"><code id="keyvalue"></code>
+                  <button type="button" class="ghost" id="keycopy">Copy</button></div>
+                <p class="knote">Shown once. Keep it private, like a password.</p></li>
+              <li><h3 id="kpicktitle">Pick your AI app</h3>
+                <div class="ktiles" id="ktiles" role="group" aria-labelledby="kpicktitle"></div></li>
+              <li><h3 id="kapptitle">Add it</h3>
+                <div class="kbody" id="kappbody" aria-live="polite"></div></li>
+            </ol>
           </div>
           <div class="msg" id="keymsg"></div>
         </div>

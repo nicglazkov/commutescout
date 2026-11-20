@@ -8,7 +8,8 @@
     {
       "id": "chatgpt",
       "name": "ChatGPT",
-      "hint": "chatgpt.com and the ChatGPT apps",
+      "short": "ChatGPT",
+      "hint": "chatgpt.com and apps",
       "key": true,
       "steps": [
         {
@@ -29,7 +30,8 @@
     {
       "id": "claude-ai",
       "name": "Claude",
-      "hint": "claude.ai, Claude Desktop and the mobile apps",
+      "short": "Claude",
+      "hint": "claude.ai and apps",
       "key": true,
       "steps": [
         {
@@ -50,6 +52,7 @@
     {
       "id": "claude-code",
       "name": "Claude Code",
+      "short": "Claude Code",
       "hint": "Terminal",
       "key": true,
       "steps": [
@@ -65,7 +68,8 @@
     {
       "id": "cursor",
       "name": "Cursor",
-      "hint": "One-click install",
+      "short": "Cursor",
+      "hint": "One click",
       "key": true,
       "install": "cursor",
       "steps": [
@@ -81,7 +85,8 @@
     {
       "id": "vscode",
       "name": "VS Code (GitHub Copilot)",
-      "hint": "One-click install",
+      "short": "VS Code",
+      "hint": "One click",
       "key": true,
       "install": "vscode",
       "steps": [
@@ -97,6 +102,7 @@
     {
       "id": "codex",
       "name": "OpenAI Codex CLI",
+      "short": "Codex CLI",
       "hint": "Terminal",
       "key": true,
       "steps": [
@@ -109,6 +115,7 @@
     {
       "id": "gemini",
       "name": "Gemini CLI",
+      "short": "Gemini CLI",
       "hint": "Terminal",
       "key": true,
       "steps": [
@@ -121,6 +128,7 @@
     {
       "id": "windsurf",
       "name": "Windsurf",
+      "short": "Windsurf",
       "hint": "Config file",
       "key": true,
       "steps": [
@@ -136,7 +144,8 @@
     {
       "id": "other",
       "name": "Any other MCP client",
-      "hint": "Streamable HTTP",
+      "short": "Other",
+      "hint": "Any MCP client",
       "key": true,
       "steps": [
         {

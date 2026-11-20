@@ -2691,6 +2691,15 @@ async def llms_txt(_: Request):
                              headers={"Cache-Control": "public, max-age=3600"})
 
 
+async def mcp_setup(_: Request):
+    """Per-client MCP setup (connect.py), for the map's API keys pane,
+    which fills the new key into these steps in the browser."""
+    from ca_roads_mcp import connect  # noqa: PLC0415
+
+    return JSONResponse(connect.clients_json(),
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+
 async def mcp_server_card(_: Request):
     from ca_roads_mcp import connect  # noqa: PLC0415
 
@@ -2939,6 +2948,7 @@ app = Starlette(
         Route("/health", health),
         Route("/.well-known/security.txt", security_txt),
         Route("/llms.txt", llms_txt),
+        Route("/api/mcp-setup", mcp_setup),
         Route("/.well-known/mcp.json", mcp_server_card),
         Route("/.well-known/mcp/server-card.json", mcp_server_card),
         Route("/api/ask", ask, methods=["POST"]),
