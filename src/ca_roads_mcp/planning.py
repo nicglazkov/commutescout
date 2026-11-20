@@ -739,14 +739,20 @@ async def live_markers(client, box, kinds: set[str]
     snap = await snapshots.markers(client, box, kinds)
     if snap is not None:
         return snap[0], []
+    from ca_roads_demo import states  # noqa: PLC0415
     from ca_roads_demo.app import build_markers  # noqa: PLC0415 - heavy, lazy
 
     notes: list[str] = []
+    want = kinds - {"plugin", "enforcement"}
     try:
-        markers, ready, total, degraded = await build_markers(
-            box, kinds - {"plugin", "enforcement"}, feed_budget=12.0)
+        markers, _ready, _total, degraded = await build_markers(
+            box, want, feed_budget=12.0)
     except Exception:  # noqa: BLE001 - one bad feed must not sink a trip
         return [], ["live road events could not be loaded just now"]
+    # Warm-up is judged on the feeds this box touches. build_markers
+    # reports it for the whole country, and this process never prewarms,
+    # so every fallback trip used to say feeds were "still loading".
+    ready, total = states.warm_progress(box, want)
     if degraded or (total and ready < total):
         notes.append("some state feeds were still loading; a few live "
                      "events may be missing")

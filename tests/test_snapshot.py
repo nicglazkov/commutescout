@@ -19,6 +19,18 @@ from mapsrc import map_source
 SNAP_HOST = "data.commutescout.com"
 
 
+@pytest.fixture(autouse=True)
+def _no_live_feed_state(monkeypatch):
+    """coverage_summary() leaves out states whose feeds are down right
+    now, which is what the topbar should say. The copy these tests pin
+    describes the registry, so they read it on a clean feed cache rather
+    than whatever fetch errors earlier tests left behind."""
+    from ca_roads.cache import TTLCache
+    from ca_roads_demo import states
+
+    monkeypatch.setattr(states, "_cache", TTLCache())
+
+
 def test_payload_carries_the_fields_the_client_depends_on():
     p = snapshot.build_payload([{"kind": "incident", "lat": 1, "lon": 2}])
     # schema drives the long-lived-tab self-reload; published drives the

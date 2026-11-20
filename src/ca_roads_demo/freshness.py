@@ -109,6 +109,13 @@ async def find_stale() -> dict[str, str]:
         if age > state_limit(key):
             stale[f"state feed {key}"] = (f"last good data {age / 60:.0f} min old"
                                           + _clean(cache._errors.get(key)))
+    # A feed that has never once answered has no entry to age, so the
+    # loop above cannot see it. Five states sat dark for days that way
+    # (an endpoint moved, an IP block, a WAF) without a single alert.
+    for key in states._expected_keys():
+        if key not in cache._entries and key in cache._errors:
+            stale[f"state feed {key}"] = "no data since start" + _clean(
+                cache._errors.get(key))
     return stale
 
 
