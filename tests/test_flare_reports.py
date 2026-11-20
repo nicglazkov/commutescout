@@ -178,7 +178,11 @@ def test_confirm_routes_to_our_source_or_the_plugin(api):
 
 
 def test_map_has_one_report_control_and_votes_on_plugin_popups():
-    assert HTML.count('id="reportbtn"') == 1
+    # Round 3 (board #3) drops the on-map Report button; the one Report
+    # control is the rail's More menu entry (the palette runs the same act).
+    assert 'id="reportbtn"' not in HTML
+    assert HTML.count('data-act="report"') == 1
+    assert "function startReport()" in APP
     assert "report: 'Click the map where it is'," in APP
     assert ("if (mode === 'report') "
             "{ openReportForm(await snapForReport(e.latlng), e.latlng); return; }") in APP

@@ -3205,7 +3205,7 @@ function alertRow(m, g) {
   const src = m.src || SOURCE_DEFAULT[g] || '';
   if (g.startsWith('inc_')) {
     const parts = splitRoad(m.label || '');
-    // CHP types carry a dispatch code; incidentTitle drops it (and humanize(m.type) the rest).
+    // CHP types carry a dispatch code; incidentTitle drops it and spells out the rest.
     return { title: incidentTitle(m.type) || 'Incident',
       sub: [m.location || parts.road || parts.rest || null,
         m.reported ? agoTxt(m.reported) : null, src].filter(Boolean).join(', ') };
