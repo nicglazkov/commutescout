@@ -2,15 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import D01Swimlane from "./d01-swimlane";
-import D02Timing from "./d02-timing";
 import D03Journey from "./d03-journey";
-import D04Matrix from "./d04-matrix";
 import D05Iso from "./d05-iso";
-import D06Console from "./d06-console";
-import D07Dial from "./d07-dial";
-import D08FanIn from "./d08-fanin";
-import D09Normalise from "./d09-normalise";
-import D10Coverage from "./d10-coverage";
 import "./diagrams.css";
 
 // Local-only board (page.lab.tsx never builds in production). Ten replacements for
@@ -28,72 +21,23 @@ const OPTIONS: Opt[] = [
     n: 1,
     name: "Pipeline swimlane",
     pick: true,
-    idea: "Each kind of source is a row: read on its own timer, held in memory, combined into one list, published as three files, read by the map. The API and MCP branch off the held copies.",
-    trade: <><b>Best fit for “How it fits together”:</b> every stage and number is real. Dense at phone width; would need a stacked phone version.</>,
+    idea: "Each kind of source is a row: re-read once its copy is older than its refresh time, held in memory, combined into one list, published as three files, read by the map. The API and MCP branch off the held copies.",
+    trade: <><b>Shows every stage the section promises, with the real numbers.</b> The animation runs the 30-second build: stale rows refetch, a changed build uploads, the map gets a 200 or a 304. On a phone it becomes a stacked list of stages.</>,
     fig: <D01Swimlane />,
-  },
-  {
-    n: 2,
-    name: "Timing diagram",
-    idea: "Ten minutes to scale. Ticks show when each source is re-read, when each file is published and when the map checks for news.",
-    trade: <><b>Answers “how fresh?” at a glance.</b> Says nothing about how sources are combined, so it fits “How fresh it is” better than here.</>,
-    fig: <D02Timing />,
   },
   {
     n: 3,
     name: "One crash's journey",
     idea: "A single crash followed second by second from the dispatcher's log to a pin on the map, including the build that ships the old copy while it fetches a new one.",
-    trade: <><b>The most concrete and memorable.</b> Covers one source, not all 53; pairs well with option 1 or 8.</>,
+    trade: <><b>The most concrete: 75 seconds you can follow.</b> One source only, so it explains freshness rather than the whole system. On a phone it becomes a vertical log.</>,
     fig: <D03Journey />,
-  },
-  {
-    n: 4,
-    name: "Who publishes what",
-    idea: "Kinds of data against kinds of publisher, with how often each is re-read and how many states have it.",
-    trade: <><b>Precise and accessible (a real table).</b> Least visual; overlaps with the coverage table further down the page.</>,
-    fig: <D04Matrix />,
   },
   {
     n: 5,
     name: "Isometric system drawing",
-    idea: "The physical parts in the site's isometric figure style: agency servers, the app holding a copy of each feed, storage with the three files, a browser with the map, an assistant calling the API.",
-    trade: <><b>Keeps the house figure style</b> and shows where things run. Less exact about timing than 1 to 3.</>,
+    idea: "The real machines on one base plate: agency servers, our server holding one copy per feed with an age gauge on each, storage with the three files, the edge cache, the map, and a laptop on the API.",
+    trade: <><b>The house figure style, and it shows where each step runs.</b> Timing is in the gauges and lamps rather than written out; on a phone each machine gets its own row.</>,
     fig: <D05Iso />,
-  },
-  {
-    n: 6,
-    name: "Feed health console",
-    idea: "Every source with the age of its last good copy against its stale limit, and a fresh, stale or down status, as the apps' data-source screen shows it.",
-    trade: <><b>Shows what happens when an agency fails</b>, which nothing else here does. Example rows, so it reads as a mockup unless wired to /api/sources.</>,
-    fig: <D06Console />,
-  },
-  {
-    n: 7,
-    name: "Data-age dial",
-    idea: "A 30-minute dial: the outer ring is one source's copy (fresh, then served marked stale, then dropped), the inner ring is the map's “Data as of” chip.",
-    trade: <><b>Explains stale handling in one picture.</b> Two rings measure two different ages, which needs the key to read.</>,
-    fig: <D07Dial />,
-  },
-  {
-    n: 8,
-    name: "Fan-in network",
-    idea: "All 53 counted sources as dots, grouped by how they are published, converging on one list and fanning out to the three files, the REST API and MCP.",
-    trade: <><b>Makes “53” tangible</b> and shows the shape of the system. No timing.</>,
-    fig: <D08FanIn />,
-  },
-  {
-    n: 9,
-    name: "Two formats in, one out",
-    idea: "A real XML lane closure and a real WZDx work zone, side by side, translated into the one marker format, with numbered field mappings.",
-    trade: <><b>The most literal answer to “one map from many feeds”.</b> Code-heavy; best for the developer half of the audience.</>,
-    fig: <D09Normalise />,
-  },
-  {
-    n: 10,
-    name: "Coverage map with source counts",
-    idea: "Each state shaded and numbered by how many of the 53 sources cover it, counted from the code's source registries.",
-    trade: <><b>Geographic and instantly readable.</b> Shows where, not how; closest to the existing coverage table.</>,
-    fig: <D10Coverage />,
   },
 ];
 
@@ -114,16 +58,18 @@ export default function DiagramsBoard() {
       </p>
       <h1 className="cs-display mt-2">Data sources diagram</h1>
       <p className="mt-4 max-w-2xl text-cs-ink-2">
-        Ten replacements for Fig. 1, “Many feeds, one map”, under “How it fits together” on <Link href="/data-sources" className="cs-link">/data-sources</Link>.
+        Three finalists to replace Fig. 1, “Many feeds, one map”, under “How it fits together” on <Link href="/data-sources" className="cs-link">/data-sources</Link>.
         Each one draws the real pipeline as the code runs it, with generic places only.
       </p>
 
       <section className="dg-rec" aria-labelledby="dg-rec-h">
-        <h2 id="dg-rec-h">Recommendation: 1, Pipeline swimlane</h2>
+        <h2 id="dg-rec-h">Recommendation: 1 for the section, 3 under “How fresh it is”</h2>
         <p>
-          It is the only option that shows every stage the section title promises, and every number in it comes from
-          the code. If the page can carry a second figure, put 3 (one crash&apos;s journey) under “How fresh it is”.
-          Runners-up: 8 for a lighter overview, 9 for a developer audience.
+          1 is still the only one that shows every stage the section title promises, with every number from the code,
+          and it now runs the real 30-second cycle and stacks cleanly on a phone. 3 is the best second figure: it
+          turns the same rules into 75 seconds a reader can follow. 5 is the most striking and matches the house
+          figure style, but says the least in words; pick it if the page wants one picture rather than an explanation.
+          1 and 5 run on one model of the pipeline (sim.ts) and 3 follows the same rules, so their numbers agree.
         </p>
       </section>
 

@@ -3,9 +3,8 @@ import Link from "next/link";
 import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
 import { C, CodeBlock, CopyField } from "@/components/docs/code-block";
 import { Callout } from "@/components/docs/callout";
-import { Quickstart } from "@/components/docs/quickstart";
+import { Quickstart, QuickstartSteps } from "@/components/docs/quickstart";
 import reference from "@/lib/api-reference.json";
-import { AGENCY_FEED_COUNT, STATE_COUNT } from "@/lib/stats";
 
 // The developer documentation: the REST API in full (base URL, keys,
 // limits, errors, conventions, every tool with every parameter), the
@@ -275,13 +274,9 @@ export default function DevelopersPage() {
           API key.
         </>
       }
-      facts={[
-        { value: String(TOOLS.length), label: "tools" },
-        { value: String(STATE_COUNT), label: "states" },
-        { value: String(AGENCY_FEED_COUNT), label: "official feeds" },
-      ]}
+      headExtra={<QuickstartSteps docsHref={`${API_ROOT}/docs`} />}
+      aside={<Quickstart apiRoot={API_ROOT} />}
       toc={TOC}
-      lead={<Quickstart apiRoot={API_ROOT} docsHref={`${API_ROOT}/docs`} />}
     >
       <Section id="basics" title="Base URL and versioning">
         <div className="dx-mt-20">

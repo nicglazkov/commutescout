@@ -24,6 +24,8 @@ export function DocsShell({
   dek,
   actions,
   facts,
+  aside,
+  headExtra,
   toc,
   lead,
   children,
@@ -33,6 +35,13 @@ export function DocsShell({
   dek: React.ReactNode;
   actions?: React.ReactNode;
   facts?: { value: string; label: string }[];
+  // The right column of a two-column head (text left, the page's one
+  // working object right: the install command on /mcp, a live request on
+  // /developers, the layer ledger on /data-sources). Stacks under the
+  // text below 1024px.
+  aside?: React.ReactNode;
+  // Extra content in the text column, under the actions.
+  headExtra?: React.ReactNode;
   toc: TocItem[];
   // A full-width band between the head and the body, for the one thing a
   // page must show above the fold (the REST API quickstart).
@@ -65,10 +74,14 @@ export function DocsShell({
       </nav>
 
       <header className="dx-head">
-        <div className="dx-head-inner">
-          <h1>{title}</h1>
-          <p className="dx-dek">{dek}</p>
-          {actions ? <div className="dx-head-actions">{actions}</div> : null}
+        <div className={"dx-head-inner" + (aside ? " dx-head-split" : "")}>
+          <div className="dx-head-main">
+            <h1>{title}</h1>
+            <p className="dx-dek">{dek}</p>
+            {actions ? <div className="dx-head-actions">{actions}</div> : null}
+            {headExtra}
+          </div>
+          {aside ? <div className="dx-head-aside">{aside}</div> : null}
           {facts?.length ? (
             <ul className="dx-facts" aria-label="At a glance" data-count={facts.length}>
               {facts.map((f) => (

@@ -104,3 +104,9 @@
   color: var(--cs-ink-3);
   font-weight: 500;
 }
+
+/* Board chrome: a clear focus ring on every control. */
+.msb-ui :where(a, button, select, [role="tab"]):focus-visible {
+  outline: 2px solid var(--cs-accent);
+  outline-offset: 2px;
+}

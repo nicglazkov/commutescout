@@ -121,17 +121,56 @@ export function P2() {
 }
 
 export function P3() {
+  // Frame coordinates (800 x 520). The map is zoomed out to a whole state.
+  const clusters: [number, number, number][] = [
+    [372, 168, 12],
+    [520, 300, 31],
+    [664, 132, 6],
+    [716, 392, 9],
+    [430, 430, 4],
+    [610, 470, 3],
+  ];
+  const cur = { x: 548, y: 244 };
   return (
     <div className="absolute inset-0">
-      <MapBg viewBox="-260 -180 2000 1300" labels={false}>
-        <circle cx="900" cy="420" r="120" style={{ fill: "var(--cs-accent)", opacity: 0.12, stroke: "var(--cs-accent)", strokeWidth: 4 }} />
-      </MapBg>
-      <span className="absolute grid h-9 w-9 place-items-center rounded-full bg-cs-accent text-cs-accent-ink" style={{ left: 545, top: 264 }}>
-        <ZoomIn size={17} />
+      <MapBg viewBox="-260 -180 2000 1300" labels={false} markers={false} />
+      {clusters.map(([x, y, c]) => (
+        <span
+          key={`${x}-${y}`}
+          className="absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-cs-surface bg-cs-incident font-mono text-[12px] font-semibold text-white shadow-[var(--cs-shadow-sm)]"
+          style={{ left: x, top: y, width: 22 + c * 0.6, height: 22 + c * 0.6 }}
+        >
+          {c}
+        </span>
+      ))}
+      {/* the area the click will zoom to */}
+      <span
+        className="absolute -translate-x-1/2 -translate-y-1/2 rounded-[10px] border-2 border-dashed border-cs-accent bg-cs-accent/10"
+        style={{ left: cur.x, top: cur.y, width: 150, height: 96 }}
+      />
+      <span className="absolute text-cs-ink" style={{ left: cur.x - 3, top: cur.y - 3 }}>
+        <MousePointer2 size={22} fill="currentColor" className="text-cs-ink [&>path]:stroke-cs-surface" />
+      </span>
+      <span
+        className="msb-float absolute flex items-center gap-1.5 whitespace-nowrap rounded-[8px] bg-cs-surface px-2.5 py-1.5 text-[12.5px] font-medium"
+        style={{ left: cur.x + 22, top: cur.y + 18 }}
+      >
+        <ZoomIn size={14} className="text-cs-accent" /> Click to zoom in here
+      </span>
+      <span className="msb-float absolute bottom-3 right-3 flex items-center gap-2 rounded-full bg-cs-surface px-3 py-1.5 text-[12px] text-cs-ink-2">
+        <span className="font-mono">Whole state</span>
+        <span className="h-[3px] w-14 rounded-full bg-cs-line-strong">
+          <span className="block h-full w-1/4 rounded-full bg-cs-accent" />
+        </span>
+        <span className="font-mono">Street</span>
       </span>
       <Panel>
         <FromTo from="Your location" pickingTo />
-        <div className="text-[12px] text-cs-ink-2">You are zoomed out too far to pick one street.</div>
+        <div className="rounded-[8px] bg-cs-surface-2 p-2.5 text-[12.5px] text-cs-ink-2">
+          <div className="font-medium text-cs-ink">Too far out to pick one street</div>
+          <div className="mt-1">At this zoom one click covers several towns. Click once near the spot and the map zooms in there. Then click the road.</div>
+        </div>
+        <div className="text-[12px] text-cs-ink-3">Or type an address in the field above.</div>
       </Panel>
       <Banner>
         <ZoomIn size={15} /> Click near the spot to zoom in there first <BannerCancel />

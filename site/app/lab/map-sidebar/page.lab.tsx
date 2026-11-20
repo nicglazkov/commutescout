@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./board.css";
 import { Scaled } from "./scaled";
+import { Board } from "./board";
 import { O1, O1Result, O2, O3, O4, O5, O6, O7, O8 } from "./options-a";
 import { O9, O10, O11, O12, O13, O14, O15 } from "./options-b";
 import { M1, M1Result, M2, M6, M11, M13 } from "./mobile";
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
 type Opt = {
   n: number;
   name: string;
+  diff: string;
   idea: string;
   moved: string[];
   plus: string;
@@ -29,6 +31,7 @@ type Opt = {
 const OPTIONS: Opt[] = [
   {
     n: 1,
+    diff: "Route and Alerts become one panel: a trip form with Home, Work and Choose on map in plain view, the live list under it.",
     name: "Where to?",
     tag: "Top pick",
     idea: "The panel opens on the question people arrive with. Home, Work and Choose on map are chips you can see, not rows hidden until you click an empty field. Under the form: what is live in view. A result replaces the form, with a Back arrow.",
@@ -47,6 +50,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 2,
+    diff: "No panel. One floating search box with Directions inside it, and a small live card that folds away.",
     name: "Search-first card",
     tag: "Runner-up",
     idea: "One floating search box with the Directions button inside it, the way most people already know from Google Maps. Under it, a small card of what is live, which folds away. The map gets the full width.",
@@ -58,6 +62,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 3,
+    diff: "Starts from your saved places, each with its live drive time, then recent trips.",
     name: "Your places",
     idea: "A rounded floating panel built around your places: Home, Work and School with a live drive time under each, then recent trips, then what is live near you.",
     moved: ["Saved places get a home (today they are only reachable from the find-box popup)", "Route opens when you tap a place", "Alerts shrink to “Live near you”"],
@@ -67,6 +72,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 4,
+    diff: "Keeps today’s rail, but seven icon tabs become three words.",
     name: "Slim rail, three jobs",
     idea: "Keep the rail, but cut seven tabs to three words: Drive, Live, Saved, with Alerts at the bottom. The smallest change from today.",
     moved: ["Ask folds into Drive", "Layers moves to the map", "Watch goes under Saved", "Settings and Data go to the avatar menu"],
@@ -76,6 +82,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 5,
+    diff: "No rail. A three-way switch under the search: Directions, What’s live, Saved.",
     name: "Words, not icons",
     idea: "No rail. A segmented control under the search: Directions, What’s live, Saved. What’s live keeps today’s counts as tiles over a worst-first list.",
     moved: ["Rail becomes three labelled tabs", "Today’s six count tiles stay, in the What’s live tab", "Layers moves to the map"],
@@ -85,6 +92,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 6,
+    diff: "The live list is the panel, and its filter chips replace the Layers tab.",
     name: "The list is the legend",
     idea: "The panel is the live list, worst first. The filter chips are the layer switches, with counts. Hover a row and its marker rings on the map. One Directions button.",
     moved: ["Layers, Alerts and the missing legend merge into the chips", "Map style moves to a link at the foot", "Route opens from the Directions button"],
@@ -95,6 +103,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 7,
+    diff: "You ask in your own words first; the form is one link away.",
     name: "Ask first",
     idea: "The panel is a conversation about your drive. The answer comes with the route and a summary card. The form is one link away.",
     moved: ["Ask becomes the front door", "The route form becomes “Use the form instead”", "Suggested questions sit above the input"],
@@ -104,6 +113,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 8,
+    diff: "No sidebar. A dock at the bottom centre opens each tool as a card.",
     name: "Bottom dock",
     idea: "No sidebar. A dock at the bottom centre holds Search, Directions, Live, Layers and Ask. Each opens a card just above it.",
     moved: ["Every rail tab becomes a dock button", "Status moves to the top left"],
@@ -113,6 +123,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 9,
+    diff: "Search on the left, the details of whatever you click on the right.",
     name: "Details on the right",
     idea: "Search floats on the left. What you click opens on the right: today’s inspector promoted to the main panel, with the camera, the facts and the actions.",
     moved: ["The inspector becomes the panel", "Directions is a mode of the search box", "Alerts become “Also near here”"],
@@ -122,6 +133,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 10,
+    diff: "A guided path, one question per screen, with big targets.",
     name: "One question at a time",
     idea: "A short guided path: where from, where to, when. Big targets, plain words, a progress bar. Each step offers Home, Work, a recent place and “Point to it on the map”.",
     moved: ["The route form becomes three steps", "Everything else floats on the map"],
@@ -131,6 +143,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 11,
+    diff: "A results view: the route drawn as a straight strip, each event at its mile.",
     name: "The route as a strip",
     idea: "A results view: the route straightened into a strip from Home (mile 0) to Work, each event placed at its mile and the line coloured by speed. Arrival weather at the end.",
     moved: ["“Conditions on this route” becomes the strip", "Alternatives become chips", "Exports go behind Share"],
@@ -141,6 +154,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 12,
+    diff: "Almost nothing on screen. One search pill opens a palette that does everything.",
     name: "Command palette",
     idea: "Almost no chrome. A small search pill opens a palette (⌘K) that does everything: directions, places, layers, watch, ask.",
     moved: ["Every tab becomes a command", "Keyboard shortcuts for layers and directions"],
@@ -150,6 +164,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 13,
+    diff: "The signed-in start page: your usual drives with their live status.",
     name: "Your drives",
     idea: "The signed-in start page: your saved drives with live status, then watched areas with alerts. Plan something new from the search.",
     moved: ["Watch moves out of a tab into “Watched areas”", "Alerts attach to the drive or area they belong to", "Saved drives replace Home/Work quick picks"],
@@ -160,6 +175,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 14,
+    diff: "One floating sheet with three heights, the same on desktop and phone.",
     name: "One sheet, three heights",
     idea: "The panel is a floating sheet with three heights (compact, medium, full) on every screen. Desktop and phone share one component and one set of moves.",
     moved: ["The sidebar becomes a sheet on desktop too", "Compact shows only search and chips"],
@@ -169,6 +185,7 @@ const OPTIONS: Opt[] = [
   },
   {
     n: 15,
+    diff: "From, To and Leave in a bar across the top of the map, like a flight search.",
     name: "Drive bar on top",
     idea: "From, To and Leave sit in a bar across the top of the map, like a flight search. A results drawer slides in from the left only after you search.",
     moved: ["The route form becomes a top bar", "Results get a drawer that can hide", "Saved moves to the bar’s right end"],
@@ -234,66 +251,10 @@ const WHERE: [string, string, string][] = [
   ["Details of a clicked item", "Panel on desktop (Back returns), sheet on phone", "One panel, one history. No third column."],
 ];
 
-function PickCaption({ i, title, body }: { i: number; title: string; body: string }) {
+function TodaySection() {
   return (
-    <figcaption className="mt-3">
-      <span className="font-mono text-xs text-cs-ink-3">Step {String.fromCharCode(65 + i)}</span>
-      <div className="font-semibold">{title}</div>
-      <p className="mt-1 max-w-xl text-sm text-cs-ink-2">{body}</p>
-    </figcaption>
-  );
-}
-
-function Phone({ C, label }: { C: React.ComponentType; label: string }) {
-  return (
-    <Scaled w={390} h={844} label={label} className="rounded-[22px]">
-      <C />
-    </Scaled>
-  );
-}
-
-export default function MapSidebarBoard() {
-  return (
-    <main className="msb cs-container py-14">
-      <p className="text-sm text-cs-ink-2">Local preview only. Not part of the site.</p>
-      <h1 className="cs-display mt-2 max-w-4xl">Map sidebar: what goes where, then fifteen designs</h1>
-      <p className="mt-4 max-w-2xl text-cs-ink-2">
-        First what the map does today and how other maps handle the same jobs. Then a proposal for where each thing lives, a step-by-step plan for
-        choosing a point on the map, and fifteen sidebars drawn at real size over a made-up map.
-      </p>
-
-      <aside className="mt-8 grid gap-4 rounded-[var(--cs-radius-lg)] border border-cs-accent bg-cs-accent-soft/40 p-6 md:grid-cols-[1fr_1fr]">
-        <div>
-          <div className="cs-eyebrow">Recommendation</div>
-          <p className="mt-2 text-lg font-semibold">
-            Top pick: <a href="#opt-1" className="text-cs-accent underline-offset-4 hover:underline">1, Where to?</a>
-          </p>
-          <p className="mt-1 text-cs-ink-2">
-            Use <a href="#opt-11" className="text-cs-accent">11’s strip</a> as its results view and <a href="#opt-13" className="text-cs-accent">13’s drives</a> as
-            its start page once someone is signed in. Pick on map as in <a href="#pick" className="text-cs-accent">section 4</a>.
-          </p>
-        </div>
-        <div>
-          <div className="cs-eyebrow">Runner-up</div>
-          <p className="mt-2 text-lg font-semibold">
-            <a href="#opt-2" className="text-cs-accent underline-offset-4 hover:underline">2, Search-first card</a>
-          </p>
-          <p className="mt-1 text-cs-ink-2">More map, more familiar, one more click to get directions. Choose it if browsing the live map matters more than planning a drive.</p>
-        </div>
-      </aside>
-
-      <nav className="msb-toc mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-cs-accent" aria-label="On this board">
-        <a href="#today">1. The map today</a>
-        <a href="#others">2. How other maps do it</a>
-        <a href="#where">3. What goes where</a>
-        <a href="#pick">4. Pick on map</a>
-        <a href="#options">5. Fifteen sidebars</a>
-      </nav>
-
-      {/* 1 ------------------------------------------------------------- */}
-      <section id="today" className="mt-16 scroll-mt-20">
-        <div className="cs-eyebrow">01</div>
-        <h2 className="mt-1 text-2xl font-semibold">The map today</h2>
+      <section>
+        <h2 className="text-2xl font-semibold">The map today</h2>
         <p className="mt-2 max-w-3xl text-cs-ink-2">Read from map.html, map-app.js, map-assistant.js and watch-app.js. Everything a visitor can touch, grouped by where it lives now.</p>
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[
@@ -347,10 +308,13 @@ export default function MapSidebarBoard() {
         </ol>
       </section>
 
-      {/* 2 ------------------------------------------------------------- */}
-      <section id="others" className="mt-20 scroll-mt-20">
-        <div className="cs-eyebrow">02</div>
-        <h2 className="mt-1 text-2xl font-semibold">How other maps do it</h2>
+  );
+}
+
+function OthersSection() {
+  return (
+      <section>
+        <h2 className="text-2xl font-semibold">How other maps do it</h2>
         <p className="mt-2 max-w-3xl text-cs-ink-2">
           From product help pages, design guidance, Mobbin flows and screens, and beginner tutorials on YouTube. Where a detail could not be confirmed it is left
           out.
@@ -425,10 +389,13 @@ export default function MapSidebarBoard() {
         </div>
       </section>
 
-      {/* 3 ------------------------------------------------------------- */}
-      <section id="where" className="mt-20 scroll-mt-20">
-        <div className="cs-eyebrow">03</div>
-        <h2 className="mt-1 text-2xl font-semibold">What goes where</h2>
+  );
+}
+
+function WhereSection() {
+  return (
+      <section>
+        <h2 className="text-2xl font-semibold">What goes where</h2>
         <p className="mt-2 max-w-3xl text-cs-ink-2">
           The rule: the sidebar holds the trip and what you are looking at. Things that change the map live on the map. Personal and rare things live behind the
           avatar. Shortcuts never hold the only way to do something.
@@ -469,33 +436,12 @@ export default function MapSidebarBoard() {
         </div>
       </section>
 
-      {/* 4 ------------------------------------------------------------- */}
-      <section id="pick" className="mt-20 scroll-mt-20">
-        <div className="cs-eyebrow">04</div>
-        <h2 className="mt-1 text-2xl font-semibold">Pick on map, for someone who has never done it</h2>
-        <p className="mt-2 max-w-3xl text-cs-ink-2">
-          The person may not know exactly where to click. So every step says what to do next, the spot can be adjusted before it counts, and every step has an
-          obvious way back.
-        </p>
-        <div className="mt-6 grid gap-x-8 gap-y-10 lg:grid-cols-2">
-          {PICK.filter((p) => !p.phone).map((p, i) => (
-            <figure key={p.id}>
-              <Scaled w={800} h={520} label={p.title}>
-                <p.c />
-              </Scaled>
-              <PickCaption i={i} title={p.title} body={p.body} />
-            </figure>
-          ))}
-          <div className="grid grid-cols-2 gap-6">
-            {PICK.filter((p) => p.phone).map((p, i) => (
-              <figure key={p.id}>
-                <Phone C={p.c} label={p.title} />
-                <PickCaption i={i + 7} title={p.title} body={p.body} />
-              </figure>
-            ))}
-          </div>
-        </div>
-        <div className="mt-10 overflow-x-auto rounded-[var(--cs-radius-md)] border border-cs-line bg-cs-surface">
+  );
+}
+
+function PickSpec() {
+  return (
+        <div className="overflow-x-auto rounded-[var(--cs-radius-md)] border border-cs-line bg-cs-surface">
           <table className="min-w-[760px] text-sm">
             <thead>
               <tr>
@@ -524,72 +470,57 @@ export default function MapSidebarBoard() {
             </tbody>
           </table>
         </div>
-      </section>
+  );
+}
 
-      {/* 5 ------------------------------------------------------------- */}
-      <section id="options" className="mt-20 scroll-mt-20">
-        <div className="cs-eyebrow">05</div>
-        <h2 className="mt-1 text-2xl font-semibold">Fifteen sidebars</h2>
-        <p className="mt-2 max-w-3xl text-cs-ink-2">
-          Each is drawn at 1280 × 800 and scaled to fit. Phone views (390 × 844) for the top five. The map, places and events are made up.
-        </p>
-        <div className="mt-8 flex flex-col gap-20">
-          {OPTIONS.map((o) => (
-            <article key={o.n} id={`opt-${o.n}`} className="scroll-mt-20 border-t border-cs-line pt-8">
-              <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                <span className="font-mono text-3xl text-cs-ink-3">{String(o.n).padStart(2, "0")}</span>
-                <h3 className="text-2xl font-semibold">{o.name}</h3>
-                {o.tag ? (
-                  <span className="rounded-full bg-cs-accent px-2.5 py-0.5 text-xs font-semibold text-cs-accent-ink">{o.tag}</span>
-                ) : null}
-              </header>
-              <div className={`mt-5 grid gap-5 ${o.phone ? "lg:grid-cols-[1fr_250px]" : ""}`}>
-                <div className="flex flex-col gap-5">
-                  <Scaled w={1280} h={800} label={`Option ${o.n}, ${o.name}, desktop`}>
-                    <o.desk />
-                  </Scaled>
-                  {o.desk2 ? (
-                    <Scaled w={1280} h={800} label={`Option ${o.n}, ${o.name}, with a route planned`}>
-                      <o.desk2 />
-                    </Scaled>
-                  ) : null}
-                </div>
-                {o.phone ? (
-                  <div className="grid max-w-[540px] grid-cols-2 gap-4 lg:flex lg:max-w-none lg:flex-col">
-                    <Phone C={o.phone} label={`Option ${o.n} on a phone`} />
-                    {o.phone2 ? <Phone C={o.phone2} label={`Option ${o.n} on a phone, with a route`} /> : null}
-                  </div>
-                ) : null}
-              </div>
-              <div className="mt-5 grid gap-6 md:grid-cols-3">
-                <div>
-                  <div className="cs-eyebrow">The idea</div>
-                  <p className="mt-1.5 text-sm">{o.idea}</p>
-                </div>
-                <div>
-                  <div className="cs-eyebrow">What moved</div>
-                  <ul className="mt-1.5 list-disc space-y-1 pl-4 text-sm text-cs-ink-2">
-                    {o.moved.map((m) => (
-                      <li key={m}>{m}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <div className="cs-eyebrow">Trade-off</div>
-                  <p className="mt-1.5 text-sm">
-                    <span className="font-medium text-cs-ok">Good: </span>
-                    {o.plus}
-                  </p>
-                  <p className="mt-1.5 text-sm">
-                    <span className="font-medium text-cs-closure">Cost: </span>
-                    {o.minus}
-                  </p>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-    </main>
+const dk = (o: Opt, C: React.ComponentType, extra = "") => (
+  <Scaled w={1280} h={800} label={`Option ${o.n}, ${o.name}, desktop${extra}`}>
+    <C />
+  </Scaled>
+);
+const ph = (o: Opt, C: React.ComponentType, extra = "") => (
+  <Scaled w={390} h={844} label={`Option ${o.n}, ${o.name}, on a phone${extra}`} className="rounded-[22px]">
+    <C />
+  </Scaled>
+);
+
+export default function MapSidebarBoard() {
+  return (
+    <Board
+      options={OPTIONS.map((o) => ({
+        n: o.n,
+        name: o.name,
+        tag: o.tag,
+        diff: o.diff,
+        idea: o.idea,
+        moved: o.moved,
+        plus: o.plus,
+        minus: o.minus,
+        desk: dk(o, o.desk),
+        desk2: o.desk2 ? dk(o, o.desk2, ", with a route planned") : undefined,
+        phone: o.phone ? ph(o, o.phone) : undefined,
+        phone2: o.phone2 ? ph(o, o.phone2, ", with a route planned") : undefined,
+      }))}
+      steps={PICK.map((p, i) => ({
+        id: p.id,
+        letter: String.fromCharCode(65 + i),
+        title: p.title,
+        body: p.body,
+        phone: !!p.phone,
+        node: p.phone ? (
+          <Scaled w={390} h={844} label={p.title} className="rounded-[22px]">
+            <p.c />
+          </Scaled>
+        ) : (
+          <Scaled w={800} h={520} label={p.title}>
+            <p.c />
+          </Scaled>
+        ),
+      }))}
+      today={<TodaySection />}
+      others={<OthersSection />}
+      where={<WhereSection />}
+      pickSpec={<PickSpec />}
+    />
   );
 }

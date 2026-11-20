@@ -1,13 +1,13 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/brand/brand-mark";
+import { HeroMap } from "@/components/home/hero-map";
 
 // The homepage hero. A left-aligned split: the claim, one line on what the
-// map shows, two actions, and a real screenshot of the live map on the
-// right (light and dark captures of /map, swapped by the site theme).
-// The copy never names the area the screenshot shows.
+// map shows, two actions, and on the right the live national map
+// (components/home/hero-map.tsx): real dots and counts, polled every 30 s,
+// with a step rail through route, watch area and assistant.
 //
 // The counts in the lede are pinned by tests/test_snapshot.py
 // (test_state_counts_are_current, test_feed_counts_are_current), which
@@ -72,29 +72,7 @@ export default function HeroSection() {
         </div>
 
         <div className="cs-rise min-w-0 [animation-delay:120ms] lg:col-span-7 lg:pl-6">
-          <figure className="rounded-[calc(var(--cs-radius-lg)+6px)] border border-cs-line bg-cs-surface-2 p-1.5 sm:p-2">
-            <div className="overflow-hidden rounded-[var(--cs-radius-lg)] border border-cs-line-strong bg-cs-surface shadow-[var(--cs-shadow-md)]">
-              {/* One capture per theme. The light one is the LCP image;
-                  the dark one is display:none in light mode. */}
-              <Image
-                src="/shots/live-map-light.webp"
-                alt="The CommuteScout live map, zoomed out to show thousands of live incident, closure and road-weather markers."
-                width={1600}
-                height={939}
-                sizes="(min-width: 1024px) 700px, 100vw"
-                priority
-                className="block h-auto w-full dark:hidden"
-              />
-              <Image
-                src="/shots/live-map-dark.webp"
-                alt="The CommuteScout live map on its dark base map, zoomed out to show thousands of live incident, closure and road-weather markers."
-                width={1600}
-                height={939}
-                sizes="(min-width: 1024px) 700px, 100vw"
-                className="hidden h-auto w-full dark:block"
-              />
-            </div>
-          </figure>
+          <HeroMap />
         </div>
       </div>
     </section>

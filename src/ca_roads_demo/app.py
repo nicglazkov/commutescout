@@ -54,6 +54,7 @@ from ca_roads_demo import (
     event_status,
     flare_sources,
     freshness,
+    hero_dots,
     lanecount,
     leavelater,
     mapfiles,
@@ -2787,6 +2788,7 @@ app = Starlette(
         Route("/api/ask", ask, methods=["POST"]),
         Route("/api/event", track, methods=["POST"]),
         Route("/api/stats", stats, methods=["GET"]),
+        Route("/api/hero-dots", hero_dots.api_hero_dots, methods=["GET"]),
         Route("/api/warmup", warmup, methods=["GET"]),
         Route("/api/geocode", api_geocode, methods=["GET"]),
         Route("/api/suggest", api_suggest, methods=["GET"]),
@@ -3193,7 +3195,8 @@ app = RateLimitMiddleware(
     # legitimately calls them on every pan - throttling them starves
     # address validation behind map browsing.
     exempt_prefixes=("/static/", "/logo.svg", "/health", "/favicon",
-                     "/api/mapdata", "/api/stats", "/api/warmup",
+                     "/api/mapdata", "/api/stats", "/api/hero-dots",
+                     "/api/warmup",
                      "/api/geocode",
                      "/api/incident/", "/api/event-status", "/api/sources", "/api/stcam/",
                      "/api/suggest", "/api/flow", "/api/traffictile",

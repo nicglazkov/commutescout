@@ -933,49 +933,76 @@
 .dx .dx-plain { text-decoration: none; }
 .dx .dx-code-quiet { font-weight: 400; color: var(--dx-ink-3); }
 
-/* ---------- REST API quickstart band (/developers) ----------
-   Sits between the page head and the body so the three steps are above
-   the fold on a desktop. Left: a numbered stepper with the one action
-   (get a key) and an optional key field. Right: the request and the
-   sample response, labelled with the step they belong to. */
-.dx-qs {
-  border-bottom: 1px solid var(--dx-line);
-  background: var(--dx-bg);
-}
-.dx-qs-inner {
-  max-width: 1264px;
-  margin: 0 auto;
-  padding: 24px var(--dx-gutter) 32px;
-}
-.dx-qs-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
-.dx-qs-head h2 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
-.dx-qs-head p { margin: 0; font-size: 15px; color: var(--dx-ink-2); }
-.dx-qs-ref { margin-left: auto; }
-.dx-qs-grid {
-  margin-top: 18px;
-  display: grid;
-  gap: 20px;
-  grid-template-columns: minmax(0, 1fr);
-}
+/* ---------- Two-column page head ----------
+   Text on the left, the page's one working object on the right (the
+   install command, a live request, the layer ledger). Stacks below 1024px. */
+.dx-head-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
+.dx-head-split > .dx-facts { grid-column: 1 / -1; }
 @media (min-width: 1024px) {
-  .dx-qs-grid { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 28px; align-items: start; }
+  .dx-head-split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 560px);
+    gap: 32px 56px;
+    align-items: start;
+  }
+  .dx-head-split .dx-dek { max-width: 52ch; }
 }
-.dx-qs-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; }
+.dx-head-aside { min-width: 0; }
+.dx-head-aside .dx-code { margin: 0; }
+.dx-head-aside .dx-code pre { font-size: 13px; line-height: 1.6; padding: 12px 16px 14px; }
+@media (max-width: 640px) {
+  /* On a phone the head's code wraps instead of scrolling sideways. */
+  .dx-head-aside .dx-code code { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .dx-head-aside .dx-code pre { font-size: 12.5px; padding: 10px 14px 12px; }
+}
+.dx-head-k {
+  margin: 0;
+  font: 600 11.5px/1.2 var(--dx-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dx-ink-3);
+}
+.dx-head-meta { margin: 14px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--dx-ink-2); }
+
+/* ---------- REST API quickstart (/developers head) ----------
+   Left: three numbered steps under the dek, with the one action (get a
+   key). Right: the request those steps refer to, a key field that fills
+   it in, and what it returns. */
+.dx-qs { margin-top: 30px; scroll-margin-top: var(--dx-top); }
+.dx-qs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--dx-line);
+  max-width: 560px;
+}
+.dx-qs-head h2 {
+  margin: 0;
+  font: 600 11.5px/1.2 var(--dx-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dx-ink-3);
+}
+.dx-qs-head .dx-textlink { font-size: 14px; }
+.dx-qs-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; max-width: 560px; }
 .dx-qs-steps > li {
   position: relative;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   gap: 14px;
-  padding-bottom: 16px;
+  padding-bottom: 18px;
 }
 .dx-qs-steps > li:last-child { padding-bottom: 0; }
 /* the rail joining the numbers */
 .dx-qs-steps > li:not(:last-child)::before {
   content: "";
   position: absolute;
-  left: 14px;
+  left: 13px;
   top: 32px;
-  bottom: 2px;
+  bottom: 4px;
   width: 2px;
   border-radius: 2px;
   background: var(--dx-line);
@@ -983,20 +1010,21 @@
 .dx-qs-n {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  font: 600 13px/1 var(--dx-mono);
+  font: 600 12.5px/1 var(--dx-mono);
   color: var(--dx-accent);
   background: var(--dx-surface);
   border: 1.5px solid var(--dx-accent);
 }
 .dx-qs-steps > li:first-child .dx-qs-n { background: var(--dx-accent); color: var(--dx-accent-ink); }
-.dx-qs-steps h3 { margin: 4px 0 0; font-size: 16px; line-height: 1.35; }
+.dx-qs-steps h3 { margin: 3px 0 0; font-size: 16px; line-height: 1.35; }
 .dx-qs-steps p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--dx-ink-2); text-wrap: pretty; }
 .dx-qs-act { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .dx-qs-act small { font-size: 13px; color: var(--dx-ink-3); }
 .dx-qs-cta svg { width: 16px; height: 16px; }
+.dx-qs-panels { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
 /* the key field hangs under the request, inside the same dark panel */
 .dx-qs-req .dx-code { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .dx-qs-key {
@@ -1012,7 +1040,7 @@
 }
 .dx-qs-key label { font: 500 12.5px/1.2 var(--dx-sans); color: var(--dx-code-ink); }
 .dx-qs-key input {
-  flex: 1 1 220px;
+  flex: 1 1 200px;
   min-width: 0;
   height: 34px;
   padding: 0 10px;
@@ -1025,14 +1053,69 @@
 .dx-qs-key input::placeholder { color: var(--dx-code-mute); }
 .dx-qs-key input:focus-visible { outline: 2px solid var(--dx-tk-key); outline-offset: 1px; }
 .dx-qs-key p { margin: 0; font-size: 12px; color: var(--dx-code-mute); }
-.dx-qs-panels { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
-.dx-qs-panels .dx-code { margin: 0; }
-.dx-qs-panels .dx-code pre { font-size: 13px; line-height: 1.6; padding: 12px 16px 14px; }
-.dx-qs-resp pre { max-height: 232px; overflow-y: auto; }
+@media (min-width: 1024px) {
+  .dx-qs-key p { flex-basis: 100%; }
+}
+
+/* ---------- Install command by client (/mcp head) ---------- */
+.dx-install .dx-tabs { margin-top: 10px; }
+.dx-install .dx-tabpanel { padding-top: 0; }
+.dx-install .dx-tabpanel .dx-code { margin-top: 12px; }
+/* One height for every client, so switching tabs never moves the page.
+   The longest config (VS Code) scrolls inside it. */
+.dx-install .dx-code pre { height: 212px; overflow: auto; }
+.dx-install .dx-code code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.dx-install-foot { margin: 12px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--dx-ink-2); }
 @media (max-width: 640px) {
-  .dx-qs-inner { padding-top: 24px; }
-  .dx-qs-ref { margin-left: 0; }
-  .dx-qs-resp pre { max-height: 300px; }
+  .dx-install .dx-code pre { height: 236px; }
+}
+
+/* ---------- Layer ledger (/data-sources head) ----------
+   One row per layer a state's own feeds publish: a bar against every
+   covered state, and the count. National layers sit under it as text. */
+.dx-ledger { margin: 0; border: 1px solid var(--dx-line); border-radius: var(--dx-r-lg); background: var(--dx-surface); }
+.dx-ledger-cap {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--dx-line);
+}
+.dx-ledger-cap span { font-size: 12.5px; color: var(--dx-ink-3); }
+.dx-ledger table, .dx-ledger tbody { display: block; width: 100%; border-collapse: collapse; }
+.dx-ledger th, .dx-ledger td { padding: 0; font-weight: 400; text-align: left; }
+.dx-ledger tr { display: grid; grid-template-columns: 196px minmax(0, 1fr) 84px; align-items: center; gap: 16px; padding: 10px 18px; }
+.dx-ledger tr + tr { border-top: 1px solid var(--dx-line); }
+.dx-ledger th { font-size: 14.5px; color: var(--dx-ink); }
+.dx-ledger th em {
+  margin-left: 8px;
+  font: 500 10.5px/1 var(--dx-mono);
+  font-style: normal;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dx-ink-3);
+}
+.dx-ledger-bar { position: relative; height: 8px; border-radius: 4px; background: var(--dx-surface-2); overflow: hidden; }
+.dx-ledger-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--dx-accent); }
+.dx-ledger-bar i[data-seasonal] { background: var(--dx-ink-3); }
+.dx-ledger td.dx-ledger-v { text-align: right; white-space: nowrap; font-size: 13px; color: var(--dx-ink-2); }
+.dx-ledger-v b { margin-right: 3px; font-size: 16px; font-weight: 600; color: var(--dx-ink); font-variant-numeric: tabular-nums; }
+.dx-ledger-foot {
+  margin: 0;
+  padding: 12px 18px 14px;
+  border-top: 1px solid var(--dx-line);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--dx-ink-2);
+  background: var(--dx-bg);
+  border-radius: 0 0 var(--dx-r-lg) var(--dx-r-lg);
+}
+.dx-ledger-foot b { color: var(--dx-ink); font-weight: 600; }
+@media (max-width: 640px) {
+  .dx-ledger-cap, .dx-ledger tr, .dx-ledger-foot { padding-left: 14px; padding-right: 14px; }
+  .dx-ledger tr { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+  .dx-ledger-bar { grid-column: 1 / -1; grid-row: 2; }
 }
 
 /* ---------- MCP Registry (one card, full width) ---------- */
@@ -1072,3 +1155,8 @@
 .dx-places svg { width: 15px; height: 15px; color: var(--dx-accent); }
 .dx-places li[data-any] { border-style: dashed; color: var(--dx-ink-2); }
 .dx-places li[data-any] svg { color: var(--dx-ink-3); }
+
+/* Totals under a split head's dek, as one quiet line (/data-sources, /mcp). */
+.dx-head-stats { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 6px 28px; font-size: 14px; }
+.dx-head-stats b { margin-right: 4px; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--dx-ink); font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .dx-head-stats { margin-top: 20px; gap: 4px 20px; } .dx-head-stats b { font-size: 19px; } }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, Briefcase, Dumbbell, House, MapPin, Plus } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Briefcase, Dumbbell, House, MapPin, Plus } from "lucide-react";
 import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
 import { C, CodeBlock, CopyField } from "@/components/docs/code-block";
 import { Tabs } from "@/components/docs/tabs";
@@ -46,6 +46,57 @@ export const metadata: Metadata = {
 };
 
 const MCP_URL = setup.endpoint;
+
+// The head's install widget: one tab per client that is set up by a
+// command or a config file, each showing that client's first code step
+// from mcp-clients.json as-is. claude.ai and Claude Desktop are set up in
+// their own settings screens, so they (and any other client) point to
+// Setup. ChatGPT cannot send the key header yet (key: false), so it is
+// never offered here.
+const INSTALL_IDS = ["claude-code", "codex", "gemini", "cursor", "vscode", "windsurf"] as const;
+// Where each config file goes, from the client's own step text.
+const INSTALL_FILE: Partial<Record<(typeof INSTALL_IDS)[number], string>> = {
+  cursor: "~/.cursor/mcp.json",
+  vscode: ".vscode/mcp.json",
+  windsurf: "mcp_config.json",
+};
+const INSTALL = INSTALL_IDS.flatMap((id) => {
+  const client = setup.clients.find((c) => c.id === id);
+  const step = client?.key ? client.steps.find((s) => "code" in s && s.code) : undefined;
+  if (!client || !step || !("code" in step) || !step.code) return [];
+  return [
+    {
+      id,
+      label: client.name.replace(" (GitHub Copilot)", "").replace("OpenAI Codex CLI", "Codex"),
+      code: step.code,
+      lang: step.lang === "json" ? ("json" as const) : ("bash" as const),
+      title: INSTALL_FILE[id] ?? "Terminal",
+    },
+  ];
+});
+
+function InstallWidget() {
+  return (
+    <div className="dx-install">
+      <p className="dx-head-k">Connect your client</p>
+      <Tabs
+        label="MCP client"
+        tabs={INSTALL.map((t) => ({
+          id: `install-${t.id}`,
+          label: t.label,
+          content: <CodeBlock code={t.code} lang={t.lang} title={t.title} />,
+        }))}
+      />
+      <p className="dx-install-foot">
+        Replace <C>cs_live_...</C> with your key, or set <C>COMMUTESCOUT_API_KEY</C>. claude.ai, Claude Desktop
+        and other clients:{" "}
+        <a href="#connect" className="dx-link">
+          Setup
+        </a>
+      </p>
+    </div>
+  );
+}
 
 type Param = { name: string; required: boolean };
 type Tool = { name: string; summary: string; params: Param[] };
@@ -121,17 +172,26 @@ export default function McpPage() {
       }
       actions={
         <>
-          <CopyField value={MCP_URL} label="MCP endpoint" />
-          <a href="#connect" className="dx-textlink">
-            Setup
+          <a href="/map?settings=keys" className="dx-btn dx-btn-primary">
+            Get a free key <ArrowRight aria-hidden="true" />
           </a>
+          <CopyField value={MCP_URL} label="MCP endpoint" />
         </>
       }
-      facts={[
-        { value: String(TOOLS.length), label: "tools" },
-        { value: String(STATE_COUNT), label: "states" },
-        { value: String(AGENCY_FEED_COUNT), label: "official feeds" },
-      ]}
+      headExtra={
+        <p className="dx-head-stats">
+          <span>
+            <b>{TOOLS.length}</b> tools
+          </span>
+          <span>
+            <b>{STATE_COUNT}</b> states
+          </span>
+          <span>
+            <b>{AGENCY_FEED_COUNT}</b> official feeds
+          </span>
+        </p>
+      }
+      aside={<InstallWidget />}
       toc={TOC}
     >
       <Section id="how" title="How it works">

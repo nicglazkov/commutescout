@@ -371,7 +371,7 @@ export function O14() {
       {[
         ["Compact", 72],
         ["Medium", 440],
-        ["Full", 690],
+        ["Full", 640],
       ].map(([l, y]) => (
         <span key={l as string} className="absolute left-[390px] flex items-center gap-2" style={{ top: (y as number) - 4 }}>
           <span className="h-[9px] w-[13px] rounded-full border-2 border-cs-accent bg-cs-surface" />

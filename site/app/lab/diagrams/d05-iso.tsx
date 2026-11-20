@@ -1,180 +1,202 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { FigureFrame } from "@/components/figures/frame";
-import { usePlay } from "./use-play";
+import { ART } from "./d05-art";
+import { BUILD, FEEDS, LOOP, STILL, sayAt, stateAt, type State } from "./sim";
+import { along, useClock, usePlay } from "./use-play";
 
-// 5. Isometric system drawing (anatomy convention: iso camera at 30 degrees, four-tone faces,
-// painter's order back to front, leader-line labels). It draws the real parts: agency
-// servers, the app that reads and holds every feed, the file storage behind the edge
-// cache holding the three published files, the map in a browser, and an assistant or
-// script calling the REST API / MCP server on the same app.
+// 5. Isometric system drawing, built with the anatomy kit (app/lab/diagrams/_iso/build.mjs):
+// four-tone solids painted back to front on one base plate. Agency servers in a rack, our
+// server holding one copy per feed (a blade each, with a gauge of the copy's age against its
+// refresh time), storage with the three published files, the edge cache, the map, and a
+// laptop calling the API. The live parts run on the pipeline model in sim.ts.
 
-// fixed constants (not Math.cos) so server and client render identical numbers
-const C = 0.8660254;
-const S = 0.5;
-type P3 = [number, number, number?];
-const r2 = (v: number) => Math.round(v * 100) / 100;
-const pr = ([x, y, z = 0]: P3): [number, number] => [r2((x - y) * C), r2((x + y) * S - z)];
-const pts = (a: P3[]) => a.map((p) => pr(p).map((v) => v.toFixed(1)).join(",")).join(" ");
-// ground position for a wanted screen point (z = 0)
-const at = (sx: number, sy: number): [number, number] => [(sx / C + sy / S) / 2, (sy / S - sx / C) / 2];
+type Pt = readonly number[];
+type Desk = typeof ART.desk;
+const SPEED = 4;
+const API_EVERY = 45;
+const lerp = (a: Pt, b: Pt, f: number) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f] as const;
+const gaugeOf = (st: State, i: number) => Math.min(1, st.age[i] / (2 * FEEDS[i].ttl));
+const PIN_KINDS = ["closure", "incident", "chain", "fire", "closure"];
 
-function Block({ c, w, d, h, z = 0, k, top }: { c: [number, number]; w: number; d: number; h: number; z?: number; k?: string; top?: string }) {
-  const x = c[0] - w / 2;
-  const y = c[1] - d / 2;
+const Art = memo(function Art({ html }: { html: string }) {
+  return <g dangerouslySetInnerHTML={{ __html: html }} />;
+});
+
+function Label({ at, dx = 0, dy, title, sub, align = "start" }: { at: Pt; dx?: number; dy: number; title: string; sub: string; align?: "start" | "end" }) {
+  const x = at[0] + dx;
+  const y = at[1] + dy;
+  const tx = align === "start" ? x + 6 : x - 6;
+  const top = dy < 0;
   return (
-    <g data-k={k}>
-      <polygon className="iso-l" points={pts([[x, y + d, z], [x + w, y + d, z], [x + w, y + d, z + h], [x, y + d, z + h]])} />
-      <polygon className="iso-r" points={pts([[x + w, y, z], [x + w, y + d, z], [x + w, y + d, z + h], [x + w, y, z + h]])} />
-      <polygon className={top ?? "iso-top"} points={pts([[x, y, z + h], [x + w, y, z + h], [x + w, y + d, z + h], [x, y + d, z + h]])} />
+    <g className="dg-lab">
+      <path className="lead" d={`M${at[0]} ${at[1]}L${x} ${top ? y + 16 : y - 18}`} />
+      <circle className="lead-dot" cx={at[0]} cy={at[1]} r={2} />
+      <text className="t-strong t-lab" x={tx} y={y} textAnchor={align}>{title}</text>
+      <text className="t-mono t-lab-sub" x={tx} y={y + 15} textAnchor={align}>{sub}</text>
     </g>
   );
 }
 
-function Label({ from, to, lines, anchor = "start" }: { from: [number, number]; to: [number, number]; lines: string[]; anchor?: "start" | "end" }) {
+function Gauges({ st, gauges, leds, r }: { st: State; gauges: readonly (readonly Pt[])[]; leds: readonly Pt[]; r: number }) {
   return (
-    <g>
-      <circle className="lead-dot" cx={from[0]} cy={from[1]} r={1.8} />
-      <path className="lead" d={`M${from[0]} ${from[1]}L${to[0]} ${to[1]}`} />
-      {lines.map((l, i) => (
-        <text key={i} x={to[0] + (anchor === "start" ? 4 : -4)} y={to[1] + 4 + i * 13} textAnchor={anchor} className={i === 0 ? "t-strong" : "t-small"}>
-          {l}
-        </text>
+    <>
+      {gauges.map(([g0, g1], i) => {
+        const e = lerp(g0, g1, gaugeOf(st, i));
+        return (
+          <g key={i} data-k={FEEDS[i].k}>
+            <path className="gauge" d={`M${g0[0]} ${g0[1]}L${e[0]} ${e[1]}`} />
+            <circle className="led" data-on={st.fetching[i] === null ? "" : undefined} cx={leds[i][0]} cy={leds[i][1]} r={r} />
+          </g>
+        );
+      })}
+    </>
+  );
+}
+
+function RackLeds({ st, leds, r }: { st: State; leds: readonly Pt[]; r: number }) {
+  // the rack is drawn bottom up: unit 0 is the last feed
+  return (
+    <>
+      {leds.map((p, u) => {
+        const i = FEEDS.length - 1 - u;
+        return <circle key={u} data-k={FEEDS[i].k} className="led" data-on={st.fetching[i] !== null ? "" : undefined} cx={p[0]} cy={p[1]} r={r} />;
+      })}
+    </>
+  );
+}
+
+function Live({ st, d, packets }: { st: State; d: Desk; packets: boolean }) {
+  const s = st.s;
+  const b = st.build;
+  const sinceBuild = b ? s - b.t : 99;
+  const c = st.check;
+  const sinceCheck = c ? s - c.t : 99;
+  const apiPhase = s % API_EVERY;
+  const fresh = st.last200 !== null ? s - st.last200 : 99;
+  let check: readonly number[] | null = null;
+  if (c && sinceCheck < 4) {
+    const f = sinceCheck / 4;
+    const out = [...d.paths.toMap].reverse(); // the map asks the edge
+    check = c.ok200 ? along([...d.paths.toEdge, ...d.paths.toMap], f) : along(f < 0.5 ? out : d.paths.toMap, (f % 0.5) * 2);
+  }
+  return (
+    <g className="dg-live">
+      <RackLeds st={st} leds={d.rack.leds} r={2.3} />
+      <Gauges st={st} gauges={d.app.gauges} leds={d.app.leds} r={2} />
+      <circle className="led" data-k="accent" data-on={sinceBuild < 3 ? "" : undefined} cx={d.app.build[0]} cy={d.app.build[1]} r={2.6} />
+      {d.bucket.leds.map((p, k) => (
+        <circle key={k} className="led" data-k="accent" data-on={k === 0 && b?.changed && sinceBuild >= 4 && sinceBuild < 12 ? "" : undefined} cx={p[0]} cy={p[1]} r={2} />
       ))}
+      <circle className="led" data-k="ok" data-on={sinceCheck < 4 ? "" : undefined} cx={d.edge.led[0]} cy={d.edge.led[1]} r={2} />
+      {d.monitor.pins.map((p, i) => (
+        <circle key={i} className="pin" data-k={PIN_KINDS[i]} cx={p[0]} cy={p[1]} r={2.6} />
+      ))}
+      {fresh < 75 && (
+        <g data-k="incident">
+          <circle className="pin" cx={d.monitor.fresh[0]} cy={d.monitor.fresh[1]} r={3.2} />
+          {fresh < 3 && <circle className="ping" cx={d.monitor.fresh[0]} cy={d.monitor.fresh[1]} r={3.2 + fresh * 3} />}
+        </g>
+      )}
+      <circle className="led" data-k="ok" data-on="" cx={d.monitor.chipDot[0]} cy={d.monitor.chipDot[1]} r={1.8} />
+      {packets && (
+        <g>
+          {st.fetching.map((p, i) => {
+            if (p === null) return null;
+            const q = along(d.paths.feeds[FEEDS.length - 1 - i], p);
+            return <circle key={i} data-k={FEEDS[i].k} className="packet-k" cx={q[0]} cy={q[1]} r={3} />;
+          })}
+          {b?.changed && sinceBuild < 4 && (() => {
+            const q = along(d.paths.upload, sinceBuild / 4);
+            return <circle className="packet" cx={q[0]} cy={q[1]} r={3.2} />;
+          })()}
+          {check && <circle className={c?.ok200 ? "packet" : "packet-dim"} cx={check[0]} cy={check[1]} r={c?.ok200 ? 3.2 : 2.6} />}
+          {apiPhase < 3 && (() => {
+            const q = along(d.paths.api, apiPhase / 3);
+            return <circle className="packet" cx={q[0]} cy={q[1]} r={3} />;
+          })()}
+        </g>
+      )}
     </g>
   );
 }
 
-const AGENCIES = [
-  { k: "incident", name: "Highway patrol", h: 34 },
-  { k: "closure", name: "State DOTs", h: 44 },
-  { k: "chain", name: "Regional portal", h: 30 },
-  { k: "neutral", name: "Work-zone feeds", h: 38 },
-  { k: "fire", name: "National fire service", h: 28 },
-];
-const AG_POS = AGENCIES.map((_, i) => at(-262, -56 + i * 44));
-const APP = at(-40, 44);
-const STORE = at(150, 4);
-const MAP = at(318, -54);
-const BOT = at(306, 122);
+const STEPS = [
+  ["rack", "Agency servers", "53 sources. Each is read on its own: once a copy is older than its refresh time, the next read fetches a new one."],
+  ["app", "Our server: one copy per feed", "Each blade holds one feed's latest copy. The bar is the copy's age, the tick its refresh time (60 s to 5 min). A copy is kept 10 min to 6 h."],
+  ["bucket", "Storage: three files", "live.json.gz is rebuilt every 30 s and uploaded only if it changed. signs.json.gz every 5 min, cameras.json.gz every hour."],
+  ["edge", "Edge cache", "Serves the files to every map and holds each one for 15 s."],
+  ["monitor", "The map", "Checks every 30 s and gets a 304 when nothing changed."],
+  ["laptop", "REST API and MCP", "Answer from the same held copies, with data_as_of on every answer."],
+] as const;
 
 export default function D05Iso() {
   const { ref, play } = usePlay<HTMLDivElement>();
-  const [ax, ay] = pr([...APP]);
-  const [sx, sy] = pr([...STORE]);
-  const [mx, my] = pr([...MAP]);
-  const [bx, by] = pr([...BOT]);
-  const feedPaths = AG_POS.map((p) => {
-    const [x0, y0] = pr([p[0], p[1]]);
-    return `M${(x0 + 14).toFixed(1)} ${y0.toFixed(1)}C${(x0 + 90).toFixed(1)} ${y0.toFixed(1)} ${(ax - 110).toFixed(1)} ${ay.toFixed(1)} ${(ax - 50).toFixed(1)} ${ay.toFixed(1)}`;
-  });
-  const pubPath = `M${(ax + 50).toFixed(1)} ${ay.toFixed(1)}L${(sx - 30).toFixed(1)} ${(sy + 8).toFixed(1)}`;
-  const mapPath = `M${(sx + 30).toFixed(1)} ${(sy - 4).toFixed(1)}L${(mx - 30).toFixed(1)} ${(my + 10).toFixed(1)}`;
-  const apiPath = `M${(ax + 40).toFixed(1)} ${(ay + 28).toFixed(1)}L${(bx - 30).toFixed(1)} ${(by + 2).toFixed(1)}`;
+  const s = useClock(play, SPEED, STILL, LOOP);
+  const st = useMemo(() => stateAt(s), [s]);
+  const d = ART.desk;
   return (
     <FigureFrame
       n={5}
-      title="The parts, and what moves between them"
-      hint="Isometric drawing; solid lines are the 30-second map path"
-      readout="agencies → app → storage → map"
+      title="Where the data runs"
+      hint={`Each blade holds one feed's copy: the bar is its age, the tick its refresh time · ${SPEED}× speed`}
+      readout={sayAt(st)}
+      legend={
+        <div className="csf-keys dgf">
+          {FEEDS.map((f) => (
+            <span key={f.k} className="csf-key" data-k={f.k}>
+              <span className="dg-key-dot" />
+              {f.name}
+            </span>
+          ))}
+        </div>
+      }
       caption={
         <>
-          The app reads every agency feed on its own timer and keeps the last good copy of each. Every 30 seconds it
-          builds one marker list and writes it to file storage behind an edge cache, so opening the map never waits on
-          an agency. Assistants and scripts ask the same app through the REST API or the MCP server.
+          Our server reads each agency feed on its own. A copy younger than its refresh time is served as it is;
+          the first read after that serves it once more while a new copy is fetched behind it. Every {BUILD} seconds
+          the server builds <code>live.json.gz</code> from the held copies and uploads it only if something changed.
+          The map checks the edge cache every 30 s and gets a 304 when nothing did. The REST API and the MCP server
+          answer from the same held copies, with <code>data_as_of</code> on every answer.
         </>
       }
     >
-      <div ref={ref} className="dgf" data-play={play ? "" : undefined}>
-        <svg className="csf-svg" viewBox="-430 -146 870 330" role="img" aria-label="Isometric drawing: five agency servers on the left feed the CommuteScout app in the middle; the app writes three files to storage behind an edge cache; a browser showing the map fetches from the edge; an assistant calls the app's REST API and MCP server directly.">
-          {/* wires on the ground */}
-          {feedPaths.map((d, i) => (
-            <path key={i} className="wire" d={d} />
-          ))}
-          <path className="wire" d={pubPath} strokeWidth={2} stroke="var(--f-accent)" />
-          <path className="wire" d={mapPath} strokeWidth={2} stroke="var(--f-accent)" />
-          <path className="wire-dash" d={apiPath} />
-
-          {/* agencies, back to front */}
-          {AGENCIES.map((a, i) => (
-            <Block key={a.name} c={AG_POS[i]} w={28} d={28} h={a.h} k={a.k} top="iso-top-k" />
-          ))}
-          {AGENCIES.map((a, i) => {
-            const [x, y] = pr([AG_POS[i][0], AG_POS[i][1], a.h]);
+      <div ref={ref} className="dgf dg-iso" data-play={play ? "" : undefined}>
+        <div className="csf-desk">
+          <svg className="csf-svg" viewBox={`0 0 ${d.w} ${d.h + 40}`} role="img" aria-label="Isometric drawing on one base plate. Left, a rack of six agency servers, cabled to our server, which holds one blade per feed with a bar for the copy's age. A cable runs to storage holding three files (live, signs, cameras), then to an edge cache, then to a monitor showing the map. A laptop in front, wired to our server, stands for the REST API and MCP.">
+            <Art html={d.art} />
+            <Live st={st} d={d} packets={play} />
+            <Label at={d.rack.top} dy={-40} title="Agency servers" sub="53 sources, each on its own timer" />
+            <Label at={d.app.top} dy={-78} title="Our server: one held copy per feed" sub="refresh 60 s to 5 min · kept 10 min to 6 h" />
+            <Label at={d.bucket.top} dy={-60} title="Storage: three files" sub="live 30 s · signs 5 min · cameras 1 h" />
+            <Label at={d.edge.front} dy={74} title="Edge cache" sub="holds each file 15 s" />
+            <Label at={d.monitor.front} dy={92} align="end" title="The map" sub="checks every 30 s · 304 if unchanged" />
+            <Label at={d.laptop.front} dy={40} title="REST API and MCP" sub="read the held copies · data_as_of" />
+          </svg>
+        </div>
+        <div className="csf-phone">
+        <ol className="dg-iso-steps">
+          {STEPS.map(([key, title, text]) => {
+            const part = ART.phone[key];
             return (
-              <text key={a.name} x={x - 30} y={y + 6} textAnchor="end" className="t-small">
-                {a.name}
-              </text>
+              <li key={key} className="dg-iso-step" data-wide={key === "app" ? "" : undefined}>
+                <svg className="dg-iso-mini" viewBox={`0 0 ${part.w} ${part.h}`} aria-hidden="true" style={{ maxWidth: part.w }}>
+                  <Art html={part.art} />
+                  {key === "rack" && <RackLeds st={st} leds={ART.phone.rack.anchors.leds} r={2} />}
+                  {key === "app" && <Gauges st={st} gauges={ART.phone.app.anchors.gauges} leds={ART.phone.app.anchors.leds} r={1.8} />}
+                  {key === "monitor" &&
+                    ART.phone.monitor.anchors.pins.map((p, i) => <circle key={i} className="pin" data-k={PIN_KINDS[i]} cx={p[0]} cy={p[1]} r={2.4} />)}
+                </svg>
+                <div>
+                  <h3 className="dg-step-h">{title}</h3>
+                  <p className="dg-step-p">{text}</p>
+                </div>
+              </li>
             );
           })}
-
-          {/* the app: a server block with its held copies on top */}
-          <Block c={APP} w={110} d={110} h={46} />
-          {Array.from({ length: 16 }, (_, i) => {
-            const gx = APP[0] - 44 + (i % 4) * 24;
-            const gy = APP[1] - 44 + Math.floor(i / 4) * 24;
-            const k = ["incident", "closure", "chain", "fire", "weather", "neutral"][i % 6];
-            return (
-              <g key={i} data-k={k}>
-                <polygon className="iso-top-k" points={pts([[gx, gy, 46], [gx + 18, gy, 46], [gx + 18, gy + 18, 46], [gx, gy + 18, 46]])} />
-              </g>
-            );
-          })}
-
-          {/* storage with three files */}
-          <Block c={STORE} w={70} d={70} h={22} />
-          {[0, 1, 2].map((j) => (
-            <Block key={j} c={STORE} w={52 - j * 4} d={52 - j * 4} h={5} z={24 + j * 8} k="accent" top={j === 2 ? "iso-top-k" : "iso-top"} />
-          ))}
-
-          {/* the browser with the map */}
-          {(() => {
-            const w = 96;
-            const x = MAP[0] - w / 2;
-            const y = MAP[1];
-            const z = 8;
-            const h = 62;
-            return (
-              <g>
-                <Block c={[MAP[0], MAP[1] - 4]} w={30} d={14} h={8} />
-                <polygon className="iso-l" points={pts([[x, y + 3, z], [x + w, y + 3, z], [x + w, y + 3, z + h], [x, y + 3, z + h]])} />
-                <polygon className="iso-screen" points={pts([[x + 4, y + 3.2, z + 4], [x + w - 4, y + 3.2, z + 4], [x + w - 4, y + 3.2, z + h - 4], [x + 4, y + 3.2, z + h - 4]])} />
-                <path stroke="var(--f-screen-ink)" strokeWidth={1.5} fill="none" opacity={0.6} d={(() => {
-                  const a = pr([x + 10, y + 3.2, z + 18]);
-                  const b = pr([x + 46, y + 3.2, z + 34]);
-                  const c = pr([x + 86, y + 3.2, z + 44]);
-                  return `M${a[0]} ${a[1]}Q${b[0]} ${b[1] + 8} ${c[0]} ${c[1]}`;
-                })()} />
-                {[[30, 26, "incident"], [58, 40, "closure"], [74, 46, "chain"]].map(([px, pz, k]) => {
-                  const p = pr([x + (px as number), y + 3.2, z + (pz as number)]);
-                  return (
-                    <g key={k as string} data-k={k as string}>
-                      <circle className="dot-k" cx={p[0]} cy={p[1]} r={3} />
-                    </g>
-                  );
-                })}
-              </g>
-            );
-          })()}
-
-          {/* an assistant or script */}
-          <Block c={BOT} w={44} d={44} h={16} />
-          <Block c={BOT} w={30} d={30} h={4} z={16} k="accent" top="iso-top-k" />
-
-          {/* packets */}
-          {play &&
-            [...feedPaths.map((d, i) => ({ d, b: i * 0.5, dur: 5 })), { d: pubPath, b: 0, dur: 3 }, { d: mapPath, b: 1.5, dur: 3 }].map((p, i) => (
-              <circle key={i} className="packet" r={2.6}>
-                <animateMotion dur={`${p.dur}s`} begin={`${p.b}s`} repeatCount="indefinite" path={p.d} />
-              </circle>
-            ))}
-
-          {/* labels */}
-          <Label from={[ax, ay - 70]} to={[ax - 20, -128]} lines={["CommuteScout app", "reads each feed on its timer,", "keeps the last good copy of each"]} />
-          <Label from={[sx + 20, sy + 10]} to={[sx + 44, 50]} lines={["File storage + edge cache", "live 30 s · signs 5 min · cameras 1 h"]} />
-          <Label from={[mx + 40, my - 50]} to={[mx + 58, -100]} lines={["Your map", "asks every 30 s"]} />
-          <Label from={[bx - 10, by + 14]} to={[bx - 40, by + 40]} anchor="end" lines={["Assistant or script", "REST API · MCP, on request"]} />
-        </svg>
+        </ol>
+        </div>
       </div>
     </FigureFrame>
   );

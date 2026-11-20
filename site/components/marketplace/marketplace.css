@@ -1,0 +1,66 @@
+/* Plugin marketplace. Trust colours match /plugins (approved green, public
+   not reviewed amber, private violet); alert-kind tones match the kinds list
+   on /plugins and the map legend. Everything reads the --cs-* tokens, so dark
+   mode follows the site theme. */
+
+.mk {
+  --mk-approved: var(--cs-ok, #1a774f);
+  --mk-approved-soft: var(--cs-ok-soft, #e4f4ec);
+  --mk-unreviewed: var(--cs-fire, #946200);
+  --mk-unreviewed-soft: var(--cs-fire-soft, #fbf3df);
+  --mk-private: var(--cs-stale, #6b5b95);
+  --mk-private-soft: var(--cs-stale-soft, #efecf7);
+}
+
+.mk [data-tier="approved"] { --t: var(--mk-approved); --t-soft: var(--mk-approved-soft); }
+.mk [data-tier="unreviewed"] { --t: var(--mk-unreviewed); --t-soft: var(--mk-unreviewed-soft); }
+.mk [data-tier="private"] { --t: var(--mk-private); --t-soft: var(--mk-private-soft); }
+
+.mk-t { color: var(--t); }
+.mk-t-bg { background: var(--t-soft); color: var(--t); }
+.mk-t-dot { background: var(--t); }
+.mk-t-rule { border-top: 2px solid var(--t); }
+
+/* Alert-kind tones */
+.mk [data-tone] { --k: var(--cs-ink-3); --k-soft: var(--cs-surface-2); }
+.mk [data-tone="police"] { --k: var(--cs-ink-2); --k-soft: var(--cs-surface-2); }
+.mk [data-tone="incident"] { --k: var(--cs-incident, #ab4d0d); --k-soft: var(--cs-incident-soft); }
+.mk [data-tone="hazard"] { --k: var(--cs-fire, #946200); --k-soft: var(--cs-fire-soft); }
+.mk [data-tone="weather"] { --k: var(--cs-weather, #0e7480); --k-soft: var(--cs-weather-soft); }
+.mk [data-tone="closure"] { --k: var(--cs-closure, #a1262e); --k-soft: var(--cs-closure-soft); }
+.mk [data-tone="traffic"] { --k: var(--cs-accent, #1a63d6); --k-soft: var(--cs-accent-soft); }
+.mk [data-tone="chain"] { --k: var(--cs-chain, #4053a8); --k-soft: var(--cs-chain-soft); }
+.mk [data-tone="camera"] { --k: var(--cs-stale, #6b5b95); --k-soft: var(--cs-stale-soft); }
+
+.mk-k { background: var(--k-soft); color: var(--k); }
+.mk-k-fg { color: var(--k); }
+.mk-k-bar { background: var(--k); }
+
+/* Native checkboxes in the facet rail pick up the accent. */
+.mk-check { accent-color: var(--cs-accent); }
+
+/* Filters sheet (below lg). The native <dialog> gives focus trapping and Esc. */
+.mk-sheet {
+  width: 100%;
+  max-width: 100%;
+  max-height: 88dvh;
+  margin: auto 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cs-radius-lg) var(--cs-radius-lg) 0 0;
+  background: var(--cs-surface);
+  color: var(--cs-ink);
+  box-shadow: var(--cs-shadow-md);
+}
+.mk-sheet::backdrop { background: rgb(10 15 25 / 0.45); }
+@media (min-width: 640px) {
+  .mk-sheet { max-width: 440px; margin: auto; border-radius: var(--cs-radius-lg); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mk-sheet[open] { animation: mk-up 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+  @keyframes mk-up { from { transform: translateY(16px); opacity: 0; } }
+}
+
+/* Quick trust chips scroll sideways on phones instead of wrapping. */
+.mk-scroll { scrollbar-width: none; }
+.mk-scroll::-webkit-scrollbar { display: none; }

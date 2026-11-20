@@ -48,6 +48,61 @@ export const metadata: Metadata = {
 const DEPTH_KEYS: (keyof StateRow)[] = ["incidents", "closures", "cameras", "signs", "weather"];
 const FULL_STATES = STATE_COVERAGE.filter((r) => DEPTH_KEYS.every((k) => r[k].startsWith("Y"))).length;
 
+// The head's ledger: each layer a state's own feeds can publish, and in
+// how many of the covered states it is live (a "Y" cell in the coverage
+// table). Wildfires are national (WILDFIRE_NOTE), so they sit under the
+// ledger with the other every-state layers (OVERLAY_NOTE) instead of as a row.
+const LEDGER: { key: keyof StateRow; label: string; note?: string }[] = [
+  { key: "incidents", label: "Crashes and incidents" },
+  { key: "closures", label: "Closures and work zones" },
+  { key: "cameras", label: "Cameras" },
+  { key: "signs", label: "Message signs" },
+  { key: "weather", label: "Road weather" },
+  { key: "chains", label: "Chain controls", note: "seasonal" },
+];
+const LEDGER_ROWS = LEDGER.map((l) => ({
+  ...l,
+  states: STATE_COVERAGE.filter((r) => r[l.key].startsWith("Y")).length,
+}));
+
+function LayerLedger() {
+  const total = STATE_COVERAGE.length;
+  return (
+    <figure className="dx-ledger">
+      <figcaption className="dx-ledger-cap">
+        <span className="dx-head-k" id="ledger-k">
+          Live layers by state
+        </span>
+        <span>of {total} states</span>
+      </figcaption>
+      <table aria-labelledby="ledger-k">
+        <tbody>
+          {LEDGER_ROWS.map((l) => (
+            <tr key={l.key}>
+              <th scope="row">
+                {l.label}
+                {l.note ? <em>{l.note}</em> : null}
+              </th>
+              <td className="dx-ledger-bar" aria-hidden="true">
+                <i style={{ width: `${(l.states / total) * 100}%` }} data-seasonal={l.note ? "" : undefined} />
+              </td>
+              <td className="dx-ledger-v">
+                <b>{l.states}</b> states
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="dx-ledger-foot">
+        <b>Every state:</b> wildfires, live traffic speeds, National Weather Service alerts and earthquakes.{" "}
+        <a href="#coverage" className="dx-link">
+          Coverage by state
+        </a>
+      </p>
+    </figure>
+  );
+}
+
 const TOC: TocItem[] = [
   { id: "how", label: "How it fits together" },
   { id: "coverage", label: "Coverage by state" },
@@ -73,11 +128,20 @@ export default function DataSourcesPage() {
           patrols, and national weather and fire services, and puts them on one map.
         </>
       }
-      facts={[
-        { value: String(AGENCY_FEED_COUNT), label: "official feeds" },
-        { value: String(STATE_COVERAGE.length), label: "states" },
-        { value: String(FULL_STATES), label: "states with every live layer" },
-      ]}
+      headExtra={
+        <p className="dx-head-stats">
+          <span>
+            <b>{AGENCY_FEED_COUNT}</b> official feeds
+          </span>
+          <span>
+            <b>{STATE_COVERAGE.length}</b> states
+          </span>
+          <span>
+            <b>{FULL_STATES}</b> with all five year-round layers
+          </span>
+        </p>
+      }
+      aside={<LayerLedger />}
       toc={TOC}
     >
       <Section id="how" title="How it fits together">
