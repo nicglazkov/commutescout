@@ -30,7 +30,7 @@
 
 ## Overview
 
-CommuteScout reads 53 official agency feeds across **37 states** (state
+CommuteScout reads 54 official agency feeds across **37 states** (state
 DOT and 511 closures and incidents, CHP dispatch, chain controls,
 cameras, message signs, wildfire perimeters, road weather, NWS alerts
 and toll prices) and turns them into one live picture of the road.

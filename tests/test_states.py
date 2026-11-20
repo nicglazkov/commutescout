@@ -639,6 +639,33 @@ async def test_traveliq_registry_builds_keyed_states(monkeypatch):
     assert states._wzdx_superseded("az") is False
 
 
+def test_fl511_key_supersedes_divas_and_fdot_wzdx(monkeypatch):
+    # Without a key Florida keeps its DIVAS live feed and the FDOT WZDx
+    # roadwork; with FL511_API_KEY mounted the Travel-IQ feed replaces
+    # both, so nothing is drawn twice and no blocked feed shows as down.
+    monkeypatch.delenv("FL511_API_KEY", raising=False)
+    assert not states._keyless_superseded("fl")
+    assert not states._wzdx_superseded("flw")
+    names = {e.get("agency") for e in states.source_status()}
+    assert "FDOT DIVAS" in names
+    monkeypatch.setenv("FL511_API_KEY", "k")
+    assert states._keyless_superseded("fl")
+    assert states._wzdx_superseded("flw")
+    entries = states.source_status()
+    names = {e.get("agency") for e in entries}
+    assert "FDOT DIVAS" not in names and "FDOT (FL511)" in names
+    keys = states._expected_keys()
+    assert "fl:all" not in keys and "wzdx:flw" not in keys
+    assert "flk:all" in keys
+
+
+def test_mississippi_wzdx_feed_registered():
+    st, src, bounds, url = states.WZDX_FEEDS["msw"]
+    assert st == "Mississippi" and src == "MDOT (WZDx)"
+    assert bounds == states.MS_BOUNDS
+    assert url.startswith("https://api.mdottraffic.com/")
+
+
 async def test_co_adapter_parses_all_kinds(monkeypatch):
     import httpx
     import respx
