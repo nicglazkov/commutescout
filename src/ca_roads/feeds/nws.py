@@ -42,10 +42,13 @@ def _road_relevant(event: str) -> bool:
 
 
 async def alerts_at_points(
-    client: httpx.AsyncClient, points: list[tuple[float, float]]
+    client: httpx.AsyncClient, points: list[tuple[float, float]],
+    with_ids: bool = False,
 ) -> list[dict]:
     """Active road-relevant alerts covering any of the given points,
-    deduplicated by alert id."""
+    deduplicated by alert id. ``with_ids`` adds each alert's NWS id and
+    the (rounded) point it was first found at, for callers that track
+    alerts over time (watch areas)."""
     seen: dict[str, dict] = {}
     now = time.monotonic()
     rounded = {(round(lat, 1), round(lon, 1)) for lat, lon in points}
@@ -80,6 +83,8 @@ async def alerts_at_points(
                 "areas": (props.get("areaDesc") or "")[:160],
                 "ends": props.get("ends") or props.get("expires"),
             }
+            if with_ids:
+                seen[alert_id].update({"id": alert_id, "point": point})
     return list(seen.values())
 
 

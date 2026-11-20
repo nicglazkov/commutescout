@@ -23,12 +23,25 @@ WATCH_IDS = [
     "signin", "googlebtn", "email", "emailbtn", "signinmsg", "gate",
     "gatetext", "code", "redeembtn", "gatemsg", "appzone", "mode-circle",
     "mode-polygon", "mode-route", "shapehint", "polytools", "undopt",
-    "clearpts", "routerow", "rw-from", "rw-to", "rw-preview", "rw-buffer",
+    "clearpts", "routerow", "rw-buffer",
     "rw-bufferlabel", "radiusrow", "radius", "radiuslabel", "wname",
     "ch-push", "emailchan", "ch-email", "createbtn", "canceledit",
     "createmsg", "wcount", "usagefill", "wlist", "listmsg", "notifbtn",
     "testbtn", "devmsg",
 ]
+
+
+# The map page's older From / To / Preview route fields. The module
+# replaces them with its stops editor (start, stops, destination), so
+# /watch no longer carries them.
+LEGACY_ROUTE_IDS = ["rw-from", "rw-to", "rw-preview"]
+
+
+def test_legacy_route_fields_give_way_to_the_stops_editor():
+    for i in LEGACY_ROUTE_IDS:
+        assert f'id="{i}"' not in WATCH_HTML, i
+    assert "function stripLegacyRouteFields()" in WATCH_JS
+    assert "routeRow.prepend(stopsBox)" in WATCH_JS
 
 
 def test_the_watch_pane_carries_every_id_the_module_uses_once():
