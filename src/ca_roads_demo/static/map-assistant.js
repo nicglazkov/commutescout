@@ -510,6 +510,9 @@ function pollStats(attempt) {
         'live from ' + s.sources + ' sources in ' + s.states + ' states' +
         (s.warm_total && s.warm_ready < s.warm_total
           ? ', warming ' + s.warm_ready + '/' + s.warm_total : '');
+      // The map's live pill (bottom of the map) carries the source count.
+      const pill = document.getElementById('livesrc');
+      if (pill) pill.textContent = s.sources.toLocaleString() + ' sources';
     }
     const warming = s.warm_total && s.warm_ready < s.warm_total;
     if (warming && attempt < 40) later(8000, attempt + 1);
