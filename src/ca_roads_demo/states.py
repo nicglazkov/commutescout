@@ -63,7 +63,7 @@ TZ_EAST = ZoneInfo("America/New_York")
 # location (README.md, site/lib/stats.ts, site/app/about/page.tsx,
 # site/components/blocks/hero-section-1.tsx) and pins them to this
 # constant.
-PUBLIC_SOURCE_COUNT = 54
+PUBLIC_SOURCE_COUNT = 55
 
 # (lat_min, lon_min, lat_max, lon_max) - fetch a state only when the
 # viewport overlaps it.
@@ -2130,6 +2130,116 @@ async def _fetch_ms(client) -> dict:
 FL_BOUNDS = (24.3, -87.7, 31.1, -79.8)
 FL_DIVAS_BASE = "https://gis.fdot.gov/arcgis/rest/services"
 
+# Florida Highway Patrol's public live crash and road condition report
+# (the CAD view linked from flhsmv.gov/fhp/traffic). Official, keyless,
+# no robots.txt restriction, and it answers from Google Cloud, unlike
+# the DIVAS layers. It is an HTML table: type, received, dispatched,
+# arrived, county, location, remarks, latitude, longitude.
+FHP_URL = "https://trafficincidents.flhsmv.gov/SmartWebClient/CadView.aspx"
+FHP_SRC = "FHP"
+# Not road events: people alerts and building fires.
+_FHP_SKIP = re.compile(r"ALERT|FIRE - STRUCTURE|^\s*$", re.I)
+_FHP_CLOSURE = re.compile(r"ROAD CLOSED", re.I)
+_FHP_LONG = re.compile(r"ROAD CLOSED|ADVISORY|CONSTRUCTION", re.I)
+_FHP_ROUTE = re.compile(r"^((?:I|SR|US|CR|FL)-?\s?\d+[A-Z]?|TPKE|TURNPIKE)",
+                        re.I)
+_FHP_TIME = re.compile(r"(\d{2})/(\d{2})/(\d{4}) (\d{2}):(\d{2}):(\d{2})")
+
+
+def _fhp_time(text: str, now: float) -> float | None:
+    """The CAD view prints a 12-hour clock with no AM/PM. Of the two
+    readings, the latest one not in the future is the real one."""
+    m = _FHP_TIME.search(text or "")
+    if not m:
+        return None
+    mo, d, y, h, mi, sec = (int(x) for x in m.groups())
+    best = None
+    for hour in {h % 12, h % 12 + 12}:
+        try:
+            t = datetime(y, mo, d, hour, mi, sec, tzinfo=TZ_EAST).timestamp()
+        except ValueError:
+            continue
+        if t <= now + 300 and (best is None or t > best):
+            best = t
+    return best
+
+
+def _fhp_place(where: str) -> str:
+    """'I-95 NB [MM308]  x[MM308]    [SAINT AUGUSTINE]' to
+    'I-95 NB (MM308) at MM308, Saint Augustine'."""
+    m = re.match(r"^(.*?)\s*x\[([^\]]*)\]\s*(?:\[([^\]]*)\])?\s*$", where or "")
+    if not m:
+        return re.sub(r"\[([^\]]*)\]", r"(\1)", where or "").strip()
+    road, cross, city = (x.strip() if x else "" for x in m.groups())
+    road = re.sub(r"\[([^\]]*)\]", r"(\1)", road).strip()
+    if cross and cross not in road:
+        road = f"{road} at {cross}" if road else cross
+    return ", ".join(x for x in (road, city.title()) if x)
+
+
+def _fhp_rows(page: str) -> list[list[str]]:
+    rows = []
+    for r in re.findall(r"(?s)<tr[^>]*>(.*?)</tr>", page):
+        cells = [re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", "", c))).strip()
+                 for c in re.findall(r"(?s)<td[^>]*>(.*?)</td>", r)]
+        if len(cells) == 9:
+            rows.append(cells)
+    return rows
+
+
+def _fhp_markers(page: str, now: float | None = None) -> list[dict]:
+    """FHP CAD rows to incident and closure markers. Crashes and the like
+    older than 12 hours are dropped (the view keeps the odd stuck row
+    for months); closures, advisories and construction get 7 days."""
+    now = time.time() if now is None else now
+    out: list[dict] = []
+    for etype, received, _disp, _arr, county, where, remarks, la, lo in \
+            _fhp_rows(page):
+        if _FHP_SKIP.search(etype):
+            continue
+        try:
+            lat, lon = float(la), float(lo)
+        except ValueError:
+            continue
+        if not (FL_BOUNDS[0] <= lat <= FL_BOUNDS[2]
+                and FL_BOUNDS[1] <= lon <= FL_BOUNDS[3]):
+            continue
+        since = _fhp_time(received, now)
+        if since is None:
+            continue
+        max_age = 7 * 86400 if _FHP_LONG.search(etype) else 12 * 3600
+        if now - since > max_age:
+            continue
+        title = etype.capitalize() if etype.isupper() else etype
+        place = _fhp_place(where)
+        label = " - ".join(x for x in (title, place,
+                                       county.title() + " County")
+                           if x)[:220]
+        rm = _FHP_ROUTE.match(where)
+        route = rm.group(1).upper().replace(" ", "") if rm else None
+        if _FHP_CLOSURE.search(etype) or re.search(r"CONSTRUCTION", etype,
+                                                     re.I):
+            m = {"kind": "lane_closure", "lat": lat, "lon": lon,
+                 "cls": ("full-roadway" if _FHP_CLOSURE.search(etype)
+                         else "lane"),
+                 "label": label, "route": route, "src": FHP_SRC,
+                 "since": since}
+        else:
+            m = {"kind": "incident", "lat": lat, "lon": lon,
+                 "type": title, "label": label, "route": route,
+                 "src": FHP_SRC, "since": since}
+        if remarks:
+            m["detail"] = remarks.title()[:250]
+        out.append(m)
+    return out
+
+
+async def _fetch_fl_fhp(client) -> dict:
+    resp = await client.get(FHP_URL, headers=UA, timeout=30.0)
+    resp.raise_for_status()
+    markers = await asyncio.to_thread(_fhp_markers, resp.text)
+    return {"markers": markers}
+
 
 async def _fl_layer(client, service: str, cap: int = 6000,
                     server: str = "FeatureServer") -> list[dict]:
@@ -2384,6 +2494,7 @@ KEYLESS_STATES = {
     "tn": ("Tennessee", TN_BOUNDS, _fetch_tn),
     "ms": ("Mississippi", MS_BOUNDS, _fetch_ms),
     "fl": ("Florida", FL_BOUNDS, _fetch_fl),
+    "flp": ("Florida", FL_BOUNDS, _fetch_fl_fhp),
     "ny": ("New York", NY_BOUNDS, _fetch_ny),
     "usf": ("Nationwide", US_BOUNDS, _fetch_us_fires),
 }
@@ -3202,6 +3313,7 @@ def source_status() -> list[dict]:
                                   "tn": "TDOT SmartWay",
                                   "ms": "MDOT Traffic (MS)",
                                   "fl": "FDOT DIVAS",
+                                  "flp": "FHP",
                                   "ny": "511NY",
                                   "usf": "WFIGS wildfires"}[code], st))
     for code, (name, _bounds, _fetcher, ready) in KEYED_STATES.items():

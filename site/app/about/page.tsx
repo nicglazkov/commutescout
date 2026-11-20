@@ -47,7 +47,7 @@ export default function AboutPage() {
         <div className="grid gap-8 lg:grid-cols-12 lg:items-end lg:gap-10">
           <h1 className="cs-display cs-rise lg:col-span-6">Built on official road data</h1>
           <p className="cs-lede cs-rise max-w-[34rem] [animation-delay:120ms] lg:col-span-6">
-            CommuteScout puts 54 official sources on one live map: state transportation
+            CommuteScout puts 55 official sources on one live map: state transportation
             departments, highway patrols, the National Weather Service and wildfire agencies.
           </p>
         </div>

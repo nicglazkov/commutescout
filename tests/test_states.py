@@ -1165,3 +1165,42 @@ async def test_va_login_trims_terminal_newlines(monkeypatch):
     sent = _json.loads(login.calls[0].request.content)
     assert sent == {"username": "someone@example.com", "password": "p a ss"}
     states._sr_tokens.clear()
+
+
+_FHP_PAGE = """<table><tr><th>Incident Type</th></tr>
+<tr><td>Vehicle Crash</td><td>11/20/2026 03:18:12</td><td></td><td></td>
+<td>HILLSBOROUGH</td><td>DALE MABRY HWY x[W LAMBRIGHT ST]    [TAMPA]</td>
+<td>NO ROADBLOCK</td><td>28.0071794071146</td><td>-82.5049607616496</td></tr>
+<tr><td>ROAD CLOSED DUE TO WATER</td><td>11/19/2026 09:00:00</td><td></td>
+<td></td><td>BREVARD</td><td>CHENEY HWY (WB) x[HELEN HAUSER BLVD] [TITUSVILLE]</td>
+<td></td><td>28.6</td><td>-80.8</td></tr>
+<tr><td>VEHICLE CRASH W/INJURIES AND ROADBLOCK</td><td>04/01/2026 12:41:33</td>
+<td></td><td></td><td>MIAMI-DADE</td><td>S DIXIE HWY SB x[E HIBISCUS ST] [PALMETTO BAY]</td>
+<td>ROADBLOCK</td><td>25.6</td><td>-80.35</td></tr>
+<tr><td>SILVER ALERT [ENDANGERED ADULT]</td><td>11/20/2026 03:00:00</td><td></td>
+<td></td><td>LEON</td><td>US-90 x[X] [TALLAHASSEE]</td><td></td><td>30.4</td><td>-84.3</td></tr>
+</table>"""
+
+
+def test_fhp_rows_become_markers():
+    # 2026-11-20 15:25 Eastern. The page's "03:18" is 3:18 PM (12-hour
+    # clock, no AM/PM); the April row is stuck and dropped; a 30-hour-old
+    # water closure stays; the Silver Alert is not a road event.
+    from datetime import datetime
+    now = datetime(2026, 11, 20, 15, 25, tzinfo=states.TZ_EAST).timestamp()
+    out = states._fhp_markers(_FHP_PAGE, now=now)
+    assert len(out) == 2
+    crash, water = out
+    assert crash["kind"] == "incident" and crash["src"] == "FHP"
+    assert crash["label"] == ("Vehicle Crash - DALE MABRY HWY at "
+                              "W LAMBRIGHT ST, Tampa - Hillsborough County")
+    assert now - crash["since"] == 6 * 60 + 48
+    assert water["kind"] == "lane_closure"
+    assert water["cls"] == "full-roadway"
+
+
+def test_fhp_place_and_route():
+    assert states._fhp_place("I-95 NB [MM308]  x[MM308]    [SAINT AUGUSTINE]") \
+        == "I-95 NB (MM308), Saint Augustine"
+    assert states._fhp_place("US-1 NB") == "US-1 NB"
+    assert "flp" in states.KEYLESS_STATES
