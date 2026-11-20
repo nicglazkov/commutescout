@@ -2219,32 +2219,56 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* private mode */ } },
 };
+// Directions open inside the Places pane, so the rail lights Places for
+// them; API keys sit under More.
+const RAIL_OF = { route: 'places' };
+const MORE_TOOLS = ['keys'];
+const MORE_TOOLS_PHONE = ['about', 'settings'];
 function setTool(name, opts) {
   const toggle = !(opts && opts.toggle === false);
-  const current = railEl.querySelector('.tool.on');
-  const collapsing = toggle && current && current.dataset.tool === name
-    && !shellEl.classList.contains('nopanel');
+  const panel = document.getElementById('panel');
+  const shown = shellEl.classList.contains('nopanel') ? '' : panel.dataset.tool;
+  const collapsing = !!(toggle && shown && shown === name);
+  const railName = RAIL_OF[name] || name;
   railEl.querySelectorAll('.tool[data-tool]').forEach((b) => {
-    const on = !collapsing && b.dataset.tool === name;
+    const on = !collapsing && b.dataset.tool === railName;
     b.classList.toggle('on', on);
     if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
+  const more = document.getElementById('railmore');
+  if (more) {
+    more.classList.toggle('on', !collapsing && (MORE_TOOLS.includes(name) ||
+      (isPhone() && MORE_TOOLS_PHONE.includes(name))));
+  }
   document.querySelectorAll('aside section[data-tool]').forEach((s) => {
     s.classList.toggle('on', !collapsing && s.dataset.tool === name);
   });
   // The panel's search header shows on the tools that look at the map
   // (Places, Live); folded, the panel is the search alone.
-  document.getElementById('panel').dataset.tool = collapsing ? '' : name;
+  panel.dataset.tool = collapsing ? '' : name;
   shellEl.classList.toggle('nopanel', !!collapsing);
   store.set(TOOL_KEY, collapsing ? '' : name);
   showWatch(name === 'watch' && !collapsing);
-  // Settings shows the account: the watch module owns sign-in state.
-  if (name === 'settings' && !collapsing) loadWatch();
+  // Settings and API keys show the account: the watch module owns
+  // sign-in state.
+  if ((name === 'settings' || name === 'keys') && !collapsing) loadWatch();
   // Tools defined further down (Your places) listen for this.
   document.dispatchEvent(new CustomEvent('cs-tool', { detail: collapsing ? '' : name }));
   if (opts && opts.reveal && isPhone() && sheetState === 'peek') setSheet('half');
   setTimeout(() => map.invalidateSize(), 60);
 }
+// Every pane's close button (and Escape inside the panel) folds the
+// panel away on a computer, leaving the rail and the floating search;
+// on a phone it lowers the sheet to its peek.
+function closePanel() {
+  if (isPhone()) { setSheet('peek'); return; }
+  const cur = document.getElementById('panel').dataset.tool;
+  if (!cur || shellEl.classList.contains('nopanel')) return;
+  setTool(cur);
+  const back = railEl.querySelector('.tool[data-tool="' + (RAIL_OF[cur] || cur) + '"]');
+  (back && back.offsetParent ? back : document.getElementById('railmore')).focus();
+}
+document.querySelectorAll('#panel .paneclose').forEach((b) => b.addEventListener('click', closePanel));
 
 // ── Watch tool: the /watch flow on this map, loaded on first use ──
 // Firebase and the watch code only download when someone opens the
@@ -2283,7 +2307,7 @@ document.getElementById('settingssignin').addEventListener('click', () => {
   pick.addEventListener('change', (e) => { if (e.target.value) csUnits.set(e.target.value); });
   document.addEventListener('cs-units', () => {
     sync();
-    if (lastEnds) replanVias();  // distances in the directions come from the router
+    if (lastEnds) autoPlan();  // distances in the directions come from the router
   });
   sync();
 }
@@ -2378,12 +2402,7 @@ railEl.addEventListener('click', (e) => {
 // whichever of the two is visible once the account module has loaded.
 // No parameter, no change.
 if (new URLSearchParams(location.search).get('settings') === 'keys') {
-  setTool('settings', { toggle: false, reveal: true });
-  loadWatch().then(() => setTimeout(() => {
-    const card = document.getElementById('keycard');
-    const target = card && !card.hidden ? card : document.getElementById('acctnote');
-    if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }, 400));
+  setTool('keys', { toggle: false, reveal: true });
 }
 // Drag handles. Bounds from the spec: the floating panel 300-520px and
 // never more than 40% of the viewport; the details pane 300-480px. The
@@ -2577,14 +2596,17 @@ function appendMeasured(popup, html) {
 
 // ── Data-source status panel: click "live from ..." in the topbar ──
 let srcPanel = null;
-async function renderSourcePanel() {
-  if (!srcPanel) return;
-  srcPanel.innerHTML = '<h4>Data sources</h4><div class="sub">Loading&hellip;</div>';
+// The Data pane shows the same list inline (renderSourcePanel(box)).
+async function renderSourcePanel(target) {
+  const box = target || srcPanel;
+  if (!box) return;
+  const head = target ? '' : '<h4>Data sources</h4>';
+  if (!target) box.innerHTML = head + '<div class="sub">Loading&hellip;</div>';
   try {
     const res = await fetch('/api/sources');
     const d = await res.json();
     const at = new Date(d.checked_at);
-    srcPanel.innerHTML = '<h4>Data sources</h4>' +
+    box.innerHTML = head +
       '<div class="sub">Checked ' + at.toLocaleString([], {
         hour: 'numeric', minute: '2-digit', weekday: 'short' }) + '</div>';
     // Group per state (California first, then expansion states, then
@@ -2604,9 +2626,8 @@ async function renderSourcePanel() {
       if (g.header) {
         const h = document.createElement('h5');
         h.textContent = g.header;
-        h.style.cssText = 'font:700 .64rem Inter;text-transform:uppercase;' +
-          'letter-spacing:.6px;color:var(--dim);margin:9px 0 2px';
-        srcPanel.append(h);
+        h.className = 'srcstate';
+        box.append(h);
         continue;
       }
       const s = g;
@@ -2629,12 +2650,17 @@ async function renderSourcePanel() {
       meta.textContent = state + (ago ? ', data ' + ago : '');
       if (s.error) meta.title = s.error;
       row.append(dot, name, meta);
-      srcPanel.append(row);
+      box.append(row);
     }
   } catch (_) {
-    srcPanel.innerHTML = '<h4>Data sources</h4><div class="sub">Status unavailable right now.</div>';
+    box.innerHTML = head + '<div class="sub">Status unavailable right now.</div>';
   }
 }
+// Data: the pane lists each feed's status, fetched each time it opens.
+document.addEventListener('cs-tool', (e) => {
+  if (e.detail === 'about') renderSourcePanel(document.getElementById('srclist'));
+});
+if (document.getElementById('panel').dataset.tool === 'about') renderSourcePanel(document.getElementById('srclist'));
 // The topbar's "live from ..." and the map's live pill open the same
 // list; from the pill it rises above the pill.
 function toggleSrcPanel(from) {
@@ -2806,6 +2832,15 @@ function inspectorActions(m, g) {
         share.textContent = 'Link copied';
         setTimeout(() => { share.textContent = 'Copy link'; }, 1800);
       } catch (_) { showLinkInline(share, url); }
+    });
+  }
+  if (Number.isFinite(m.lat) && Number.isFinite(m.lon)) {
+    button('inspask', 'Ask about this', false, () => {
+      const t = document.createElement('div');
+      t.innerHTML = String(alertRow(m, g).title || POP_LABEL[g] || 'this');
+      if (isPhone()) closeInspector();
+      askAbout('What should I know about ' + t.textContent.trim() + ' at ' +
+        m.lat.toFixed(4) + ', ' + m.lon.toFixed(4) + '?');
     });
   }
   button('inspwatch', 'Watch this stretch', false, () => {
@@ -3249,24 +3284,87 @@ function alertRow(m, g) {
   }
   return { title: m.label || m.name || m.route || POP_LABEL[g] || g, sub: src };
 }
+// Live filters: each kind is the same switch as its layers in the
+// Layers popover, so the map follows the list. Road weather is not in
+// SEVERITY (it is not an alert) and sorts last when switched on.
+const LIVE_KINDS = [
+  ['closures', 'Closures', ['clo_full', 'clo_lane', 'clo_oneway', 'clo_ramp']],
+  ['incidents', 'Incidents', ['inc_collision', 'inc_fire', 'inc_hazard', 'inc_other']],
+  ['chain', 'Chains', ['chain']],
+  ['fires', 'Wildfires', ['fire_pt']],
+  ['weather', 'Weather', ['rwis']],
+  ['community', 'Community', ['plugin']],
+];
+const LIVE_SEV = Object.assign({ rwis: 6 }, SEVERITY);
+const liveFilters = document.getElementById('livefilters');
+const liveSerious = document.getElementById('liveserious');
+function layerBox(g) { return document.querySelector('#filters input[data-group="' + g + '"]'); }
+function setGroups(groups, on) {
+  for (const g of groups) {
+    const box = layerBox(g);
+    if (box && box.checked !== on) {
+      box.checked = on;
+      // Bubbles, so the Layers badge and the list hear it as well.
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+}
+function paintLiveFilters(counts) {
+  if (!liveFilters.children.length) {
+    for (const [key, label, groups] of LIVE_KINDS) {
+      const lab = document.createElement('label');
+      lab.className = 'livekind';
+      lab.dataset.kind = key;
+      lab.innerHTML = '<input type="checkbox">' + kindIcon(groups[0]) +
+        '<span class="lkname">' + esc(label) + '</span><span class="lkn"></span>';
+      lab.querySelector('input').addEventListener('change', (e) => setGroups(groups, e.target.checked));
+      liveFilters.append(lab);
+    }
+  }
+  for (const [key, label, groups] of LIVE_KINDS) {
+    const lab = liveFilters.querySelector('[data-kind="' + key + '"]');
+    const box = lab.querySelector('input');
+    const on = groups.some(groupOn);
+    box.checked = on;
+    box.indeterminate = on && !groups.every(groupOn);
+    const n = counts[key] || 0;
+    lab.querySelector('.lkn').textContent = String(n);
+    lab.classList.toggle('none', !n);
+    box.setAttribute('aria-label', label + ', ' + n + ' in view');
+  }
+}
 function refreshAlerts() {
   if (!alertList || !document.getElementById('pane-alerts').classList.contains('on')) return;
   const b = map.getBounds();
   const c = map.getCenter();
   const rows = [];
-  for (const g of Object.keys(SEVERITY)) {
-    if (!items[g] || !groupOn(g)) continue;
-    for (const it of items[g]) {
-      const m = it.m;
-      if (!b.contains([m.lat, m.lon])) continue;
-      rows.push({ it, sev: SEVERITY[g], d: map.distance(c, [m.lat, m.lon]) });
+  const counts = {};
+  const serious = liveSerious.checked;
+  for (const [key, , groups] of LIVE_KINDS) {
+    for (const g of groups) {
+      if (!items[g]) continue;
+      const on = groupOn(g);
+      for (const it of items[g]) {
+        const m = it.m;
+        if (!b.contains([m.lat, m.lon])) continue;
+        if (g === 'plugin' && pluginHidden(m)) continue;
+        // Counts are of what is in view, on or off, so a kind that is
+        // switched off still says what switching it on would bring.
+        counts[key] = (counts[key] || 0) + 1;
+        if (!on || (serious && LIVE_SEV[g] > 2)) continue;
+        rows.push({ it, sev: LIVE_SEV[g], d: map.distance(c, [m.lat, m.lon]) });
+      }
     }
   }
+  paintLiveFilters(counts);
   rows.sort((x, y) => x.sev - y.sev || x.d - y.d);
   const top = rows.slice(0, ALERT_CAP);
+  document.getElementById('livecount').textContent = rows.length
+    ? rows.length + ' in view \u00b7 worst first' : '';
   if (!top.length) {
-    alertList.innerHTML = '<p class="panenote">Nothing in view for the layers ' +
-      'you have on. Zoom out or turn on more layers.</p>';
+    alertList.innerHTML = '<p class="panenote">' + (serious
+      ? 'Nothing serious in view. Turn off Serious only to see the rest.'
+      : 'Nothing in view for the kinds you have on. Zoom out or turn on more kinds.') + '</p>';
     return;
   }
   alertList.innerHTML = top.map((r, i) => {
@@ -3307,6 +3405,7 @@ map.on('moveend zoomend', scheduleAlerts);
 document.querySelectorAll('#filters input[data-group]').forEach((box) => {
   box.addEventListener('change', scheduleAlerts);
 });
+liveSerious.addEventListener('change', refreshAlerts);
 setInterval(scheduleAlerts, 30000);
 
 // TomTom flow raster, proxied server-side; 404s harmlessly with no key.
@@ -3509,10 +3608,11 @@ function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
     input.value = c.name;
     input.dataset.lat = c.lat; input.dataset.lon = c.lon;
     input.dataset.name = c.name;
-    val.className = 'val ok'; val.textContent = '\u2713 ' + c.name;
+    // No echo line under the field: the field itself shows the pick.
+    val.className = 'val'; val.textContent = '';
     close();
     Places.noteRecent(c);
-    if (onPick) onPick(c);
+    if (api.onPick) api.onPick(c);
     if (c.approx) {
       // The row was a street match with the typed number re-attached; ask
       // the precise geocoder to interpolate the actual house position and
@@ -3542,9 +3642,8 @@ function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
       input.dataset.lat = pos.coords.latitude;
       input.dataset.lon = pos.coords.longitude;
       input.dataset.name = 'My location';
-      val.className = 'val ok';
-      val.textContent = '\u2713 Using your location (\u00b1' +
-        Math.round(pos.coords.accuracy) + ' m)';
+      val.className = 'val'; val.textContent = '';
+      if (api.onPick) api.onPick({ name: 'My location', lat: pos.coords.latitude, lon: pos.coords.longitude });
     }, () => {
       val.className = 'val err';
       val.textContent = 'Location was blocked - type an address instead.';
@@ -3672,7 +3771,8 @@ function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
     }
   }
   input.addEventListener('change', () => setTimeout(validate, 200));
-  return { input, val, validate, pick };
+  const api = { input, val, validate, pick, onPick };
+  return api;
 }
 const fromF = wireAddress('from', 'fromval', 'fromsugg', true);
 const toF = wireAddress('to', 'toval', 'tosugg', false);
@@ -3705,7 +3805,7 @@ function showFound(c) {
   const name = document.createElement('b'); name.textContent = parts[0];
   const sub = document.createElement('small'); sub.textContent = parts.slice(1).join(', ');
   const nav = document.createElement('button');
-  nav.type = 'button'; nav.className = 'planbtn'; nav.textContent = 'Navigate here';
+  nav.type = 'button'; nav.className = 'planbtn'; nav.textContent = 'Directions';
   nav.addEventListener('click', () => navigateTo(c));
   const save = document.createElement('div');
   save.className = 'saverow';
@@ -3725,10 +3825,8 @@ function showFound(c) {
 // Into the planner: the pin is the destination; the start is the
 // driver's own location unless From already says otherwise.
 function navigateTo(c) {
-  toF.pick(c);
-  setTool('route', { toggle: false, reveal: true });
-  if (fromF.input.dataset.lat) planbtn.click();
-  else fromF.input.focus();
+  toF.pick(c);           // plans by itself once the start is set too
+  openDirections();      // focuses the start when it is still empty
 }
 findClear.addEventListener('click', clearFound);
 findF.input.addEventListener('keydown', (e) => {
@@ -3754,6 +3852,8 @@ function valhallaTripToRoute(trip) {
     distance: trip.summary.length * perUnit,
     duration: trip.summary.time,
     via: best ? best.street_names[0].split(';')[0] : '',
+    // Each leg's own time, for the arrival at every stop.
+    legTimes: trip.legs.map((l) => (l.summary && l.summary.time) || null),
     steps: trip.legs.flatMap(l => l.maneuvers || []).map(s => ({
       text: s.instruction.replace(/\.$/, ''), miles: s.length,
     })),
@@ -3763,14 +3863,15 @@ function valhallaTripToRoute(trip) {
 // candidates ranked by what lies on them, one-tap presets) and holds
 // the routing key and the daily budget; past the budget the page says
 // the route servers are busy rather than route around it.
-let routePreset = 'fastest';
 let planNote = null;
-async function serverDirections(points, preset) {
+// Route by (Fastest or Shortest) is the preset; Avoid is a list on top
+// of it (routing.AVOID: highways, tolls, chains).
+async function serverDirections(points, preset, avoid) {
   const res = await fetch('/api/route', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ locations: points.map(p => ({ lat: p[0], lon: p[1] })),
-      preset, units: csUnits.get() === 'km' ? 'kilometers' : 'miles' }),
+      preset, units: csUnits.get() === 'km' ? 'kilometers' : 'miles', avoid: avoid || [] }),
     signal: AbortSignal.timeout(12000),
   });
   if (!res.ok) return null;
@@ -3783,17 +3884,8 @@ async function serverDirections(points, preset) {
 }
 async function anyDirections(points) {
   planNote = null;
-  try { return await serverDirections(points, routePreset); } catch (e) { return null; }
+  try { return await serverDirections(points, routeBy(), routeAvoid()); } catch (e) { return null; }
 }
-document.getElementById('routepresets').addEventListener('click', async (e) => {
-  const btn = e.target.closest('button[data-preset]');
-  if (!btn || btn.dataset.preset === routePreset) return;
-  routePreset = btn.dataset.preset;
-  document.querySelectorAll('#routepresets button').forEach((b) => {
-    b.classList.toggle('on', b === btn);
-  });
-  if (lastEnds) await replanVias();
-});
 
 const layerRoute = L.layerGroup().addTo(map);
 let plannedRoute = null;
@@ -3848,8 +3940,8 @@ document.getElementById('sharebtn').addEventListener('click', async () => {
   if (!plannedRoute) return;
   const r = plannedRoute.route;
   const step = Math.max(1, Math.floor(r.latlngs.length / 450));
-  const btn = document.getElementById('sharebtn');
-  btn.textContent = 'Creating\u2026';
+  const say = (t) => { dirStatus.textContent = t; setTimeout(() => { if (dirStatus.textContent === t) dirStatus.textContent = ''; }, 4000); };
+  say('Creating a share link\u2026');
   try {
     const res = await fetch('/api/trip', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3866,153 +3958,320 @@ document.getElementById('sharebtn').addEventListener('click', async () => {
     if (!res.ok) throw new Error(data.error || 'could not create link');
     let copied = true;
     await navigator.clipboard.writeText(data.url).catch(() => { copied = false; });
-    btn.textContent = copied ? 'Link copied!' : 'Share link';
+    say(copied ? 'Share link copied.' : 'Copy the link below.');
     // A browser that refuses the clipboard (no user gesture, a locked
     // down profile) gets the link on the page instead. Never a native
     // prompt: that blocks the whole tab until somebody dismisses it.
-    if (!copied) showLinkInline(btn, data.url);
-    setTimeout(() => { btn.textContent = 'Share link'; }, 2500);
+    if (!copied) showLinkInline(document.getElementById('routeacts'), data.url);
   } catch (e) {
-    btn.textContent = 'Share failed';
-    btn.title = e.message;
-    setTimeout(() => { btn.textContent = 'Share link'; btn.title = ''; }, 4000);
+    say('Could not create a share link: ' + e.message + '. Try again in a moment.');
   }
 });
 let plannedRoutes = [];
-const planbtn = document.getElementById('planbtn');
-let viaPoints = [];
 let lastEnds = null;
 let suppressPinOnce = false;
 
-let viaManual = false;
-
+// ── Directions: From, stops, To ──────────────────────────────────
+// The editor is a list of points on a dotted line, Google Maps style:
+// the start, any stops, the destination. Every row can be dragged (or
+// moved with the arrow keys on its handle) and, with three or more
+// points, removed. A move or a removal shifts the values, not the rows,
+// so From and To keep their fields and ids. The route plans itself as
+// soon as both ends are set.
+// /api/route takes 2 to 8 points (app.py _route_locations): the start,
+// up to six stops and the destination.
+const MAX_STOPS = 6;
+const dirPts = document.getElementById('dirpts');
+const fromRow = document.getElementById('fromrow');
+const toRow = document.getElementById('torow');
+const dirLive = document.createElement('p');
+dirLive.className = 'visually-hidden';
+dirLive.setAttribute('aria-live', 'polite');
+dirPts.after(dirLive);
+let stops = [];      // [{ n, field, row }] between From and To, in order
+let stopSeq = 0;
 let itinHl = null;
 function dropItinHl() {
   if (itinHl) { map.removeLayer(itinHl); itinHl = null; }
 }
-
-function renderViaChips() {
-  dropItinHl();
-  const box = document.getElementById('viachips');
-  box.innerHTML = '';
-  if (!lastEnds) return;
-  const mkBtn = (label, title, cls, fn) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.textContent = label; b.title = title;
-    if (cls) b.className = cls;
-    b.addEventListener('click', fn);
-    return b;
-  };
-  // Google Maps grammar: hollow circle for the start, numbered gray dots
-  // for stops, a red pin for the destination, dotted connector between.
-  const legRow = (kind, badgeText, name) => {
-    const row = document.createElement('div');
-    row.className = 'leg ' + kind;
-    const badge = document.createElement('span');
-    badge.className = 'badge'; badge.textContent = badgeText;
-    const nm = document.createElement('span');
-    nm.className = 'legname'; nm.textContent = name;
-    row.append(badge, nm);
-    return row;
-  };
-  box.append(legRow('origin', '',
-    (fromF.input.dataset.name || 'Start').split(',')[0]));
-  viaPoints.forEach((v, i) => {
-    const row = legRow('stop', String(i + 1),
-      'Stop \u00b7 ' + v[0].toFixed(3) + ', ' + v[1].toFixed(3));
-    row.draggable = true;
-    row.addEventListener('dragstart', (ev) => {
-      ev.dataTransfer.setData('text/plain', String(i));
-      ev.dataTransfer.effectAllowed = 'move';
-      row.classList.add('dragging');
-    });
-    row.addEventListener('dragend', () => row.classList.remove('dragging'));
-    row.addEventListener('dragover', (ev) => { ev.preventDefault(); });
-    row.addEventListener('drop', async (ev) => {
-      ev.preventDefault();
-      const from = Number(ev.dataTransfer.getData('text/plain'));
-      if (!Number.isInteger(from) || from === i) return;
-      viaManual = true;
-      const [moved] = viaPoints.splice(from, 1);
-      viaPoints.splice(i, 0, moved);
-      await replanVias();
-    });
-    row.addEventListener('mouseenter', () => {
-      dropItinHl();
-      itinHl = L.circleMarker(v, { radius: 13, color: '#2f81f7',
-        weight: 3, fill: false }).addTo(map);
-    });
-    row.addEventListener('mouseleave', dropItinHl);
-    row.append(mkBtn('\u00d7', 'Remove this stop', 'rm', async () => {
-      viaPoints.splice(i, 1);
-      await replanVias();
-    }));
-    box.append(row);
+const pointFields = () => [fromF, ...stops.map((s) => s.field), toF];
+const pointRows = () => [fromRow, ...stops.map((s) => s.row), toRow];
+function readPoint(f) {
+  const i = f.input;
+  return { text: i.value, name: i.dataset.name, lat: i.dataset.lat, lon: i.dataset.lon };
+}
+function writePoint(f, p) {
+  const i = f.input;
+  i.value = p ? p.text || p.name || '' : '';
+  for (const k of ['name', 'lat', 'lon']) {
+    if (p && p[k] != null && p[k] !== '') i.dataset[k] = p[k]; else delete i.dataset[k];
+  }
+  f.val.textContent = ''; f.val.className = 'val';
+}
+const pointSet = (f) => !!f.input.dataset.lat;
+const cPoint = (c) => ({ text: c.name, name: c.name, lat: c.lat, lon: c.lon });
+const X_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+const GRIP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>';
+const PICK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg>';
+// Every row gets a drag handle in front and a remove button at the end.
+function decorateRow(li) {
+  const grip = document.createElement('button');
+  grip.type = 'button'; grip.className = 'dirgrip';
+  grip.innerHTML = GRIP_SVG;
+  li.prepend(grip);
+  const rm = document.createElement('button');
+  rm.type = 'button'; rm.className = 'dirrm';
+  rm.innerHTML = X_SVG;
+  li.append(rm);
+  grip.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    const i = pointRows().indexOf(li);
+    const j = i + (e.key === 'ArrowUp' ? -1 : 1);
+    if (j < 0 || j >= pointRows().length) return;
+    movePoint(i, j);
+    pointRows()[j].querySelector('.dirgrip').focus();
   });
-  box.append(legRow('dest', '',
-    (toF.input.dataset.name || 'End').split(',')[0]));
-  if (viaPoints.length < 5) {
-    const add = document.createElement('button');
-    add.type = 'button'; add.className = 'addstop';
-    add.innerHTML = '<span class="plus">+</span> Add stop \u00b7 click the map';
-    add.classList.toggle('armed', pickMode === 'via');
-    add.addEventListener('click', () => setPickMode('via'));
-    box.append(add);
+  rm.addEventListener('click', () => {
+    const i = pointRows().indexOf(li);
+    removePoint(i);
+    const rows = pointRows();
+    const next = rows[Math.min(i, rows.length - 1)];
+    if (next) next.querySelector('input').focus();
+  });
+  // Drag by the handle: the row is draggable only while the handle is
+  // held, so text in the field still selects normally.
+  grip.addEventListener('pointerdown', () => { li.draggable = true; });
+  li.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', String(pointRows().indexOf(li)));
+    e.dataTransfer.effectAllowed = 'move';
+    li.classList.add('dragging');
+  });
+  li.addEventListener('dragend', () => {
+    li.draggable = false; li.classList.remove('dragging');
+    dirPts.querySelectorAll('.dropat').forEach((r) => r.classList.remove('dropat'));
+  });
+  li.addEventListener('dragover', (e) => { e.preventDefault(); li.classList.add('dropat'); });
+  li.addEventListener('dragleave', () => li.classList.remove('dropat'));
+  li.addEventListener('drop', (e) => {
+    e.preventDefault();
+    li.classList.remove('dropat');
+    const from = Number(e.dataTransfer.getData('text/plain'));
+    const to = pointRows().indexOf(li);
+    if (Number.isInteger(from) && from !== to && to >= 0) movePoint(from, to);
+  });
+  li.addEventListener('mouseenter', () => {
+    const f = pointFields()[pointRows().indexOf(li)];
+    dropItinHl();
+    if (f && pointSet(f)) {
+      itinHl = L.circleMarker([+f.input.dataset.lat, +f.input.dataset.lon], { radius: 13,
+        color: '#1a63d6', weight: 3, fill: false, interactive: false }).addTo(map);
+    }
+  });
+  li.addEventListener('mouseleave', dropItinHl);
+}
+// Names, labels and which buttons show, after any change to the list.
+function syncDirUi() {
+  const rows = pointRows();
+  const many = rows.length > 2;
+  rows.forEach((li, i) => {
+    const role = i === 0 ? 'start' : i === rows.length - 1 ? 'destination' : 'stop ' + i;
+    const Role = role.charAt(0).toUpperCase() + role.slice(1);
+    li.querySelector('.dirgrip').setAttribute('aria-label', 'Move the ' + role + '. Use the up and down arrow keys.');
+    li.querySelector('.dirgrip').title = 'Drag to reorder';
+    const rm = li.querySelector('.dirrm');
+    rm.hidden = !many;
+    rm.setAttribute('aria-label', 'Remove the ' + role);
+    rm.title = 'Remove';
+    const input = li.querySelector('input');
+    if (i > 0 && i < rows.length - 1) {
+      input.placeholder = 'Choose stop ' + i;
+      li.querySelector('label').textContent = Role;
+      li.querySelector('.dirmark').textContent = String(i);
+    }
+    const pick = li.querySelector('.dirpick');
+    if (pick) pick.setAttribute('aria-label', 'Pick the ' + role + ' on the map');
+  });
+  document.getElementById('swapbtn').hidden = many;
+  const add = document.getElementById('addstop');
+  const cap = document.getElementById('stopcap');
+  add.hidden = stops.length >= MAX_STOPS;
+  cap.hidden = stops.length < MAX_STOPS;
+  cap.textContent = 'Up to ' + MAX_STOPS + ' stops on one route';
+  const any = pointFields().some((f) => f.input.value.trim()) || !!plannedRoute;
+  document.getElementById('clearroutebtn').hidden = !any;
+  paintDirEntry();
+}
+function addStopRow(at, p) {
+  if (stops.length >= MAX_STOPS) return null;
+  const n = ++stopSeq;
+  const li = document.createElement('li');
+  li.className = 'dirpt stop';
+  li.innerHTML = '<span class="dirmark" aria-hidden="true"></span>' +
+    '<div class="dirfld"><label class="visually-hidden" for="stop' + n + '">Stop</label>' +
+    '<input id="stop' + n + '" maxlength="200" autocomplete="off">' +
+    '<div class="sugg" id="stop' + n + 'sugg"></div><div class="val" id="stop' + n + 'val"></div></div>' +
+    '<button type="button" class="dirpick pickmap" title="Pick on the map">' + PICK_SVG + '</button>';
+  const idx = at == null ? stops.length : Math.max(0, Math.min(at, stops.length));
+  const before = idx < stops.length ? stops[idx].row : toRow;
+  dirPts.insertBefore(li, before);
+  decorateRow(li);
+  const field = wireAddress('stop' + n, 'stop' + n + 'val', 'stop' + n + 'sugg', false, () => autoPlan());
+  const s = { n, field, row: li };
+  li.querySelector('.dirpick').addEventListener('click', () => setPickMode('point', field));
+  stops.splice(idx, 0, s);
+  if (p) writePoint(field, p);
+  syncDirUi();
+  return s;
+}
+function dropLastStopRow() {
+  const s = stops.pop();
+  if (s) s.row.remove();
+}
+function movePoint(i, j) {
+  const fields = pointFields();
+  const vals = fields.map(readPoint);
+  const [moved] = vals.splice(i, 1);
+  vals.splice(j, 0, moved);
+  fields.forEach((f, k) => writePoint(f, vals[k]));
+  dirLive.textContent = 'Moved to position ' + (j + 1) + ' of ' + fields.length + '.';
+  syncDirUi();
+  autoPlan();
+}
+function removePoint(i) {
+  const fields = pointFields();
+  if (fields.length <= 2) { writePoint(fields[i], null); syncDirUi(); return; }
+  const vals = fields.map(readPoint);
+  vals.splice(i, 1);
+  dropLastStopRow();
+  pointFields().forEach((f, k) => writePoint(f, vals[k]));
+  dirLive.textContent = 'Removed. ' + (vals.length) + ' points left.';
+  syncDirUi();
+  autoPlan();
+}
+[fromRow, toRow].forEach(decorateRow);
+
+// A stop dragged onto the route goes where it falls along it.
+function stopIndexAlong(ll) {
+  if (!plannedRoute) return stops.length;
+  const pts = plannedRoute.route.latlngs;
+  const frac = (lat, lon) => {
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < pts.length; i += 3) {
+      const d = Math.hypot(pts[i][0] - lat, pts[i][1] - lon);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  };
+  const at = frac(ll.lat, ll.lng);
+  return stops.filter((s) => pointSet(s.field) &&
+    frac(+s.field.input.dataset.lat, +s.field.input.dataset.lon) < at).length;
+}
+const pinPoint = (ll) => {
+  const name = 'Pin ' + ll.lat.toFixed(3) + ' / ' + ll.lng.toFixed(3);
+  return { text: name, name, lat: ll.lat, lon: ll.lng };
+};
+
+// ── Planning ─────────────────────────────────────────────────────
+const dirStatus = document.getElementById('routesum');
+let planTimer = null;
+let planSeq = 0;
+function autoPlan() {
+  syncDirUi();
+  clearTimeout(planTimer);
+  planTimer = setTimeout(planNow, 150);
+}
+async function planNow() {
+  const ready = pointFields().filter(pointSet);
+  if (!pointSet(fromF) || !pointSet(toF)) {
+    dirStatus.textContent = '';
+    return;
+  }
+  const pts = ready.map((f) => [+f.input.dataset.lat, +f.input.dataset.lon]);
+  const a = pts[0], b = pts[pts.length - 1];
+  lastEnds = { a, b };
+  await planWith(pts, a, b);
+}
+async function planWith(points, a, b) {
+  const mine = ++planSeq;
+  dirStatus.textContent = 'Finding routes…';
+  document.getElementById('pane-plan').setAttribute('aria-busy', 'true');
+  try {
+    const routes = await anyDirections(points);
+    if (mine !== planSeq) return;
+    if (!routes || !routes.length) {
+      dirStatus.textContent = 'No route came back. The route servers may be busy, or the points are not ' +
+        'connected by road. Try again in a moment.';
+      return;
+    }
+    dirStatus.textContent = '';
+    plannedRoutes = routes;
+    renderRouteAlts(0, a, b);
+  } finally {
+    if (mine === planSeq) document.getElementById('pane-plan').removeAttribute('aria-busy');
   }
 }
+fromF.onPick = autoPlan;
+toF.onPick = autoPlan;
 
 function clearRoute() {
   routeGen += 1;
+  planSeq += 1;
+  clearTimeout(planTimer);
   dropItinHl();
   clearPickMarks();
+  if (pickMode === 'point') setPickMode(null);
   if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
-  viaPoints = []; viaManual = false; lastEnds = null;
+  while (stops.length) dropLastStopRow();
+  writePoint(fromF, null); writePoint(toF, null);
+  lastEnds = null;
   plannedRoute = null; plannedRoutes = [];
-  setPlanned(false);
   layerRoute.clearLayers();
-  renderViaChips();
-  for (const id of ['routesum', 'routealts', 'routecond', 'steps']) {
+  for (const id of ['routealts', 'routecond', 'steps']) {
     const el = document.getElementById(id);
     if (el) el.innerHTML = '';
   }
+  dirStatus.textContent = '';
+  setStepsOpen(false);
+  setRouteMenu(false);
   const wrap = document.getElementById('routeasks-wrap');
   if (wrap) wrap.style.display = 'none';
-  const pw = document.getElementById('printwrap');
-  if (pw) pw.style.display = 'none';
+  document.getElementById('printwrap').hidden = true;
   hideRouteStrip();
+  syncDirUi();
+  dirLive.textContent = 'Route cleared.';
 }
-document.getElementById('clearroutebtn')
-  .addEventListener('click', clearRoute);
+document.getElementById('clearroutebtn').addEventListener('click', () => {
+  clearRoute();
+  fromF.input.focus();
+});
+document.getElementById('addstop').addEventListener('click', () => {
+  // A new stop goes just before the destination, as on Google Maps.
+  const s = addStopRow(stops.length);
+  if (s) s.field.input.focus();
+});
+document.getElementById('swapbtn').addEventListener('click', () => {
+  const fields = pointFields();
+  const vals = fields.map(readPoint).reverse();
+  fields.forEach((f, k) => writePoint(f, vals[k]));
+  dirLive.textContent = 'Start and destination swapped.';
+  autoPlan();
+});
+for (const f of [fromF, toF]) {
+  f.input.addEventListener('input', () => syncDirUi());
+}
 
-// ── The planned trip, board #11: a header, the alternatives as chips,
-// then the route item by item. The arrow goes back to the fields.
-const planPane = document.getElementById('pane-plan');
-function setPlanned(on) {
-  planPane.classList.toggle('planned', !!on);
-  document.getElementById('rhead').hidden = !on;
-  if (!on) setLeaveOpen(false);
-}
-function setLeaveOpen(open) {
-  const b = document.getElementById('rleave');
-  b.setAttribute('aria-expanded', open ? 'true' : 'false');
-  planPane.classList.toggle('leaveopen', !!open);
-}
-function updateRouteHead() {
-  if (!plannedRoute) return;
-  const r = plannedRoute.route;
-  const free = Math.round(r.duration / 60);
-  const mins = plannedRoute.trafficMins || free;
-  const slower = mins - free;
-  document.getElementById('rhtitle').textContent =
-    placeLabel(plannedRoute.fromC) + ' to ' + placeLabel(plannedRoute.toC);
-  const meta = document.getElementById('rhmeta');
-  meta.innerHTML = '<b' + (slower >= 2 ? ' class="late"' : '') + '>' + minsTxt(mins) + '</b> · ' +
-    csUnits.fmt(r.distance / 1000, 1) +
-    (slower >= 2 ? ' · <span class="late">' + slower + ' min slower</span>'
-      : plannedRoute.flow ? ' · traffic flowing' : '');
-  const dep = departEpoch();
-  document.getElementById('rleavetxt').textContent = dep
-    ? 'Leave ' + clockTxtMs(dep * 1000) : 'Leave now';
+// Back to Places: the route stays on the map, and the Directions row
+// on Places says so and comes back to it.
+document.getElementById('rback').addEventListener('click', () => {
+  setTool('places', { toggle: false });
+  document.getElementById('direntry').focus();
+});
+function openDirections(focusField) {
+  setTool('route', { toggle: false, reveal: true });
+  syncDirUi();
+  const f = focusField || (!pointSet(fromF) ? fromF : !pointSet(toF) ? toF : null);
+  if (f && !isPhone()) f.input.focus();
 }
 // Recent trips keep the newest time measured for the drive.
 function noteTrip() {
@@ -4022,16 +4281,48 @@ function noteTrip() {
     mins: plannedRoute.trafficMins || Math.round(r.duration / 60),
     km: r.distance / 1000, at: Date.now() });
 }
-document.getElementById('rback').addEventListener('click', () => {
-  planPane.classList.remove('planned');
-  document.getElementById('rhead').hidden = true;
-  document.getElementById('to').focus();
-});
+function updateLeaveText() {
+  const dep = departEpoch();
+  document.getElementById('rleavetxt').textContent = dep
+    ? 'Leave ' + new Date(dep * 1000).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+    : 'Leave now';
+}
 document.getElementById('rleave').addEventListener('click', () => {
-  const open = document.getElementById('rleave').getAttribute('aria-expanded') !== 'true';
-  setLeaveOpen(open);
+  const b = document.getElementById('rleave');
+  const open = b.getAttribute('aria-expanded') !== 'true';
+  b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  document.getElementById('departrow').hidden = !open;
   if (open) document.getElementById('departmode').focus();
 });
+// Options: Fastest or Shortest, and what to avoid. Quiet until opened;
+// the link carries how many are changed from the default.
+const optsBtn = document.getElementById('optsbtn');
+const optsBox = document.getElementById('diropts');
+function routeBy() {
+  const r = optsBox.querySelector('input[name="routeby"]:checked');
+  return r ? r.value : 'fastest';
+}
+function routeAvoid() {
+  return [...optsBox.querySelectorAll('input[data-avoid]:checked')].map((b) => b.dataset.avoid);
+}
+function paintOptCount() {
+  const n = routeAvoid().length + (routeBy() === 'fastest' ? 0 : 1);
+  const el = document.getElementById('optcount');
+  el.textContent = n ? ' · ' + n : '';
+  el.hidden = !n;
+  optsBtn.setAttribute('aria-label', 'Route options' + (n ? ', ' + n + ' changed' : ''));
+}
+optsBtn.addEventListener('click', () => {
+  const open = optsBtn.getAttribute('aria-expanded') !== 'true';
+  optsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  optsBox.hidden = !open;
+});
+optsBox.addEventListener('change', () => {
+  paintOptCount();
+  if (lastEnds) autoPlan();
+});
+paintOptCount();
+
 // Popups pan clear of the floating panel (and on a phone, the search).
 function syncPopupPad() {
   // The phone search floats just under the site header, which can wrap
@@ -4070,8 +4361,8 @@ function mapPad() {
 }
 
 // ── Depart at: pick a future time, the conditions list re-reads every
-// item's Caltrans schedule against it. (Historical predictions will
-// plug in here once the event archive is deep enough.) ───────────────
+// item's schedule against it. (Historical predictions will plug in
+// here once the event archive is deep enough.) ───────────────────────
 const departMode = document.getElementById('departmode');
 const departAt = document.getElementById('departat');
 function localStamp(d) {
@@ -4089,117 +4380,44 @@ departMode.addEventListener('change', () => {
     departAt.value = localStamp(d);
   }
   if (lastRouteLL) renderRouteConditions(lastRouteLL);
-  updateRouteHead();
+  updateLeaveText();
 });
 departAt.addEventListener('change', () => {
   if (lastRouteLL) renderRouteConditions(lastRouteLL);
-  updateRouteHead();
+  updateLeaveText();
 });
 
-function viaOrdered(routeLatlngs) {
-  // Waypoints keep their order along the current route so dragging a
-  // second bend never crosses the wires with the first.
-  const frac = (pt) => {
-    let best = 0, bestD = Infinity;
-    for (let i = 0; i < routeLatlngs.length; i += 3) {
-      const d = Math.hypot(routeLatlngs[i][0] - pt[0],
-        routeLatlngs[i][1] - pt[1]);
-      if (d < bestD) { bestD = d; best = i; }
-    }
-    return best;
-  };
-  return [...viaPoints].sort((x, y) => frac(x) - frac(y));
-}
-
-async function planWith(points, a, b) {
-  planbtn.disabled = true; planbtn.textContent = 'Planning\u2026';
-  try {
-    const routes = await anyDirections(points);
-    if (!routes || !routes.length) {
-      document.getElementById('routesum').textContent =
-        'Route servers are busy - try again in a moment.';
-      document.getElementById('routealts').innerHTML = '';
-      document.getElementById('printwrap').style.display = 'block';
-      return;
-    }
-    plannedRoutes = routes;
-    renderRouteAlts(0, a, b);
-  } finally {
-    planbtn.disabled = false; planbtn.textContent = 'Plan route';
-  }
-}
-
-async function replanVias() {
-  if (!lastEnds) return;
-  const base = plannedRoute ? plannedRoute.route.latlngs : [];
-  const vias = viaPoints.length
-    ? (viaManual ? viaPoints : viaOrdered(base)) : [];
-  viaPoints = vias;
-  await planWith([lastEnds.a, ...vias, lastEnds.b],
-    lastEnds.a, lastEnds.b);
-  renderViaChips();
-}
-
-planbtn.addEventListener('click', async () => {
-  if (!fromF.input.dataset.lat) await fromF.validate();
-  if (!toF.input.dataset.lat) await toF.validate();
-  if (!fromF.input.dataset.lat || !toF.input.dataset.lat) return;
-  const a = [+fromF.input.dataset.lat, +fromF.input.dataset.lon];
-  const b = [+toF.input.dataset.lat, +toF.input.dataset.lon];
-  viaPoints = []; viaManual = false;
-  // lastEnds must be set BEFORE rendering: renderViaChips() early-returns
-  // without it, which used to blank the itinerary on the first plan.
-  lastEnds = { a, b };
-  renderViaChips();
-  await planWith([a, b], a, b);
-});
-
-// Click an empty spot on the map to route from or to it, like the big
-// guys do.
-const pinPopup = L.popup({ closeButton: true, autoClose: true });
-function setPinField(field, ll) {
-  const name = 'Pin ' + ll.lat.toFixed(3) + ' / ' + ll.lng.toFixed(3);
-  field.input.value = name;
-  field.input.dataset.lat = ll.lat;
-  field.input.dataset.lon = ll.lng;
-  field.input.dataset.name = name;
-  const val = document.getElementById(
-    field.input.id === 'from' ? 'fromval' : 'toval');
-  val.className = 'val ok'; val.textContent = '\u2713 ' + name;
-  map.closePopup(pinPopup);
-  if (fromF.input.dataset.lat && toF.input.dataset.lat) planbtn.click();
-}
-// ── Pick-on-map: a sidebar "Pick on map" button arms which route point
-// the next single map click sets. Without an armed mode, map clicks no
-// longer drop a from/to/stop chooser on every click. ───────────────────
-let pickMode = null;  // 'from' | 'to' | 'via' | null
+// Pick on the map: a row's target button arms that point, and the next
+// map click sets it. Without an armed point, map clicks set nothing.
+let pickMode = null;  // 'point' | 'report' | null
+let pickField = null; // the point the next click sets, when pickMode is 'point'
 const pickHint = document.getElementById('pickhint');
-const pickBtns = {
-  from: document.getElementById('pickfrom'),
-  to: document.getElementById('pickto'),
-  via: document.getElementById('viapickbtn'),
-};
-const PICK_LABEL = {
-  from: 'Click the map to set your start',
-  to: 'Click the map to set your destination',
-  via: 'Click the map to add a stop',
-  report: 'Click the map where it is',
-};
-function setPickMode(mode) {
-  pickMode = (pickMode === mode) ? null : mode;
-  for (const [k, btn] of Object.entries(pickBtns)) {
-    if (btn) btn.classList.toggle('armed', pickMode === k);
-  }
-  document.querySelectorAll('.addstop').forEach((b) =>
-    b.classList.toggle('armed', pickMode === 'via'));
+function pickRole(f) {
+  if (f === fromF) return 'your start';
+  if (f === toF) return 'your destination';
+  const i = stops.findIndex((s) => s.field === f);
+  return 'stop ' + (i + 1);
+}
+function setPickMode(mode, field) {
+  const same = mode === pickMode && (mode !== 'point' || field === pickField);
+  pickMode = same ? null : mode;
+  pickField = pickMode === 'point' ? field : null;
+  pointRows().forEach((li, i) => {
+    const b = li.querySelector('.dirpick');
+    if (b) b.classList.toggle('armed', pickMode === 'point' && pointFields()[i] === pickField);
+  });
   document.querySelectorAll('[data-act="report"]').forEach((b) => b.classList.toggle('armed', pickMode === 'report'));
   map.getContainer().style.cursor = pickMode ? 'crosshair' : '';
   if (pickMode) {
-    pickHint.textContent = PICK_LABEL[pickMode]; pickHint.hidden = false;
+    pickHint.textContent = pickMode === 'report' ? 'Click the map where it is'
+      : 'Click the map to set ' + pickRole(pickField);
+    pickHint.hidden = false;
     if (isPhone()) setSheet('peek');
   }
   else { pickHint.hidden = true; }
 }
+fromRow.querySelector('.dirpick').addEventListener('click', () => setPickMode('point', fromF));
+toRow.querySelector('.dirpick').addEventListener('click', () => setPickMode('point', toF));
 
 // Every pick drops a marker at the chosen spot immediately, so the point
 // is visible before (and independent of) any route render. Google-style
@@ -4231,49 +4449,26 @@ function clearPickMarks() {
   if (pickMarks.to) { map.removeLayer(pickMarks.to); pickMarks.to = null; }
   pickMarks.via.clearLayers();
 }
-pickBtns.from.addEventListener('click', () => setPickMode('from'));
-pickBtns.to.addEventListener('click', () => setPickMode('to'));
-if (pickBtns.via) pickBtns.via.addEventListener('click', () => setPickMode('via'));
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && pickMode) setPickMode(null);
 });
 
-function clickNearRoute(latlng) {
-  if (!plannedRoute || !lastEnds) return false;
-  const pts = plannedRoute.route.latlngs;
-  const c = map.latLngToLayerPoint(latlng);
-  const step = Math.max(1, Math.floor(pts.length / 250));
-  let prev = map.latLngToLayerPoint(pts[0]);
-  for (let i = step; i < pts.length; i += step) {
-    const cur = map.latLngToLayerPoint(pts[i]);
-    const dx = cur.x - prev.x, dy = cur.y - prev.y;
-    const seg2 = dx * dx + dy * dy;
-    const t = seg2 ? Math.max(0, Math.min(1,
-      ((c.x - prev.x) * dx + (c.y - prev.y) * dy) / seg2)) : 0;
-    const px = prev.x + t * dx - c.x, py = prev.y + t * dy - c.y;
-    if (px * px + py * py < 26 * 26) return true;
-    prev = cur;
-  }
-  return false;
-}
-
 map.on('click', async (e) => {
   // A reshape drag ends with a synthetic map click; swallow it.
   if (suppressPinOnce) { suppressPinOnce = false; return; }
-  // Map clicks only set route points when a sidebar "Pick on map" button
-  // has armed a target. Without that, clicking the map does nothing here
-  // (it no longer drops a from/to/stop chooser on every click).
+  // Map clicks only set route points when a row's "Pick on the map"
+  // button has armed one. Without that, clicking the map does nothing
+  // here (it never drops a from/to/stop chooser on every click).
   if (!pickMode) return;
   const mode = pickMode;
+  const field = pickField;
   setPickMode(null);
   if (mode === 'report') { openReportForm(await snapForReport(e.latlng), e.latlng); return; }
-  dropPickMark(mode, e.latlng);
-  if (mode === 'from') { setPinField(fromF, e.latlng); return; }
-  if (mode === 'to') { setPinField(toF, e.latlng); return; }
-  if (mode === 'via' && lastEnds && viaPoints.length < 5) {
-    viaPoints.push([e.latlng.lat, e.latlng.lng]);
-    await replanVias();
-  }
+  if (!field) return;
+  dropPickMark(field === fromF ? 'from' : field === toF ? 'to' : 'via', e.latlng);
+  writePoint(field, pinPoint(e.latlng));
+  if (isPhone()) setSheet('half');
+  autoPlan();
 });
 
 // ── Community reports (Flare) ────────────────────────────────────
@@ -4403,63 +4598,105 @@ map.on('popupopen', (e) => {
   card.appendChild(row);
 });
 
+// On a phone, bring a result into view inside the sheet (the page itself
+// does not scroll; the sheet does).
+const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 function mobileReveal(el) {
-  if (window.matchMedia('(max-width: 960px)').matches && el) {
-    setTimeout(() => {
-      const y = el.getBoundingClientRect().top + window.scrollY - 8;
-      window.scrollTo({ top: y, behavior: 'smooth' });
-    }, 350);
-  }
+  if (!el || !isPhone()) return;
+  if (sheetState === 'peek') setSheet('half');
+  setTimeout(() => el.scrollIntoView({ block: 'nearest', behavior: reduceMotion() ? 'auto' : 'smooth' }), 250);
 }
 
+// A small menu behind a button: arrow keys move, Escape closes and
+// returns focus, a pick or a click outside closes it.
+function wireMenu(btn, menu, opts) {
+  const items = () => [...menu.querySelectorAll('[role="menuitem"]')].filter((el) => el.offsetParent !== null);
+  // Focus moves into the menu either way; the ring only shows when it
+  // was opened from the keyboard (a click reports detail 0 only then).
+  function set(open, refocus, byKey) {
+    if (open && opts && opts.beforeOpen) opts.beforeOpen();
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      if (opts && opts.place) opts.place();
+      const first = items()[0];
+      if (first) first.focus({ focusVisible: byKey !== false });
+    } else if (refocus) btn.focus();
+  }
+  btn.addEventListener('click', (e) => set(menu.hidden, false, e.detail === 0));
+  menu.addEventListener('keydown', (e) => {
+    const list = items();
+    const i = list.indexOf(document.activeElement);
+    const go = (j) => { e.preventDefault(); if (list.length) list[(j + list.length) % list.length].focus(); };
+    if (e.key === 'ArrowDown') go(i + 1);
+    else if (e.key === 'ArrowUp') go(i - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(list.length - 1);
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); set(false, true); }
+    else if (e.key === 'Tab') set(false);
+  });
+  menu.addEventListener('click', (e) => { if (e.target.closest('[role="menuitem"]')) set(false); });
+  document.addEventListener('pointerdown', (e) => {
+    if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) set(false);
+  });
+  return set;
+}
+
+// ── The routes, as compact rows ──────────────────────────────────
+// Time big, distance and the road it takes small, and a badge for what
+// is on it. The selected row carries a bar on its left edge.
+let chosenAlt = 0;
+let altEnds = null;
 function renderRouteAlts(chosen, a, b) {
-  const alts = document.getElementById('routealts');
-  alts.innerHTML = '';
-  if (plannedRoutes.length > 1) {
-    // Chips, board #11: the quickest is "Fastest", the others by the
-    // road that sets them apart, each with its drive time.
-    const quickest = plannedRoutes.reduce((q, r, i) => r.duration < plannedRoutes[q].duration ? i : q, 0);
-    plannedRoutes.forEach((r, i) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = i === chosen ? 'on' : '';
-      btn.setAttribute('aria-pressed', i === chosen ? 'true' : 'false');
-      const bEl = document.createElement('b');
-      bEl.textContent = i === quickest ? 'Fastest' : r.via ? 'Via ' + r.via.split(',')[0] : 'Route ' + (i + 1);
-      const sm = document.createElement('small');
-      sm.textContent = Math.round(r.duration / 60) + ' min';
-      sm.title = csUnits.fmt(r.distance / 1000, 0);
-      btn.append(bEl, document.createTextNode(' · '), sm);
-      if (r.hassles) {
-        const em = document.createElement('em');
-        em.textContent = r.hassles.length
-          ? 'On it: ' + r.hassles.map((h) => h.label).join(', ')
-          : 'Clear right now';
-        em.className = r.hassles.length ? 'warn' : '';
-        btn.append(em);
-      }
-      btn.addEventListener('click', () => renderRouteAlts(i, a, b));
-      alts.append(btn);
-    });
-  }
-  // What is on the chosen route, under the chips (the chips carry only
-  // name and time).
-  const pick = plannedRoutes[chosen];
-  if (pick && pick.hassles && pick.hassles.length) {
-    const p = document.createElement('p');
-    p.className = 'althassle';
-    p.textContent = 'On this route: ' + pick.hassles.map((h) => h.label).join(', ');
-    alts.append(p);
-  }
+  chosenAlt = chosen;
+  altEnds = { a, b };
+  paintAlts();
   showRoute(plannedRoutes[chosen],
     plannedRoutes.filter((_, i) => i !== chosen), a, b);
   const note = document.getElementById('plannote');
   note.textContent = planNote || '';
   note.hidden = !planNote;
 }
+function paintAlts() {
+  const alts = document.getElementById('routealts');
+  alts.innerHTML = '';
+  const many = plannedRoutes.length > 1;
+  const quickest = plannedRoutes.reduce((q, r, i) => r.duration < plannedRoutes[q].duration ? i : q, 0);
+  plannedRoutes.forEach((r, i) => {
+    const on = i === chosenAlt;
+    const free = Math.round(r.duration / 60);
+    const live = on && plannedRoute && plannedRoute.route === r && plannedRoute.trafficMins;
+    const mins = live || free;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'altrow' + (on ? ' on' : '');
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const via = r.via ? 'via ' + r.via.split(',')[0] : (many ? 'Route ' + (i + 1) : '');
+    let badge = '';
+    if (r.hassles) {
+      badge = r.hassles.length
+        ? '<span class="altbadge warn">' + esc(r.hassles.length === 1 ? r.hassles[0].label : r.hassles.length + ' things on it') + '</span>'
+        : '<span class="altbadge ok">Clear right now</span>';
+    }
+    const slower = live ? live - free : 0;
+    btn.innerHTML = '<span class="altcar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 16V11.5L7 7h10l2 4.5V16M5 16h14M5 16v2.5M19 16v2.5"/><circle cx="8" cy="13.2" r=".9"/><circle cx="16" cy="13.2" r=".9"/></svg></span>' +
+      '<span class="altmain"><span class="altvia">' + esc(via) +
+      (many && i === quickest ? ' <span class="altfast">Fastest</span>' : '') + '</span>' + badge +
+      (on && r.hassles && r.hassles.length > 1
+        ? '<span class="altwhat">' + esc(r.hassles.map((h) => h.label).join(', ')) + '</span>' : '') +
+      '</span><span class="altside"><b class="alttime' + (slower >= 2 ? ' late' : '') + '">' + esc(minsTxt(mins)) + '</b>' +
+      '<span class="altdist">' + esc(csUnits.fmt(r.distance / 1000, r.distance < 16000 ? 1 : 0)) +
+      (slower >= 2 ? ' · +' + slower + ' min traffic' : '') + '</span></span>';
+    btn.addEventListener('click', () => { if (i !== chosenAlt) renderRouteAlts(i, altEnds.a, altEnds.b); });
+    alts.append(btn);
+  });
+}
 
+// The route's own ink: navy on a light map, pale on a dark one, where
+// navy all but disappears.
+const routeInk = () => (document.documentElement.dataset.theme === 'dark' ? '#d6e4f5' : '#0b1f33');
 function flowColor(ratio) {
-  if (ratio == null) return '#0b1f33';
+  if (ratio == null) return routeInk();
   if (ratio >= 0.8) return '#2f9e6e';
   if (ratio >= 0.55) return '#e8a13c';
   return '#d64545';
@@ -4512,10 +4749,9 @@ async function colorRouteByTraffic(route, baseLine, gen) {
 // so the ETA is re-weighted with the measured speeds along the route:
 // each sampled stretch takes its free-flow share of the trip time
 // divided by measured-over-free-flow speed. Only slower counts; a
-// stretch flowing above free flow does not shorten the trip.
+// stretch flowing above free flow does not shorten the trip. The time
+// lands in the selected route's row.
 function showTrafficEta(route, pts, bounds, flow) {
-  const box = document.getElementById('routeeta');
-  if (!box) return;
   const segLen = (seg) => {
     let m = 0;
     for (let k = 1; k < seg.length; k++) m += map.distance(seg[k - 1], seg[k]);
@@ -4529,40 +4765,33 @@ function showTrafficEta(route, pts, bounds, flow) {
     if (f && f.ratio) sampled += len;
     weighted += (f && f.ratio && f.ratio < 1) ? len / Math.max(0.25, f.ratio) : len;
   }
-  if (!total || sampled / total < 0.5) { box.hidden = true; return; }
+  if (!total || sampled / total < 0.5) return;
   const free = Math.round(route.duration / 60);
   const adjusted = Math.round(route.duration * (weighted / total) / 60);
   if (plannedRoute && plannedRoute.route === route) {
     plannedRoute.trafficMins = Math.max(free, adjusted);
-    updateRouteHead();
     noteTrip();
+    paintAlts();
+    paintDirEntry();
   }
-  if (adjusted - free < 2) {
-    box.innerHTML = 'Traffic is flowing along this route right now: <b>about ' +
-      free + ' min</b>.';
-  } else {
-    box.innerHTML = 'With current speeds along it: <b>about ' + adjusted +
-      ' min</b>, against ' + free + ' min free-flow.';
-  }
-  box.hidden = false;
 }
 
 function wireReshape(route) {
   // A wide, invisible line over the route is the drag handle: pull it
-  // anywhere and the trip re-routes through that spot. Via points stay
-  // as draggable dots; clicking one removes it.
+  // anywhere and the trip re-routes through that spot, as a new stop in
+  // the list. Stops stay as numbered dots: drag to move, click to remove.
   const grab = L.polyline(route.latlngs, { color: '#000', weight: 22,
     opacity: 0.001, interactive: true }).addTo(layerRoute);
   reshapeGrab = grab;
   let ghost = null;
   grab.on('mousedown', (e) => {
-    if (viaPoints.length >= 5) return;
+    if (stops.length >= MAX_STOPS) return;
     L.DomEvent.stop(e.originalEvent);
     map.dragging.disable();
     ghost = L.circleMarker(e.latlng, { radius: 7, color: '#fff',
       weight: 2, fillColor: '#0b1f33', fillOpacity: 1 }).addTo(layerRoute);
     const move = (ev) => ghost.setLatLng(ev.latlng);
-    const finish = async (commit) => {
+    const finish = (commit) => {
       map.off('mousemove', move); map.off('mouseup', up);
       document.removeEventListener('mouseup', docUp, true);
       map.dragging.enable();
@@ -4572,8 +4801,8 @@ function wireReshape(route) {
       const ll = ghost.getLatLng();
       layerRoute.removeLayer(ghost); ghost = null;
       if (commit) {
-        viaPoints.push([ll.lat, ll.lng]);
-        await replanVias();
+        addStopRow(stopIndexAlong(ll), pinPoint(ll));
+        autoPlan();
       }
     };
     const up = () => finish(true);
@@ -4586,21 +4815,19 @@ function wireReshape(route) {
     map.on('mouseup', up);
     document.addEventListener('mouseup', docUp, true);
   });
-  for (const [i, v] of viaPoints.entries()) {
-    const mk = L.marker(v, { draggable: true, zIndexOffset: 500,
-      icon: L.divIcon({ className: 'viadot', iconSize: [16, 16] }) })
+  stops.forEach((s, k) => {
+    if (!pointSet(s.field)) return;
+    const mk = L.marker([+s.field.input.dataset.lat, +s.field.input.dataset.lon], {
+      draggable: true, zIndexOffset: 500,
+      icon: L.divIcon({ className: 'viadot', html: String(k + 1), iconSize: [18, 18] }) })
       .addTo(layerRoute);
-    mk.bindTooltip('Drag to move \u00b7 click to remove');
-    mk.on('dragend', async () => {
-      const ll = mk.getLatLng();
-      viaPoints[i] = [ll.lat, ll.lng];
-      await replanVias();
+    mk.bindTooltip('Stop ' + (k + 1) + ': drag to move, click to remove');
+    mk.on('dragend', () => {
+      writePoint(s.field, pinPoint(mk.getLatLng()));
+      autoPlan();
     });
-    mk.on('click', async () => {
-      viaPoints.splice(i, 1);
-      await replanVias();
-    });
-  }
+    mk.on('click', () => removePoint(pointFields().indexOf(s.field)));
+  });
 }
 
 let routeGen = 0;
@@ -4609,53 +4836,37 @@ function showRoute(route, others, a, b) {
   routeGen += 1;
   mobileReveal(document.getElementById('routealts'));
   plannedRoute = { route, a, b,
-    fromName: fromF.input.dataset.name, toName: toF.input.dataset.name };
+    fromName: fromF.input.dataset.name || fromF.input.value, toName: toF.input.dataset.name || toF.input.value };
   plannedRoute.fromC = { name: plannedRoute.fromName, lat: a[0], lon: a[1] };
   plannedRoute.toC = { name: plannedRoute.toName, lat: b[0], lon: b[1] };
-  const eta = document.getElementById('routeeta');
-  if (eta) eta.hidden = true;
+  // The stops on this route, numbered as in the editor.
+  plannedRoute.stops = stops.map((s, k) => ({ n: k + 1, f: s.field })).filter((s) => pointSet(s.f))
+    .map((s) => ({ n: s.n, name: s.f.input.dataset.name || s.f.input.value,
+      lat: +s.f.input.dataset.lat, lon: +s.f.input.dataset.lon }));
   layerRoute.clearLayers();
   for (const alt of others) {
     L.polyline(alt.latlngs, { color: '#7d93ab', weight: 3.5, opacity: 0.65,
       dashArray: '7 7' }).addTo(layerRoute);
   }
   const baseLine = L.polyline(route.latlngs,
-    { color: '#0b1f33', weight: 4.5, opacity: 0.85 }).addTo(layerRoute);
+    { color: routeInk(), weight: 4.5, opacity: 0.85 }).addTo(layerRoute);
   colorRouteByTraffic(route, baseLine, routeGen);
   wireReshape(route);
-  [[a, 'A', plannedRoute.fromName], [b, 'B', plannedRoute.toName]].forEach(([pnt, letter, name]) => {
+  [[a, 'A', plannedRoute.fromName, fromF], [b, 'B', plannedRoute.toName, toF]].forEach(([pnt, letter, name, field]) => {
     const end = L.marker(pnt, { icon: L.divIcon({ className: 'route-end', html: letter, iconSize: [22, 22] }),
       zIndexOffset: 400, draggable: true }).bindPopup(esc(name)).addTo(layerRoute);
     end.bindTooltip('Drag to move the ' + (letter === 'A' ? 'start' : 'destination'));
-    end.on('dragend', async () => {
-      const ll = end.getLatLng();
-      const field = letter === 'A' ? fromF : toF;
-      const pinName = 'Pin ' + ll.lat.toFixed(3) + ' / ' + ll.lng.toFixed(3);
-      field.input.value = pinName;
-      field.input.dataset.lat = ll.lat;
-      field.input.dataset.lon = ll.lng;
-      field.input.dataset.name = pinName;
-      const val = document.getElementById(letter === 'A' ? 'fromval' : 'toval');
-      val.className = 'val ok'; val.textContent = '\u2713 ' + pinName;
-      if (letter === 'A') lastEnds.a = [ll.lat, ll.lng];
-      else lastEnds.b = [ll.lat, ll.lng];
-      await replanVias();
+    end.on('dragend', () => {
+      writePoint(field, pinPoint(end.getLatLng()));
+      autoPlan();
     });
   });
   map.fitBounds(L.latLngBounds(route.latlngs), mapPad());
-  setPlanned(true);
-  updateRouteHead();
   noteTrip();
-  const min = route.duration / 60;
-  document.getElementById('routesum').textContent =
-    plannedRoute.fromName.split(',')[0] + ' → ' + plannedRoute.toName.split(',')[0] +
-    ', ' + csUnits.fmt(route.distance / 1000, 0) + ', ~' + Math.round(min) + ' min' +
-    (route.via ? ', via ' + route.via.split(',')[0] : '');
   const ol = document.getElementById('steps');
   ol.innerHTML = '';
-  document.getElementById('stepsdrop').open = false;
   document.getElementById('stepssummary').textContent =
-    'Turn-by-turn directions (' + route.steps.length + ' steps)';
+    'Turn by turn · ' + route.steps.length + ' steps';
   route.steps.forEach(s => {
     const li = document.createElement('li');
     li.textContent = s.text + ' ';
@@ -4669,9 +4880,22 @@ function showRoute(route, others, a, b) {
   });
   renderRouteConditions(route.latlngs);
   buildRouteAsks();
-  document.getElementById('printwrap').style.display = 'block';
+  document.getElementById('printwrap').hidden = false;
+  syncDirUi();
   beacon('example_click');
 }
+
+// Steps, and the route's More menu (share, export, print).
+function setStepsOpen(open) {
+  const b = document.getElementById('stepsbtn');
+  b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  b.textContent = open ? 'Hide steps' : 'Steps';
+  document.getElementById('stepsdrop').hidden = !open;
+}
+document.getElementById('stepsbtn').addEventListener('click', () => {
+  setStepsOpen(document.getElementById('stepsdrop').hidden);
+});
+const setRouteMenu = wireMenu(document.getElementById('routemorebtn'), document.getElementById('routemenu'));
 
 function nearRoute(m, latlngs, km) {
   const step = Math.max(1, Math.floor(latlngs.length / 60));
@@ -4713,7 +4937,7 @@ function departNote(m, g, dep) {
       : 'Expected still in place when you leave (no scheduled end)'];
   }
   if (g && g.startsWith('inc_')) {
-    return ['gone', 'Live now; most CHP incidents clear within the hour'];
+    return ['gone', 'Live now; most incidents clear within the hour'];
   }
   if (g === 'chain') {
     return ['active', 'Chain status changes with weather; check before leaving'];
@@ -4887,20 +5111,17 @@ function buildRouteAsks() {
     btn.type = 'button';
     btn.textContent = q;
     btn.addEventListener('click', () => {
-      input.value = q;
-      form.requestSubmit();
       beacon('tell_more');
-      document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+      askAbout(q);
     });
     wrap.append(btn);
   }
 }
 document.getElementById('printbtn').addEventListener('click', () => {
-  const drop = document.getElementById('stepsdrop');
-  const wasOpen = drop.open;
-  drop.open = true;
+  const wasOpen = !document.getElementById('stepsdrop').hidden;
+  setStepsOpen(true);
   window.print();
-  drop.open = wasOpen;
+  setStepsOpen(wasOpen);
 });
 document.getElementById('exportbtn').addEventListener('click', () => {
   if (!plannedRoute) return;
@@ -5073,11 +5294,13 @@ function placeTile(kind, c, label) {
   main.innerHTML = '<span class="pcirc">' + svgIcon(PLACE_ICON[kind]) + '</span>' +
     '<span class="plbl">' + esc(label) + '</span>' +
     '<small class="psub' + (sub.cls ? ' ' + sub.cls : '') + '">' + esc(sub.text) + '</small>';
-  main.title = c ? 'Directions to ' + c.name + (sub.title ? '. ' + sub.title : '')
+  main.title = c ? c.name + (sub.title ? '. ' + sub.title : '')
     : 'Set your ' + label.toLowerCase() + ' address';
+  if (c) { main.setAttribute('aria-haspopup', 'menu'); main.setAttribute('aria-expanded', 'false'); }
   main.addEventListener('click', () => {
     if (placesEditing && c) return;
-    if (c) navigateTo(Object.assign({}, c));
+    // A tap offers Directions first (and Show on map), Google Maps style.
+    if (c) openPlaceMenu(main, c);
     else armPlaceSlot(kind);
   });
   li.append(main);
@@ -5146,12 +5369,122 @@ function renderPlaces() {
   }));
   refreshPlacesLive();
 }
+// ── A place's menu: Directions, or Show on map ───────────────────
+const pmenu = document.getElementById('pmenu');
+let pmenuOpener = null;
+function closePlaceMenu(refocus) {
+  if (pmenu.hidden) return;
+  pmenu.hidden = true;
+  if (pmenuOpener) {
+    pmenuOpener.setAttribute('aria-expanded', 'false');
+    if (refocus && document.contains(pmenuOpener)) pmenuOpener.focus();
+  }
+  pmenuOpener = null;
+}
+function openPlaceMenu(btn, c) {
+  if (pmenuOpener === btn && !pmenu.hidden) { closePlaceMenu(true); return; }
+  closePlaceMenu();
+  pmenuOpener = btn;
+  pmenu.replaceChildren();
+  pmenu.setAttribute('aria-label', c.name.split(', ')[0]);
+  const item = (label, icon, run) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('role', 'menuitem');
+    b.innerHTML = svgIcon(icon) + esc(label);
+    b.addEventListener('click', () => { closePlaceMenu(); run(); });
+    pmenu.append(b);
+  };
+  item('Directions', '<path d="M12 2.8 21.2 12 12 21.2 2.8 12z"/><path d="M9 14v-2.5a1.5 1.5 0 0 1 1.5-1.5H15M13 8l2 2-2 2"/>',
+    () => navigateTo(Object.assign({}, c)));
+  item('Show on map', '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+    () => showFound(Object.assign({}, c)));
+  const pane = document.getElementById('pane-places').getBoundingClientRect();
+  const r = btn.getBoundingClientRect();
+  pmenu.style.left = Math.max(8, Math.min(r.left - pane.left, pane.width - 196)) + 'px';
+  pmenu.style.top = (r.bottom - pane.top + 4) + 'px';
+  pmenu.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  pmenu.querySelector('button').focus();
+}
+pmenu.addEventListener('keydown', (e) => {
+  const list = [...pmenu.querySelectorAll('[role="menuitem"]')];
+  const i = list.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    list[(i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length].focus();
+  } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePlaceMenu(true); }
+  else if (e.key === 'Tab') closePlaceMenu();
+});
+document.addEventListener('pointerdown', (e) => {
+  if (!pmenu.hidden && !pmenu.contains(e.target) && e.target.closest('.pbtn') !== pmenuOpener) closePlaceMenu();
+});
+// ── Directions from Places ──────────────────────────────────────
+// The row under the places opens the route editor in this same pane;
+// with a route planned it goes back to it and says where it goes.
+function paintDirEntry() {
+  const title = document.getElementById('direntrytitle');
+  const sub = document.getElementById('direntrysub');
+  if (!title) return;
+  if (plannedRoute) {
+    const r = plannedRoute.route;
+    title.textContent = 'Back to your route';
+    sub.textContent = placeLabel(plannedRoute.fromC) + ' to ' + placeLabel(plannedRoute.toC) + ' \u00b7 ' +
+      minsTxt(plannedRoute.trafficMins || Math.round(r.duration / 60));
+  } else if (fromF.input.value.trim() || toF.input.value.trim()) {
+    title.textContent = 'Back to directions';
+    sub.textContent = 'Pick up where you left off';
+  } else {
+    title.textContent = 'Directions';
+    sub.textContent = 'Plan a drive, with stops';
+  }
+}
+document.getElementById('direntry').addEventListener('click', () => openDirections());
+document.getElementById('finddir').addEventListener('click', () => {
+  // A place already found in the search goes straight in as the
+  // destination; otherwise the editor opens empty.
+  if (findF.input.dataset.lat && findF.input.value.trim()) {
+    navigateTo({ name: findF.input.dataset.name || findF.input.value,
+      lat: +findF.input.dataset.lat, lon: +findF.input.dataset.lon });
+  } else openDirections();
+});
+// Questions to try, from your own places when you have them; nothing
+// here names a region, so they read right wherever the map is.
+function renderAskExamples() {
+  const box = document.getElementById('askexamples');
+  const p = Places.load();
+  const short = (c) => c.name.split(', ')[0];
+  const qs = [];
+  if (p.home && p.work) qs.push('How is the drive from ' + short(p.home) + ' to ' + short(p.work) + ' right now?');
+  else if (p.work) qs.push('Anything slowing the drive to ' + short(p.work) + ' right now?');
+  if (p.home) qs.push('What is going on near ' + short(p.home) + '?');
+  qs.push('Are there any road closures near me?', 'Anything to know before I drive right now?',
+    'How is the weather on the roads near me?');
+  box.replaceChildren(...qs.slice(0, 3).map((q) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = q;
+    return b;
+  }));
+}
+document.addEventListener('cs-tool', (e) => {
+  if (e.detail !== 'ask') return;
+  renderAskExamples();
+  // A computer lands in the box; a phone waits for a tap (no keyboard
+  // jumping over the map).
+  if (!isPhone()) setTimeout(() => input.focus({ preventScroll: true }), 30);
+});
+if (document.getElementById('panel').dataset.tool === 'ask') renderAskExamples();
+// Ask, from anywhere: the inspector, the palette, a route chip.
+function askAbout(q) {
+  setTool('ask', { toggle: false, reveal: true });
+  input.value = q.slice(0, 300);
+  form.requestSubmit();
+}
 // A recent trip, planned again from the same two ends.
 function replanTrip(t) {
+  clearRoute();
   fromF.pick(Object.assign({}, t.a));
-  toF.pick(Object.assign({}, t.b));
-  setTool('route', { toggle: false, reveal: true });
-  planbtn.click();
+  toF.pick(Object.assign({}, t.b));   // plans by itself
+  openDirections();
 }
 placesEditBtn.addEventListener('click', () => {
   placesEditing = !placesEditing;
@@ -5305,18 +5638,33 @@ function buildRouteStrip(latlngs, along) {
   const dep = departEpoch();
   const leave = dep ? dep * 1000 : Date.now();
   const mins = plannedRoute.trafficMins || Math.round(r.duration / 60);
-  stripItems = [{ end: 'a', km: 0 }, ...hits, { end: 'b', km: total }];
+  // Each stop is a row at its mile, with its arrival time: from the
+  // legs' own times when the router gave them, else by distance.
+  const legT = (r.legTimes || []).every((t) => t > 0) ? r.legTimes : null;
+  const legSum = legT ? legT.reduce((x, y) => x + y, 0) : 0;
+  const stopRows = (plannedRoute.stops || []).map((s, k) => {
+    const km = along.at(s);
+    const frac = legT ? legT.slice(0, k + 1).reduce((x, y) => x + y, 0) / legSum : (total ? km / total : 0);
+    return { stop: s, km, eta: leave + frac * mins * 60000 };
+  });
+  stripItems = [{ end: 'a', km: 0 }, ...hits.concat(stopRows).sort((x, y) => x.km - y.km), { end: 'b', km: total }];
   stripSel = -1;
   const rows = stripItems.map((h, i) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.id = 'rsrow' + i;
-    b.className = 'rsrow' + (h.end ? ' end' : '');
+    b.className = 'rsrow' + (h.m ? '' : ' end');
     b.tabIndex = -1;
     b.setAttribute('role', 'option');
     b.setAttribute('aria-selected', 'false');
     let title, meta, mark;
-    if (h.end) {
+    if (h.stop) {
+      title = placeLabel(h.stop);
+      meta = 'Stop ' + h.stop.n + ' · arrive about ' + clockTxtMs(h.eta);
+      mark = '<span class="rsend stop" aria-hidden="true">' + h.stop.n + '</span>';
+      b.setAttribute('aria-label', 'Stop ' + h.stop.n + ': ' + title + ', at ' + csUnits.fmt(h.km, 1) +
+        ', arrive about ' + clockTxtMs(h.eta));
+    } else if (h.end) {
       title = placeLabel(h.end === 'a' ? plannedRoute.fromC : plannedRoute.toC);
       meta = h.end === 'a' ? 'Leave ' + clockTxtMs(leave)
         : 'Arrive about ' + clockTxtMs(leave + mins * 60000);
@@ -5354,30 +5702,39 @@ function selectStrip(i, fly) {
   rstrack.setAttribute('aria-activedescendant', 'rsrow' + stripSel);
   const rowEl = document.getElementById('rsrow' + stripSel);
   if (rowEl) rowEl.scrollIntoView({ block: 'nearest' });
-  const n = stripItems.length - 2;
-  document.getElementById('rspos').textContent = h.end ? (n + (n === 1 ? ' item' : ' items') + ' on the way')
-    : stripSel + ' of ' + n;
+  const hits = stripHits();
+  const n = hits.length;
+  document.getElementById('rspos').textContent = !h.m
+    ? (n ? n + (n === 1 ? ' item' : ' items') + ' on the way' : 'Nothing reported on the way')
+    : (hits.indexOf(stripSel) + 1) + ' of ' + n;
   if (!fly) return;
-  if (h.end) {
+  if (h.stop) map.setView([h.stop.lat, h.stop.lon], Math.max(map.getZoom(), 13));
+  else if (h.end) {
     const at = h.end === 'a' ? plannedRoute.a : plannedRoute.b;
     map.setView(at, Math.max(map.getZoom(), 13));
   } else openPeek(h.m, h.g, 12);
 }
-// The arrows step through the items, skipping the two ends.
+// The arrows step through the reported items, skipping the ends and
+// the stops.
+const stripHits = () => stripItems.map((x, i) => (x.m ? i : -1)).filter((i) => i >= 0);
 document.getElementById('rsprev').addEventListener('click', () => {
-  const n = stripItems.length - 2;
-  if (n > 0) selectStrip(stripSel <= 1 ? n : stripSel - 1, true);
+  const hits = stripHits();
+  if (!hits.length) return;
+  const k = hits.indexOf(stripSel);
+  selectStrip(hits[k <= 0 ? hits.length - 1 : k - 1], true);
 });
 document.getElementById('rsnext').addEventListener('click', () => {
-  const n = stripItems.length - 2;
-  if (n > 0) selectStrip(stripSel < 1 || stripSel >= n ? 1 : stripSel + 1, true);
+  const hits = stripHits();
+  if (!hits.length) return;
+  const k = hits.indexOf(stripSel);
+  selectStrip(hits[k < 0 || k >= hits.length - 1 ? 0 : k + 1], true);
 });
 rstrack.addEventListener('keydown', (e) => {
   const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
   if (step) { e.preventDefault(); selectStrip(stripSel < 0 ? (step > 0 ? 0 : stripItems.length - 1) : stripSel + step, true); }
   else if (e.key === 'Home') { e.preventDefault(); selectStrip(0, true); }
   else if (e.key === 'End') { e.preventDefault(); selectStrip(stripItems.length - 1, true); }
-  else if (e.key === 'Enter' && stripSel >= 0 && !stripItems[stripSel].end) {
+  else if (e.key === 'Enter' && stripSel >= 0 && stripItems[stripSel].m) {
     e.preventDefault(); openInspector(stripItems[stripSel].m, stripItems[stripSel].g);
   }
 });
@@ -5464,26 +5821,27 @@ document.addEventListener('pointerdown', (e) => {
 document.getElementById('filters').addEventListener('change', paintLayersBadge);
 paintLayersBadge();
 
-// ── The rail: slim by default, expands to labels and the rest ─────
-const RAIL_WIDE_KEY = 'cs-rail-wide';
-const railX = document.getElementById('railexpand');
-function setRailWide(on) {
-  shellEl.classList.toggle('railwide', on);
-  railX.setAttribute('aria-expanded', on ? 'true' : 'false');
-  railX.querySelector('span').textContent = on ? (isPhone() ? 'Close' : 'Collapse') : 'More';
-  railX.title = on ? 'Collapse the rail' : 'Show more tools and labels';
-  if (!isPhone()) store.set(RAIL_WIDE_KEY, on ? '1' : '');
-  setTimeout(() => map.invalidateSize(), 220);
-}
-railX.addEventListener('click', () => setRailWide(!shellEl.classList.contains('railwide')));
-setRailWide(!isPhone() && store.get(RAIL_WIDE_KEY) === '1');
-// On a phone the expanded rail is a menu over the tab bar: picking from
-// it, or tapping elsewhere, closes it.
-document.getElementById('railadv').addEventListener('click', (e) => {
-  if (isPhone() && e.target.closest('.tool')) setRailWide(false);
+// ── The rail's More menu ─────────────────────────────────────────
+// Opens beside the rail (above the tab bar on a phone); the rail keeps
+// its width. On a phone it also holds the tools that the tab bar has no
+// room for.
+const railMore = document.getElementById('railmore');
+const moreMenu = document.getElementById('moremenu');
+const setMoreMenu = wireMenu(railMore, moreMenu, {
+  place() {
+    if (isPhone()) { moreMenu.style.left = ''; moreMenu.style.top = ''; moreMenu.style.bottom = ''; return; }
+    const r = railMore.getBoundingClientRect();
+    const rail = railEl.getBoundingClientRect();
+    moreMenu.style.left = Math.round(rail.right + 8) + 'px';
+    moreMenu.style.top = '';
+    moreMenu.style.bottom = Math.max(8, Math.round(window.innerHeight - r.bottom)) + 'px';
+  },
 });
-document.addEventListener('pointerdown', (e) => {
-  if (isPhone() && shellEl.classList.contains('railwide') && !railEl.contains(e.target)) setRailWide(false);
+moreMenu.addEventListener('click', (e) => {
+  const item = e.target.closest('[role="menuitem"]');
+  if (!item || item.tagName !== 'BUTTON') return;
+  if (item.dataset.tool) setTool(item.dataset.tool, { toggle: false, reveal: true });
+  else if (item.dataset.act) runAction(item.dataset.act);
 });
 railEl.addEventListener('click', (e) => {
   const act = e.target.closest('[data-act]');
@@ -5492,12 +5850,7 @@ railEl.addEventListener('click', (e) => {
 });
 function runAction(name) {
   if (name === 'keys') {
-    setTool('settings', { toggle: false, reveal: true });
-    loadWatch().then(() => setTimeout(() => {
-      const card = document.getElementById('keycard');
-      const target = card && !card.hidden ? card : document.getElementById('acctnote');
-      if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    }, 300));
+    setTool('keys', { toggle: false, reveal: true });
   } else if (name === 'report') {
     startReport();
   } else if (name === 'theme') {
@@ -5506,6 +5859,25 @@ function runAction(name) {
     openPalette();
   }
 }
+document.getElementById('keyssignin').addEventListener('click', () => {
+  setTool('watch', { toggle: false, reveal: true });
+});
+// Escape inside the panel closes it, unless something smaller is open
+// and takes the key first (a menu, a suggestion list, a popup, the
+// details pane, the palette, Layers, or a pick on the map). This runs
+// before every other Escape handler, so it sees them still open.
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || e.defaultPrevented) return;
+  const panel = document.getElementById('panel');
+  const at = document.activeElement;
+  if (!at || !(panel.contains(at) || railEl.contains(at))) return;
+  if (pickMode || !cpal.hidden || !inspectorEl.hidden || layersPane.classList.contains('pop')) return;
+  if (!moreMenu.hidden || !document.getElementById('routemenu').hidden || !document.getElementById('pmenu').hidden) return;
+  if (panel.querySelector('.sugg.open')) return;
+  if (map._popup && map._popup.isOpen()) return;
+  if (at.tagName === 'SELECT') return;
+  closePanel();
+}, true);
 
 // ── Theme: light or dark, the site's own setting (cs-theme) ───────
 // basemap-early.js applied it before first paint. With no base map
@@ -5513,7 +5885,7 @@ function runAction(name) {
 const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  document.getElementById('railtheme').textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+  paintThemeControls();
   let chosenBase = null;
   try { chosenBase = localStorage.getItem('cs-basemap'); } catch (_) { /* private mode */ }
   if (!chosenBase) {
@@ -5537,8 +5909,22 @@ darkMq.addEventListener('change', () => {
   try { saved = localStorage.getItem('cs-theme'); } catch (_) { /* private mode */ }
   if (saved !== 'light' && saved !== 'dark') applyTheme(darkMq.matches ? 'dark' : 'light');
 });
-document.getElementById('railtheme').textContent =
-  document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode';
+// The rail's button, its copy in the phone's More sheet and the
+// Settings choice all show the same state.
+function paintThemeControls() {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const label = dark ? 'Light mode' : 'Dark mode';
+  document.getElementById('railtheme').textContent = label;
+  document.querySelectorAll('.mmtheme').forEach((el) => { el.textContent = label; });
+  let saved = null;
+  try { saved = localStorage.getItem('cs-theme'); } catch (_) { /* private mode */ }
+  const pick = (saved === 'light' || saved === 'dark') ? saved : 'system';
+  document.querySelectorAll('#themepick input').forEach((r) => { r.checked = r.value === pick; });
+}
+document.getElementById('themepick').addEventListener('change', (e) => {
+  if (e.target.name === 'themepick') setTheme(e.target.value);
+});
+paintThemeControls();
 
 // ── Command palette (Cmd-K / Ctrl-K) ──────────────────────────────
 // One box for every real action on the page: places, a place search,
@@ -5571,19 +5957,20 @@ function paletteCommands() {
   p.saved.forEach((c) => add('Places', 'Directions to ' + c.name.split(', ')[0], () => navigateTo(Object.assign({}, c)), 'Saved', 'saved favorite'));
   p.recents.slice(0, 3).forEach((c) => add('Places', c.name.split(', ')[0], () => navigateTo(Object.assign({}, c)), 'Recent', 'recent'));
   palPlaces.forEach((c) => add('Search results', c.name.split(', ')[0], () => showFound(c), c.name.split(', ').slice(1).join(', '), 'search find'));
-  add('Actions', 'Plan a route', () => { setTool('route', { toggle: false, reveal: true }); fromF.input.focus(); }, '', 'directions navigate trip');
+  add('Actions', 'Directions', () => openDirections(fromF), '', 'directions navigate trip plan route');
   add('Actions', 'Your places', () => setTool('places', { toggle: false, reveal: true }), '', 'home saved');
   add('Actions', 'Live right now', () => { setTool('alerts', { toggle: false, reveal: true }); scheduleAlerts(); }, '', 'alerts incidents closures');
   add('Actions', 'Layers', () => openLayers(), '', 'filters show hide');
   add('Actions', 'Ask about your drive', () => { setTool('ask', { toggle: false, reveal: true }); document.getElementById('q').focus(); }, '', 'assistant question ai');
-  add('Actions', 'Report something on the road', () => runAction('report'), '', 'report hazard');
+  add('Actions', 'Report a road problem', () => runAction('report'), '', 'report hazard');
   add('Actions', 'Watch areas', () => setTool('watch', { toggle: false, reveal: true }), '', 'alerts notify watch');
   add('Actions', 'Settings', () => setTool('settings', { toggle: false, reveal: true }), '', 'account preferences');
-  add('Actions', 'API keys', () => runAction('keys'), 'Settings', 'developer key token');
-  add('Actions', 'About the data', () => setTool('about', { toggle: false, reveal: true }), '', 'sources legal privacy');
-  add('Actions', shellEl.classList.contains('railwide') ? 'Collapse the rail' : 'Expand the rail', () => setRailWide(!shellEl.classList.contains('railwide')), '', 'sidebar menu');
+  add('Actions', 'API keys', () => runAction('keys'), 'More', 'developer key token');
+  add('Actions', 'Data sources', () => setTool('about', { toggle: false, reveal: true }), '', 'sources about data legal privacy');
+  add('Actions', 'Plugins', () => { location.href = '/marketplace'; }, '', 'marketplace community');
   if (plannedRoute) {
     add('Route', 'Show what is along the route', () => { setTool('route', { toggle: false, reveal: true }); rstrack.focus(); }, '', 'strip along');
+    add('Route', 'Turn-by-turn steps', () => { setTool('route', { toggle: false, reveal: true }); setStepsOpen(true); document.getElementById('stepsbtn').focus(); }, '', 'steps directions');
     add('Route', 'Copy a share link', () => document.getElementById('sharebtn').click(), '', 'share link');
     add('Route', 'Export as GPX', () => document.getElementById('gpxbtn').click(), '', 'gpx download');
     add('Route', 'Export as KML', () => document.getElementById('kmlbtn').click(), '', 'kml download');
@@ -5617,6 +6004,11 @@ function palMatch(cmd, words) {
   const hay = cmd.keys.toLowerCase().split(/[^a-z0-9]+/);
   return words.every((w) => hay.some((h) => h.startsWith(w)));
 }
+// A question mark, a question word first, or four or more words.
+function looksLikeQuestion(q) {
+  return /\?\s*$/.test(q) || /^(how|what|when|where|why|which|who|is|are|any|can|should|will|do|does)\b/i.test(q) ||
+    q.trim().split(/\s+/).length >= 4;
+}
 function renderPalette() {
   const q = cpalQ.value.trim();
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -5625,12 +6017,13 @@ function renderPalette() {
   if (q.length >= 2) {
     const coord = parseCoords(q);
     if (coord && !palPlaces.length) palCmds.unshift({ group: 'Search results', label: coord.name, run: () => showFound(coord), hint: 'Coordinates', keys: '' });
-    palCmds.push({ group: 'Ask', label: 'Ask: ' + q, hint: 'Assistant', keys: '', run: () => {
-      setTool('ask', { toggle: false, reveal: true });
-      const box = document.getElementById('q');
-      box.value = q.slice(0, 300);
-      document.getElementById('form').requestSubmit();
-    } });
+    // The typed text goes to Ask as the question. It leads the list
+    // (so Enter sends it) when no command matched, unless a place
+    // matched and the text does not read as a question.
+    const askCmd = { group: 'Ask', label: 'Ask: ' + q, hint: 'Assistant', keys: '', run: () => askAbout(q) };
+    const commands = palCmds.filter((c) => c.group !== 'Search results');
+    if (!commands.length && (!palPlaces.length || looksLikeQuestion(q))) palCmds.unshift(askCmd);
+    else palCmds.push(askCmd);
   }
   palSel = Math.min(palSel, Math.max(0, palCmds.length - 1));
   cpalList.replaceChildren();

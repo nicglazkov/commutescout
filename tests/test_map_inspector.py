@@ -20,7 +20,11 @@ def test_inspector_pane_exists_once_and_starts_hidden():
 def test_alerts_pane_lists_the_view_under_the_counts():
     alerts = re.search(r'<section id="pane-alerts"[^>]*>(.*?)</section>', HTML, re.S).group(1)
     assert 'id="kpis"' in alerts and 'id="alertlist"' in alerts
-    assert alerts.index('id="kpis"') < alerts.index('id="alertlist"')
+    # Map v2 (2026-11): Live leads with the kind filters and the list; the
+    # statewide totals fold into a disclosure below it.
+    order = [alerts.index(f'id="{i}"') for i in ("livefilters", "alertlist", "kpis")]
+    assert order == sorted(order)
+    assert '<details class="kpiwrap"' in alerts
 
 
 def test_popups_get_one_details_button_at_open_time():

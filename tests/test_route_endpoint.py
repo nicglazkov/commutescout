@@ -110,3 +110,17 @@ def test_route_is_budgeted_and_soft_limited():
     # Per client at or under the service-wide cap: one caller must not
     # be able to spend the whole day on its own.
     assert demo_app.PAID_PER_CLIENT_DAILY["route"] <= demo_app.STADIA_ROUTE_DAILY
+
+
+def test_avoid_list_is_validated_and_part_of_the_cache_key(wired):
+    c = TestClient(demo_app.app)
+    assert c.post("/api/route", json={"locations": LOCS, "avoid": ["ferries"]}).status_code == 400
+    assert c.post("/api/route", json={"locations": LOCS, "avoid": "tolls"}).status_code == 400
+    r = c.post("/api/route", json={"locations": LOCS, "avoid": ["tolls", "highways"]})
+    assert r.status_code == 200, r.text
+    assert wired.calls[-1][1]["costing_options"] == {"auto": {"use_highways": 0, "use_tolls": 0}}
+    n = len(wired.calls)
+    r2 = c.post("/api/route", json={"locations": LOCS, "avoid": ["highways", "tolls"]})
+    assert r2.headers.get("X-Cache") == "hit" and len(wired.calls) == n
+    c.post("/api/route", json={"locations": LOCS, "avoid": ["tolls"]})
+    assert len(wired.calls) == n + 1

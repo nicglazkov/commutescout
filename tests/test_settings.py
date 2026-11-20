@@ -23,12 +23,17 @@ UNITS = (STATIC / "units.js").read_text(encoding="utf-8")
 
 def test_settings_is_the_last_rail_tool_below_data_with_units_and_account():
     rail = re.search(r'<nav class="rail"[^>]*>(.*?)</nav>', HTML, re.S).group(1)
-    assert rail.index('data-tool="about"') > rail.index('class="railgap"')
+    # Map v2 (2026-11): Data and Settings sit in the rail's second group
+    # (after the separator); the gap now only pushes More to the bottom.
+    assert rail.index('data-tool="about"') > rail.index('class="railsep"')
     # Data sits above Settings; Settings is the rail's last tool.
     assert rail.index('data-tool="settings"') > rail.index('data-tool="about"')
     assert rail.rindex('data-tool=') == rail.index('data-tool="settings"')
     pane = re.search(r'<section id="pane-settings"[^>]*>(.*?)\n    </section>', HTML, re.S).group(1)
     assert pane.count('name="units"') == 2 and 'value="mi"' in pane and 'value="km"' in pane
+    # Map v2 (2026-11): Settings also picks the theme (light, dark, system).
+    assert re.findall(r'name="themepick" value="([a-z]+)"', pane) == ["light", "dark", "system"]
+    assert "if (e.target.name === 'themepick') setTheme(e.target.value);" in APP
     for i in ("unitpick", "unitnote", "who", "acctnote", "settingssignin", "acctcard",
               "deleteacct", "acctmsg"):
         assert pane.count(f'id="{i}"') == 1, i
@@ -45,7 +50,9 @@ def test_units_follow_locale_then_the_choice_on_both_pages():
     # The map page loads it before the scripts that read it.
     assert HTML.index("units.js") < HTML.index("map-assistant.js?v=")
     assert "csUnits.set(e.target.value)" in APP
-    assert "if (lastEnds) replanVias();" in APP
+    # Map v2 (2026-11): a unit change replans through autoPlan (stops are
+    # rows in the editor now, not a separate via list).
+    assert "if (lastEnds) autoPlan();" in APP
 
 
 def test_watch_radius_works_in_the_viewers_unit_and_sends_kilometers():
@@ -59,7 +66,8 @@ def test_watch_radius_works_in_the_viewers_unit_and_sends_kilometers():
 
 def test_route_distances_follow_the_unit_setting():
     assert "const perUnit = trip.units === 'kilometers' ? 1000 : 1609.344;" in APP
-    assert "csUnits.fmt(route.distance / 1000, 0)" in APP
+    # Map v2 (2026-11): the route rows show a decimal under 10 miles.
+    assert "csUnits.fmt(r.distance / 1000, r.distance < 16000 ? 1 : 0)" in APP
     assert "preset, units: csUnits.get() === 'km' ? 'kilometers' : 'miles'" in APP
 
 

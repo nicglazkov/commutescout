@@ -73,11 +73,13 @@ def test_active_key_cap_and_admin_tier(keys):
 
 
 def test_settings_pane_has_the_keys_card_once():
-    pane = re.search(r'<section id="pane-settings"[^>]*>(.*?)\n    </section>', HTML, re.S).group(1)
+    # Map v2 (2026-11): API keys moved out of Settings into their own pane,
+    # opened from the rail's More menu; the card is the same, once.
+    pane = re.search(r'<section id="pane-keys"[^>]*>(.*?)\n    </section>', HTML, re.S).group(1)
     for i in ("keycard", "keylist", "keyname", "keycreate", "keynew", "keyvalue", "keycopy",
               "keymsg"):
         assert pane.count(f'id="{i}"') == 1 and HTML.count(f'id="{i}"') == 1, i
-    assert pane.index('id="keycard"') < pane.index('id="acctcard"')
+    assert 'data-tool="keys"' in HTML[HTML.index('id="moremenu"'):]
     assert "async function renderKeys()" in WATCH_JS
     assert "api('/api/keys', { method: 'POST'," in WATCH_JS
     assert "if ($('keycard')) { $('keycard').hidden = false; renderKeys(); }" in WATCH_JS

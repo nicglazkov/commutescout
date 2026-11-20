@@ -181,15 +181,15 @@ body { background:var(--bg); color:var(--ink);
   padding:6px 0; border:0; border-radius:0; background:transparent; color:var(--ink-2);
   font:500 11px/1.2 Inter; cursor:pointer; text-decoration:none; text-align:center }
 /* The icon sits in a 48x36 pill that fills with the accent when on. */
-.rail .tool svg, .rail .railx svg { width:48px; height:36px; padding:8.5px 14.5px; border-radius:999px;
+.rail .tool svg { width:48px; height:36px; padding:8.5px 14.5px; border-radius:999px;
   fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;
   flex:none; transition:background-color .15s var(--ease), color .15s }
-.rail .tool:hover svg, .rail .railx:hover svg { background:var(--surface-2) }
+.rail .tool:hover svg { background:var(--surface-2) }
 .rail .tool:hover { color:var(--ink) }
 .rail .tool.on { color:var(--ink); font-weight:600 }
 .rail .tool.on svg, .rail .tool.armed svg { background:var(--sky-soft); color:var(--sky) }
-.rail .tool:focus-visible, .rail .railx:focus-visible { outline:none }
-.rail .tool:focus-visible svg, .rail .railx:focus-visible svg { outline:2px solid var(--sky); outline-offset:1px }
+.rail .tool:focus-visible { outline:none }
+.rail .tool:focus-visible svg { outline:2px solid var(--sky); outline-offset:1px }
 .rail .railgap { flex:1 }
 .resizer { cursor:col-resize; background:transparent; position:relative }
 .resizer::after { content:""; position:absolute; inset:0; margin:auto;
@@ -237,18 +237,7 @@ aside#panel:not([data-tool="places"]):not([data-tool="alerts"]) section[data-too
 .shell.nopanel aside#panel section[data-tool] { display:none }
 .shell.nopanel .phdr { padding:0 }
 .shell.nopanel .findbox input { box-shadow:var(--float); border-color:transparent }
-.sharemenu { position:relative }
-.sharemenu summary { list-style:none; cursor:pointer; font:600 .76rem Inter;
-  border-radius:8px; padding:8px 12px; border:1px solid var(--line);
-  background:var(--card) }
-.sharemenu summary::-webkit-details-marker { display:none }
-.sharemenu[open] summary { border-color:var(--sky) }
-.sharelist { position:absolute; z-index:5; top:calc(100% + 4px); left:0;
-  background:var(--card); border:1px solid var(--line); border-radius:10px;
-  box-shadow:0 8px 24px rgba(15,28,43,.16); padding:6px; display:flex;
-  flex-direction:column; gap:2px; min-width:140px }
-.sharelist button { text-align:left; border:0; background:transparent }
-.sharelist button:hover { background:var(--sky-soft) }
+
 .searchrow { display:flex; border:1.5px solid var(--line); border-radius:10px;
   overflow:hidden; background:var(--card) }
 .searchrow:focus-within { border-color:var(--sky) }
@@ -406,7 +395,6 @@ aside#panel:not([data-tool="places"]):not([data-tool="alerts"]) section[data-too
 .cam-icon { color:var(--sky); font-size:18px; line-height:20px; text-align:center;
   text-shadow:0 0 3px #fff, 0 0 3px #fff }
 .campopup img { border-radius:8px; margin-top:6px; display:block; max-width:100% }
-
 
 /* ── Planner & tabs ─────────────────────────────────────────── */
 .tabs { display:flex; gap:2px; background:var(--bg); border-radius:9px;
@@ -623,72 +611,17 @@ aside#panel:not([data-tool="places"]):not([data-tool="alerts"]) section[data-too
 .srcpanel .src i { width:9px; height:9px; border-radius:99px; flex:none }
 .srcpanel .src small { margin-left:auto; color:var(--dim); font-size:.66rem;
   text-align:right }
-.viachips .leg { position:relative }
-.viachips .leg .badge { display:inline-flex; align-items:center;
-  justify-content:center; flex:none }
-.viachips .leg.origin .badge { width:13px; height:13px; border-radius:99px;
-  background:var(--card); border:3.5px solid var(--ink); color:transparent }
-.viachips .leg.stop .badge { width:15px; height:15px; border-radius:99px;
-  background:#5b6b7d; color:#fff; font:700 .58rem Inter; border:0 }
-.viachips .leg.dest .badge { width:14px; height:14px; border-radius:50% 50% 50% 0;
-  transform:rotate(-45deg); background:var(--red); border:0; color:transparent }
-.viachips .leg:not(:last-child)::after { content:''; position:absolute;
-  left:6px; bottom:-7px; width:2px; height:8px;
-  background-image:radial-gradient(circle, #9aa7b5 1px, transparent 1.4px);
-  background-size:2px 4px }
-.viachips .leg.dragging { opacity:.45 }
-.viachips .leg.stop { cursor:grab }
-.viachips .addstop { display:flex; align-items:center; gap:9px; width:100%;
-  font:600 .78rem Inter; color:var(--sky); background:none; border:0;
-  padding:6px 0 2px 0; cursor:pointer; text-align:left }
-.viachips .addstop .plus { width:15px; height:15px; border-radius:99px;
-  border:1.5px solid var(--sky); display:inline-flex; align-items:center;
-  justify-content:center; font-size:.7rem; flex:none }
-.viachips .addstop.armed { color:#fff; background:var(--sky);
-  border-radius:8px; padding:6px 8px }
+
 .val select { font:inherit; font-size:.8rem; width:100%; margin-top:3px;
   padding:6px; border:1px solid var(--line); border-radius:7px }
 .planbtn { width:100%; font:600 .9rem Inter; background:var(--sky); color:#fff;
   border:0; border-radius:9px; padding:11px; cursor:pointer; margin-top:2px }
 .planbtn:disabled { opacity:.55; cursor:wait }
-.routealts { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 4px }
-.routealts button { flex:1 1 30%; min-width:120px; text-align:left; cursor:pointer;
-  font:500 .76rem Inter; color:var(--ink); background:var(--card);
-  border:1.5px solid var(--line); border-radius:10px; padding:8px 10px }
-.routealts button b { display:block; font-size:.84rem }
-.routealts button small { color:var(--dim) }
-.routealts button.on { border-color:var(--sky); background:var(--sky-soft) }
-.routealts button em { display:block; font-style:normal; font-size:.7rem;
-  color:var(--green); margin-top:2px }
-.routealts button em.warn { color:#a02c2c }
-.routepresets { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 2px }
-.routepresets button { font:500 .72rem Inter; padding:4px 10px; border-radius:999px;
-  border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer }
-.routepresets button.on { border-color:var(--sky); background:var(--sky-soft); color:#1d4f9c }
-.routepresets button:disabled { opacity:.6; cursor:default }
+
 .plannote { font-size:.76rem; color:#7a2020; background:#fbe9e9; border:1px solid #f0c6c6;
   border-radius:9px; padding:7px 10px; margin:8px 0 2px }
 .plannote[hidden] { display:none }
-.routesum { font:600 .95rem Inter; margin:14px 0 4px }
-.routeeta { font-size:.8rem; color:var(--ink); background:var(--sky-soft);
-  border:1px solid #cfe0fb; border-radius:9px; padding:7px 10px; margin:4px 0 6px }
-.routeeta b { color:#1d4f9c }
-.routeeta[hidden] { display:none }
-.routebtns { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 12px }
-.routebtns button { font:600 .76rem Inter; border-radius:8px; padding:8px 12px;
-  cursor:pointer; border:1px solid var(--line); background:var(--card) }
-.routebtns button.pri { background:var(--navy); border-color:var(--navy); color:#fff }
-.stepsdrop { border:1px solid var(--line); border-radius:10px;
-  margin:4px 0 10px; background:var(--bg) }
-.stepsdrop summary { cursor:pointer; font:600 .82rem Inter; padding:9px 12px;
-  color:var(--ink); user-select:none; list-style:none;
-  display:flex; align-items:center; gap:7px }
-.stepsdrop summary::-webkit-details-marker { display:none }
-.stepsdrop summary::before { content:"\25B8"; color:var(--dim);
-  transition:transform .12s }
-.stepsdrop[open] summary::before { transform:rotate(90deg) }
-.stepsdrop .steps { background:var(--card); border-top:1px solid var(--line);
-  border-radius:0 0 10px 10px; margin:0; padding:10px 12px 10px 30px }
+
 .steps { padding-left:20px; font-size:.85rem }
 .steps li { margin:6px 0 } .steps small { color:var(--dim) }
 .routecond { margin-top:12px; border-top:1px solid var(--line); padding-top:10px }
@@ -770,10 +703,12 @@ aside#panel:not([data-tool="places"]):not([data-tool="alerts"]) section[data-too
   box-shadow:0 1px 4px rgba(0,0,0,.35) }
 
 @media print {
-  body > * { display:none !important }
-  #printwrap { display:block !important; position:absolute; inset:0;
-    padding:20px; background:#fff; font:12pt/1.5 Georgia, serif }
-  #printwrap .routebtns { display:none !important }
+  /* Only the route's steps print: everything else is hidden in place,
+     since #printwrap lives inside the panel. */
+  body * { visibility:hidden !important }
+  #printwrap, #printwrap * { visibility:visible !important }
+  #printwrap { position:absolute; inset:0; padding:20px; background:#fff; font:12pt/1.5 Georgia, serif }
+  #printwrap .routeacts, #printwrap .rstrip { display:none !important }
 }
 
 .pop .cmsboard { background:#161613; border-radius:9px; padding:10px 12px;
@@ -784,25 +719,7 @@ aside#panel:not([data-tool="places"]):not([data-tool="alerts"]) section[data-too
 .pop .hist { color:#8a94a3; font-size:.72rem; margin-top:7px;
   border-top:1px dashed var(--line); padding-top:6px; line-height:1.5 }
 .pop .lanes-strong { font-weight:700; color:#a02c2c }
-.viachips { display:flex; flex-direction:column; gap:0; margin:8px 0 4px }
-.viachips .leg { display:flex; align-items:center; gap:9px; padding:4px 0;
-  font:500 .8rem Inter; color:var(--ink); position:relative }
-.viachips .leg::before { content:""; position:absolute; left:10px;
-  top:-8px; bottom:-8px; width:2px; background:#cfe0fb; z-index:0 }
-.viachips .leg:first-child::before { top:50% }
-.viachips .leg:last-child::before { bottom:50% }
-.viachips .badge { width:21px; height:21px; border-radius:99px;
-  background:var(--navy); color:#fff; display:grid; place-items:center;
-  font:700 .68rem Inter; flex:none; z-index:1 }
-.viachips .leg.stop .badge { background:var(--sky) }
-.viachips .legname { flex:1; overflow:hidden; text-overflow:ellipsis;
-  white-space:nowrap; color:var(--ink) }
-.viachips .leg.stop .legname { color:#1d4f9c }
-.viachips .leg button { background:none; border:1px solid var(--line);
-  border-radius:7px; cursor:pointer; color:var(--dim); font-size:.78rem;
-  padding:3px 7px; line-height:1 }
-.viachips .leg button:hover { color:var(--sky); border-color:var(--sky) }
-.viachips .leg button.rm:hover { color:var(--red); border-color:var(--red) }
+
 .pinchoice { display:flex; flex-direction:column; gap:6px; min-width:150px }
 .pinchoice button, .pinchoice-single { font:600 .8rem Inter; color:var(--sky);
   background:var(--sky-soft); border:1px solid #cfe0fb; border-radius:8px;
@@ -1026,26 +943,8 @@ input, select, textarea { color:var(--ink); background:var(--card) }
 
 /* ── Rail: slim, or expanded to labels (board #4) ────────────── */
 /* Expanded wins over a dragged slim width (an inline --rail-w). */
-.shell.railwide { --rail-w:224px !important }
+
 .rail { transition:none }
-.rail .railx { display:flex; flex-direction:column; align-items:center; gap:4px;
-  padding:6px 0 4px; margin-top:4px; border:0; border-top:1px solid var(--bline); background:transparent;
-  color:var(--ink-2); font:500 11px/1.2 Inter; cursor:pointer }
-.rail .railx:hover { color:var(--ink) }
-.railadv { display:flex; flex-direction:column; gap:2px }
-.raillabel { display:none; font:500 10.5px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase;
-  color:var(--ink-3); padding:12px 16px 6px }
-/* Slim: only the open one of the "more" tools shows, so the rail always
-   marks where you are; the rest live in the expanded rail. */
-.shell:not(.railwide) .railadv > :not(.on) { display:none }
-.shell.railwide .raillabel { display:block }
-.shell.railwide .rail { padding:8px 10px; overflow-y:auto }
-.shell.railwide .rail .tool, .shell.railwide .rail .railx { flex-direction:row; justify-content:flex-start;
-  gap:10px; padding:2px 0; font:500 13px/1.2 Inter; text-align:left }
-.shell.railwide .rail .tool svg, .shell.railwide .rail .railx svg { width:40px; height:32px; padding:6.5px 10.5px }
-.shell.railwide .rail .railx { margin-top:6px; padding-top:8px }
-.rail a.tool.act::after { content:"↗"; margin-left:auto; padding-right:6px; font-size:.85em; color:var(--ink-3) }
-.shell:not(.railwide) .rail a.tool.act::after { content:none }
 
 /* ── Small shared pieces ─────────────────────────────────────── */
 .txtbtn { border:0; background:none; padding:4px 6px; margin:-4px -6px; border-radius:6px;
@@ -1152,22 +1051,7 @@ kbd { font:600 .68rem var(--mono); padding:1px 5px; border-radius:5px;
 
 /* ── Phone ───────────────────────────────────────────────────── */
 @media (max-width: 960px) {
-  .shell.railwide { --rail-w:auto !important }
-  .railadv { display:none }
-  .shell.railwide .railadv { display:flex; position:absolute; right:8px; bottom:calc(var(--tab-h) + 8px);
-    width:min(260px, calc(100vw - 16px)); padding:6px; gap:2px; border-radius:14px;
-    background:var(--navy); box-shadow:0 -8px 32px rgba(8,16,26,.4); z-index:1302 }
-  .shell.railwide .raillabel { display:block; padding:8px 10px 4px }
-  .shell.railwide .rail .railadv .tool { flex:none; flex-direction:row; justify-content:flex-start; gap:12px;
-    min-height:44px; padding:8px 12px; font:500 .86rem Inter; text-align:left }
-  .shell.railwide .rail .railadv .tool svg { width:19px; height:19px }
-  .shell.railwide .rail > .tool, .shell.railwide .rail .railx { flex-direction:column; gap:3px;
-    padding:5px 0 4px; font:600 .56rem Inter; min-height:44px; justify-content:center; text-align:center }
-  .shell.railwide .rail > .tool svg, .shell.railwide .rail .railx svg { width:20px; height:20px }
-  .shell.railwide .rail { padding:4px 6px env(safe-area-inset-bottom); overflow:visible }
-  .rail .railx { flex:1 1 0; min-width:0; min-height:44px; margin:0; padding:5px 0 4px;
-    font-size:.56rem; border:0; border-radius:10px }
-  .rail .railx svg { width:20px; height:20px }
+
   .cpalhint { display:none }
   .cpal { padding:8px }
   .cpalbox { max-height:calc(100dvh - 16px) }
@@ -1378,43 +1262,24 @@ aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:130
 .inspbody .p2 > .body:first-of-type { margin-top:0 }
 
 /* ── Route, planned (board #11) ───────────────────────────────── */
-.rhead { display:flex; align-items:center; gap:8px; margin:-16px -18px 0; padding:10px 12px;
-  border-bottom:1px solid var(--bline) }
-.rhead[hidden] { display:none }
-.rhtxt { flex:1; min-width:0 }
-.rhtxt h2 { font:600 15px/1.3 Inter; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-.rhtxt p { font:400 12px/1.4 Inter; color:var(--ink-2); margin:0 }
-.rhtxt p b { font-weight:500; color:var(--ink) }
-.rhtxt .late, .rhtxt p b.late { color:var(--k-incident); font-weight:500 }
-.rhtxt p .late:not(b) { font-weight:400 }
+
 .leavebtn { flex:none; display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 10px;
   border:1px solid var(--bline); border-radius:8px; background:var(--surface); color:var(--ink);
   font:500 13px Inter; cursor:pointer; white-space:nowrap }
 .leavebtn svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round }
 .leavebtn:hover, .leavebtn[aria-expanded="true"] { border-color:var(--sky); color:var(--sky) }
 .leavebtn:focus-visible { outline:2px solid var(--sky); outline-offset:2px }
-#pane-plan.planned > .fld, #pane-plan.planned > #planbtn, #pane-plan.planned #routepresets,
-#pane-plan.planned #routesum, #pane-plan.planned #routeeta, #pane-plan.planned #viachips,
-#pane-plan.planned #routecond { display:none }
-#pane-plan.planned:not(.leaveopen) > .departrow { display:none }
-#pane-plan.planned.leaveopen > .departrow { margin:12px 0 0 }
-#pane-plan.planned .routealts { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 6px }
-#pane-plan.planned .routealts button { display:inline-flex; align-items:center; gap:0; height:34px; padding:0 14px;
-  border:1px solid var(--bline); border-radius:999px; background:var(--surface); color:var(--ink);
-  font:400 13px Inter; cursor:pointer; min-width:0; flex:none; text-align:left }
-#pane-plan.planned .routealts button b { font-weight:400 }
-#pane-plan.planned .routealts button small { font:inherit; color:inherit; display:inline }
-#pane-plan.planned .routealts button em { display:none }
-#pane-plan.planned .routealts button.on { border-color:var(--sky); background:var(--sky-soft); color:var(--sky) }
-#pane-plan.planned .routealts button:focus-visible { outline:2px solid var(--sky); outline-offset:2px }
-.althassle { flex-basis:100%; margin:2px 0 0; font-size:12px; color:var(--ink-2) }
+
 .plannote { font-size:12px }
 /* The strip: one row per item, mile, a line coloured by traffic, kind. */
 .rstrip { margin-top:10px }
 .rstrip[hidden] { display:none }
 .rshead { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px }
 .rsnav { display:flex; align-items:center; gap:2px }
-#rspos { font:400 11px var(--mono); color:var(--ink-3); margin-right:6px; font-variant-numeric:tabular-nums }
+.rshead .kicker { margin:0; white-space:nowrap }
+/* The count sits on its own line under the label, so neither wraps. */
+.rspos { margin:-2px 0 8px; font:400 12px/1.4 Inter; color:var(--ink-2); font-variant-numeric:tabular-nums }
+.rspos:empty { display:none }
 .rsnav button { width:28px; height:28px; display:grid; place-items:center; border:0; border-radius:8px;
   background:transparent; color:var(--ink-2); cursor:pointer }
 .rsnav button:hover:not(:disabled) { background:var(--surface-2); color:var(--ink) }
@@ -1441,6 +1306,8 @@ aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:130
 .rsend { width:14px; height:14px; margin-top:3px; border-radius:99px; background:var(--surface);
   border:3px solid var(--ink) }
 .rsend.b { background:var(--k-closure); border-color:var(--k-closure) }
+.rsend.stop { width:18px; height:18px; margin-top:1px; border:1.5px solid var(--ink-3); background:var(--surface-2);
+  display:grid; place-items:center; font:600 10px/1 Inter; color:var(--ink-2) }
 .rstxt { min-width:0; padding-bottom:10px }
 .rstxt b { display:block; font:500 13.5px/20px Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 .rstxt small { display:block; font:400 12px/1.4 Inter; color:var(--ink-2) }
@@ -1453,12 +1320,6 @@ aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:130
 .rslegend i { width:16px; height:6px; border-radius:99px }
 .rslegend i.moving { background:var(--k-ok) } .rslegend i.slow { background:var(--k-fire) }
 .rslegend i.jam { background:var(--k-closure) }
-.rsfoot #sharebtn { margin-left:auto; border:0; background:none; padding:4px 0; color:var(--sky);
-  font:500 12.5px Inter; cursor:pointer }
-.rsfoot #sharebtn::after { content:" \203A" }
-.rsfoot #sharebtn:hover { text-decoration:underline; text-underline-offset:3px }
-.rsfoot #sharebtn:focus-visible { outline:2px solid var(--sky); outline-offset:2px; border-radius:4px }
-#pane-plan.planned .routebtns { margin-top:14px }
 
 /* ── Phone (390px): boards M1, M2, M6, M11, M13 ──────────────── */
 @media (max-width: 960px) {
@@ -1488,20 +1349,14 @@ aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:130
   /* The tab bar, in the rail's own look. */
   .rail { background:var(--surface); border-right:0; border-top:1px solid var(--bline); align-items:center }
   .rail .tool { color:var(--ink-2); gap:2px; padding:4px 0 2px; font-size:10.5px }
-  .rail .tool svg, .rail .railx svg { width:44px; height:28px; padding:5px 12px }
+  .rail .tool svg { width:44px; height:28px; padding:5px 12px }
   .rail .tool span { font-size:10.5px }
-  .rail .railx { border-top:0; margin:0; color:var(--ink-2); gap:2px; padding:4px 0 2px; font-size:10.5px }
-  .shell.railwide .railadv { background:var(--surface); border:1px solid var(--bline); box-shadow:var(--float),
-    0 -8px 32px rgb(11 26 44 / .18) }
-  .shell.railwide .rail .railadv .tool { color:var(--ink) }
-  .shell.railwide .rail .railadv .tool svg { width:36px; height:28px; padding:4.5px 8.5px }
-  .shell.railwide .rail > .tool, .shell.railwide .rail .railx { font:500 10.5px Inter; gap:2px }
-  .shell.railwide .rail > .tool svg, .shell.railwide .rail .railx svg { width:44px; height:28px; padding:5px 12px }
+
   .inspector { border-radius:18px 18px 0 0; border-top:0; box-shadow:0 -10px 28px -8px rgb(11 26 44 / .3) }
   aside#panel section#pane-layers.pop { top:auto; left:0; right:0; bottom:0; width:auto; max-height:72dvh;
     border-radius:18px 18px 0 0; border:0; padding:8px 16px calc(16px + env(safe-area-inset-bottom));
     box-shadow:0 -10px 32px -8px rgb(11 26 44 / .35); z-index:1400 }
-  .rhead { margin:-4px -16px 0; padding:4px 10px 10px }
+
   .rsfoot { bottom:-16px; margin:8px -16px 0; padding:12px 16px }
   .pfav { width:25% }
 }
@@ -1509,5 +1364,292 @@ aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:130
   #locbtn.busy svg { animation:none }
   aside#panel section#pane-layers.pop { animation:none }
 }
-.rhtxt p { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+
 .rstxt small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+
+/* ============ Map v2 (2026-11): rail with More, panes with a close
+   button, Places with Directions inside, the stacked route editor, Live
+   filters, Ask states. Tokens only, so light and dark share it. ======== */
+
+/* ── Rail: always 76px; More opens a menu beside it ───────────── */
+.rail { overflow-y:auto; scrollbar-width:none }
+.rail::-webkit-scrollbar { display:none }
+.railalso { display:contents }
+.railsep { flex:none; height:1px; margin:6px 18px; background:var(--bline) }
+.rail .tool.railmore[aria-expanded="true"] svg { background:var(--surface-2); color:var(--ink) }
+@media (min-width: 961px) and (max-height: 760px) {
+  .rail .tool { gap:2px; padding:3px 0 }
+  .rail .tool svg { height:30px; padding:5.5px 14.5px }
+  .railsep { margin:3px 18px }
+}
+.moremenu { position:fixed; z-index:1400; width:252px; padding:6px; border-radius:12px;
+  background:var(--surface); color:var(--ink); border:1px solid var(--bline);
+  box-shadow:var(--float), 0 24px 48px -16px rgb(11 26 44 / .25) }
+.moremenu[hidden], .mmphone { display:none }
+.moremenu [role="group"] + [role="group"] { margin-top:4px; padding-top:4px; border-top:1px solid var(--bline) }
+.moremenu [role="menuitem"], .routemenu [role="menuitem"], .pmenu [role="menuitem"] {
+  display:flex; align-items:center; gap:10px; width:100%; min-height:38px; padding:8px 10px; border:0;
+  border-radius:8px; background:transparent; color:var(--ink); font:500 13.5px/1.3 Inter;
+  text-align:left; text-decoration:none; cursor:pointer }
+.moremenu [role="menuitem"] svg, .pmenu [role="menuitem"] svg { flex:none; width:18px; height:18px; fill:none;
+  stroke:var(--ink-2); stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round }
+.moremenu [role="menuitem"]:hover, .routemenu [role="menuitem"]:hover, .pmenu [role="menuitem"]:hover,
+.moremenu [role="menuitem"]:focus-visible, .routemenu [role="menuitem"]:focus-visible,
+.pmenu [role="menuitem"]:focus-visible { background:var(--surface-2); outline:none }
+.moremenu [role="menuitem"]:focus-visible, .routemenu [role="menuitem"]:focus-visible,
+.pmenu [role="menuitem"]:focus-visible { box-shadow:inset 0 0 0 2px var(--sky) }
+.moremenu [role="menuitem"].armed { color:var(--sky) }
+
+/* ── Every pane: title left, close right ─────────────────────── */
+.phead { align-items:center; margin-bottom:12px }
+.phead .panehead { flex:1; min-width:0 }
+.phead .txtbtn { margin:0 }
+.paneclose { width:32px; height:32px; margin:-6px -10px -6px 0; color:var(--ink-2) }
+.paneclose:hover { color:var(--ink) }
+.panehead .badge { font:500 10px/1 var(--mono); letter-spacing:.08em; color:var(--ink-3);
+  border:1px solid var(--bline); border-radius:4px; padding:2px 4px; vertical-align:2px; margin-left:4px }
+
+/* ── Places: a place's menu, and the Directions row ─────────── */
+#pane-places { position:relative }
+.pmenu { position:absolute; z-index:20; width:188px; padding:4px; border-radius:10px;
+  background:var(--surface); border:1px solid var(--bline);
+  box-shadow:var(--float), 0 16px 32px -12px rgb(11 26 44 / .25) }
+.pmenu[hidden] { display:none }
+.pmenu [role="menuitem"]:first-child svg { stroke:var(--sky) }
+.direntry { display:flex; align-items:center; gap:12px; width:100%; margin-top:16px; padding:10px 12px;
+  border:1px solid var(--bline); border-radius:12px; background:var(--surface); color:var(--ink);
+  text-align:left; cursor:pointer; font:inherit }
+.direntry:hover { background:var(--surface-2) }
+.direntry:focus-visible { outline:2px solid var(--sky); outline-offset:2px }
+.direntry > span:nth-child(2) { flex:1; min-width:0 }
+.direntry b { display:block; font:600 14px/1.3 Inter }
+.direntry small { display:block; font:400 12.5px/1.4 Inter; color:var(--ink-2); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis }
+.dirglyph { flex:none; display:grid; place-items:center; width:36px; height:36px; border-radius:999px;
+  background:var(--sky); color:var(--accent-ink, #fff) }
+.dirglyph svg, .direntry .chev { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.9;
+  stroke-linecap:round; stroke-linejoin:round }
+.direntry .chev { flex:none; color:var(--ink-3) }
+.findbox input { padding-right:74px }
+.findbox #findclear { right:42px }
+.findbox .finddir { position:absolute; right:6px; top:6px; width:32px; height:32px; display:grid;
+  place-items:center; border:0; border-radius:8px; background:transparent; color:var(--sky); cursor:pointer }
+.findbox .finddir svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:1.9;
+  stroke-linecap:round; stroke-linejoin:round }
+.findbox .finddir:hover { background:var(--sky-soft) }
+.findbox .finddir:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+
+/* ── Directions: points on a dotted line ─────────────────────── */
+.dirtop { display:flex; align-items:center; gap:4px; margin:-6px -10px 10px -10px }
+.dirtop .panehead { flex:1; min-width:0; margin:0 }
+.dirtop .txtbtn { margin:0 4px 0 0 }
+.dirtop .txtbtn[hidden] { display:none }
+.dirbox { display:flex; align-items:center; gap:2px; margin:0 -8px 0 -6px }
+.dirpts { list-style:none; flex:1; min-width:0; margin:0; padding:0 }
+.dirpt { position:relative; display:grid; grid-template-columns:24px 16px minmax(0, 1fr) auto auto;
+  align-items:center; column-gap:6px; padding:3px 0 }
+.dirpt.dragging { opacity:.45 }
+.dirpt.dropat { box-shadow:inset 0 2px 0 var(--sky) }
+/* The dotted line from each point's mark down to the next one. */
+.dirpt:not(:last-child)::after { content:""; position:absolute; left:38px; top:calc(50% + 9px);
+  height:calc(100% - 18px); width:2px; margin-left:-1px;
+  background:radial-gradient(circle, var(--ink-3) 1px, transparent 1.3px) 0 0 / 2px 5px repeat-y }
+.dirgrip { width:24px; height:32px; display:grid; place-items:center; padding:0; border:0; border-radius:6px;
+  background:transparent; color:var(--ink-3); cursor:grab; opacity:0; transition:opacity .12s }
+.dirgrip svg { width:14px; height:14px; fill:currentColor; stroke:none }
+.dirpt:hover .dirgrip, .dirgrip:focus-visible, .dirpts:focus-within .dirgrip { opacity:1 }
+.dirgrip:focus-visible { outline:2px solid var(--sky); outline-offset:-1px }
+.dirmark { justify-self:center; display:grid; place-items:center; box-sizing:border-box }
+.dirpt.origin .dirmark { width:12px; height:12px; border-radius:99px; border:2.5px solid var(--ink-2);
+  background:var(--surface) }
+.dirpt.stop .dirmark { width:16px; height:16px; border-radius:99px; background:var(--surface-2);
+  border:1.5px solid var(--ink-3); font:600 9.5px/1 Inter; color:var(--ink-2) }
+.dirpt.dest .dirmark { width:12px; height:12px; border-radius:50% 50% 50% 0; transform:rotate(-45deg);
+  background:var(--k-closure); margin-top:-2px }
+.dirfld { position:relative; min-width:0 }
+.dirfld input { width:100%; height:40px; padding:0 10px; border:1px solid var(--bline); border-radius:8px;
+  background:var(--surface); color:var(--ink); font:400 14px Inter }
+.dirfld input::placeholder { color:var(--ink-3) }
+.dirfld input:focus { border-color:var(--sky); outline:2px solid color-mix(in srgb, var(--sky) 30%, transparent);
+  outline-offset:0 }
+.dirfld .val { font-size:12px; margin:2px 0 0; min-height:0 }
+.dirfld .val:empty { display:none }
+.dirpick, .dirrm { width:30px; height:32px; display:grid; place-items:center; padding:0; border:0;
+  border-radius:8px; background:transparent; color:var(--ink-3); cursor:pointer;
+  position:static; font:inherit }
+.dirpick svg, .dirrm svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.9;
+  stroke-linecap:round; stroke-linejoin:round }
+.dirpick:hover, .dirrm:hover { background:var(--surface-2); color:var(--ink) }
+.dirpick.armed { background:var(--sky-soft); color:var(--sky) }
+.dirpick:focus-visible, .dirrm:focus-visible { outline:2px solid var(--sky); outline-offset:-1px }
+.dirrm[hidden] { display:none }
+.dirswap { color:var(--ink-2) }
+.dirswap[hidden] { display:none }
+.diradd { display:flex; align-items:center; gap:10px; margin:2px 0 0 24px; min-height:36px }
+#addstop { display:inline-flex; align-items:center; gap:10px; padding:6px 8px 6px 4px; border:0;
+  border-radius:8px; background:transparent; color:var(--ink); font:500 13.5px Inter; cursor:pointer }
+#addstop .plus { display:grid; place-items:center; width:18px; height:18px; border-radius:99px;
+  border:1.5px solid var(--ink-3); color:var(--ink-2); font:500 13px/1 Inter }
+#addstop:hover { background:var(--surface-2) }
+#addstop:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+#addstop[hidden], .dircap[hidden] { display:none }
+.dircap { font:400 12.5px Inter; color:var(--ink-3) }
+.dirmeta { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px;
+  padding-top:10px; border-top:1px solid var(--bline) }
+.leavebtn .caret { width:14px; height:14px; margin-left:-2px; color:var(--ink-3) }
+.optcount { color:var(--ink-2); font-weight:400 }
+.optcount[hidden] { display:none }
+#optsbtn, .dirtop .txtbtn, #stepsbtn { min-height:32px }
+#optsbtn { padding:4px 8px; border-radius:8px }
+#optsbtn[aria-expanded="true"] { background:var(--sky-soft) }
+.departrow { margin-top:10px }
+.departrow[hidden] { display:none }
+.diropts { display:grid; gap:10px; margin-top:10px; padding:10px 12px; border:1px solid var(--bline);
+  border-radius:10px; background:var(--surface) }
+.diropts[hidden] { display:none }
+.diropts fieldset { border:0; margin:0; padding:0; display:flex; flex-wrap:wrap; align-items:center;
+  gap:0 16px }
+.diropts legend { padding:0; margin:0 0 2px; font:500 10.5px/1.4 var(--mono);
+  letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3) }
+.diropts label { display:inline-flex; align-items:center; gap:7px; min-height:32px; font:400 13.5px Inter;
+  color:var(--ink); cursor:pointer }
+.diropts input { width:16px; height:16px; margin:0; accent-color:var(--sky) }
+.dirstatus { margin:10px 0 0; font:400 13px/1.45 Inter; color:var(--ink-2) }
+.dirstatus:empty { display:none }
+#pane-plan[aria-busy="true"] .routealts { opacity:.55 }
+.plannote { margin:10px 0 0 }
+
+/* Routes: compact rows, the selected one barred on the left. */
+.routealts { margin:12px -18px 0; border-top:1px solid var(--bline) }
+.routealts:empty { display:none }
+.altrow { position:relative; display:grid; grid-template-columns:24px minmax(0, 1fr) auto; column-gap:12px;
+  align-items:start; width:100%; padding:12px 18px; border:0; border-bottom:1px solid var(--bline);
+  background:transparent; color:var(--ink); text-align:left; font:inherit; cursor:pointer }
+.altrow:hover { background:var(--surface-2) }
+.altrow.on { background:color-mix(in srgb, var(--sky) 7%, var(--surface)) }
+.altrow.on::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--sky) }
+.altrow:focus-visible { outline:2px solid var(--sky); outline-offset:-2px }
+.altcar svg { width:20px; height:20px; margin-top:1px; fill:none; stroke:var(--ink-2); stroke-width:1.8;
+  stroke-linecap:round; stroke-linejoin:round }
+.altrow.on .altcar svg { stroke:var(--sky) }
+.altmain { min-width:0 }
+.altvia { display:block; font:500 14px/1.35 Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.altfast { font:500 10px/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--k-ok);
+  vertical-align:1px; margin-left:4px }
+.altbadge { display:inline-block; margin-top:3px; font:400 12.5px/1.35 Inter }
+.altbadge.ok { color:var(--k-ok) }
+.altbadge.warn { color:var(--k-incident) }
+.altwhat { display:block; font:400 12px/1.4 Inter; color:var(--ink-2); margin-top:2px }
+.altside { text-align:right; white-space:nowrap }
+.alttime { display:block; font:600 17px/1.25 Inter; color:var(--ink); font-variant-numeric:tabular-nums }
+.alttime.late { color:var(--k-incident) }
+.altdist { display:block; font:400 12px/1.4 Inter; color:var(--ink-2) }
+
+/* Steps, and Share / Export behind the More button. */
+#printwrap[hidden] { display:none }
+.routeacts { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin:10px 0 0 }
+#stepsbtn { margin:0; padding:7px 14px; border:1px solid var(--bline); border-radius:999px; font:500 13px Inter }
+#stepsbtn[aria-expanded="true"] { background:var(--sky-soft); border-color:transparent }
+.routemore { position:relative }
+#routemorebtn { width:34px; height:34px; border:1px solid var(--bline); border-radius:999px; color:var(--ink-2) }
+#routemorebtn[aria-expanded="true"] { background:var(--surface-2) }
+.routemenu { position:absolute; right:0; top:calc(100% + 6px); z-index:20; width:196px; padding:4px;
+  border-radius:10px; background:var(--surface); border:1px solid var(--bline);
+  box-shadow:var(--float), 0 16px 32px -12px rgb(11 26 44 / .25) }
+.routemenu[hidden] { display:none }
+.stepsdrop { margin:10px 0 0; padding:10px 12px 4px; border:1px solid var(--bline); border-radius:10px }
+.stepsdrop[hidden] { display:none }
+.stepsdrop .steps { margin:6px 0 0; padding-left:20px; font-size:13px; line-height:1.45 }
+.stepsdrop .steps li { margin:0 0 6px }
+.rstrip { margin-top:14px }
+.rsfoot:not(:has(.rslegend:not([hidden]))) { display:none }
+.routecond[hidden] { display:none }
+
+/* ── Live: kinds with counts, then the list ──────────────────── */
+.livefilters { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; margin:0 0 10px }
+.livekind { display:flex; align-items:center; gap:8px; min-height:40px; padding:5px 10px 5px 8px;
+  border:1px solid var(--bline); border-radius:10px; cursor:pointer; font:500 13px/1.25 Inter;
+  color:var(--ink); background:var(--surface) }
+.livekind:hover { background:var(--surface-2) }
+.livekind:has(input:checked) { border-color:color-mix(in srgb, var(--sky) 45%, var(--bline)) }
+.livekind:has(input:focus-visible) { outline:2px solid var(--sky); outline-offset:1px }
+.livekind input { width:16px; height:16px; margin:0; flex:none; accent-color:var(--sky) }
+.livekind .kicon { width:20px; height:20px; border-radius:6px }
+.livekind .kicon svg { width:11px; height:11px }
+.lkname { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.lkn { flex:none; font:400 11.5px var(--mono); color:var(--ink-2); font-variant-numeric:tabular-nums }
+.livekind.none .lkname, .livekind.none .lkn { color:var(--ink-3) }
+.liverow { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:2px 0 4px;
+  min-height:32px }
+.livesev { display:inline-flex; align-items:center; gap:7px; font:400 12.5px Inter; color:var(--ink-2);
+  cursor:pointer; min-height:32px }
+.livesev input { width:16px; height:16px; margin:0; accent-color:var(--sky) }
+.kpiwrap { margin-top:16px; border-top:1px solid var(--bline) }
+.kpiwrap summary { padding:12px 0 8px; font:500 12.5px Inter; color:var(--ink-2); cursor:pointer }
+.kpiwrap summary:focus-visible { outline:2px solid var(--sky); outline-offset:2px; border-radius:4px }
+
+/* ── Ask: the question above its answer, errors that stay ─────── */
+.askintro { margin:0 0 10px; font:400 13px/1.5 Inter; color:var(--ink-2) }
+.searchrow button.ask { display:grid; place-items:center; padding:0 14px; min-width:44px }
+.searchrow button.ask svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2.2;
+  stroke-linecap:round; stroke-linejoin:round }
+:root[data-theme="dark"] .searchrow button.ask { color:#08101a }
+.examples:empty { display:none }
+.result { scroll-margin-top:12px }
+.askedq { margin:0 0 10px auto; width:fit-content; max-width:88%; padding:8px 12px;
+  border-radius:14px 14px 4px 14px; background:var(--surface-2); color:var(--ink); font:400 13.5px/1.45 Inter;
+  overflow-wrap:anywhere }
+.askedq[hidden] { display:none }
+.askerr { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; margin-top:10px; padding:9px 12px;
+  border-radius:10px; background:color-mix(in srgb, var(--k-closure) 10%, var(--surface));
+  border:1px solid color-mix(in srgb, var(--k-closure) 30%, transparent); font:400 13px/1.45 Inter;
+  color:var(--ink) }
+.askerr[hidden] { display:none }
+.askerr span { flex:1 1 200px }
+.askerr .txtbtn { margin:0 }
+.feedback button { display:grid; place-items:center; width:32px; height:32px; padding:0; color:var(--ink-2) }
+.feedback button svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.8;
+  stroke-linecap:round; stroke-linejoin:round }
+
+/* ── Data: the feeds' status in the pane ─────────────────────── */
+.srclist .sub { font:400 12px Inter; color:var(--ink-3); margin-bottom:6px }
+.srcstate { margin:14px 0 2px; font:500 10.5px/1.2 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+  color:var(--ink-3) }
+.srclist .src { display:flex; align-items:center; gap:8px; padding:6px 0; font:500 12.5px/1.35 Inter;
+  border-top:1px solid var(--bline); color:var(--ink) }
+.srclist .src i { width:8px; height:8px; border-radius:99px; flex:none }
+.srclist .src span { min-width:0 }
+.srclist .src small { margin-left:auto; color:var(--ink-2); font-size:11.5px; text-align:right }
+.srcpanel .srcstate { margin:9px 0 2px }
+
+/* ── API keys: native in its own pane ────────────────────────── */
+#pane-keys .keyblock .hint { margin:0 0 10px; font:400 13px/1.5 Inter; color:var(--ink-2) }
+#keycard:not([hidden]) ~ .keysout { display:none }
+.keyblock[hidden] { display:none }
+
+/* ── Phone: tab bar Places, Live, Ask, Watch, More ───────────── */
+@media (max-width: 960px) {
+  .railalso, .railsep, .rail .railgap { display:none }
+  .rail { overflow:visible }
+  .rail .tool.railmore { flex:1 1 0; min-width:0; min-height:44px }
+  .moremenu { left:8px !important; right:8px; bottom:calc(var(--tab-h) + 8px) !important; top:auto !important;
+    width:auto; max-height:calc(100dvh - var(--tab-h) - 80px); overflow-y:auto; border-radius:16px;
+    padding:8px; z-index:1402 }
+  .moremenu .mmphone { display:block }
+  .moremenu [role="menuitem"] { min-height:44px; font-size:15px }
+  .routealts { margin:12px -16px 0 }
+  .altrow { padding:12px 16px }
+  .dirgrip { opacity:.6 }
+  .dirpick, .dirrm { width:36px; height:40px }
+  .dirfld input { height:44px }
+  .dirtop { margin:-2px -8px 8px -8px }
+  .paneclose { width:40px; height:40px; margin:-8px -10px -8px 0 }
+  .livekind { min-height:44px }
+}
+
+/* Sign-in links inside a pane's note read as links, not grey blocks. */
+#panel .panenote .detbtn { display:inline; padding:0; margin:0 0 0 2px; border:0; background:none;
+  color:var(--sky); font:inherit; font-weight:600; cursor:pointer; text-decoration:underline;
+  text-underline-offset:2px }
+#panel .panenote .detbtn:hover { text-decoration-thickness:2px }
+#panel .panenote .detbtn:focus-visible { outline:2px solid var(--sky); outline-offset:2px; border-radius:3px }
