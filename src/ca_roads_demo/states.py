@@ -1202,8 +1202,11 @@ async def _sr_refresh_tokens(client) -> None:
     xsrf = client.cookies.get("XSRF-TOKEN") or ""
     resp = await client.post(
         f"{SR_SERVICES}/auth/login", timeout=30.0,
-        json={"username": os.environ.get("SMARTERROADS_USER", ""),
-              "password": os.environ.get("SMARTERROADS_PASS", "")},
+        # Secrets added from a terminal often end in a newline; the
+        # portal treats it as part of the password and answers 401.
+        json={"username": os.environ.get("SMARTERROADS_USER", "").strip(),
+              "password": os.environ.get("SMARTERROADS_PASS", "")
+              .rstrip("\r\n")},
         headers={**UA, "X-XSRF-TOKEN": xsrf})
     resp.raise_for_status()
     # The portal answers 200 even when it refuses a login and puts the

@@ -1114,3 +1114,27 @@ async def test_va_refused_login_reports_the_portal_reason(monkeypatch):
             assert "secret-pass" not in str(err.value)
             assert token.call_count == 0
     states._sr_tokens.clear()
+
+
+async def test_va_login_trims_terminal_newlines(monkeypatch):
+    import json as _json
+
+    import httpx
+    import respx
+
+    monkeypatch.setenv("SMARTERROADS_USER", " someone@example.com\n")
+    monkeypatch.setenv("SMARTERROADS_PASS", "p a ss\r\n")
+    _sr_reset(monkeypatch)
+    with respx.mock:
+        respx.get(url__regex=r".*services/auth/token").mock(
+            return_value=httpx.Response(
+                200, headers={"set-cookie": "XSRF-TOKEN=x"}))
+        login = respx.post(url__regex=r".*services/auth/login").mock(
+            return_value=httpx.Response(200, json=SR_LOGIN_OK))
+        respx.get(url__regex=r".*services/users/token/\d+").mock(
+            return_value=httpx.Response(200, json={"data": "tok"}))
+        async with httpx.AsyncClient() as client:
+            await states._sr_refresh_tokens(client)
+    sent = _json.loads(login.calls[0].request.content)
+    assert sent == {"username": "someone@example.com", "password": "p a ss"}
+    states._sr_tokens.clear()
