@@ -2,8 +2,9 @@
 
 CommuteScout exposes its entire data layer as an MCP server, so Claude
 (or any MCP client) can answer questions about US roads with live data
-instead of guesses: California in the most depth, and live events
-across every covered state.
+instead of guesses: the same trip, weather, traffic and live-event
+tools in every covered state, plus extra California-only corridor
+tools.
 
 ## Connect to the hosted server
 
@@ -68,8 +69,8 @@ Every tool is also a `GET` on the same host, for scripts, dashboards and
 anything that is not an MCP client:
 
 ```
-https://mcp.commutescout.com/v1/tools/get_incidents?area=Redwood%20City
-https://mcp.commutescout.com/v1/tools/check_route?from_place=Sacramento&to_place=Reno
+https://mcp.commutescout.com/v1/tools/plan_trip?origin=Denver%2C%20CO&destination=Boulder%2C%20CO
+https://mcp.commutescout.com/v1/tools/get_nearby_events?place=Columbus%2C%20OH&radius_km=30
 ```
 
 Each call needs the key (`X-API-Key: cs_live_...` or
@@ -138,16 +139,16 @@ without Firestore:
 
 | Tool | What it answers |
 |------|-----------------|
-| `check_route(from_place, to_place, from_coords?, to_coords?)` | Everything active along a major corridor (17 curated corridors: I-80 Sacramento-Reno, US-50 to Tahoe, I-5, US-101, SR-17, SR-99, SR-1, I-15 to Vegas, Bay Area freeways, Tahoe locals), ordered by miles along the route |
-| `check_region(region)` | One-call report for a whole region (Bay Area, SoCal, Sierra, Central Valley, and four more): exact counts, incidents severity-sorted, full closures first, capped lists that say when they truncate |
-| `get_incidents(highway?, area?, center?, radius_km?)` | Live CHP incidents by route, dispatch area, or a point and radius |
-| `get_lane_closures(route?, district?, center?, radius_km?)` | Closures in place right now, classified per the [closure taxonomy](data-sources.md#the-closure-taxonomy) |
-| `get_chain_controls(route?, center?, radius_km?)` | Current chain requirements; says "none active" explicitly in the off-season |
-| `get_wildfires(near_route?, center?, radius_km?)` | Active fires with size, containment, and mapped perimeter edges, flagged near major highways |
-| `get_cameras(center?, route?, radius_km?, limit?)` | Roadside camera snapshots, each verified live before it is returned (offline placeholder frames are filtered by image freshness) |
-| `get_road_signs(route?, center?, radius_km?)` | What changeable message signs are displaying right now, verbatim |
-| `rank_routes(by?, limit?)` | All 17 corridors ranked by live events or measured congestion, with reasons; answers "what are the busiest routes right now" |
-| `get_nearby_events(center or place, radius_km?, kinds?)` | Live road events near a point across every covered state, 37 states, not just California (California's own feeds are included), plus speed and red-light cameras; the tool for locations outside California or near a state border |
+| `check_route(from_place, to_place, from_coords?, to_coords?)` | California only: Everything active along a major corridor (17 curated corridors: I-80 Sacramento-Reno, US-50 to Tahoe, I-5, US-101, SR-17, SR-99, SR-1, I-15 to Vegas, Bay Area freeways, Tahoe locals), ordered by miles along the route |
+| `check_region(region)` | California only: One-call report for a whole region (Bay Area, SoCal, Sierra, Central Valley, and four more): exact counts, incidents severity-sorted, full closures first, capped lists that say when they truncate |
+| `get_incidents(highway?, area?, center?, radius_km?)` | California only: Live CHP incidents by route, dispatch area, or a point and radius |
+| `get_lane_closures(route?, district?, center?, radius_km?)` | California only: Closures in place right now, classified per the [closure taxonomy](data-sources.md#the-closure-taxonomy) |
+| `get_chain_controls(route?, center?, radius_km?)` | California only: Current chain requirements; says "none active" explicitly in the off-season |
+| `get_wildfires(near_route?, center?, radius_km?)` | California only: Active fires with size, containment, and mapped perimeter edges, flagged near major highways |
+| `get_cameras(center?, route?, radius_km?, limit?)` | California only: Roadside camera snapshots, each verified live before it is returned (offline placeholder frames are filtered by image freshness) |
+| `get_road_signs(route?, center?, radius_km?)` | California only: What changeable message signs are displaying right now, verbatim |
+| `rank_routes(by?, limit?)` | California only: All 17 corridors ranked by live events or measured congestion, with reasons; answers "what are the busiest routes right now" |
+| `get_nearby_events(center or place, radius_km?, kinds?)` | Live road events near a place in any of the 37 covered states, each naming its publishing agency; optional signs, road weather, cameras, tolls and speed and red-light cameras |
 | `plan_trip(origin, destination, depart_at?, preference?)` | One drive between any two US places: drive time with traffic for that departure, alternatives, everything on the route in mile order, alerts and the arrival forecast |
 | `best_time_to_go(origin, destination, day?, earliest?, latest?, arrive_by?, step_minutes?)` | Up to 16 departures compared on drive time, arrival weather and how often incidents start on the route that hour; a pick and the full curve |
 | `find_place(query, near?, limit?)` | What a typed place resolves to, with alternatives |
@@ -162,17 +163,20 @@ trip with no origin starts from Home.
 
 The `check_route`, `check_region`, `rank_routes`, `get_incidents`,
 `get_lane_closures`, `get_chain_controls`, `get_wildfires`, `get_cameras`
-and `get_road_signs` tools read California's feeds and corridors. For a
-drive or a place in another state, use `plan_trip`, `best_time_to_go` or
-`get_nearby_events`.
+and `get_road_signs` tools read California's feeds and corridors only;
+given a point or a place in another state they answer with an error that
+points to `get_nearby_events` or `plan_trip` instead of an empty list.
+For a drive or a place in any state, use `plan_trip`, `best_time_to_go`
+or `get_nearby_events`.
 
 Parameter notes: `center` is `"lat,lon"`; `radius_km` caps at 160 on
 `get_nearby_events`, whose `kinds` is a comma list from `incident`,
-`closure`, `chain` and `fire` (all four by default); `plan_trip`'s
+`closure`, `chain` and `fire` (all four by default), plus `sign`, `rwis`,
+`camera`, `toll` and `enforcement`; `plan_trip`'s
 `preference` is one of `fastest` (default), `shortest`, `no_highways`,
 `no_tolls` or `avoid_chains`; `depart_at`, `day`, `earliest`, `latest`
 and `arrive_by` take plain times such as `"tomorrow 8am"` or `"friday"`
-in the origin's local time, and `day` reaches up to 60 days out; `best_time_to_go`'s
+in the origin's local time (`arrive_by` in the destination's), and `day` reaches up to 60 days out; `best_time_to_go`'s
 `step_minutes` runs 10 to 180 (the default fits the window into 16
 departures); `get_weather` takes `hours` from 1 to 156; `get_traffic`
 takes up to 10 `points` as `"lat,lon|lat,lon"`; `get_area_history` takes

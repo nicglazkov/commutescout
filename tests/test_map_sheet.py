@@ -58,7 +58,8 @@ def test_tab_bar_never_collapses_the_panel_on_a_phone():
 
 def test_map_first_actions_fold_the_sheet():
     # Alert row, inspector and pick-on-map all need the map visible.
-    assert APP.count("if (isPhone()) setSheet('peek');") == 2  # inspector, pick on map
+    # Inspector, pick on map, and saving a place (the search box is on the map).
+    assert APP.count("if (isPhone()) setSheet('peek');") == 3
     assert "map.on('popupopen', (e) => {\n  if (!isPhone()) return;\n  setSheet('peek');" in APP
     assert "map.once('moveend', open); map.setView(at, z);" in APP
     assert "setTool('ask', { toggle: false, reveal: true })" in ASSIST

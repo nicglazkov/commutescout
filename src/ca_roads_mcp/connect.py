@@ -166,9 +166,9 @@ def guide() -> str:
 > API key required): {ENDPOINT}
 
 CommuteScout ({SITE}) is a live road map, a driving app and an MCP server
-built on the same data: state DOT and 511 feeds, CHP, NWS weather,
-wildfires, cameras, message signs, TomTom traffic and an archive of past
-events. The MCP server lets an assistant answer "what's a good time to
+built on the same data: state DOT, highway patrol and 511 feeds, NWS
+weather, wildfires, cameras, message signs, TomTom traffic and an archive
+of past events. The MCP server lets an assistant answer "what's a good time to
 drive to X?", "is the pass on my route open?" or "what's going on near me?"
 with live data.
 
@@ -204,9 +204,10 @@ coordinates or a city you already know, or ask.
 - Trips: `plan_trip`, `best_time_to_go`, `find_place`, `get_my_places`
 - Around a place: `get_nearby_events`, `get_weather`, `get_traffic`,
   `get_area_history`
-- California corridors and regions: `check_route`, `check_region`,
-  `rank_routes`, `get_incidents`, `get_lane_closures`,
-  `get_chain_controls`, `get_wildfires`, `get_cameras`, `get_road_signs`
+- California only (extra depth there; use the tools above for every
+  other state): `check_route`, `check_region`, `rank_routes`,
+  `get_incidents`, `get_lane_closures`, `get_chain_controls`,
+  `get_wildfires`, `get_cameras`, `get_road_signs`
 - Coverage: `get_coverage`
 
 ## Docs

@@ -268,7 +268,12 @@ function ensureMap() {
   let savedBase = null;
   try { savedBase = localStorage.getItem('cs-basemap'); } catch (e) { /* private mode */ }
   // A saved choice that is no longer offered falls back to the default.
-  if (!baseLayers[savedBase]) savedBase = CS_BASEMAP_DEFAULT;
+  // Nothing saved: a dark page starts on the Dark map (basemap-early.js
+  // preloads the same style).
+  if (!baseLayers[savedBase]) {
+    savedBase = (document.documentElement.dataset.theme === 'dark' && baseLayers.Dark)
+      ? 'Dark' : CS_BASEMAP_DEFAULT;
+  }
   let baseOn = baseLayers[savedBase].addTo(map);
   // The style choice lives in the Layers pane with everything else that
   // is on the map; no second control floats over the map.

@@ -202,6 +202,8 @@ export async function initWatch(opts) {
   });
   onAuthStateChanged(auth, async (u) => {
     user = u;
+    // The map page's Your places follows the account while signed in.
+    document.dispatchEvent(new CustomEvent('cs-auth', { detail: { signedIn: !!u } }));
     if (!u) {
       termsGate = false;
       syncAgree();

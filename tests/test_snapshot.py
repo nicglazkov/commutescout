@@ -244,7 +244,7 @@ def test_state_counts_are_current():
         # said 32 while the line above said 38, inside the text the
         # assistant reads to answer users.
         ("src/ca_roads_demo/prompt.py", r"(\d+) covered states"),
-        ("src/ca_roads_mcp/server.py", r"just California: (\d+) states today"),
+        ("src/ca_roads_mcp/server.py", r"any of the (\d+) states CommuteScout"),
         ("README.md", r"across \*\*(\d+) states\*\*|across (\d+) states"),
         # Two counts in this file, and the long connector description
         # says "across N US states" with the wrap falling between "US"
@@ -257,7 +257,7 @@ def test_state_counts_are_current():
         ("site/app/page.tsx", r"across (\d+) states"),
         ("site/components/blocks/hero-section-1.tsx", r"across (\d+) states"),
         ("docs/architecture.md", r"(\d+) states"),
-        ("docs/mcp.md", r"(\d+) states, not just California"),
+        ("docs/mcp.md", r"any of the (\d+) covered states"),
         # /mcp states the count inside the get_nearby_events blurb. It
         # used to be split across a string concatenation, which hid it
         # from every per-file pattern; the blurb now keeps "37 states"

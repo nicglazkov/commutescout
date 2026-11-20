@@ -9,7 +9,7 @@ import {
   WILDFIRE_NOTE,
   type StateRow,
 } from "@/lib/state-coverage";
-import { AGENCY_FEED_COUNT } from "@/lib/stats";
+import { AGENCY_FEED_COUNT, TOLL_FEED_COUNT } from "@/lib/stats";
 import { StateCoverageTable } from "@/components/state-coverage-table";
 import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
 import { C } from "@/components/docs/code-block";
@@ -125,13 +125,17 @@ export default function DataSourcesPage() {
       dek={
         <>
           CommuteScout reads 53 official agency feeds from state transportation departments, highway
-          patrols, and national weather and fire services, and puts them on one map.
+          patrols, and national weather and fire services, and puts them on one map. Toll prices come
+          from {TOLL_FEED_COUNT} separate toll-price feeds.
         </>
       }
       headExtra={
         <p className="dx-head-stats">
           <span>
             <b>{AGENCY_FEED_COUNT}</b> official feeds
+          </span>
+          <span>
+            <b>{TOLL_FEED_COUNT}</b> toll-price feeds
           </span>
           <span>
             <b>{STATE_COVERAGE.length}</b> states
@@ -148,10 +152,10 @@ export default function DataSourcesPage() {
         <div className="dx-prose dx-lead">
           <p>
             Each agency publishes one kind of information, such as crashes, closures or chain controls.
-            CommuteScout reads each one as its own layer and lines them all up on the same map.
+            CommuteScout checks each one on its own schedule, keeps a copy, and combines them into one map.
           </p>
         </div>
-        <DocFigure name="map-layers" />
+        <DocFigure name="pipeline-flow" />
       </Section>
 
       <Section id="coverage" title="Coverage by state">

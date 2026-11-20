@@ -51,8 +51,11 @@
   --dx-tk-ph: #ffd479;
   --dx-tk-flag: #8fd3e0;
 
-  /* The site header is sticky; anchors land below it. */
-  --dx-top: calc(var(--cs-header-h, 64px) + 20px);
+  /* The site header and the docs sub-nav are both sticky; anchors land
+     below the pair. */
+  --dx-header: var(--cs-header-h, 64px);
+  --dx-subnav-h: 49px;
+  --dx-top: calc(var(--dx-header) + var(--dx-subnav-h) + 20px);
   /* Same column as the marketing pages' cs-container. */
   --dx-gutter: 20px;
 
@@ -72,6 +75,9 @@
 
 /* ---------- sub-nav ---------- */
 .dx-subnav {
+  position: sticky;
+  top: var(--dx-header);
+  z-index: 30;
   border-bottom: 1px solid var(--dx-line);
   background: var(--dx-surface);
 }

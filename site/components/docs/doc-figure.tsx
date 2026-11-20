@@ -8,27 +8,27 @@
 //   route-strip     /mcp         #how
 //   departure-chart /mcp         #how
 //   plugin-flow     /plugins     #topology
-//   map-layers      /data-sources #how
+//   pipeline-flow   /data-sources #how
 import type { ComponentType } from "react";
 import McpCall from "@/components/figures/mcp-call";
 import RouteStrip from "@/components/figures/route-strip";
 import DepartureChart from "@/components/figures/departure-chart";
 import PluginFlow from "@/components/figures/plugin-flow";
-import MapLayers from "@/components/figures/map-layers";
+import PipelineFlow from "@/components/figures/pipeline-flow";
 
 export type FigureName =
   | "mcp-call"
   | "route-strip"
   | "departure-chart"
   | "plugin-flow"
-  | "map-layers";
+  | "pipeline-flow";
 
 const FIGURES: Record<FigureName, ComponentType<{ n?: number | string }> | null> = {
   "mcp-call": McpCall,
   "route-strip": RouteStrip,
   "departure-chart": DepartureChart,
   "plugin-flow": PluginFlow,
-  "map-layers": MapLayers,
+  "pipeline-flow": PipelineFlow,
 };
 
 export function DocFigure({ name, n = 1 }: { name: FigureName; n?: number }) {

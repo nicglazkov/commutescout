@@ -16,7 +16,8 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { US_NATION, US_VIEWBOX } from "@/components/figures/us-map.geo";
+import { US_NATION, US_STATES, US_VIEWBOX } from "@/components/figures/us-map.geo";
+import { project } from "@/components/home/albers";
 import { GROUP_META, coverageLabel, groupsOf, mainGroup, operatorOf, tierOf, type Group, type Source, type Tier } from "./data";
 
 export const GROUP_ICON: Record<Group, LucideIcon> = {
@@ -217,17 +218,50 @@ export function Operator({ s }: { s: Source }) {
   );
 }
 
-/** The country outline, filled when the plugin covers the whole of it. */
+/** The bounding box's outline in map pixels, sampled along each edge so
+ * the conic projection's curved parallels are followed. */
+function boxPolygon([south, west, north, east]: number[]): [number, number][] {
+  const pts: [number, number][] = [];
+  const steps = 24;
+  for (let i = 0; i <= steps; i++) pts.push(project(south, west + ((east - west) * i) / steps));
+  for (let i = 0; i <= steps; i++) pts.push(project(south + ((north - south) * i) / steps, east));
+  for (let i = steps; i >= 0; i--) pts.push(project(north, west + ((east - west) * i) / steps));
+  for (let i = steps; i >= 0; i--) pts.push(project(south + ((north - south) * i) / steps, west));
+  return pts;
+}
+
+function inside([x, y]: [number, number], poly: [number, number][]): boolean {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
+}
+
+/** A state map with the states the plugin covers filled in: every state
+ * when it covers the whole country, otherwise the states whose centre
+ * falls inside its stated area. */
 export function CoverageMap({ s, className = "" }: { s: Source; className?: string }) {
-  const whole = coverageLabel(s.coverage) === "Whole country";
+  const label = coverageLabel(s.coverage);
+  const whole = label === "Whole country";
+  const box = !whole && s.coverage && s.coverage.length === 4 ? boxPolygon(s.coverage) : null;
   return (
-    <svg viewBox={US_VIEWBOX} className={className} role="img" aria-label={`Coverage: ${coverageLabel(s.coverage)}`}>
-      <path
-        d={US_NATION}
-        className={whole ? "fill-cs-accent-soft stroke-cs-accent" : "fill-cs-surface-2 stroke-cs-line-strong"}
-        strokeWidth={1.25}
-        strokeLinejoin="round"
-      />
+    <svg viewBox={US_VIEWBOX} className={className} role="img" aria-label={`Coverage: ${label}`}>
+      <g strokeWidth={0.75} strokeLinejoin="round">
+        {US_STATES.map((st) => {
+          const on = whole || (box ? inside(st.c, box) : false);
+          return (
+            <path
+              key={st.id}
+              d={st.d}
+              className={on ? "fill-cs-accent-soft stroke-cs-accent/50" : "fill-cs-surface-2 stroke-cs-line-strong"}
+            />
+          );
+        })}
+      </g>
+      <path d={US_NATION} fill="none" className={whole ? "stroke-cs-accent" : "stroke-cs-line-strong"} strokeWidth={1.25} strokeLinejoin="round" />
     </svg>
   );
 }

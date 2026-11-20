@@ -44,20 +44,31 @@ def test_every_pinned_id_survives():
         assert HTML.count(f'id="{i}"') == 1, i
 
 
-def test_rail_has_the_five_tools_plus_data_once_each():
-    rail = re.search(r'<nav class="rail"[^>]*>(.*?)</nav>', HTML, re.S).group(1)
+def test_rail_has_five_primary_tools_and_the_rest_behind_more():
+    """2026-11: a slim rail (Places, Route, Live, Layers, Ask) that
+    expands to labels and the less frequent tools."""
+    rail = re.search(r'<nav class="rail"[^>]*>(.*?)\n  </nav>', HTML, re.S).group(1)
     tools = re.findall(r'data-tool="([a-z]+)"', rail)
-    assert tools == ["route", "ask", "layers", "watch", "alerts", "about", "settings"]
-    assert rail.count("<button") == 7 and "<a " not in rail
-    for name in ("Route", "Ask", "Layers", "Watch", "Alerts", "Settings", "Data"):
+    assert tools == ["places", "route", "alerts", "layers", "ask", "watch", "about", "settings"]
+    primary, adv = rail.split('<div class="railadv"')
+    assert re.findall(r'data-tool="([a-z]+)"', primary) == ["places", "route", "alerts", "layers", "ask"]
+    for name in ("Places", "Route", "Live", "Layers", "Ask", "Watch areas", "Settings", "Data"):
         assert f"<span>{name}</span>" in rail
+    # Links only in the expanded part; one expand toggle, last.
+    assert "<a " not in primary
+    assert rail.count('id="railexpand"') == 1 and rail.rstrip().endswith("</button>")
+    assert 'aria-controls="railadv"' in rail
+    for act in ("keys", "report", "theme", "palette"):
+        assert f'data-act="{act}"' in adv
+    assert "cs-rail-wide" in APP and ".shell.railwide { --rail-w:224px !important }" in CSS
 
 
-def test_one_pane_per_tool_and_only_route_open_at_load():
+def test_one_pane_per_tool_and_only_places_open_at_load():
     panes = re.findall(r'<section id="([a-z-]+)" data-tool="([a-z]+)"([^>]*)>', HTML)
-    assert [t for _, t, _ in panes] == ["route", "ask", "layers", "watch", "alerts",
+    assert [t for _, t, _ in panes] == ["places", "route", "ask", "layers", "watch", "alerts",
                                         "settings", "about"]
-    assert [i for i, t, a in panes if 'class="on"' in a] == ["pane-plan"]
+    assert [i for i, t, a in panes if 'class="on"' in a] == ["pane-places"]
+    assert "setTool(known ? saved : 'places', { toggle: false })" in APP
 
 
 def test_layers_live_in_the_panel_not_on_the_map():
