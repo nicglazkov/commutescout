@@ -51,8 +51,7 @@ const MCP_URL = setup.endpoint;
 // command or a config file, each showing that client's first code step
 // from mcp-clients.json as-is. claude.ai and Claude Desktop are set up in
 // their own settings screens, so they (and any other client) point to
-// Setup. ChatGPT cannot send the key header yet (key: false), so it is
-// never offered here.
+// Setup, where ChatGPT and claude.ai use the personal link.
 const INSTALL_IDS = ["claude-code", "codex", "gemini", "cursor", "vscode", "windsurf"] as const;
 // Where each config file goes, from the client's own step text.
 const INSTALL_FILE: Partial<Record<(typeof INSTALL_IDS)[number], string>> = {
@@ -88,8 +87,7 @@ function InstallWidget() {
         }))}
       />
       <p className="dx-install-foot">
-        Replace <C>cs_live_...</C> with your key, or set <C>COMMUTESCOUT_API_KEY</C>. claude.ai, Claude Desktop
-        and other clients:{" "}
+        Replace <C>cs_live_...</C> with your key. ChatGPT, claude.ai, Claude Desktop and other clients:{" "}
         <a href="#connect" className="dx-link">
           Setup
         </a>
@@ -206,7 +204,8 @@ export default function McpPage() {
       <Section id="connect" title="Setup">
         <div className="dx-prose dx-lead">
           <p>
-            Add the endpoint <C>{setup.endpoint}</C> to your client with your API key.{" "}
+            Every app takes your personal link: <C>{setup.personal_url}</C> with your key in place of{" "}
+            <C>cs_live_...</C>. {setup.link_note}{" "}
             <Link href="/developers#quickstart" prefetch={false} className="dx-link">
               Get a free key
             </Link>{" "}

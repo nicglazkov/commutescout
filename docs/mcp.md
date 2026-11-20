@@ -23,17 +23,28 @@ one, the server answers HTTP 401 with a JSON-RPC error (code `-32001`,
 server behind [commutescout.com](https://commutescout.com), with the same
 live feeds.
 
+The easiest way, in any client, is your **personal link**: `https://mcp.commutescout.com/mcp/cs_live_...`
+with your key in place of `cs_live_...`. It is the endpoint with the key as
+the last path segment ([`keyurl.py`](../src/ca_roads_mcp/keyurl.py) moves it
+into the `Authorization` header), so it works in apps that cannot send a
+header, such as ChatGPT and claude.ai. The link contains your key: keep it
+private, and delete the key under Settings > API keys if it leaks.
+`/mcp?key=cs_live_...` works the same way.
+
 | Client | How to add it |
 |--------|---------------|
-| Claude Code | `claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp --header "Authorization: Bearer cs_live_..."`, then `/mcp` to confirm |
-| claude.ai and Claude Desktop | Customize > Connectors > + Add > Add custom connector, with the URL above, no sign-in, and a request header `Authorization: Bearer cs_live_...` |
-| Cursor | `~/.cursor/mcp.json`: `{"mcpServers": {"commutescout": {"url": "https://mcp.commutescout.com/mcp", "headers": {"Authorization": "Bearer ${env:COMMUTESCOUT_API_KEY}"}}}}` |
-| VS Code (Copilot) | `.vscode/mcp.json`: `{"servers": {"commutescout": {"type": "http", "url": "https://mcp.commutescout.com/mcp", "headers": {"Authorization": "Bearer ${input:commutescout-key}"}}}}` plus a `promptString` input named `commutescout-key` |
-| Windsurf | `mcp_config.json`: `{"mcpServers": {"commutescout": {"serverUrl": "https://mcp.commutescout.com/mcp", "headers": {"Authorization": "Bearer ${env:COMMUTESCOUT_API_KEY}"}}}}` |
-| OpenAI Codex CLI | `codex mcp add commutescout --url https://mcp.commutescout.com/mcp --bearer-token-env-var COMMUTESCOUT_API_KEY` |
-| Gemini CLI | `gemini mcp add --transport http commutescout https://mcp.commutescout.com/mcp --header "Authorization: Bearer cs_live_..."` |
-| ChatGPT | Not yet: its custom MCP servers take OAuth or no authentication, not a header. Use another client until CommuteScout supports OAuth sign-in |
-| stdio-only clients | `npx mcp-remote https://mcp.commutescout.com/mcp --transport http-only --header "Authorization: Bearer ${COMMUTESCOUT_API_KEY}"` |
+| ChatGPT | Plugins > + > Add custom MCP server, URL: your personal link, Authentication: No authentication |
+| claude.ai and Claude Desktop | Customize > Connectors > + Add > Add custom connector, URL: your personal link, Sign-in: No sign in |
+| Claude Code | `claude mcp add --transport http --scope user commutescout https://mcp.commutescout.com/mcp/cs_live_...`, then `/mcp` to confirm |
+| Cursor | One-click "Add to Cursor" on the site, or `~/.cursor/mcp.json`: `{"mcpServers": {"commutescout": {"url": "https://mcp.commutescout.com/mcp/cs_live_..."}}}` |
+| VS Code (Copilot) | One-click "Add to VS Code" on the site, or MCP: Add Server > HTTP with your personal link |
+| Windsurf | `mcp_config.json`: `{"mcpServers": {"commutescout": {"serverUrl": "https://mcp.commutescout.com/mcp/cs_live_..."}}}` |
+| OpenAI Codex CLI | `codex mcp add commutescout --url https://mcp.commutescout.com/mcp/cs_live_...` |
+| Gemini CLI | `gemini mcp add --transport http commutescout https://mcp.commutescout.com/mcp/cs_live_...` |
+| stdio-only clients | `npx mcp-remote https://mcp.commutescout.com/mcp/cs_live_... --transport http-only` |
+
+Clients that can send headers can still use the plain endpoint with
+`Authorization: Bearer cs_live_...`, which keeps the key out of the URL.
 
 The full steps, including where each client takes the key, are
 on [commutescout.com/mcp](https://commutescout.com/mcp#connect). The same
