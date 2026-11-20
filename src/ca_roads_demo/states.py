@@ -1164,6 +1164,36 @@ def _va_ready() -> str:
             and os.environ.get("SMARTERROADS_PASS", ""))
 
 
+class SmarterRoadsLoginRefused(RuntimeError):
+    """The portal accepted the request but refused the login."""
+
+
+def _sr_check_login(resp) -> None:
+    """Raise with the portal's stated reason when a login is refused or
+    needs a person (new terms, forced password change). Only the
+    portal's flags and message are included, never credentials."""
+    try:
+        body = resp.json()
+    except ValueError:
+        raise SmarterRoadsLoginRefused(
+            "login answered with a non-JSON page") from None
+    if not isinstance(body, dict):
+        raise SmarterRoadsLoginRefused("login answered with unexpected data")
+    if not body.get("success"):
+        reason = (body.get("user_message") or body.get("message")
+                  or "no reason given")
+        code = body.get("error_code")
+        raise SmarterRoadsLoginRefused(
+            f"login refused: {reason}" + (f" (code {code})" if code else ""))
+    user = body.get("user") or {}
+    if user.get("terms_accepted") is False:
+        raise SmarterRoadsLoginRefused(
+            "login needs the SmarterRoads terms accepted on the website")
+    if user.get("passwordChangeNeeded"):
+        raise SmarterRoadsLoginRefused(
+            "login needs a password change on the website")
+
+
 async def _sr_refresh_tokens(client) -> None:
     """Login and cache one token per dataset. Tokens are long-lived;
     a 401 on the gateway triggers one refresh."""
@@ -1176,9 +1206,17 @@ async def _sr_refresh_tokens(client) -> None:
               "password": os.environ.get("SMARTERROADS_PASS", "")},
         headers={**UA, "X-XSRF-TOKEN": xsrf})
     resp.raise_for_status()
+    # The portal answers 200 even when it refuses a login and puts the
+    # reason in the body (its own web app reads it there). Without this
+    # check a refused login surfaced only as a 500 from the token call.
+    _sr_check_login(resp)
     for ds in SR_PATHS:
+        # The portal's web app sends the (possibly rotated) XSRF cookie
+        # back on every request, not only the login; do the same.
+        xsrf = client.cookies.get("XSRF-TOKEN") or xsrf
         r = await client.get(f"{SR_SERVICES}/users/token/{ds}",
-                             headers=UA, timeout=30.0)
+                             headers={**UA, "X-XSRF-TOKEN": xsrf},
+                             timeout=30.0)
         r.raise_for_status()
         _sr_tokens[ds] = r.json()["data"]
 
