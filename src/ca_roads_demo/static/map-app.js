@@ -4034,6 +4034,21 @@ document.getElementById('rleave').addEventListener('click', () => {
 });
 // Popups pan clear of the floating panel (and on a phone, the search).
 function syncPopupPad() {
+  // The phone search floats just under the site header, which can wrap
+  // to two rows on a narrow tablet; follow its real bottom edge.
+  const bar = document.querySelector('header.topbar');
+  if (bar) {
+    // The header's nav can overflow its box on a narrow tablet, so take
+    // the lowest thing it draws, not the box.
+    let b = bar.getBoundingClientRect().bottom;
+    bar.querySelectorAll('a, button').forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.height && r.top < 160) b = Math.max(b, r.bottom);
+    });
+    const over = Math.max(0, b - map.getContainer().getBoundingClientRect().top);
+    document.documentElement.style.setProperty('--bar-b', Math.round(b) + 'px');
+    document.documentElement.style.setProperty('--bar-over', Math.round(over) + 'px');
+  }
   const pad = mapPad();
   L.Popup.prototype.options.autoPanPaddingTopLeft = L.point(pad.paddingTopLeft[0] - 16, pad.paddingTopLeft[1] - 16);
   L.Popup.prototype.options.autoPanPaddingBottomRight = L.point(pad.paddingBottomRight[0] - 16, pad.paddingBottomRight[1] - 16);

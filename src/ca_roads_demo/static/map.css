@@ -1468,10 +1468,10 @@ aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:130
   aside#panel > section[data-tool].on { padding-top:4px }
   .grab::before { width:36px; height:5px; margin-left:-18px; background:var(--bline-strong) }
   /* The search floats at the top of the map, above the sheet (M2, M6). */
-  .phdr, .shell.nopanel .phdr { position:fixed; z-index:1250; top:66px; left:12px; right:68px; padding:0 }
+  .phdr, .shell.nopanel .phdr { position:fixed; z-index:1250; top:calc(var(--bar-b, 56px) + 10px); left:12px; right:68px; padding:0 }
   .shell.sheet-full .phdr { display:none }
   .findbox input { height:44px; border-radius:12px; border-color:transparent; box-shadow:var(--float) }
-  .maptr { top:10px; right:12px }
+  .maptr { top:calc(var(--bar-over, 0px) + 12px); right:12px }
   .cpalhint { display:none }
   #layersbtn { width:44px; height:44px; padding:0; justify-content:center; border-radius:999px; position:relative }
   #layersbtn svg { width:19px; height:19px }
