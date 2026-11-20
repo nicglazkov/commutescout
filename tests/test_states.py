@@ -802,7 +802,7 @@ async def test_va_smarterroads_login_tokens_and_parsing(monkeypatch):
             return_value=httpx.Response(
                 200, headers={"set-cookie": "XSRF-TOKEN=x"}))
         respx.post(url__regex=r".*services/auth/login").mock(
-            return_value=httpx.Response(200, json={"user": {}}))
+            return_value=httpx.Response(200, json=SR_LOGIN_OK))
         respx.get(url__regex=r".*services/users/token/\d+").mock(
             return_value=httpx.Response(200, json={"data": "tok"}))
         respx.get(url__regex=r".*incidentFiltered_wfs\.json.*").mock(
@@ -831,6 +831,10 @@ async def test_va_smarterroads_login_tokens_and_parsing(monkeypatch):
     states._sr_tokens.clear()
 
 
+SR_LOGIN_OK = {"success": True, "user": {"terms_accepted": True,
+                                          "passwordChangeNeeded": False}}
+
+
 def _sr_reset(monkeypatch):
     states._sr_tokens.clear()
     monkeypatch.setattr(states, "_sr_login_at", 0.0)
@@ -852,7 +856,7 @@ async def test_va_token_endpoint_500_backs_off_and_doubles(monkeypatch):
             return_value=httpx.Response(
                 200, headers={"set-cookie": "XSRF-TOKEN=x"}))
         login = respx.post(url__regex=r".*services/auth/login").mock(
-            return_value=httpx.Response(200, json={"user": {}}))
+            return_value=httpx.Response(200, json=SR_LOGIN_OK))
         # What SmarterRoads did from 2026-10-23: a good login, then 500.
         respx.get(url__regex=r".*services/users/token/\d+").mock(
             return_value=httpx.Response(500, json={"success": False}))
@@ -890,7 +894,7 @@ async def test_va_rejected_tokens_log_in_once_then_back_off(monkeypatch):
             return_value=httpx.Response(
                 200, headers={"set-cookie": "XSRF-TOKEN=x"}))
         login = respx.post(url__regex=r".*services/auth/login").mock(
-            return_value=httpx.Response(200, json={"user": {}}))
+            return_value=httpx.Response(200, json=SR_LOGIN_OK))
         respx.get(url__regex=r".*services/users/token/\d+").mock(
             return_value=httpx.Response(200, json={"data": "tok"}))
         # The gateway rejects every token, as it did from 2026-10-23.
@@ -1074,3 +1078,39 @@ def test_road_path_keeps_a_genuinely_long_closure():
     # Survives well past the 2-degree radius that would have cut it.
     assert abs(path[-1][1] - pts[-1][1]) < 0.01
     assert abs(path[-1][1] - (-111.41261)) > 2
+
+
+async def test_va_refused_login_reports_the_portal_reason(monkeypatch):
+    """SmarterRoads answers 200 to a refused login with the reason in the
+    body. Read it, never ask for tokens, and say why (no credentials)."""
+    import httpx
+    import pytest
+    import respx
+
+    monkeypatch.setenv("SMARTERROADS_USER", "u")
+    monkeypatch.setenv("SMARTERROADS_PASS", "secret-pass")
+    cases = [
+        ({"success": False, "user_message": "Invalid username or password"},
+         "Invalid username or password"),
+        ({"success": True, "user": {"terms_accepted": False}}, "terms"),
+        ({"success": True, "user": {"terms_accepted": True,
+                                    "passwordChangeNeeded": True}},
+         "password change"),
+    ]
+    for body, needle in cases:
+        _sr_reset(monkeypatch)
+        with respx.mock:
+            respx.get(url__regex=r".*services/auth/token").mock(
+                return_value=httpx.Response(
+                    200, headers={"set-cookie": "XSRF-TOKEN=x"}))
+            respx.post(url__regex=r".*services/auth/login").mock(
+                return_value=httpx.Response(200, json=body))
+            token = respx.get(url__regex=r".*services/users/token/\d+").mock(
+                return_value=httpx.Response(500))
+            async with httpx.AsyncClient() as client:
+                with pytest.raises(states.SmarterRoadsLoginRefused) as err:
+                    await states._sr_refresh_tokens(client)
+            assert needle in str(err.value)
+            assert "secret-pass" not in str(err.value)
+            assert token.call_count == 0
+    states._sr_tokens.clear()
