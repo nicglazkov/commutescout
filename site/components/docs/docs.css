@@ -1063,18 +1063,86 @@
   .dx-qs-key p { flex-basis: 100%; }
 }
 
-/* ---------- Install command by client (/mcp head) ---------- */
-.dx-install .dx-tabs { margin-top: 10px; }
-.dx-install .dx-tabpanel { padding-top: 0; }
-.dx-install .dx-tabpanel .dx-code { margin-top: 12px; }
-/* One height for every client, so switching tabs never moves the page.
-   The longest config (VS Code) scrolls inside it. */
-.dx-install .dx-code pre { height: 212px; overflow: auto; }
-.dx-install .dx-code code { white-space: pre-wrap; overflow-wrap: anywhere; }
-.dx-install-foot { margin: 12px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--dx-ink-2); }
-@media (max-width: 640px) {
-  .dx-install .dx-code pre { height: 236px; }
+/* ---------- Pick your app, paste your key (/mcp head) ----------
+   Owner pick 2026-11-20 (option 2A): a grid of apps, each with a one-line
+   hint, and the chosen app's steps with the pasted key filled in. */
+.dx-apps-key { margin-top: 10px; }
+.dx-apps-key label { display: block; font: 500 13px/1.3 var(--dx-sans); color: var(--dx-ink); }
+.dx-apps-key input {
+  width: 100%;
+  height: 40px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--dx-line-strong);
+  border-radius: var(--dx-r-md);
+  background: var(--dx-surface);
+  color: var(--dx-ink);
+  font: 400 13px/1 var(--dx-mono);
 }
+.dx-apps-key input::placeholder { color: var(--dx-ink-3); }
+.dx-apps-key input:focus-visible { outline: 2px solid var(--dx-accent); outline-offset: 1px; }
+.dx-apps-key input[aria-invalid] { border-color: var(--dx-incident); }
+.dx-apps-key p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--dx-ink-3); }
+.dx-apps-key p.dx-apps-bad { color: var(--dx-incident); }
+.dx-apps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 14px;
+}
+.dx-apps-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 1px solid var(--dx-line);
+  border-radius: var(--dx-r-md);
+  background: var(--dx-surface);
+  color: var(--dx-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.dx-apps-tile b { font: 600 13.5px/1.25 var(--dx-sans); }
+.dx-apps-tile small { font-size: 11.5px; line-height: 1.3; color: var(--dx-ink-3); }
+.dx-apps-tile:hover { border-color: var(--dx-line-strong); }
+.dx-apps-tile[aria-pressed="true"] {
+  border-color: var(--dx-accent);
+  background: var(--dx-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--dx-accent);
+}
+.dx-apps-tile:focus-visible { outline: 2px solid var(--dx-accent); outline-offset: 2px; }
+.dx-apps-steps { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--dx-line); }
+.dx-apps-title { margin: 0 0 6px; font: 600 14px/1.3 var(--dx-sans); color: var(--dx-ink); }
+.dx-apps-steps > p:not(.dx-apps-title) { margin: 6px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--dx-ink-2); }
+.dx-apps-steps .dx-code { margin-top: 10px; }
+.dx-apps-steps .dx-code pre { max-height: 220px; overflow: auto; }
+.dx-apps-steps .dx-code code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.dx-apps-one { margin: 4px 0 6px; }
+.dx-apps-tip { margin: 4px 0 0; font-size: 12.5px; color: var(--dx-ink-3); }
+
+/* Setup section: every app's steps, one collapsible row each. */
+.dx-applist { margin-top: 20px; border-top: 1px solid var(--dx-line); }
+.dx-appitem { border-bottom: 1px solid var(--dx-line); }
+.dx-appitem summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 2px;
+  cursor: pointer;
+  list-style: none;
+}
+.dx-appitem summary::-webkit-details-marker { display: none; }
+.dx-appitem summary::after { content: "+"; margin-left: auto; font: 500 16px/1 var(--dx-mono); color: var(--dx-ink-3); }
+.dx-appitem[open] summary::after { content: "\2212"; }
+.dx-appitem summary b { font: 600 15px/1.3 var(--dx-sans); color: var(--dx-ink); }
+.dx-appitem summary span { font-size: 13px; color: var(--dx-ink-3); }
+.dx-appitem summary:focus-visible { outline: 2px solid var(--dx-accent); outline-offset: 2px; border-radius: var(--dx-r-sm); }
+.dx-appitem > p { margin: 0 0 10px; max-width: 68ch; font-size: 15px; line-height: 1.6; color: var(--dx-ink-2); }
+.dx-appitem > .dx-code { margin: 0 0 14px; }
+.dx-appitem[open] { padding-bottom: 6px; }
 
 /* ---------- Layer ledger (/data-sources head) ----------
    One row per layer a state's own feeds publish: a bar against every

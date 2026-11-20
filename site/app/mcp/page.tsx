@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight, ArrowUpRight, Briefcase, Dumbbell, House, MapPin, Plus } from "lucide-react";
 import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
 import { C, CodeBlock, CopyField } from "@/components/docs/code-block";
-import { Tabs } from "@/components/docs/tabs";
+import { AppSetup } from "@/components/docs/app-setup";
 import { DocFigure } from "@/components/docs/doc-figure";
 // Per-client setup, generated from src/ca_roads_mcp/connect.py by
 // scripts/gen_api_reference.py. The same source renders /llms.txt, so the
@@ -46,57 +46,6 @@ export const metadata: Metadata = {
 };
 
 const MCP_URL = setup.endpoint;
-
-// The head's install widget: one tab per client that is set up by a
-// command or a config file, each showing that client's first code step
-// from mcp-clients.json as-is. claude.ai and Claude Desktop are set up in
-// their own settings screens, so they (and any other client) point to
-// Setup. ChatGPT cannot send the key header yet (key: false), so it is
-// never offered here.
-const INSTALL_IDS = ["claude-code", "codex", "gemini", "cursor", "vscode", "windsurf"] as const;
-// Where each config file goes, from the client's own step text.
-const INSTALL_FILE: Partial<Record<(typeof INSTALL_IDS)[number], string>> = {
-  cursor: "~/.cursor/mcp.json",
-  vscode: ".vscode/mcp.json",
-  windsurf: "mcp_config.json",
-};
-const INSTALL = INSTALL_IDS.flatMap((id) => {
-  const client = setup.clients.find((c) => c.id === id);
-  const step = client?.key ? client.steps.find((s) => "code" in s && s.code) : undefined;
-  if (!client || !step || !("code" in step) || !step.code) return [];
-  return [
-    {
-      id,
-      label: client.name.replace(" (GitHub Copilot)", "").replace("OpenAI Codex CLI", "Codex"),
-      code: step.code,
-      lang: step.lang === "json" ? ("json" as const) : ("bash" as const),
-      title: INSTALL_FILE[id] ?? "Terminal",
-    },
-  ];
-});
-
-function InstallWidget() {
-  return (
-    <div className="dx-install">
-      <p className="dx-head-k">Connect your client</p>
-      <Tabs
-        label="MCP client"
-        tabs={INSTALL.map((t) => ({
-          id: `install-${t.id}`,
-          label: t.label,
-          content: <CodeBlock code={t.code} lang={t.lang} title={t.title} />,
-        }))}
-      />
-      <p className="dx-install-foot">
-        Replace <C>cs_live_...</C> with your key, or set <C>COMMUTESCOUT_API_KEY</C>. claude.ai, Claude Desktop
-        and other clients:{" "}
-        <a href="#connect" className="dx-link">
-          Setup
-        </a>
-      </p>
-    </div>
-  );
-}
 
 type Param = { name: string; required: boolean };
 type Tool = { name: string; summary: string; params: Param[] };
@@ -191,7 +140,9 @@ export default function McpPage() {
           </span>
         </p>
       }
-      aside={<InstallWidget />}
+      aside={
+        <AppSetup clients={setup.clients} placeholder={setup.key_placeholder} personalUrl={setup.personal_url} />
+      }
       toc={TOC}
     >
       <Section id="how" title="How it works">
@@ -206,7 +157,8 @@ export default function McpPage() {
       <Section id="connect" title="Setup">
         <div className="dx-prose dx-lead">
           <p>
-            Add the endpoint <C>{setup.endpoint}</C> to your client with your API key.{" "}
+            Every app takes your personal link: <C>{setup.personal_url}</C> with your key in place of{" "}
+            <C>cs_live_...</C>. Paste your key at the top of the page to fill it in. {setup.link_note}{" "}
             <Link href="/developers#quickstart" prefetch={false} className="dx-link">
               Get a free key
             </Link>{" "}
@@ -217,29 +169,30 @@ export default function McpPage() {
             .
           </p>
         </div>
-        <Tabs
-          label="MCP clients"
-          tabs={setup.clients.map((client) => ({
-            id: client.id,
-            label: client.name.replace(" and Claude Desktop", "").replace(" (GitHub Copilot)", "").replace("OpenAI Codex CLI", "Codex").replace("Any other MCP client", "Other"),
-            content: (
-              <div id={client.id}>
-                <h3 className="sr-only">{client.name}</h3>
-                {client.steps.map((step, i) =>
-                  "code" in step && step.code ? (
-                    <CodeBlock
-                      key={i}
-                      code={step.code}
-                      lang={step.lang === "sh" ? "bash" : step.lang === "json" ? "json" : step.lang === "toml" ? "toml" : "text"}
-                    />
-                  ) : (
-                    <p key={i}>{"text" in step ? step.text : null}</p>
-                  ),
-                )}
-              </div>
-            ),
-          }))}
-        />
+        {/* Every app's steps in full, server-rendered, for reading top to
+            bottom, for search and for agents. The grid at the top of the
+            page is the same steps with your key filled in. */}
+        <div className="dx-applist">
+          {setup.clients.map((client) => (
+            <details key={client.id} id={client.id} className="dx-appitem">
+              <summary>
+                <b>{client.name}</b>
+                {client.hint ? <span>{client.hint}</span> : null}
+              </summary>
+              {client.steps.map((step, i) =>
+                "code" in step && step.code ? (
+                  <CodeBlock
+                    key={i}
+                    code={step.code}
+                    lang={step.lang === "sh" ? "bash" : step.lang === "json" ? "json" : step.lang === "toml" ? "toml" : "text"}
+                  />
+                ) : (
+                  <p key={i}>{"text" in step ? step.text : null}</p>
+                ),
+              )}
+            </details>
+          ))}
+        </div>
       </Section>
 
       <Section id="saved-places" title="Saved places">

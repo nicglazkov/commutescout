@@ -2192,6 +2192,10 @@ def hosted_app(host: str = "0.0.0.0", require_key: bool | None = None):
     # Keys (from Settings on the map page) sit in front: a keyed
     # request is limited by its tier instead of its address.
     app = ApiKeyMiddleware(app, require_key=require_key)
+    # Personal connector links (/mcp/<key>) for ChatGPT and claude.ai,
+    # which cannot send a header: the key moves into one here.
+    from ca_roads_mcp.keyurl import KeyInUrl
+    app = KeyInUrl(app)
     # Outermost, so a 401 or 429 from the middlewares carries them too.
     return SecurityHeaders(app)
 

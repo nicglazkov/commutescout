@@ -38,6 +38,7 @@ def test_every_client_has_runnable_steps():
         assert client["steps"], client["id"]
         assert any(connect.ENDPOINT in (s.get("code") or s.get("text") or "")
                    for s in client["steps"]), client["id"]
+        assert client.get("install") in (None, "cursor", "vscode"), client["id"]
 
 
 def test_site_json_matches_the_source():
@@ -63,7 +64,13 @@ def test_every_header_capable_client_sends_the_key():
     for client in connect.CLIENTS:
         steps = " ".join(s.get("code") or s.get("text") or "" for s in client["steps"])
         if client["key"]:
-            assert "Authorization" in steps or "bearer" in steps.lower(), client["id"]
+            assert (connect.PERSONAL_URL in steps or "Authorization" in steps
+                    or "bearer" in steps.lower()), client["id"]
+    # ChatGPT and claude.ai cannot send a header: they get the personal link.
+    by_id = {c["id"]: c for c in connect.CLIENTS}
+    for cid in ("chatgpt", "claude-ai"):
+        assert by_id[cid]["key"] is True
+        assert any(s.get("code") == connect.PERSONAL_URL for s in by_id[cid]["steps"])
         assert "without a key" not in steps, client["id"]
     assert "no\n> key needed" not in connect.guide()
     assert "missing_key" in connect.guide()

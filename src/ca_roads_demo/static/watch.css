@@ -97,7 +97,7 @@
 .watch .wlist { display:flex; flex-direction:column; gap:8px }
 .watch .witem { display:flex; flex-wrap:wrap; gap:10px; align-items:center;
   border:1px solid var(--line); border-radius:10px; padding:9px 12px;
-  background:#fff; cursor:pointer }
+  background:var(--card, #fff); cursor:pointer }
 .watch .witem:hover { border-color:var(--sky) }
 .watch .witem i { width:10px; height:10px; border-radius:99px;
   background:var(--sky); flex:none }
@@ -147,11 +147,44 @@
 .watch .gate-ask { color:var(--dim); font-size:.82rem; margin:14px 0 0 }
 .watch .gate-ask a { color:var(--sky) }
 .watch .hidden { display:none !important }
-.watch .keynew { margin-top:10px; padding:10px 12px; border:1px solid #cfe2fd;
-  background:var(--sky-soft); border-radius:9px; font-size:.8rem }
-.watch .keynew b { display:block; margin-bottom:6px }
-.watch .keynew code { display:block; word-break:break-all; font:500 .78rem ui-monospace,
-  Menlo, monospace; margin-bottom:8px; user-select:all }
+/* New key: three numbered steps (copy, pick an app, add it). The app
+   tiles carry a one-line hint under the name so ChatGPT and Claude read
+   as the chat apps at a glance. */
+.watch .keynew { margin-top:14px; font-size:.8rem }
+.watch .ksteps { list-style:none; margin:0; padding:0; counter-reset:kstep }
+.watch .ksteps > li { position:relative; padding:0 0 16px 32px; counter-increment:kstep }
+.watch .ksteps > li::before { content:counter(kstep); position:absolute; left:0; top:0;
+  width:22px; height:22px; border-radius:50%; background:var(--ink); color:var(--bg);
+  font:600 .72rem/22px var(--mono); text-align:center }
+.watch .ksteps > li:not(:last-child)::after { content:""; position:absolute; left:10.5px;
+  top:27px; bottom:4px; width:1px; background:var(--hair-strong) }
+.watch .ksteps h3 { margin:1px 0 8px; font:600 .86rem Geist, Inter, sans-serif; color:var(--ink) }
+.watch .kkey { display:flex; gap:8px; align-items:center; padding:6px 6px 6px 10px;
+  border:1px solid var(--line); border-radius:9px; background:var(--surface-2) }
+.watch .kkey code { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; font:500 .76rem var(--mono); user-select:all }
+.watch .knote { margin:6px 0 0; font-size:.74rem; color:var(--dim) }
+.watch .ktiles { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px }
+.watch .ktile { display:flex; flex-direction:column; gap:1px; min-width:0; text-align:left;
+  padding:7px 8px; border:1px solid var(--line); border-radius:9px; background:var(--card);
+  color:var(--ink); cursor:pointer; font:inherit; transition:background .2s var(--ease) }
+.watch .ktile:hover { background:var(--surface-2) }
+.watch .ktile:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+.watch .ktile[aria-pressed="true"] { border-color:var(--sky); background:var(--sky-soft) }
+.watch .ktile b { font:600 .78rem Geist, Inter, sans-serif }
+.watch .ktile small { font-size:.68rem; line-height:1.3; color:var(--dim) }
+.watch .kbody { color:var(--ink-2); line-height:1.5 }
+.watch .kbody p { margin:0 0 6px }
+.watch .ksnip { position:relative; margin:6px 0 8px; padding:8px 62px 8px 10px;
+  border-radius:8px; background:#0d1726; color:#dbe5f2; font:500 .72rem/1.5 var(--mono);
+  white-space:pre-wrap; word-break:break-all }
+.watch .ksnip button { position:absolute; top:5px; right:5px; padding:3px 8px;
+  border-radius:6px; border:1px solid #2b3d55; background:#1b2a3f; color:#dbe5f2;
+  font:500 .7rem Inter, sans-serif; cursor:pointer }
+.watch .kone { display:inline-block; margin:2px 0 8px; padding:6px 12px; border-radius:8px;
+  background:var(--sky); color:var(--accent-ink); font:600 .78rem Inter, sans-serif;
+  text-decoration:none }
+.watch .kone:hover { filter:brightness(1.08) }
 .watch .keyrow > div { flex:1; min-width:0 }
 .watch .keyrow small { display:block; color:var(--dim); font-size:.72rem }
 

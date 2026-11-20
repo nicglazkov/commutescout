@@ -1653,3 +1653,28 @@ aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:130
   text-underline-offset:2px }
 #panel .panenote .detbtn:hover { text-decoration-thickness:2px }
 #panel .panenote .detbtn:focus-visible { outline:2px solid var(--sky); outline-offset:2px; border-radius:3px }
+
+/* ── Top bar: the site header's light look (owner pick, 2026-11-20) ──
+   The same surface and type as every other page's header, with a 2px
+   divider (not the site's 1px) so the bar holds its edge against the
+   light basemap. Dark mode follows the tokens. */
+.topbar { background:var(--surface); color:var(--ink);
+  border-bottom:2px solid var(--hair-strong) }
+.topbar nav a, .topbar .navcta, .topbar .devbtn, .topbar .navmenu { color:var(--ink-2) }
+.topbar nav a:hover, .topbar .devbtn:hover, .topbar .navcta:hover,
+.topbar .navmenu:hover { color:var(--ink); background:var(--surface-2) }
+.topbar nav a.on { background:var(--surface-2); color:var(--ink) }
+.topbar .devmenu.open .devbtn { color:var(--ink) }
+.topbar .navcta.on, .topbar .navcta.live { color:var(--accent-ink) }
+.sysok, .asof { color:var(--k-ok) }
+.sysok i { background:var(--green) }
+.asof.stale { color:var(--k-fire) }
+.asof.old { color:var(--k-closure) }
+#ver { color:var(--ink-3) }
+@media (max-width: 640px) {
+  .topbar .devlabel { color:var(--ink-3) }
+  .topbar .devpop a { color:var(--ink-2) }
+}
+/* Dark: the site header's dark accent pair (site/app/globals.css). */
+:root[data-theme="dark"] .topbar .navcta.on { background:#5b9cff }
+:root[data-theme="dark"] .topbar .navcta.on:hover { background:#7aafff }
