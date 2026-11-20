@@ -56,7 +56,7 @@ def test_alerts_rank_full_closures_first_and_respect_layers():
     assert order[0] == ("clo_full", "0")
     assert dict(order)["inc_collision"] == "1" and dict(order)["inc_other"] == "5"
     assert "function groupOn(g)" in APP and "input[data-group=" in APP
-    assert "function alertRow(m, g)" in APP and "humanize(m.type)" in APP
+    assert "function alertRow(m, g)" in APP and "incidentTitle(m.type)" in APP
     assert "map.on('moveend zoomend', scheduleAlerts)" in APP
     assert "const ALERT_CAP = 60;" in APP
 

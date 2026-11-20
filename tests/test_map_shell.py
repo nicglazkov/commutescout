@@ -44,16 +44,17 @@ def test_every_pinned_id_survives():
         assert HTML.count(f'id="{i}"') == 1, i
 
 
-def test_rail_has_five_primary_tools_and_the_rest_behind_more():
-    """2026-11: a slim rail (Places, Route, Live, Layers, Ask) that
-    expands to labels and the less frequent tools."""
+def test_rail_has_four_primary_tools_and_the_rest_behind_more():
+    """2026-11: a slim rail (Places, Route, Live, Ask) that expands to
+    labels and the less frequent tools. Round 3 (board #3/#4) moves
+    Layers off the rail to a button on the map."""
     rail = re.search(r'<nav class="rail"[^>]*>(.*?)\n  </nav>', HTML, re.S).group(1)
     tools = re.findall(r'data-tool="([a-z]+)"', rail)
-    assert tools == ["places", "route", "alerts", "layers", "ask", "watch", "about", "settings"]
+    assert tools == ["places", "route", "alerts", "ask", "watch", "about", "settings"]
     primary, adv = rail.split('<div class="railadv"')
     main_tools = re.findall(r'data-tool="([a-z]+)"', primary)
-    assert main_tools == ["places", "route", "alerts", "layers", "ask"]
-    for name in ("Places", "Route", "Live", "Layers", "Ask", "Watch areas", "Settings", "Data"):
+    assert main_tools == ["places", "route", "alerts", "ask"]
+    for name in ("Places", "Route", "Live", "Ask", "Watch areas", "Settings", "Data"):
         assert f"<span>{name}</span>" in rail
     # Links only in the expanded part; one expand toggle, last.
     assert "<a " not in primary
@@ -72,12 +73,17 @@ def test_one_pane_per_tool_and_only_places_open_at_load():
     assert "setTool(known ? saved : 'places', { toggle: false })" in APP
 
 
-def test_layers_live_in_the_panel_not_on_the_map():
+def test_layers_open_from_the_map_button_as_one_list():
+    # Board #3: a Layers button on the map, with how many are off, opens
+    # the one layer list (the Layers section) as a popover.
     assert 'id="filters"' in _section("layers")
     mapcard = HTML[HTML.index('id="mapcard"'):]
     assert 'id="filters"' not in mapcard
     assert 'class="legend"' not in HTML, "the Layers pane lists every color; no second legend"
-    assert 'id="layersbtn"' not in HTML and "layersbtn" not in APP
+    assert 'id="layersbtn"' in mapcard and 'aria-controls="pane-layers"' in mapcard
+    assert 'id="layersoff"' in mapcard
+    assert "function setLayersOpen(open, refocus)" in APP
+    assert "#filters input[data-group]:not(:checked)" in APP
 
 
 def test_counts_moved_into_the_alerts_pane_and_the_band_is_gone():
@@ -106,20 +112,22 @@ def test_legal_text_lives_behind_the_data_tool():
 def test_no_second_copy_of_any_control():
     # One planner, one question form, one layer list, one legal block.
     for needle in ('id="planbtn"', 'id="form"', 'id="filters"', 'class="legalfoot"',
-                   'class="rail"', 'id="panelresize"', 'id="railresize"'):
+                   'class="rail"', 'id="panelresize"', 'id="layersbtn"', 'id="livepill"'):
         assert HTML.count(needle) == 1, needle
 
 
 def test_resize_bounds_and_persistence_follow_the_spec():
-    assert "--rail-w:64px; --panel-w:360px" in CSS
-    assert re.search(r"'cs-rail-w': \{ min: 56, max: 88", APP)
+    # Round 3: the rail is the board's fixed 76px (wider only expanded),
+    # so its drag handle and cs-rail-w are gone; the panel still drags.
+    assert "--rail-w:76px; --panel-w:360px" in CSS
+    assert "'cs-rail-w'" not in APP and 'id="railresize"' not in HTML
     assert re.search(r"'cs-panel-w': \{ min: 300, max: \(\) => Math\.min\(520, "
                      r"Math\.round\(window\.innerWidth \* 0\.4\)\)", APP)
-    for key in ("cs-tool", "cs-rail-w", "cs-panel-w"):
+    for key in ("cs-tool", "cs-panel-w"):
         assert key in APP
     assert "panelhidden" not in APP and "paneltab" not in APP and "paneltab" not in CSS
-    # Rail handle, panel handle, inspector handle, and the phone sheet's grab.
-    assert 'role="separator"' in HTML and HTML.count('role="separator"') == 4
+    # Panel handle, inspector handle, and the phone sheet's grab.
+    assert 'role="separator"' in HTML and HTML.count('role="separator"') == 3
     assert "ArrowRight" in APP and "ArrowLeft" in APP  # keyboard resize
 
 
@@ -136,7 +144,8 @@ def test_phone_layout_keeps_the_rail_as_a_row():
     phone = CSS[CSS.index("@media (max-width: 960px)"):]
     assert re.search(r"\.rail \{[^}]*flex-direction:row", phone)
     assert ".resizer { display:none }" in phone
-    assert "layersbtn" not in CSS
+    # On a phone the Layers button is round (board M1).
+    assert re.search(r"#layersbtn \{[^}]*border-radius:999px", phone)
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")

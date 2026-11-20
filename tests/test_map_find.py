@@ -10,17 +10,23 @@ CSS = (STATIC / "map.css").read_text(encoding="utf-8")
 APP = (STATIC / "map-app.js").read_text(encoding="utf-8")
 
 
-def test_find_box_sits_on_the_map_next_to_report():
+def test_find_box_tops_the_floating_panel():
+    # Round-3 board #3: "Search maps" sits at the top of the floating
+    # panel (folded, it floats alone; on a phone, over the map). The map
+    # carries no Report button and no Leaflet zoom in the top left.
+    panel = HTML[HTML.index('<aside id="panel">'):HTML.index('<section id="pane-places"')]
+    assert 'id="findbox"' in panel and 'role="search"' in panel
     card = re.search(
         r'<div class="map-card active" id="mapcard">(.*?)<div class="resizer" id="inspresize"',
         HTML, re.S,
     ).group(1)
-    assert card.index('id="findbox"') < card.index('id="reportbtn"')
+    assert 'id="findbox"' not in card and 'id="reportbtn"' not in HTML
     assert HTML.count('id="find"') == 1 and HTML.count('id="findsugg"') == 1
     assert 'aria-label="Find a place on the map"' in HTML
-    assert ".findbox { position:absolute; top:12px; left:12px" in CSS
+    assert 'placeholder="Search maps"' in HTML
+    assert ".findbox { position:relative }" in CSS
     assert ".findbox .val:empty, .findbox .val.ok { display:none }" in CSS
-    assert ".map-card .leaflet-top.leaflet-left { top:50px }" in CSS  # zoom buttons below the box
+    assert "if (map.zoomControl) map.zoomControl.remove();" in APP
 
 
 def test_planner_fields_stay():

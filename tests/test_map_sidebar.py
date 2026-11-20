@@ -69,7 +69,9 @@ def test_popup_is_a_peek_with_one_details_button():
 
 
 def test_route_strip_steps_by_mile():
-    for el in ("rstrip", "rsprev", "rsnext", "rstrack", "rscard", "rsopen"):
+    # Board #11: the strip is a vertical list in the route panel, so the
+    # floating card and its reopen pill (rscard, rsopen) are gone.
+    for el in ("rstrip", "rsprev", "rsnext", "rstrack", "rslegend", "rhead", "rleave"):
         assert f'id="{el}"' in HTML, el
     before, after = HTML.split('id="rstrack"', 1)
     assert 'role="listbox"' in before[-200:] + after[:200]
@@ -78,6 +80,9 @@ def test_route_strip_steps_by_mile():
     keys = APP.split("rstrack.addEventListener('keydown'", 1)[1][:700]
     for key in ("ArrowRight: 1", "ArrowLeft: -1", "'Home'", "'End'", "'Enter'"):
         assert key in keys, key
+    assert 'id="rscard"' not in HTML and 'id="rsopen"' not in HTML
+    route = HTML[HTML.index('<section id="pane-plan"'):]
+    assert route.index('id="rstrip"') < route.index('id="clearroutebtn"')
 
 
 def test_command_palette_is_a_modal_combobox_on_cmd_k():

@@ -19,6 +19,27 @@ const POP_LABEL = {
   toll: 'TOLL PRICE', plugin: 'COMMUNITY REPORT',
   fire_poly: 'BURN FOOTPRINT', camera: 'LIVE CAMERA', sign: 'MESSAGE SIGN',
 };
+// Lists (Live near you, the Live tool, the route strip) mark each row
+// with its kind: a soft square in the kind's colour with a drawn icon,
+// so a crash and a closure differ by shape as well as colour.
+const KIND_OF = (g) => g.startsWith('inc_') ? 'incident' : g.startsWith('clo_') ? 'closure'
+  : g === 'chain' ? 'chain' : (g === 'fire_pt' || g === 'fire_poly') ? 'fire'
+  : g === 'rwis' ? 'weather' : g === 'camera' ? 'camera' : g === 'plugin' ? 'plugin' : 'sign';
+const KIND_SVG = {
+  incident: '<path d="M12 4 3 19.5h18z"/><path d="M12 10v4.5M12 17v.01"/>',
+  closure: '<circle cx="12" cy="12" r="8"/><path d="m6.4 6.4 11.2 11.2"/>',
+  chain: '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/><path d="m9.5 4.5 2.5 2 2.5-2M9.5 19.5l2.5-2 2.5 2"/>',
+  fire: '<path d="M12 21c-3.6 0-6-2.4-6-5.6 0-3.6 3.2-5.4 3.2-9.4 2.6 1.4 4.4 3.6 4.6 6.2.9-.6 1.5-1.8 1.6-3 1.6 1.6 2.6 3.8 2.6 6.2 0 3.2-2.4 5.6-6 5.6z"/>',
+  weather: '<path d="M7 15.5a4 4 0 0 1 .5-8 5.5 5.5 0 0 1 10.4 1.6A3.3 3.3 0 0 1 17.5 15.5z"/><path d="M8 19l-.8 1.6M12 19l-.8 1.6M16 19l-.8 1.6"/>',
+  camera: '<rect x="3" y="7" width="13" height="10" rx="2"/><path d="m16 11 5-3v8l-5-3"/>',
+  sign: '<path d="M12 3v18M7 21h10"/><path d="M5 6h12l2.5 2.5L17 11H5z"/>',
+  plugin: '<path d="M12 21s-6.5-5.8-6.5-11a6.5 6.5 0 0 1 13 0c0 5.2-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.2"/>',
+};
+function kindIcon(g, extra) {
+  const k = KIND_OF(g);
+  return '<span class="kicon k-' + k + (extra ? ' ' + extra : '') + '" aria-hidden="true">' +
+    '<svg viewBox="0 0 24 24">' + KIND_SVG[k] + '</svg></span>';
+}
 const ambient = {};
 Object.keys(GROUP_DOT).forEach(g => {
   ambient[g] = L.layerGroup();
@@ -269,6 +290,59 @@ const humanize = (t) => {
   else s = s.charAt(0).toLowerCase() + s.slice(1);
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
+// An incident's title in plain words. CHP types arrive as dispatch code
+// plus scanner shorthand ("1179-Trfc Collision-1141 Enrt"); the codes
+// this table knows read as the same plain sentence chpGloss explains,
+// and anything else has its abbreviations spelled out and its code
+// dropped. The raw type stays in the details pane's Advanced view.
+const INCIDENT_TITLES = [
+  [/^1179\b/, 'Crash, ambulance on the way'],
+  [/^1180\b/, 'Crash, major injuries'],
+  [/^1181\b/, 'Crash, minor injuries'],
+  [/^1182\b/, 'Crash, no injuries'],
+  [/^1183\b/, 'Crash, injuries unknown'],
+  [/^1125A\b/, 'Animal on the road'],
+  [/^1125\b/, 'Traffic hazard'],
+  [/^20001\b/, 'Hit and run with injuries'],
+  [/^20002\b/, 'Hit and run, no injuries'],
+  [/^23114\b/, 'Spilled load on the road'],
+  [/^1166\b/, 'Traffic signals not working'],
+  [/^1013\b/, 'Road or weather conditions'],
+  [/^CZP\b/, 'Officers at a work zone'],
+  [/^MZP\b/, 'Officers at a maintenance zone'],
+  [/^SIG\b/i, 'SIG Alert: major incident'],
+  [/^CLOSURE\b/, 'Road closed'],
+  [/^CHAINS\b/, 'Chain control'],
+  [/^FLOOD\b/, 'Flooding on the road'],
+  [/^FOG\b/, 'Fog'],
+  [/^WIND\b/, 'Wind advisory'],
+  [/^SNOW\b/, 'Snow on the road'],
+  [/^ANIMAL\b/, 'Animal on the road'],
+  [/^FIRE\b/, 'Fire reported'],
+  [/^TADV\b/, 'Traffic advisory'],
+  [/^ESCORT\b/, 'Escort for road conditions'],
+  [/^SILVER\b/, 'Silver Alert'],
+  [/^SPINOUT$/, 'Vehicle spun out'],
+  [/^DeadAnimal/, 'Dead animal on the road'],
+];
+const SHORTHAND = [
+  [/\bTrfc\b/gi, 'traffic'], [/\bColl\b/gi, 'collision'], [/\bInj\b/gi, 'injuries'],
+  [/\bUnkn?\b/gi, 'unknown'], [/\bEnrt\b/gi, 'en route'], [/\bVeh\b/gi, 'vehicle'],
+  [/\bAmb\b/gi, 'ambulance'], [/\bRd\b/gi, 'road'], [/\bHwy\b/g, 'highway'],
+  [/\bRshoulder\b/gi, 'right shoulder'], [/\bLshoulder\b/gi, 'left shoulder'],
+];
+function incidentTitle(type) {
+  const t = String(type || '').trim();
+  if (!t) return null;
+  for (const [re, text] of INCIDENT_TITLES) if (re.test(t)) return text;
+  let s = t.replace(/^\d{4,5}[A-Z]?\s*[-:]\s*/, '')
+    .replace(/(Rshoulder|Lshoulder)/g, ' $1');
+  for (const [re, word] of SHORTHAND) s = s.replace(re, word);
+  s = humanize(s.replace(/\s+-\s+/g, ', ').replace(/^(Debris|Crash|Vehicle) (right|left) shoulder$/i, '$1 on the $2 shoulder'));
+  // Sentence case: "Abandoned Vehicle" reads as "Abandoned vehicle";
+  // short all-caps words (CT, US) and route numbers keep their case.
+  return s ? s.replace(/(?!^)\b([A-Z])([a-z]+)\b/g, (w, a, b) => a.toLowerCase() + b) : null;
+}
 // ALL-CAPS operator dumps ("CLOSED DUE TO X//USE Y/ STAY ALERT") read
 // as shouting: sentence-case them and split the slash chains into
 // real sentences. Route numbers stay caps.
@@ -680,7 +754,7 @@ function popupFor(m, g) {
     const parts = splitRoad(m.label || '');
     // esc(): m.type is CHP LogType feed text, and v2() drops title into
     // <h4> as raw HTML (callers pre-escape, like the toll_dir site).
-    const title = esc(humanize(m.type) || 'Incident');
+    const title = esc(incidentTitle(m.type) || 'Incident');
     const sub = m.location || parts.road || null;
     const body = [];
     const gloss = chpGloss(m.type);
@@ -2158,6 +2232,9 @@ function setTool(name, opts) {
   document.querySelectorAll('aside section[data-tool]').forEach((s) => {
     s.classList.toggle('on', !collapsing && s.dataset.tool === name);
   });
+  // The panel's search header shows on the tools that look at the map
+  // (Places, Live); folded, the panel is the search alone.
+  document.getElementById('panel').dataset.tool = collapsing ? '' : name;
   shellEl.classList.toggle('nopanel', !!collapsing);
   store.set(TOOL_KEY, collapsing ? '' : name);
   showWatch(name === 'watch' && !collapsing);
@@ -2308,10 +2385,10 @@ if (new URLSearchParams(location.search).get('settings') === 'keys') {
     if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }, 400));
 }
-// Drag handles. Bounds from the spec: rail 56-88px; panel 300-520px
-// and never more than 40% of the viewport.
+// Drag handles. Bounds from the spec: the floating panel 300-520px and
+// never more than 40% of the viewport; the details pane 300-480px. The
+// rail is a fixed 76px (board #4), wider only when expanded.
 const BOUNDS = {
-  'cs-rail-w': { min: 56, max: 88, prop: '--rail-w' },
   'cs-panel-w': { min: 300, max: () => Math.min(520, Math.round(window.innerWidth * 0.4)),
                   prop: '--panel-w' },
   'cs-insp-w': { min: 300, max: 480, prop: '--insp-user' },
@@ -2363,7 +2440,6 @@ function wireResizer(id, key, edge, dir) {
     setTimeout(() => map.invalidateSize(), 60);
   });
 }
-wireResizer('railresize', 'cs-rail-w', () => shellEl.getBoundingClientRect().left);
 wireResizer('panelresize', 'cs-panel-w',
   () => document.getElementById('panel').getBoundingClientRect().left);
 wireResizer('inspresize', 'cs-insp-w',
@@ -2559,17 +2635,32 @@ async function renderSourcePanel() {
     srcPanel.innerHTML = '<h4>Data sources</h4><div class="sub">Status unavailable right now.</div>';
   }
 }
-document.getElementById('sysok').addEventListener('click', () => {
-  if (srcPanel) { srcPanel.remove(); srcPanel = null; return; }
+// The topbar's "live from ..." and the map's live pill open the same
+// list; from the pill it rises above the pill.
+function toggleSrcPanel(from) {
+  const pill = document.getElementById('livepill');
+  if (srcPanel) { srcPanel.remove(); srcPanel = null; pill.setAttribute('aria-expanded', 'false'); return; }
   srcPanel = document.createElement('div');
   srcPanel.className = 'srcpanel';
+  srcPanel.id = 'srcpanel';
+  if (from === pill) {
+    const r = pill.getBoundingClientRect();
+    srcPanel.classList.add('frompill');
+    srcPanel.style.left = Math.max(12, Math.min(r.left, innerWidth - 312)) + 'px';
+    srcPanel.style.bottom = (innerHeight - r.top + 8) + 'px';
+    pill.setAttribute('aria-expanded', 'true');
+  }
   document.body.append(srcPanel);
   renderSourcePanel();
-});
+}
+document.getElementById('sysok').addEventListener('click', (e) => toggleSrcPanel(e.currentTarget));
+document.getElementById('livepill').addEventListener('click', (e) => toggleSrcPanel(e.currentTarget));
 document.addEventListener('click', (e) => {
   if (srcPanel && !srcPanel.contains(e.target) &&
-      !document.getElementById('sysok').contains(e.target)) {
+      !document.getElementById('sysok').contains(e.target) &&
+      !document.getElementById('livepill').contains(e.target)) {
     srcPanel.remove(); srcPanel = null;
+    document.getElementById('livepill').setAttribute('aria-expanded', 'false');
   }
 });
 
@@ -2768,11 +2859,18 @@ function openInspector(m, g) {
   inspIcon.innerHTML = csPlugin.svg(plugin ? csPlugin.category(m.flare_kind) : (INSP_GLYPH[g] || 'other'));
   inspIcon.classList.toggle('square', plugin);
   const label = plugin ? (m.source || 'Plugin') : (POP_LABEL[g] || 'Details').toLowerCase();
-  inspTitle.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+  const kind = label.charAt(0).toUpperCase() + label.slice(1);
   inspBody.innerHTML = popupFor(m, g);
-  // The popup's own "how long ago" moves into the header.
+  // Board #9: the header carries the item's own title, and under it the
+  // kind, the place line and "how long ago"; the body then starts with
+  // what the header does not say, so nothing is shown twice.
   const ago = inspBody.querySelector('.ago');
-  inspWhen.textContent = ago ? ago.textContent : '';
+  const h4 = inspBody.querySelector('h4');
+  const sub = inspBody.querySelector('.p2 > .sub, .pop > .sub');
+  inspTitle.textContent = h4 ? h4.textContent : kind;
+  inspWhen.textContent = [h4 ? kind : null, sub ? sub.textContent : null, ago ? ago.textContent : null]
+    .filter(Boolean).join(' · ');
+  for (const el of [inspBody.querySelector('.p2 > .hd'), h4, sub]) if (el) el.classList.add('inhead');
   inspScroll.scrollTop = 0;
   wireDispatchLog(inspBody, null);
   if (g === 'toll') {
@@ -3107,8 +3205,8 @@ function alertRow(m, g) {
   const src = m.src || SOURCE_DEFAULT[g] || '';
   if (g.startsWith('inc_')) {
     const parts = splitRoad(m.label || '');
-    // CHP types carry a dispatch code ('1183 Trfc Collision'); the row drops it.
-    return { title: (humanize(m.type) || 'Incident').replace(/^\d{4}[A-Z]?\s*/, ''),
+    // CHP types carry a dispatch code; incidentTitle drops it and spells out the rest.
+    return { title: incidentTitle(m.type) || 'Incident',
       sub: [m.location || parts.road || parts.rest || null,
         m.reported ? agoTxt(m.reported) : null, src].filter(Boolean).join(', ') };
   }
@@ -3134,6 +3232,20 @@ function alertRow(m, g) {
     const cont = (m.contained || m.contained === 0) ? m.contained + '% contained' : null;
     return { title: (m.name || 'Wildfire') + ' Fire',
       sub: ['Wildfire', size, cont, src].filter(Boolean).join(', ') };
+  }
+  if (g === 'rwis') {
+    const air = m.air_c != null ? Math.round(m.air_c * 9 / 5 + 32) + '\u00b0F air' : null;
+    return { title: 'Road weather, ' + (m.label || m.name || m.route || 'station'),
+      sub: [air, src].filter(Boolean).join(', ') };
+  }
+  if (g === 'sign') {
+    // What the sign says is the news; the road is the place line.
+    const lines = (m.lines && m.lines.length) ? m.lines : (m.message ? m.message.split(' / ') : []);
+    const said = lines.map((l) => String(l).trim()).filter(Boolean).join(' ');
+    if (said) {
+      return { title: 'Sign: ' + said,
+        sub: [m.label || m.name || m.route || null, src].filter(Boolean).join(', ') };
+    }
   }
   return { title: m.label || m.name || m.route || POP_LABEL[g] || g, sub: src };
 }
@@ -3162,7 +3274,7 @@ function refreshAlerts() {
     const g = r.it.g;
     const row = alertRow(m, g);
     return '<button type="button" class="alertrow" data-i="' + i + '">' +
-      '<i style="--dot:' + GROUP_DOT[g] + '"></i><span><b>' +
+      kindIcon(g) + '<span><b>' +
       esc(String(row.title).slice(0, 110)) + '</b><small>' + esc(row.sub) +
       '</small></span></button>';
   }).join('') + (rows.length > ALERT_CAP
@@ -3856,6 +3968,7 @@ function clearRoute() {
   if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
   viaPoints = []; viaManual = false; lastEnds = null;
   plannedRoute = null; plannedRoutes = [];
+  setPlanned(false);
   layerRoute.clearLayers();
   renderViaChips();
   for (const id of ['routesum', 'routealts', 'routecond', 'steps']) {
@@ -3870,6 +3983,91 @@ function clearRoute() {
 }
 document.getElementById('clearroutebtn')
   .addEventListener('click', clearRoute);
+
+// ── The planned trip, board #11: a header, the alternatives as chips,
+// then the route item by item. The arrow goes back to the fields.
+const planPane = document.getElementById('pane-plan');
+function setPlanned(on) {
+  planPane.classList.toggle('planned', !!on);
+  document.getElementById('rhead').hidden = !on;
+  if (!on) setLeaveOpen(false);
+}
+function setLeaveOpen(open) {
+  const b = document.getElementById('rleave');
+  b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  planPane.classList.toggle('leaveopen', !!open);
+}
+function updateRouteHead() {
+  if (!plannedRoute) return;
+  const r = plannedRoute.route;
+  const free = Math.round(r.duration / 60);
+  const mins = plannedRoute.trafficMins || free;
+  const slower = mins - free;
+  document.getElementById('rhtitle').textContent =
+    placeLabel(plannedRoute.fromC) + ' to ' + placeLabel(plannedRoute.toC);
+  const meta = document.getElementById('rhmeta');
+  meta.innerHTML = '<b' + (slower >= 2 ? ' class="late"' : '') + '>' + minsTxt(mins) + '</b> · ' +
+    csUnits.fmt(r.distance / 1000, 1) +
+    (slower >= 2 ? ' · <span class="late">' + slower + ' min slower</span>'
+      : plannedRoute.flow ? ' · traffic flowing' : '');
+  const dep = departEpoch();
+  document.getElementById('rleavetxt').textContent = dep
+    ? 'Leave ' + clockTxtMs(dep * 1000) : 'Leave now';
+}
+// Recent trips keep the newest time measured for the drive.
+function noteTrip() {
+  if (!plannedRoute) return;
+  const r = plannedRoute.route;
+  Trips.note({ a: plannedRoute.fromC, b: plannedRoute.toC,
+    mins: plannedRoute.trafficMins || Math.round(r.duration / 60),
+    km: r.distance / 1000, at: Date.now() });
+}
+document.getElementById('rback').addEventListener('click', () => {
+  planPane.classList.remove('planned');
+  document.getElementById('rhead').hidden = true;
+  document.getElementById('to').focus();
+});
+document.getElementById('rleave').addEventListener('click', () => {
+  const open = document.getElementById('rleave').getAttribute('aria-expanded') !== 'true';
+  setLeaveOpen(open);
+  if (open) document.getElementById('departmode').focus();
+});
+// Popups pan clear of the floating panel (and on a phone, the search).
+function syncPopupPad() {
+  // The phone search floats just under the site header, which can wrap
+  // to two rows on a narrow tablet; follow its real bottom edge.
+  const bar = document.querySelector('header.topbar');
+  if (bar) {
+    // The header's nav can overflow its box on a narrow tablet, so take
+    // the lowest thing it draws, not the box.
+    let b = bar.getBoundingClientRect().bottom;
+    bar.querySelectorAll('a, button').forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.height && r.top < 160) b = Math.max(b, r.bottom);
+    });
+    const over = Math.max(0, b - map.getContainer().getBoundingClientRect().top);
+    document.documentElement.style.setProperty('--bar-b', Math.round(b) + 'px');
+    document.documentElement.style.setProperty('--bar-over', Math.round(over) + 'px');
+  }
+  const pad = mapPad();
+  L.Popup.prototype.options.autoPanPaddingTopLeft = L.point(pad.paddingTopLeft[0] - 16, pad.paddingTopLeft[1] - 16);
+  L.Popup.prototype.options.autoPanPaddingBottomRight = L.point(pad.paddingBottomRight[0] - 16, pad.paddingBottomRight[1] - 16);
+}
+document.addEventListener('cs-tool', () => setTimeout(syncPopupPad, 80));
+window.addEventListener('resize', () => setTimeout(syncPopupPad, 80));
+setTimeout(syncPopupPad, 0);
+// Map padding that keeps a fitted area clear of the floating panel (and
+// on a phone, of the sheet and the search above it).
+function mapPad() {
+  const card = map.getContainer().getBoundingClientRect();
+  if (isPhone()) {
+    const sheet = document.getElementById('panel').getBoundingClientRect();
+    return { paddingTopLeft: [24, 120], paddingBottomRight: [24, Math.max(24, card.bottom - sheet.top + 24)] };
+  }
+  const p = document.getElementById('panel').getBoundingClientRect();
+  const left = shellEl.classList.contains('nopanel') ? 48 : Math.max(48, p.right - card.left + 32);
+  return { paddingTopLeft: [left, 72], paddingBottomRight: [72, 72] };
+}
 
 // ── Depart at: pick a future time, the conditions list re-reads every
 // item's Caltrans schedule against it. (Historical predictions will
@@ -3891,9 +4089,11 @@ departMode.addEventListener('change', () => {
     departAt.value = localStamp(d);
   }
   if (lastRouteLL) renderRouteConditions(lastRouteLL);
+  updateRouteHead();
 });
 departAt.addEventListener('change', () => {
   if (lastRouteLL) renderRouteConditions(lastRouteLL);
+  updateRouteHead();
 });
 
 function viaOrdered(routeLatlngs) {
@@ -3992,7 +4192,7 @@ function setPickMode(mode) {
   }
   document.querySelectorAll('.addstop').forEach((b) =>
     b.classList.toggle('armed', pickMode === 'via'));
-  document.getElementById('reportbtn').classList.toggle('armed', pickMode === 'report');
+  document.querySelectorAll('[data-act="report"]').forEach((b) => b.classList.toggle('armed', pickMode === 'report'));
   map.getContainer().style.cursor = pickMode ? 'crosshair' : '';
   if (pickMode) {
     pickHint.textContent = PICK_LABEL[pickMode]; pickHint.hidden = false;
@@ -4089,10 +4289,12 @@ const REPORT_KINDS = [
   ['CHAINS_REQUIRED', 'Chains required'], ['CHAINS_NOT_REQUIRED', 'Chains not needed'],
   ['CAMERA_ISSUE', 'Camera issue'], ['MAP_ISSUE', 'Map issue'],
 ];
-document.getElementById('reportbtn').addEventListener('click', () => {
+// Report lives in the rail's More group and the command palette; the
+// map itself carries no Report button (board #3).
+function startReport() {
   loadWatch();  // sign-in state, so the form can send
   setPickMode(pickMode === 'report' ? null : 'report');
-});
+}
 async function authToken() {
   const w = await loadWatch();
   if (!w || !window.csAuth) return null;
@@ -4214,16 +4416,20 @@ function renderRouteAlts(chosen, a, b) {
   const alts = document.getElementById('routealts');
   alts.innerHTML = '';
   if (plannedRoutes.length > 1) {
+    // Chips, board #11: the quickest is "Fastest", the others by the
+    // road that sets them apart, each with its drive time.
+    const quickest = plannedRoutes.reduce((q, r, i) => r.duration < plannedRoutes[q].duration ? i : q, 0);
     plannedRoutes.forEach((r, i) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = i === chosen ? 'on' : '';
+      btn.setAttribute('aria-pressed', i === chosen ? 'true' : 'false');
       const bEl = document.createElement('b');
-      bEl.textContent = r.via ? 'via ' + r.via.split(',')[0] : 'Route ' + (i + 1);
+      bEl.textContent = i === quickest ? 'Fastest' : r.via ? 'Via ' + r.via.split(',')[0] : 'Route ' + (i + 1);
       const sm = document.createElement('small');
-      sm.textContent = csUnits.fmt(r.distance / 1000, 0) + ', ' +
-        Math.round(r.duration / 60) + ' min';
-      btn.append(bEl, sm);
+      sm.textContent = Math.round(r.duration / 60) + ' min';
+      sm.title = csUnits.fmt(r.distance / 1000, 0);
+      btn.append(bEl, document.createTextNode(' · '), sm);
       if (r.hassles) {
         const em = document.createElement('em');
         em.textContent = r.hassles.length
@@ -4235,6 +4441,15 @@ function renderRouteAlts(chosen, a, b) {
       btn.addEventListener('click', () => renderRouteAlts(i, a, b));
       alts.append(btn);
     });
+  }
+  // What is on the chosen route, under the chips (the chips carry only
+  // name and time).
+  const pick = plannedRoutes[chosen];
+  if (pick && pick.hassles && pick.hassles.length) {
+    const p = document.createElement('p');
+    p.className = 'althassle';
+    p.textContent = 'On this route: ' + pick.hassles.map((h) => h.label).join(', ');
+    alts.append(p);
   }
   showRoute(plannedRoutes[chosen],
     plannedRoutes.filter((_, i) => i !== chosen), a, b);
@@ -4273,7 +4488,9 @@ async function colorRouteByTraffic(route, baseLine, gen) {
     const flow = data.flow || [];
     if (!flow.some(f => f)) return;
     if (gen !== routeGen) return;  // route was replaced mid-fetch
+    if (plannedRoute) plannedRoute.flow = { flow, bounds };
     showTrafficEta(route, pts, bounds, flow);
+    paintStripFlow();
     layerRoute.removeLayer(baseLine);
     for (let i = 0; i < segs; i++) {
       const seg = pts.slice(bounds[i], bounds[i + 1] + 1);
@@ -4315,6 +4532,11 @@ function showTrafficEta(route, pts, bounds, flow) {
   if (!total || sampled / total < 0.5) { box.hidden = true; return; }
   const free = Math.round(route.duration / 60);
   const adjusted = Math.round(route.duration * (weighted / total) / 60);
+  if (plannedRoute && plannedRoute.route === route) {
+    plannedRoute.trafficMins = Math.max(free, adjusted);
+    updateRouteHead();
+    noteTrip();
+  }
   if (adjusted - free < 2) {
     box.innerHTML = 'Traffic is flowing along this route right now: <b>about ' +
       free + ' min</b>.';
@@ -4388,6 +4610,8 @@ function showRoute(route, others, a, b) {
   mobileReveal(document.getElementById('routealts'));
   plannedRoute = { route, a, b,
     fromName: fromF.input.dataset.name, toName: toF.input.dataset.name };
+  plannedRoute.fromC = { name: plannedRoute.fromName, lat: a[0], lon: a[1] };
+  plannedRoute.toC = { name: plannedRoute.toName, lat: b[0], lon: b[1] };
   const eta = document.getElementById('routeeta');
   if (eta) eta.hidden = true;
   layerRoute.clearLayers();
@@ -4418,7 +4642,10 @@ function showRoute(route, others, a, b) {
       await replanVias();
     });
   });
-  map.fitBounds(L.latLngBounds(route.latlngs).pad(0.15));
+  map.fitBounds(L.latLngBounds(route.latlngs), mapPad());
+  setPlanned(true);
+  updateRouteHead();
+  noteTrip();
   const min = route.duration / 60;
   document.getElementById('routesum').textContent =
     plannedRoute.fromName.split(',')[0] + ' → ' + plannedRoute.toName.split(',')[0] +
@@ -4741,7 +4968,7 @@ let placeSlot = null;     // 'home' | 'work' | 'saved': the next search pick fil
 const PLACE_ICON = {
   home: '<path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4z"/>',
   work: '<rect x="4" y="8" width="16" height="11" rx="2"/><path d="M9 8V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v2M4 13h16"/>',
-  saved: '<path d="m12 4 2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16.4 7.2 18.9l.9-5.4-3.9-3.8 5.4-.8z"/>',
+  saved: '<path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z"/>',
   recent: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
   add: '<path d="M12 6v12M6 12h12"/>',
 };
@@ -4775,44 +5002,95 @@ function placesPicked(c) {
   findF.input.placeholder = findPlaceholder;
   renderPlaces();
 }
+// ── Trips: the drives planned in this browser, newest first ──────
+// Kept here only (cs.trips.v1): the account's places list holds places,
+// not trips. Recent lists them with their drive time, and a place's
+// button shows the last drive time measured to it.
+const Trips = {
+  KEY: 'cs.trips.v1',
+  load() {
+    try { const t = JSON.parse(store.get(this.KEY) || '[]'); return Array.isArray(t) ? t : []; }
+    catch (_) { return []; }
+  },
+  note(t) {
+    if (!t || !t.a || !t.b || !isFinite(t.a.lat) || !isFinite(t.b.lat)) return;
+    const list = this.load().filter((x) => !(Places.same(x.a, t.a) && Places.same(x.b, t.b)));
+    list.unshift(t);
+    store.set(this.KEY, JSON.stringify(list.slice(0, 12)));
+  },
+  toward(c) { return this.load().find((x) => Places.same(x.b, c)) || null; },
+};
+// Where you are, once you have asked (the locate button or "Use my
+// location"); a place's button then says "Here" when you are at it.
+let myPos = null;
+function placeLabel(c) {
+  if (!c) return 'Start';
+  const p = Places.load();
+  if (Places.same(c, p.home)) return 'Home';
+  if (Places.same(c, p.work)) return 'Work';
+  const s = p.saved.find((r) => Places.same(r, c));
+  if (s) return s.name.split(', ')[0];
+  const n = String(c.name || '');
+  if (/^(my|your) location/i.test(n)) return 'Your location';
+  return n.split(',')[0] || 'Dropped pin';
+}
+function tripTitle(t) { return placeLabel(t.a) + ' to ' + placeLabel(t.b); }
+function whenTxt(at) {
+  const d = new Date(at);
+  const days = Math.round((new Date(new Date().toDateString()) - new Date(d.toDateString())) / 864e5);
+  if (days <= 0) return 'Today, ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return d.toLocaleDateString([], { weekday: 'short' });
+  if (days < 14) return 'Last week';
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+// Live data is in once a payload carried a time or any layer holds items.
+const liveLoaded = () => !!snapPublished || Object.keys(items).some((g) => (items[g] || []).length);
+const minsTxt = (m) => m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min';
+// What a place's button says under its name: "Here" when you are at it,
+// the drive time of your last trip there, or what is live around it.
+function placeSub(c) {
+  if (!c) return { text: 'Set', cls: 'set' };
+  if (myPos && kmBetween(myPos, c) < 0.3) return { text: 'Here' };
+  const t = Trips.toward(c);
+  if (t && t.mins) {
+    return { text: minsTxt(t.mins),
+      title: 'Your last drive here (' + whenTxt(t.at).toLowerCase() + ')' };
+  }
+  if (!liveLoaded()) return { text: '' };
+  const n = liveNear(c);
+  return n ? { text: n + ' live near', cls: 'haslive',
+    title: n + ' live within ' + csUnits.fmt(PLACE_KM, 0) }
+    : { text: 'All clear', title: 'Nothing live within ' + csUnits.fmt(PLACE_KM, 0) };
+}
 function placeTile(kind, c, label) {
-  const tile = document.createElement('div');
-  tile.className = 'ptile ' + kind + (c ? '' : ' unset');
+  const li = document.createElement('li');
+  li.className = 'pfav ' + kind + (c ? '' : ' unset');
   const main = document.createElement('button');
   main.type = 'button';
-  main.className = 'pmain';
-  const n = c ? liveNear(c) : 0;
-  const sub = c
-    ? (n ? n + ' live within ' + csUnits.fmt(PLACE_KM, 0) : 'Nothing live within ' + csUnits.fmt(PLACE_KM, 0))
-    : 'Set ' + label.toLowerCase();
-  main.innerHTML = '<span class="pic">' + svgIcon(PLACE_ICON[kind]) + '</span>' +
-    '<span class="ptxt"><b>' + esc(label) + '</b><small' + (c && n ? ' class="haslive"' : '') + '>' +
-    esc(sub) + '</small></span>';
-  main.title = c ? 'Directions to ' + c.name : 'Set your ' + label.toLowerCase() + ' address';
+  main.className = 'pbtn';
+  const sub = placeSub(c);
+  main.innerHTML = '<span class="pcirc">' + svgIcon(PLACE_ICON[kind]) + '</span>' +
+    '<span class="plbl">' + esc(label) + '</span>' +
+    '<small class="psub' + (sub.cls ? ' ' + sub.cls : '') + '">' + esc(sub.text) + '</small>';
+  main.title = c ? 'Directions to ' + c.name + (sub.title ? '. ' + sub.title : '')
+    : 'Set your ' + label.toLowerCase() + ' address';
   main.addEventListener('click', () => {
     if (placesEditing && c) return;
     if (c) navigateTo(Object.assign({}, c));
     else armPlaceSlot(kind);
   });
-  tile.append(main);
-  if (c) {
-    const look = document.createElement('button');
-    look.type = 'button'; look.className = 'plook';
-    look.setAttribute('aria-label', 'Show ' + label + ' on the map');
-    look.title = 'Show on the map';
-    look.innerHTML = svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>');
-    look.addEventListener('click', () => showFound(Object.assign({}, c)));
-    tile.append(look);
-  }
+  li.append(main);
   if (c && placesEditing) {
     const rm = document.createElement('button');
     rm.type = 'button'; rm.className = 'prm';
     rm.setAttribute('aria-label', 'Remove ' + label);
-    rm.textContent = 'Remove';
+    rm.title = 'Remove ' + label;
+    rm.innerHTML = svgIcon('<path d="M7 7l10 10M17 7 7 17"/>');
     rm.addEventListener('click', () => { Places.remove(kind, c); renderPlaces(); });
-    tile.append(rm);
+    li.append(rm);
   }
-  return tile;
+  return li;
 }
 function renderPlaces() {
   if (!placesPane.classList.contains('on')) return;
@@ -4822,32 +5100,58 @@ function renderPlaces() {
     placeTile('work', p.work, 'Work'),
     ...p.saved.map((c) => placeTile('saved', c, c.name.split(', ')[0])));
   if (p.saved.length < PLACES_CAP) {
+    const li = document.createElement('li');
+    li.className = 'pfav add';
     const add = document.createElement('button');
-    add.type = 'button'; add.className = 'padd';
-    add.innerHTML = svgIcon(PLACE_ICON.add) + '<span>Save a place</span>';
+    add.type = 'button'; add.className = 'pbtn padd';
+    add.innerHTML = '<span class="pcirc">' + svgIcon(PLACE_ICON.add) + '</span><span class="plbl">Add</span>' +
+      '<small class="psub"></small>';
+    add.title = 'Save a place';
     add.addEventListener('click', () => armPlaceSlot('saved'));
-    ptiles.append(add);
+    li.append(add);
+    ptiles.append(li);
   }
   placesEditBtn.hidden = !(p.home || p.work || p.saved.length);
   document.getElementById('psync').textContent = PlaceSync.signedIn
     ? 'Synced with your account.'
     : 'Saved in this browser. Sign in to sync with the app and your AI assistant.';
   document.getElementById('psignin').hidden = PlaceSync.signedIn;
-  const recents = p.recents.filter((r) => !Places.same(r, p.home) && !Places.same(r, p.work)).slice(0, 4);
+  // Recent: the trips planned here (with their drive time), then places
+  // searched for, newest first; a destination already in a trip is not
+  // listed twice.
+  const trips = Trips.load();
+  const rows = trips.map((t) => ({ at: t.at || 0, title: tripTitle(t),
+    meta: [whenTxt(t.at), t.mins ? minsTxt(t.mins) : null].filter(Boolean).join(' · '),
+    label: 'Plan ' + tripTitle(t) + ' again',
+    go: () => replanTrip(t) }));
+  for (const c of p.recents) {
+    if (Places.same(c, p.home) || Places.same(c, p.work)) continue;
+    if (trips.some((t) => Places.same(t.b, c))) continue;
+    const parts = c.name.split(', ');
+    rows.push({ at: c.at || 0, title: parts[0], meta: c.at ? whenTxt(c.at) : (parts.slice(1).join(', ') || ''),
+      label: 'Directions to ' + c.name, go: () => navigateTo(Object.assign({}, c)) });
+  }
+  rows.sort((x, y) => y.at - x.at);
   const wrap = document.getElementById('precentwrap');
   const list = document.getElementById('precent');
-  wrap.hidden = !recents.length;
-  list.replaceChildren(...recents.map((c) => {
+  wrap.hidden = !rows.length;
+  list.replaceChildren(...rows.slice(0, 3).map((r) => {
     const row = document.createElement('button');
     row.type = 'button'; row.className = 'prow';
-    const parts = c.name.split(', ');
-    row.innerHTML = '<span class="pic sm">' + svgIcon(PLACE_ICON.recent) + '</span><span><b>' +
-      esc(parts[0]) + '</b><small>' + esc(parts.slice(1).join(', ') || 'Directions') + '</small></span>';
-    row.title = 'Directions to ' + c.name;
-    row.addEventListener('click', () => navigateTo(Object.assign({}, c)));
+    row.innerHTML = '<span class="pclock">' + svgIcon(PLACE_ICON.recent) + '</span><span><b>' +
+      esc(r.title) + '</b><small>' + esc(r.meta) + '</small></span>';
+    row.title = r.label;
+    row.addEventListener('click', r.go);
     return row;
   }));
   refreshPlacesLive();
+}
+// A recent trip, planned again from the same two ends.
+function replanTrip(t) {
+  fromF.pick(Object.assign({}, t.a));
+  toF.pick(Object.assign({}, t.b));
+  setTool('route', { toggle: false, reveal: true });
+  planbtn.click();
 }
 placesEditBtn.addEventListener('click', () => {
   placesEditing = !placesEditing;
@@ -4859,39 +5163,34 @@ document.getElementById('pliveall').addEventListener('click', () => {
   setTool('alerts', { toggle: false, reveal: true });
   scheduleAlerts();
 });
-const LIVE_CATS = [
-  ['Incidents', (g) => g.startsWith('inc_')],
-  ['Closures', (g) => g.startsWith('clo_')],
-  ['Chain controls', (g) => g === 'chain'],
-  ['Wildfires', (g) => g === 'fire_pt'],
-  ['Plugin alerts', (g) => g === 'plugin'],
-];
+// Live near you: what the Live tool would list for the map in view,
+// worst first, the first three of them; the count is everything in view.
+const PLACES_LIVE_ROWS = 3;
 function refreshPlacesLive() {
   if (!placesPane.classList.contains('on')) return;
   const b = map.getBounds();
   const c = map.getCenter();
   const rows = liveWhere((m) => b.contains([m.lat, m.lon]));
-  const chips = document.getElementById('pchips');
-  chips.replaceChildren(...LIVE_CATS.map(([label, test]) => {
-    const n = rows.filter((r) => test(r.it.g)).length;
-    if (!n) return null;
-    const chip = document.createElement('span');
-    chip.className = 'pchip';
-    chip.innerHTML = '<b>' + n.toLocaleString() + '</b> ' + esc(label.toLowerCase());
-    return chip;
-  }).filter(Boolean));
+  const count = document.getElementById('pchips');
+  const all = document.getElementById('pliveall');
+  count.textContent = liveLoaded() ? rows.length.toLocaleString() + ' in view' : '';
+  all.hidden = !rows.length;
+  all.innerHTML = 'See all ' + rows.length.toLocaleString() + ', worst first ' +
+    svgIcon('<path d="m9 6 6 6-6 6"/>');
   const list = document.getElementById('plive');
   if (!rows.length) {
-    list.innerHTML = '<p class="panenote">Nothing live in view for the layers you have on.</p>';
+    list.innerHTML = '<p class="panenote">' + (liveLoaded()
+      ? 'Nothing live in view for the layers you have on. Zoom out or switch on more layers.'
+      : 'Loading what is on the map&hellip;') + '</p>';
     return;
   }
   rows.forEach((r) => { r.d = map.distance(c, [r.it.m.lat, r.it.m.lon]); });
   rows.sort((x, y) => x.sev - y.sev || x.d - y.d);
-  list.replaceChildren(...rows.slice(0, 4).map((r) => {
+  list.replaceChildren(...rows.slice(0, PLACES_LIVE_ROWS).map((r) => {
     const row = alertRow(r.it.m, r.it.g);
     const btn = document.createElement('button');
     btn.type = 'button'; btn.className = 'alertrow';
-    btn.innerHTML = '<i style="--dot:' + GROUP_DOT[r.it.g] + '"></i><span><b>' +
+    btn.innerHTML = kindIcon(r.it.g) + '<span><b>' +
       esc(String(row.title).slice(0, 110)) + '</b><small>' + esc(row.sub) + '</small></span>';
     btn.addEventListener('click', () => openPeek(r.it.m, r.it.g));
     return btn;
@@ -4911,17 +5210,16 @@ document.getElementById('psignin').addEventListener('click', () => {
 });
 renderPlaces();
 
-// ── Route strip: the planned trip as one line, start to finish ────
-// Every item on the route sits at its mile. Click one, or step with the
-// arrows, and the map flies to it with its popup open.
+// ── Route strip: the planned trip, start to finish, item by item ──
+// Board #11, in the panel: one row per item on the route at its mile,
+// the start and the destination at either end, and a line between rows
+// coloured by the measured traffic on that stretch. Click a row, or
+// step with the arrows, and the map flies to it with its popup open.
 const rstrip = document.getElementById('rstrip');
-const rsopen = document.getElementById('rsopen');
 const rstrack = document.getElementById('rstrack');
-const rscard = document.getElementById('rscard');
 const STRIP_EXTRA = ['camera', 'rwis', 'plugin'];  // shown when their layer is on
-let stripItems = [];
+let stripItems = [];   // rows: {m, g, km} for an item, {end: 'a' | 'b', km} for the ends
 let stripSel = -1;
-let stripHidden = false;
 function routeMiles(latlngs) {
   const cum = [0];
   for (let i = 1; i < latlngs.length; i++) {
@@ -4935,6 +5233,7 @@ function routeMiles(latlngs) {
   return {
     total: cum[cum.length - 1] || 0,
     box: padded,
+    cum,
     // The km along the route of the vertex nearest the item.
     at(m) {
       let best = 0, bd = Infinity;
@@ -4952,14 +5251,44 @@ function kindName(g) {
   const t = String(POP_LABEL[g] || g).toLowerCase();
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
-let stripFitGen = -1;
 function hideRouteStrip() {
   stripItems = []; stripSel = -1;
-  rstrip.hidden = true; rsopen.hidden = true;
-  document.getElementById('mapcard').classList.remove('has-strip');
+  rstrip.hidden = true;
+  rstrack.replaceChildren();
+}
+// The measured speed over free flow on the stretch around a mile, from
+// the samples colorRouteByTraffic took (none: no class, a neutral line).
+function flowClass(ratio) {
+  return ratio == null ? '' : ratio >= 0.8 ? 'moving' : ratio >= 0.55 ? 'slow' : 'jam';
+}
+function flowAtKm(km) {
+  const f = plannedRoute && plannedRoute.flow;
+  const along = plannedRoute && plannedRoute.along;
+  if (!f || !along) return null;
+  for (let i = 0; i < f.bounds.length - 1; i++) {
+    if (km <= along.cum[f.bounds[i + 1]]) return f.flow[i] ? f.flow[i].ratio : null;
+  }
+  return null;
+}
+function paintStripFlow() {
+  let any = false;
+  rstrack.querySelectorAll('.rsrow').forEach((row, i) => {
+    const seg = row.querySelector('.rsseg');
+    if (!seg || !stripItems[i + 1]) return;
+    const cls = flowClass(flowAtKm((stripItems[i].km + stripItems[i + 1].km) / 2));
+    seg.className = 'rsseg' + (cls ? ' ' + cls : '');
+    if (cls) any = true;
+  });
+  document.getElementById('rslegend').hidden = !any;
+}
+const clockTxtMs = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function stripMile(km) {
+  const v = csUnits.fromKm(km);
+  return csUnits.label() + ' ' + (v >= 100 ? Math.round(v) : v.toFixed(1));
 }
 function buildRouteStrip(latlngs, along) {
   if (!plannedRoute) return;
+  plannedRoute.along = along;
   const groups = ['clo_full', 'clo_lane', 'clo_oneway', 'clo_ramp', 'inc_collision', 'inc_fire',
     'inc_hazard', 'inc_other', 'chain', 'fire_pt', 'sign'].concat(STRIP_EXTRA.filter(groupOn));
   const hits = [];
@@ -4971,108 +5300,169 @@ function buildRouteStrip(latlngs, along) {
     }
   }
   hits.sort((x, y) => x.km - y.km);
-  stripItems = hits;
-  stripSel = -1;
-  const total = along.total || 1;
+  const total = along.total || 0;
   const r = plannedRoute.route;
-  document.getElementById('rsname').textContent =
-    (plannedRoute.fromName || 'Start').split(',')[0] + ' → ' + (plannedRoute.toName || 'Destination').split(',')[0];
-  const mins = Math.round(r.duration / 60);
-  document.getElementById('rsmeta').textContent = [csUnits.fmt(r.distance / 1000, 0),
-    mins >= 60 ? Math.floor(mins / 60) + ' h ' + (mins % 60) + ' min' : mins + ' min',
-    hits.length ? hits.length + (hits.length === 1 ? ' item' : ' items') + ' on the way' : 'nothing reported on the way',
-  ].join(' · ');
-  document.getElementById('rsa').textContent = 'Start';
-  document.getElementById('rsb').textContent = csUnits.fmt(total, 0);
-  // Three lanes so items a few hundred metres apart stay clickable; the
-  // middle one, on the line, fills first.
-  const lanes = [-1e9, -1e9, -1e9];
-  const LANE_ORDER = [1, 0, 2];
-  rstrack.replaceChildren();
-  const line = document.createElement('div');
-  line.className = 'rsline';
-  rstrack.append(line);
-  hits.forEach((h, i) => {
-    const pct = Math.max(0, Math.min(100, (h.km / total) * 100));
-    let lane = LANE_ORDER.find((l) => pct - lanes[l] >= 2.2);
-    if (lane === undefined) lane = lanes.indexOf(Math.min(...lanes));
-    lanes[lane] = pct;
-    const row = alertRow(h.m, h.g);
+  const dep = departEpoch();
+  const leave = dep ? dep * 1000 : Date.now();
+  const mins = plannedRoute.trafficMins || Math.round(r.duration / 60);
+  stripItems = [{ end: 'a', km: 0 }, ...hits, { end: 'b', km: total }];
+  stripSel = -1;
+  const rows = stripItems.map((h, i) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'rsdot';
+    b.id = 'rsrow' + i;
+    b.className = 'rsrow' + (h.end ? ' end' : '');
     b.tabIndex = -1;
     b.setAttribute('role', 'option');
     b.setAttribute('aria-selected', 'false');
-    b.style.setProperty('--x', pct + '%');
-    b.style.setProperty('--lane', lane);
-    b.style.setProperty('--dot', GROUP_DOT[h.g] || '#64748b');
-    b.setAttribute('aria-label', kindName(h.g) + ': ' + String(row.title) + ', at ' + csUnits.fmt(h.km, 1));
-    b.title = String(row.title);
-    b.addEventListener('click', () => selectStrip(i, true));
-    rstrack.append(b);
-  });
-  ['rsprev', 'rsnext'].forEach((id) => { document.getElementById(id).disabled = !hits.length; });
-  document.getElementById('rspos').textContent = hits.length ? '— of ' + hits.length : '';
-  rscard.replaceChildren();
-  rscard.hidden = true;
-  if (!stripHidden) {
-    rstrip.hidden = false; rsopen.hidden = true;
-    document.getElementById('mapcard').classList.add('has-strip');
-    // A new route: fit it above the strip, once, so the strip never
-    // covers the line it describes.
-    if (stripFitGen !== routeGen) {
-      stripFitGen = routeGen;
-      map.fitBounds(L.latLngBounds(latlngs), { paddingTopLeft: [40, 70],
-        paddingBottomRight: [40, rstrip.offsetHeight + 40 +
-          (isPhone() ? panelEl.offsetHeight + railEl.offsetHeight : 0)], animate: false });
+    let title, meta, mark;
+    if (h.end) {
+      title = placeLabel(h.end === 'a' ? plannedRoute.fromC : plannedRoute.toC);
+      meta = h.end === 'a' ? 'Leave ' + clockTxtMs(leave)
+        : 'Arrive about ' + clockTxtMs(leave + mins * 60000);
+      mark = '<span class="rsend ' + h.end + '" aria-hidden="true"></span>';
+    } else {
+      const row = alertRow(h.m, h.g);
+      title = String(row.title).slice(0, 120);
+      const [, when] = dep ? departNote(h.m, h.g, dep) : [null, null];
+      meta = [row.sub, when].filter(Boolean).join(' · ');
+      mark = kindIcon(h.g, 'sm');
+      b.setAttribute('aria-label', kindName(h.g) + ': ' + title + ', at ' + csUnits.fmt(h.km, 1));
     }
-  } else { rsopen.hidden = false; }
+    b.innerHTML = '<span class="rsmi">' + stripMile(h.km) + '</span>' +
+      '<span class="rsmark">' + (i < stripItems.length - 1 ? '<i class="rsseg"></i>' : '') + mark + '</span>' +
+      '<span class="rstxt"><b>' + esc(title) + '</b><small>' + esc(meta) + '</small></span>';
+    b.addEventListener('click', () => selectStrip(i, true));
+    return b;
+  });
+  rstrack.replaceChildren(...rows);
+  rstrack.removeAttribute('aria-activedescendant');
+  ['rsprev', 'rsnext'].forEach((id) => { document.getElementById(id).disabled = !hits.length; });
+  document.getElementById('rspos').textContent = hits.length
+    ? hits.length + (hits.length === 1 ? ' item' : ' items') + ' on the way' : 'Nothing reported on the way';
+  rstrip.hidden = false;
+  paintStripFlow();
 }
 function selectStrip(i, fly) {
   if (!stripItems.length) return;
-  stripSel = (i + stripItems.length) % stripItems.length;
+  stripSel = Math.max(0, Math.min(stripItems.length - 1, i));
   const h = stripItems[stripSel];
-  rstrack.querySelectorAll('.rsdot').forEach((b, j) => {
+  rstrack.querySelectorAll('.rsrow').forEach((b, j) => {
     b.classList.toggle('on', j === stripSel);
     b.setAttribute('aria-selected', j === stripSel ? 'true' : 'false');
   });
-  rstrack.setAttribute('aria-activedescendant', '');
-  document.getElementById('rspos').textContent = (stripSel + 1) + ' of ' + stripItems.length;
-  const row = alertRow(h.m, h.g);
-  rscard.hidden = false;
-  rscard.innerHTML = '<i style="--dot:' + (GROUP_DOT[h.g] || '#64748b') + '"></i>' +
-    '<div><b>' + esc(String(row.title).slice(0, 120)) + '</b><small>' +
-    esc([kindName(h.g), csUnits.fmt(h.km, h.km < 10 ? 1 : 0) + ' from the start'].join(' · ')) +
-    '</small></div>';
-  const det = document.createElement('button');
-  det.type = 'button'; det.className = 'rsdet'; det.textContent = 'Details';
-  det.addEventListener('click', () => openInspector(h.m, h.g));
-  rscard.append(det);
-  if (fly) openPeek(h.m, h.g, 12);
+  rstrack.setAttribute('aria-activedescendant', 'rsrow' + stripSel);
+  const rowEl = document.getElementById('rsrow' + stripSel);
+  if (rowEl) rowEl.scrollIntoView({ block: 'nearest' });
+  const n = stripItems.length - 2;
+  document.getElementById('rspos').textContent = h.end ? (n + (n === 1 ? ' item' : ' items') + ' on the way')
+    : stripSel + ' of ' + n;
+  if (!fly) return;
+  if (h.end) {
+    const at = h.end === 'a' ? plannedRoute.a : plannedRoute.b;
+    map.setView(at, Math.max(map.getZoom(), 13));
+  } else openPeek(h.m, h.g, 12);
 }
-document.getElementById('rsprev').addEventListener('click', () => selectStrip(stripSel < 0 ? stripItems.length - 1 : stripSel - 1, true));
-document.getElementById('rsnext').addEventListener('click', () => selectStrip(stripSel + 1, true));
+// The arrows step through the items, skipping the two ends.
+document.getElementById('rsprev').addEventListener('click', () => {
+  const n = stripItems.length - 2;
+  if (n > 0) selectStrip(stripSel <= 1 ? n : stripSel - 1, true);
+});
+document.getElementById('rsnext').addEventListener('click', () => {
+  const n = stripItems.length - 2;
+  if (n > 0) selectStrip(stripSel < 1 || stripSel >= n ? 1 : stripSel + 1, true);
+});
 rstrack.addEventListener('keydown', (e) => {
   const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-  if (step) { e.preventDefault(); selectStrip(stripSel < 0 ? (step > 0 ? 0 : -1) : stripSel + step, true); }
+  if (step) { e.preventDefault(); selectStrip(stripSel < 0 ? (step > 0 ? 0 : stripItems.length - 1) : stripSel + step, true); }
   else if (e.key === 'Home') { e.preventDefault(); selectStrip(0, true); }
   else if (e.key === 'End') { e.preventDefault(); selectStrip(stripItems.length - 1, true); }
-  else if (e.key === 'Enter' && stripSel >= 0) { e.preventDefault(); openInspector(stripItems[stripSel].m, stripItems[stripSel].g); }
+  else if (e.key === 'Enter' && stripSel >= 0 && !stripItems[stripSel].end) {
+    e.preventDefault(); openInspector(stripItems[stripSel].m, stripItems[stripSel].g);
+  }
 });
-document.getElementById('rsclose').addEventListener('click', () => {
-  stripHidden = true;
-  rstrip.hidden = true; rsopen.hidden = false;
-  document.getElementById('mapcard').classList.remove('has-strip');
-  rsopen.focus();
+
+// ── Map controls, board #3: Layers top right, locate and zoom bottom
+// right, and the live pill at the foot of the map beside the panel ──
+if (map.zoomControl) map.zoomControl.remove();
+document.getElementById('zoomin').addEventListener('click', () => map.zoomIn());
+document.getElementById('zoomout').addEventListener('click', () => map.zoomOut());
+function syncZoomBtns() {
+  document.getElementById('zoomin').disabled = map.getZoom() >= map.getMaxZoom();
+  document.getElementById('zoomout').disabled = map.getZoom() <= map.getMinZoom();
+}
+map.on('zoomend', syncZoomBtns);
+syncZoomBtns();
+let myDot = null;
+const locBtn = document.getElementById('locbtn');
+locBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) { locBtn.title = 'Location is not available in this browser'; return; }
+  locBtn.classList.add('busy');
+  locBtn.setAttribute('aria-busy', 'true');
+  navigator.geolocation.getCurrentPosition((pos) => {
+    locBtn.classList.remove('busy'); locBtn.removeAttribute('aria-busy');
+    myPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+    const ll = [myPos.lat, myPos.lon];
+    if (myDot) myDot.setLatLng(ll);
+    else {
+      myDot = L.marker(ll, { interactive: false, keyboard: false, zIndexOffset: 600,
+        icon: L.divIcon({ className: 'mydot', iconSize: [18, 18] }) }).addTo(map);
+    }
+    locBtn.classList.add('on');
+    map.setView(ll, Math.max(map.getZoom(), 13));
+    renderPlaces();
+  }, () => {
+    locBtn.classList.remove('busy'); locBtn.removeAttribute('aria-busy');
+    locBtn.title = 'Location was blocked. Allow it for this site to use this button.';
+  }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 });
 });
-rsopen.addEventListener('click', () => {
-  stripHidden = false;
-  if (plannedRoute) { rstrip.hidden = false; rsopen.hidden = true; document.getElementById('mapcard').classList.add('has-strip'); rstrack.focus(); }
+// "Live · updated 12 s ago": the age of the newest data on the map.
+function paintLivePill() {
+  const el = document.getElementById('liveage');
+  if (!snapPublished) { el.textContent = 'Live'; return; }
+  const s = Math.max(0, Math.round((Date.now() - snapPublished) / 1000));
+  el.textContent = 'Live · updated ' + (s < 60 ? s + ' s' : s < 3600 ? Math.round(s / 60) + ' min'
+    : Math.round(s / 3600) + ' h') + ' ago';
+  document.getElementById('livepill').classList.toggle('stale', s > 15 * 60);
+}
+paintLivePill();
+setInterval(paintLivePill, 5000);
+
+// ── Layers: a popover from the map's Layers button ───────────────
+// Board #3 keeps layers off the rail; the button carries how many are
+// switched off. The list itself is the Layers section of the panel,
+// lifted out over the map while it is open.
+const layersBtn = document.getElementById('layersbtn');
+const layersPane = document.getElementById('pane-layers');
+function paintLayersBadge() {
+  const off = document.querySelectorAll('#filters input[data-group]:not(:checked)').length;
+  const b = document.getElementById('layersoff');
+  b.textContent = off + ' off';
+  b.hidden = !off;
+  layersBtn.setAttribute('aria-label', 'Layers' + (off ? ', ' + off + ' switched off' : ''));
+}
+function setLayersOpen(open, refocus) {
+  layersPane.classList.toggle('pop', !!open);
+  shellEl.classList.toggle('lyropen', !!open);
+  layersBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) {
+    if (isPhone() && sheetState !== 'peek') setSheet('peek');
+    document.getElementById('lyrclose').focus();
+  } else if (refocus) layersBtn.focus();
+}
+function openLayers() { setLayersOpen(true); }
+layersBtn.addEventListener('click', () => setLayersOpen(!layersPane.classList.contains('pop'), true));
+document.getElementById('lyrclose').addEventListener('click', () => setLayersOpen(false, true));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && layersPane.classList.contains('pop')) { e.stopPropagation(); setLayersOpen(false, true); }
+}, true);
+document.addEventListener('pointerdown', (e) => {
+  if (layersPane.classList.contains('pop') && !layersPane.contains(e.target) && !layersBtn.contains(e.target)) {
+    setLayersOpen(false);
+  }
 });
-L.DomEvent.disableClickPropagation(rstrip);
-L.DomEvent.disableScrollPropagation(rstrip);
-L.DomEvent.disableClickPropagation(rsopen);
+document.getElementById('filters').addEventListener('change', paintLayersBadge);
+paintLayersBadge();
 
 // ── The rail: slim by default, expands to labels and the rest ─────
 const RAIL_WIDE_KEY = 'cs-rail-wide';
@@ -5109,7 +5499,7 @@ function runAction(name) {
       if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }, 300));
   } else if (name === 'report') {
-    document.getElementById('reportbtn').click();
+    startReport();
   } else if (name === 'theme') {
     setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
   } else if (name === 'palette') {
@@ -5184,7 +5574,7 @@ function paletteCommands() {
   add('Actions', 'Plan a route', () => { setTool('route', { toggle: false, reveal: true }); fromF.input.focus(); }, '', 'directions navigate trip');
   add('Actions', 'Your places', () => setTool('places', { toggle: false, reveal: true }), '', 'home saved');
   add('Actions', 'Live right now', () => { setTool('alerts', { toggle: false, reveal: true }); scheduleAlerts(); }, '', 'alerts incidents closures');
-  add('Actions', 'Layers', () => setTool('layers', { toggle: false, reveal: true }), '', 'filters show hide');
+  add('Actions', 'Layers', () => openLayers(), '', 'filters show hide');
   add('Actions', 'Ask about your drive', () => { setTool('ask', { toggle: false, reveal: true }); document.getElementById('q').focus(); }, '', 'assistant question ai');
   add('Actions', 'Report something on the road', () => runAction('report'), '', 'report hazard');
   add('Actions', 'Watch areas', () => setTool('watch', { toggle: false, reveal: true }), '', 'alerts notify watch');
@@ -5193,7 +5583,7 @@ function paletteCommands() {
   add('Actions', 'About the data', () => setTool('about', { toggle: false, reveal: true }), '', 'sources legal privacy');
   add('Actions', shellEl.classList.contains('railwide') ? 'Collapse the rail' : 'Expand the rail', () => setRailWide(!shellEl.classList.contains('railwide')), '', 'sidebar menu');
   if (plannedRoute) {
-    add('Route', 'Show the route strip', () => rsopen.hidden ? rstrack.focus() : rsopen.click(), '', 'strip along');
+    add('Route', 'Show what is along the route', () => { setTool('route', { toggle: false, reveal: true }); rstrack.focus(); }, '', 'strip along');
     add('Route', 'Copy a share link', () => document.getElementById('sharebtn').click(), '', 'share link');
     add('Route', 'Export as GPX', () => document.getElementById('gpxbtn').click(), '', 'gpx download');
     add('Route', 'Export as KML', () => document.getElementById('kmlbtn').click(), '', 'kml download');

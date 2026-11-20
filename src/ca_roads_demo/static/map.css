@@ -7,14 +7,24 @@
      --navy/--navy2/--ink/--line/--bg/--sky usages below are unchanged. */
   --navy:var(--cs-navy); --navy2:var(--cs-navy2); --ink:var(--cs-ink); --dim:#5b6b7d;
   --line:var(--cs-line); --bg:var(--cs-bg); --card:var(--cs-paper);
-  --sky:var(--cs-sky); --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
+  /* The board's accent (site/app/globals.css): white text on it passes
+     4.5:1, which the older sky blue did not. */
+  --sky:#1a63d6; --sky-soft:#e8f0fd; --amber:#e8a13c; --red:#d64545;
   --green:#2f9e6e; --green-soft:#e2f5ec;
   /* Text and hairline tones for popups, the details pane and lists. */
   --t1:#0f172a; --t2:#475569; --t3:#64748b; --t4:#94a3b8;
   --hair:#e2e8f0; --hair2:#f1f5f9; --hair-strong:#cbd5e1; --wash:#f8fafc;
   --shadow:0 12px 32px rgba(15,28,43,.16), 0 2px 6px rgba(15,28,43,.08);
   --ease:cubic-bezier(.22,1,.36,1);
-  --mono:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --mono:"Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Round-3 board tokens (site/app/globals.css, light), local to the map. */
+  --surface:#ffffff; --surface-2:#eef2f7; --ink-2:#475569; --ink-3:#5f6e82;
+  --bline:#e1e7ef; --bline-strong:#c9d3df; --accent-ink:#ffffff;
+  --k-incident:#ab4d0d; --k-incident-soft:#fdf0e6; --k-closure:#a1262e; --k-closure-soft:#fcebec;
+  --k-chain:#4053a8; --k-chain-soft:#eceffb; --k-fire:#946200; --k-fire-soft:#fbf3df;
+  --k-weather:#0e7480; --k-weather-soft:#e3f4f5; --k-ok:#1a774f; --k-ok-soft:#e4f4ec;
+  --k-stale:#6b5b95; --k-stale-soft:#efecf7; --k-camera:#475569; --k-camera-soft:#eef2f7;
+  --float:0 1px 2px rgb(11 26 44 / .1), 0 8px 24px -8px rgb(11 26 44 / .25);
   color-scheme:light;
 }
 /* Dark: the site's dark palette (site/app/globals.css), same names. */
@@ -25,6 +35,13 @@
   --t1:#e6edf5; --t2:#a3b2c4; --t3:#8a9bb0; --t4:#6b7c91;
   --hair:#223042; --hair2:#18222f; --hair-strong:#33445b; --wash:#152030;
   --shadow:0 14px 36px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
+  --surface:#111a26; --surface-2:#172231; --ink-2:#a3b2c4; --ink-3:#8091a6;
+  --bline:#223042; --bline-strong:#33445b; --accent-ink:#06101e;
+  --k-incident:#f0914f; --k-incident-soft:#33200f; --k-closure:#ff8a8f; --k-closure-soft:#3a1619;
+  --k-chain:#98a6f0; --k-chain-soft:#1c2244; --k-fire:#e3b341; --k-fire-soft:#2f2610;
+  --k-weather:#4cc2c9; --k-weather-soft:#0f2c30; --k-ok:#4fc98e; --k-ok-soft:#10301f;
+  --k-stale:#b4a5e0; --k-stale-soft:#241f3a; --k-camera:#a3b2c4; --k-camera-soft:#172231;
+  --float:0 1px 2px rgb(0 0 0 / .4), 0 10px 28px -8px rgb(0 0 0 / .6);
   color-scheme:dark;
 }
 * { box-sizing:border-box; margin:0 }
@@ -113,8 +130,10 @@ body { background:var(--bg); color:var(--ink);
    (and take arrow keys); widths live in CSS variables the script sets
    from localStorage, clamped to the bounds in the spec. */
 .shell { flex:1; display:grid; min-height:0; position:relative;
-  --rail-w:64px; --panel-w:360px; --insp-w:0px; --insp-gap:0px;
-  grid-template-columns:var(--rail-w) 6px var(--panel-w) 6px 1fr var(--insp-gap) var(--insp-w) }
+  --rail-w:76px; --panel-w:360px; --insp-w:0px; --insp-gap:0px;
+  /* Board #3: the panel floats over a full-bleed map, so the grid is
+     rail | map | details pane; the panel is laid over the map. */
+  grid-template-columns:var(--rail-w) 1fr var(--insp-gap) var(--insp-w) }
 /* The inspector docks as a sixth column on wide screens and overlays
    the map's right edge below 1280px. Opened only on demand (a popup's
    "Show in inspector" button or an Alerts row); popups stay popups. */
@@ -156,35 +175,45 @@ body { background:var(--bg); color:var(--ink);
   .inspector { position:absolute; right:0; top:0; bottom:0; z-index:1100;
     width:min(340px, 90vw); box-shadow:-8px 0 24px rgba(15,28,43,.18) }
 }
-.rail { background:var(--navy); display:flex; flex-direction:column;
-  align-items:stretch; padding:8px 6px; gap:4px; overflow:hidden }
-.rail .tool { display:flex; flex-direction:column; align-items:center;
-  gap:3px; padding:9px 2px 7px; border:0; border-radius:10px;
-  background:transparent; color:#c9d4e0; font:600 .62rem Inter;
-  letter-spacing:.2px; cursor:pointer; text-decoration:none;
-  text-align:center; min-height:52px }
-.rail .tool svg { width:22px; height:22px; fill:none; stroke:currentColor;
-  stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round }
-.rail .tool:hover { background:var(--navy2); color:#fff }
-.rail .tool.on { background:var(--navy2); color:#fff }
-.rail .tool.on svg { color:#7fb3ee }
-.rail .tool:focus-visible { outline:2px solid #7fb3ee; outline-offset:-2px }
+.rail { background:var(--surface); border-right:1px solid var(--bline); display:flex;
+  flex-direction:column; align-items:stretch; padding:8px 0; gap:2px; overflow:hidden; z-index:1060 }
+.rail .tool { display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:6px 0; border:0; border-radius:0; background:transparent; color:var(--ink-2);
+  font:500 11px/1.2 Inter; cursor:pointer; text-decoration:none; text-align:center }
+/* The icon sits in a 48x36 pill that fills with the accent when on. */
+.rail .tool svg, .rail .railx svg { width:48px; height:36px; padding:8.5px 14.5px; border-radius:999px;
+  fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;
+  flex:none; transition:background-color .15s var(--ease), color .15s }
+.rail .tool:hover svg, .rail .railx:hover svg { background:var(--surface-2) }
+.rail .tool:hover { color:var(--ink) }
+.rail .tool.on { color:var(--ink); font-weight:600 }
+.rail .tool.on svg, .rail .tool.armed svg { background:var(--sky-soft); color:var(--sky) }
+.rail .tool:focus-visible, .rail .railx:focus-visible { outline:none }
+.rail .tool:focus-visible svg, .rail .railx:focus-visible svg { outline:2px solid var(--sky); outline-offset:1px }
 .rail .railgap { flex:1 }
-.rail .tool.small { min-height:44px; opacity:.85 }
 .resizer { cursor:col-resize; background:transparent; position:relative }
 .resizer::after { content:""; position:absolute; inset:0; margin:auto;
   width:2px; background:var(--line); transition:background .15s }
 .resizer:hover::after, .resizer.dragging::after, .resizer:focus-visible::after {
   background:var(--sky) }
 .resizer:focus-visible { outline:none }
-#railresize { background:var(--navy) }
-#railresize::after { background:var(--navy2) }
-aside { background:var(--card); border-right:1px solid var(--line);
-  overflow-y:auto; padding:18px; display:flex; flex-direction:column }
+/* The floating panel (board #3): a rounded card over the map, the
+   search at its top and the open tool below it, scrolling. */
+aside#panel { position:absolute; z-index:1050; top:12px; bottom:12px;
+  left:calc(var(--rail-w) + 12px); width:var(--panel-w); max-width:calc(100% - var(--rail-w) - 24px);
+  background:var(--surface); color:var(--ink); border-radius:16px; box-shadow:var(--float);
+  display:flex; flex-direction:column; overflow:hidden }
+:root[data-theme="dark"] aside#panel { border:1px solid var(--bline) }
+.phdr { flex:none; padding:12px 12px 4px }
+aside#panel:not([data-tool="places"]):not([data-tool="alerts"]):not([data-tool=""]) .phdr { display:none }
 aside section[data-tool] { display:none }
-aside section[data-tool].on { display:block }
+aside section[data-tool] { display:none }
+aside section[data-tool].on { display:block; flex:1; min-height:0; overflow-y:auto;
+  overscroll-behavior:contain; padding:14px 18px 18px }
+aside#panel:not([data-tool="places"]):not([data-tool="alerts"]) section[data-tool].on { padding-top:16px }
+#pane-places.on, #pane-alerts.on { padding-top:10px }
 .grab { display:none }
-.panehead { font:600 .95rem Inter; margin:0 0 10px }
+.panehead { font:600 15px/1.3 Inter; margin:0 0 10px; color:var(--ink) }
 .panenote { font-size:.78rem; color:var(--dim); margin-top:10px }
 .kpis { display:grid; grid-template-columns:1fr 1fr; gap:8px }
 .kpis div { background:var(--sky-soft); border-radius:10px; padding:10px 12px;
@@ -194,15 +223,20 @@ aside section[data-tool].on { display:block }
 /* Explicit columns: a hidden panel (display:none) leaves the grid, and
    auto-placement would then drop the map into the zero-width column
    meant for the panel. Pinning every child keeps the map at 1fr. */
-.shell > .rail { grid-column:1 }
-.shell > #railresize { grid-column:2 }
-.shell > aside { grid-column:3 }
-.shell > #panelresize { grid-column:4 }
-.shell > .map-card { grid-column:5 }
-.shell > #inspresize { grid-column:6 }
-.shell > .inspector { grid-column:7 }
-.shell.nopanel { grid-template-columns:var(--rail-w) 6px 0 0 1fr var(--insp-gap) var(--insp-w) }
-.shell.nopanel aside, .shell.nopanel #panelresize { display:none }
+.shell > .rail { grid-column:1; grid-row:1 }
+.shell > .map-card { grid-column:2 / 3; grid-row:1 }
+.shell > #inspresize { grid-column:3; grid-row:1 }
+.shell > .inspector { grid-column:4; grid-row:1 }
+#panelresize { position:absolute; z-index:1051; top:28px; bottom:28px; width:8px;
+  left:calc(var(--rail-w) + 8px + var(--panel-w)) }
+#panelresize::after { width:3px; border-radius:99px; background:transparent }
+#panelresize:hover::after, #panelresize.dragging::after, #panelresize:focus-visible::after { background:var(--sky) }
+/* Folded: the panel is the search alone, floating over the map. */
+.shell.nopanel #panelresize { display:none }
+.shell.nopanel aside#panel { bottom:auto; overflow:visible; background:transparent; box-shadow:none; border:0 }
+.shell.nopanel aside#panel section[data-tool] { display:none }
+.shell.nopanel .phdr { padding:0 }
+.shell.nopanel .findbox input { box-shadow:var(--float); border-color:transparent }
 .sharemenu { position:relative }
 .sharemenu summary { list-style:none; cursor:pointer; font:600 .76rem Inter;
   border-radius:8px; padding:8px 12px; border:1px solid var(--line);
@@ -312,20 +346,18 @@ aside section[data-tool].on { display:block }
 .findpop .saverow .linkbtn { background:none; border:0; padding:0; color:var(--sky); font:inherit; font-size:.78rem; cursor:pointer; text-decoration:underline }
 .findpop .saverow .linkbtn:disabled { color:var(--dim); text-decoration:none; cursor:default }
 .reportform .linkbtn { background:none; border:0; padding:0; color:var(--sky); font:inherit; cursor:pointer; text-decoration:underline }
-/* Find box: always on the map, left of the Report button. Leaflet's zoom
-   buttons share that corner, so they start below it. */
-.map-card .leaflet-top.leaflet-left { top:50px }
-.findbox { position:absolute; top:12px; left:12px; z-index:1000;
-  width:min(380px, calc(100% - 132px)) }
-.findbox input { width:100%; font:inherit; font-size:.88rem; color:var(--ink);
-  padding:8px 34px 8px 36px; border-radius:999px; border:1px solid var(--line);
-  background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7a8c' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") 12px 50%/16px no-repeat;
-  box-shadow:0 1px 4px rgba(15,28,43,.18) }
-.findbox input:focus { border-color:var(--sky); outline:none }
-.findbox #findclear { position:absolute; right:6px; top:5px; width:26px; height:26px;
-  border:0; border-radius:50%; background:transparent; color:var(--dim);
+/* Find box: the top of the floating panel (board #3, "Search maps"). */
+.findbox { position:relative }
+.findbox .findicon { position:absolute; left:14px; top:14px; width:16px; height:16px; fill:none;
+  stroke:var(--ink-3); stroke-width:2; stroke-linecap:round; pointer-events:none; z-index:1 }
+.findbox input { width:100%; height:44px; font:inherit; font-size:14px; color:var(--ink);
+  padding:0 38px 0 40px; border-radius:10px; border:1px solid var(--bline); background:var(--surface) }
+.findbox input::placeholder { color:var(--ink-3) }
+.findbox input:focus { border-color:var(--sky); outline:2px solid color-mix(in srgb, var(--sky) 30%, transparent); outline-offset:0 }
+.findbox #findclear { position:absolute; right:8px; top:9px; width:26px; height:26px;
+  border:0; border-radius:50%; background:transparent; color:var(--ink-3);
   font-size:1.15rem; line-height:1; cursor:pointer }
-.findbox #findclear:hover { background:var(--sky-soft); color:var(--ink) }
+.findbox #findclear:hover { background:var(--surface-2); color:var(--ink) }
 .findbox .sugg { border-radius:12px }
 .findbox .val { background:var(--card); border-radius:8px; padding:3px 10px; margin-top:4px;
   box-shadow:0 1px 4px rgba(15,28,43,.18) }
@@ -384,7 +416,7 @@ aside section[data-tool].on { display:block }
 .tabs span.on { background:var(--card); color:var(--ink);
   box-shadow:0 1px 2px rgba(15,28,43,.08) }
 .askhead { margin-bottom:4px }
-.askhead h3 { font:600 .95rem Inter; margin-bottom:3px }
+.askhead h2 { font:600 .95rem Inter; margin-bottom:3px }
 .askhead p { font-size:.8rem; color:var(--dim); margin-bottom:10px }
 .routeasks-wrap { margin:4px 0 10px }
 .routeasks-wrap b { display:block; font:700 .68rem Inter; letter-spacing:.7px;
@@ -992,36 +1024,27 @@ input, select, textarea { color:var(--ink); background:var(--card) }
 :root[data-theme="dark"] .mapbtn.armed, :root[data-theme="dark"] .mapbtn:hover { color:var(--ink) }
 :root[data-theme="dark"] .ttag .tb { background:#f8fafc }
 
-/* ── Rail: slim, or expanded to labels ───────────────────────── */
+/* ── Rail: slim, or expanded to labels (board #4) ────────────── */
 /* Expanded wins over a dragged slim width (an inline --rail-w). */
 .shell.railwide { --rail-w:224px !important }
-.shell.railwide #railresize { pointer-events:none }
 .rail { transition:none }
-.rail .railx { display:flex; flex-direction:column; align-items:center; gap:3px;
-  padding:9px 2px 7px; border:0; border-radius:10px; background:transparent;
-  color:#9fb0c3; font:600 .62rem Inter; cursor:pointer; min-height:48px; margin-top:4px;
-  border-top:1px solid rgba(255,255,255,.08); border-radius:0 0 10px 10px }
-.rail .railx svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.9;
-  stroke-linecap:round }
-.rail .railx:hover { color:#fff; background:var(--navy2) }
-.rail .railx:focus-visible { outline:2px solid #7fb3ee; outline-offset:-2px }
-.railadv { display:flex; flex-direction:column; gap:4px }
-.raillabel { display:none; font:600 .64rem Inter; letter-spacing:.9px; text-transform:uppercase;
-  color:#7f93a9; padding:10px 12px 4px }
+.rail .railx { display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:6px 0 4px; margin-top:4px; border:0; border-top:1px solid var(--bline); background:transparent;
+  color:var(--ink-2); font:500 11px/1.2 Inter; cursor:pointer }
+.rail .railx:hover { color:var(--ink) }
+.railadv { display:flex; flex-direction:column; gap:2px }
+.raillabel { display:none; font:500 10.5px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+  color:var(--ink-3); padding:12px 16px 6px }
 /* Slim: only the open one of the "more" tools shows, so the rail always
    marks where you are; the rest live in the expanded rail. */
 .shell:not(.railwide) .railadv > :not(.on) { display:none }
 .shell.railwide .raillabel { display:block }
-.shell.railwide .rail { padding:8px 8px }
+.shell.railwide .rail { padding:8px 10px; overflow-y:auto }
 .shell.railwide .rail .tool, .shell.railwide .rail .railx { flex-direction:row; justify-content:flex-start;
-  gap:12px; min-height:40px; padding:8px 12px; font:500 .84rem Inter; letter-spacing:0;
-  text-align:left }
-.shell.railwide .rail .tool svg, .shell.railwide .rail .railx svg { width:19px; height:19px; flex:none }
-.shell.railwide .rail .tool.small { min-height:40px; opacity:1 }
-.shell.railwide .rail .railx { border-radius:10px; margin-top:6px }
-.shell.railwide .rail .railx svg { transform:none }
-.rail .tool.act { color:#aebdcd }
-.rail a.tool.act::after { content:"↗"; margin-left:auto; font-size:.8em; opacity:.6 }
+  gap:10px; padding:2px 0; font:500 13px/1.2 Inter; text-align:left }
+.shell.railwide .rail .tool svg, .shell.railwide .rail .railx svg { width:40px; height:32px; padding:6.5px 10.5px }
+.shell.railwide .rail .railx { margin-top:6px; padding-top:8px }
+.rail a.tool.act::after { content:"↗"; margin-left:auto; padding-right:6px; font-size:.85em; color:var(--ink-3) }
 .shell:not(.railwide) .rail a.tool.act::after { content:none }
 
 /* ── Small shared pieces ─────────────────────────────────────── */
@@ -1034,64 +1057,6 @@ input, select, textarea { color:var(--ink); background:var(--card) }
 .phead .subhead { margin-bottom:6px }
 kbd { font:600 .68rem var(--mono); padding:1px 5px; border-radius:5px;
   border:1px solid var(--line); border-bottom-width:2px; background:var(--card); color:var(--t2) }
-
-/* ── Your places ─────────────────────────────────────────────── */
-.ptiles { display:grid; grid-template-columns:1fr 1fr; gap:8px }
-.ptile { position:relative; display:flex; border:1px solid var(--line); border-radius:12px;
-  background:var(--card); transition:border-color .15s }
-.ptile:hover { border-color:color-mix(in srgb, var(--sky) 55%, var(--line)) }
-.ptile .pmain { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start;
-  gap:10px; padding:12px; border:0; background:none; text-align:left; cursor:pointer;
-  font:inherit; color:var(--ink); border-radius:12px }
-.ptile .pmain:focus-visible, .padd:focus-visible, .prow:focus-visible, .plook:focus-visible,
-.prm:focus-visible { outline:2px solid var(--sky); outline-offset:-2px }
-.pic { display:grid; place-items:center; width:30px; height:30px; border-radius:9px;
-  background:var(--sky-soft); color:var(--sky); flex:none }
-.pic svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.9;
-  stroke-linecap:round; stroke-linejoin:round }
-.pic.sm { width:26px; height:26px; border-radius:8px; background:var(--hair2); color:var(--t3) }
-.pic.sm svg { width:15px; height:15px }
-.ptxt { display:flex; flex-direction:column; min-width:0; width:100% }
-.ptxt b { font:600 .86rem Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-.ptxt small { font-size:.72rem; color:var(--dim); line-height:1.35 }
-.ptxt small.haslive { color:#b45309 }
-:root[data-theme="dark"] .ptxt small.haslive { color:#f5b04c }
-.ptile.unset { border-style:dashed; background:transparent }
-.ptile.unset .pic { background:var(--hair2); color:var(--t3) }
-.ptile.unset small { color:var(--sky) }
-.plook { position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:8px;
-  border:0; background:transparent; color:var(--t3); cursor:pointer; display:grid; place-items:center }
-.plook svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round }
-.plook:hover { background:var(--hair2); color:var(--ink) }
-.prm { position:absolute; inset:auto 8px 8px auto; border:0; border-radius:7px; padding:3px 8px;
-  background:#fbe9e9; color:#a02c2c; font:600 .7rem Inter; cursor:pointer }
-:root[data-theme="dark"] .prm { background:#3a1717; color:#ff9f9f }
-.padd { display:flex; align-items:center; gap:8px; padding:12px; border:1px dashed var(--line);
-  border-radius:12px; background:transparent; color:var(--dim); font:600 .78rem Inter; cursor:pointer;
-  min-height:58px }
-.padd svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round }
-.padd:hover { color:var(--sky); border-color:var(--sky) }
-.pnote { display:flex; gap:10px; align-items:baseline; justify-content:space-between;
-  margin-top:10px; padding:9px 12px; border-radius:10px; background:var(--sky-soft);
-  font-size:.78rem; color:var(--ink) }
-.pnote[hidden] { display:none }
-.pnote .txtbtn { margin:-4px -4px -4px 0; flex:none }
-.psec { margin-top:18px }
-.psec[hidden] { display:none }
-.plist { display:flex; flex-direction:column }
-.prow { display:flex; align-items:center; gap:10px; width:100%; padding:8px 2px; border:0;
-  border-top:1px solid var(--line); background:transparent; text-align:left; cursor:pointer;
-  font:inherit; color:var(--ink) }
-.prow:first-child { border-top:0 }
-.prow:hover { background:var(--sky-soft) }
-.prow b { display:block; font:600 .8rem Inter }
-.prow small { display:block; color:var(--dim); font-size:.72rem; white-space:nowrap; overflow:hidden;
-  text-overflow:ellipsis; max-width:250px }
-.pchips { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 6px }
-.pchip { font:500 .72rem Inter; color:var(--dim); padding:3px 9px; border-radius:999px;
-  background:var(--hair2) }
-.pchip b { color:var(--ink); font-weight:650; font-variant-numeric:tabular-nums }
-#plive .alertrow:first-child { border-top:0 }
 
 /* ── Popups are peeks: what, where, the one line, then Details ── */
 .leaflet-popup .peek .facts .fact:nth-child(n+3), .leaflet-popup .peek .foot,
@@ -1157,65 +1122,7 @@ kbd { font:600 .68rem var(--mono); padding:1px 5px; border-radius:5px;
 .routecond .condrow > span { flex:1; min-width:0 }
 .condmi { flex:none; font:600 .7rem Inter; color:var(--dim); font-variant-numeric:tabular-nums }
 
-/* ── Route strip ─────────────────────────────────────────────── */
-.rstrip { position:absolute; z-index:1001; left:50%; bottom:26px; transform:translateX(-50%);
-  width:min(760px, calc(100% - 24px)); background:var(--card); color:var(--ink);
-  border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:12px 14px 12px }
-.rstrip[hidden], .rsopen[hidden] { display:none }
-.rshead { display:flex; align-items:center; gap:12px }
-.rstitle { flex:1; min-width:0; display:flex; flex-direction:column }
-.rstitle b { font:650 .88rem Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-.rstitle span { font-size:.74rem; color:var(--dim) }
-.rsnav { display:flex; align-items:center; gap:4px; flex:none }
-.rsnav button { width:30px; height:30px; display:grid; place-items:center; border-radius:8px;
-  border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer }
-.rsnav button:disabled { opacity:.4; cursor:default }
-.rsnav button:not(:disabled):hover { border-color:var(--sky) }
-.rsnav button:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
-.rsnav svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2.2;
-  stroke-linecap:round; stroke-linejoin:round }
-.rsnav .rsx { border:0; font:400 20px/1 Inter; color:var(--t3); margin-left:2px }
-#rspos { min-width:56px; text-align:center; font:600 .72rem Inter; color:var(--dim);
-  font-variant-numeric:tabular-nums }
-.rstrack { position:relative; height:52px; margin:12px 6px 0; outline:none; border-radius:8px }
-.rstrack:focus-visible { box-shadow:0 0 0 2px var(--sky) }
-.rsline { position:absolute; left:0; right:0; top:50%; height:4px; margin-top:-2px; border-radius:99px;
-  background:var(--hair) }
-.rsline::before, .rsline::after { content:""; position:absolute; top:50%; width:12px; height:12px;
-  margin-top:-6px; border-radius:99px; background:var(--card); border:3px solid var(--ink) }
-.rsline::before { left:-6px }
-.rsline::after { right:-6px; background:var(--ink) }
-.rsdot { position:absolute; left:var(--x); top:calc(50% - 6px + (var(--lane) - 1) * 15px);
-  width:12px; height:12px; margin-left:-6px; padding:0; border-radius:99px;
-  background:var(--dot); border:2px solid var(--card); box-shadow:0 0 0 1px rgba(15,28,43,.18);
-  cursor:pointer; transition:transform .15s var(--ease) }
-.rsdot::before { content:""; position:absolute; inset:-8px }  /* a bigger hit area */
-.rsdot:hover { transform:scale(1.3) }
-.rsdot.on { transform:scale(1.5); box-shadow:0 0 0 2px var(--ink); z-index:2 }
-.rsscale { display:flex; justify-content:space-between; margin:4px 0 0; font:600 .66rem Inter;
-  color:var(--t3); letter-spacing:.3px; text-transform:uppercase }
-.rscard { display:flex; align-items:center; gap:10px; margin-top:10px; padding-top:10px;
-  border-top:1px solid var(--line) }
-.rscard[hidden] { display:none }
-.rscard > i { width:10px; height:10px; border-radius:99px; background:var(--dot); flex:none }
-.rscard > div { flex:1; min-width:0 }
-.rscard b { display:block; font:600 .82rem Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-.rscard small { display:block; font-size:.72rem; color:var(--dim) }
-.rsdet { flex:none; border:1px solid var(--line); background:var(--card); color:var(--sky);
-  border-radius:8px; padding:6px 12px; font:600 .76rem Inter; cursor:pointer }
-.rsdet:hover { border-color:var(--sky) }
-.rsopen { position:absolute; z-index:1001; left:50%; bottom:26px; transform:translateX(-50%);
-  border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px;
-  padding:7px 14px; font:600 .78rem Inter; box-shadow:var(--shadow); cursor:pointer }
-
 /* ── Command palette ─────────────────────────────────────────── */
-.cpalhint { position:absolute; z-index:1000; left:12px; bottom:26px; display:flex; align-items:center;
-  gap:7px; padding:5px 6px 5px 10px; border-radius:9px; border:1px solid var(--line);
-  background:color-mix(in srgb, var(--card) 92%, transparent); color:var(--dim);
-  font:500 .72rem Inter; cursor:pointer; box-shadow:0 1px 3px rgba(15,28,43,.12) }
-.cpalhint:hover { color:var(--ink); border-color:var(--sky) }
-.cpalhint:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
-.map-card.has-strip .cpalhint { display:none }
 .cpal { position:fixed; inset:0; z-index:3000; background:rgba(8,16,26,.38);
   display:flex; justify-content:center; align-items:flex-start; padding:12vh 16px 16px }
 .cpal[hidden] { display:none }
@@ -1261,14 +1168,6 @@ kbd { font:600 .68rem var(--mono); padding:1px 5px; border-radius:5px;
   .rail .railx { flex:1 1 0; min-width:0; min-height:44px; margin:0; padding:5px 0 4px;
     font-size:.56rem; border:0; border-radius:10px }
   .rail .railx svg { width:20px; height:20px }
-  .ptiles { grid-template-columns:1fr 1fr }
-  .rstrip { left:8px; right:8px; width:auto; transform:none; padding:10px 12px;
-    bottom:calc(var(--sheet-h) + var(--tab-h) + 8px); transition:bottom .2s ease }
-  .rstrip .rscard { display:none }
-  .rstrip .rstitle { flex:1; min-width:0 }
-  .rstrip #rsname, .rstrip #rsmeta { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-  .rsopen { bottom:calc(var(--sheet-h) + var(--tab-h) + 8px) }
-  .shell.sheet-full .rstrip, .shell.sheet-full .rsopen { display:none }
   .cpalhint { display:none }
   .cpal { padding:8px }
   .cpalbox { max-height:calc(100dvh - 16px) }
@@ -1280,9 +1179,6 @@ kbd { font:600 .68rem var(--mono); padding:1px 5px; border-radius:5px;
   .inspector { height:max-content }
   .inspector { display:flex }
   .inspector[hidden] { display:none }
-}
-@media (pointer: coarse) {
-  .rsdot { width:16px; height:16px; margin-left:-8px }
 }
 
 /* ── Motion: off when the system asks ────────────────────────── */
@@ -1298,3 +1194,320 @@ kbd { font:600 .68rem var(--mono); padding:1px 5px; border-radius:5px;
 /* Places: where the list lives, and the way to sign in. */
 .psync { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 8px }
 .psync .txtbtn[hidden] { display:none }
+
+/* ============ Round 3: the approved "Your places" board ============
+   Board #3 (floating panel, places, Recent, Live near you, map controls),
+   #4 (the rail), #9 (details pane header), #11 (the route, item by item)
+   and #12 (the palette hint), in the board's tokens, light and dark. */
+kbd { font:500 10.5px/1 var(--mono); padding:3px 5px; border-radius:4px; border:1px solid var(--bline-strong);
+  border-bottom-width:2px; background:var(--surface); color:var(--ink-2) }
+.txtbtn { color:var(--sky); font:500 12px Inter }
+.phead { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:12px }
+.phead .panehead { margin:0 }
+.iconbtn { flex:none; width:36px; height:36px; display:grid; place-items:center; border:0; border-radius:8px;
+  background:transparent; color:var(--ink); cursor:pointer }
+.iconbtn svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round;
+  stroke-linejoin:round }
+.iconbtn:hover { background:var(--surface-2) }
+.iconbtn:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+.kicker { font:500 10.5px/1.2 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin:0 }
+.kickrow { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:4px }
+.kcount { font:400 11px var(--mono); color:var(--ink-3); font-variant-numeric:tabular-nums }
+.psubhead { font:600 14px/1.3 Inter; color:var(--ink); margin:0 0 2px }
+
+/* ── Kind icons: a soft square in the kind's colour ─────────────── */
+.kicon { flex:none; display:grid; place-items:center; width:26px; height:26px; border-radius:8px;
+  background:var(--ks); color:var(--kc) }
+.kicon svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round;
+  stroke-linejoin:round }
+.kicon.sm { width:20px; height:20px; border-radius:6px }
+.kicon.sm svg { width:11px; height:11px }
+.k-incident { --kc:var(--k-incident); --ks:var(--k-incident-soft) }
+.k-closure { --kc:var(--k-closure); --ks:var(--k-closure-soft) }
+.k-chain { --kc:var(--k-chain); --ks:var(--k-chain-soft) }
+.k-fire { --kc:var(--k-fire); --ks:var(--k-fire-soft) }
+.k-weather { --kc:var(--k-weather); --ks:var(--k-weather-soft) }
+.k-camera, .k-sign { --kc:var(--k-camera); --ks:var(--k-camera-soft) }
+.k-plugin { --kc:var(--k-stale); --ks:var(--k-stale-soft) }
+
+/* ── Your places: round buttons, Recent, Live near you ──────────── */
+.ptiles { list-style:none; padding:0; margin:0 -6px; display:flex; flex-wrap:wrap; row-gap:10px }
+.pfav { position:relative; width:25%; display:flex; justify-content:center }
+.pbtn { display:flex; flex-direction:column; align-items:center; gap:0; width:72px; padding:0;
+  border:0; background:none; color:var(--ink); cursor:pointer; font:inherit; text-align:center }
+.pcirc { display:grid; place-items:center; width:48px; height:48px; border-radius:999px;
+  background:var(--sky-soft); color:var(--sky); margin-bottom:6px; transition:filter .15s }
+.pcirc svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round;
+  stroke-linejoin:round }
+.pbtn:hover .pcirc { filter:brightness(.96) }
+:root[data-theme="dark"] .pbtn:hover .pcirc { filter:brightness(1.25) }
+.pbtn:focus-visible { outline:none }
+.pbtn:focus-visible .pcirc { outline:2px solid var(--sky); outline-offset:2px }
+.plbl { font:500 12.5px/1.3 Inter; max-width:72px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.psub { font:400 11px/1.35 Inter; color:var(--ink-3); min-height:15px; max-width:72px; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis }
+.psub.set { color:var(--sky) }
+.psub.haslive { color:var(--k-incident) }
+.pfav.unset .pcirc { background:transparent; border:1.5px dashed var(--bline-strong); color:var(--ink-3) }
+.prm { position:absolute; top:-4px; right:calc(50% - 30px); width:22px; height:22px; display:grid; place-items:center;
+  border-radius:999px; border:2px solid var(--surface); background:var(--k-closure); color:#fff; cursor:pointer; padding:0 }
+.prm svg { width:11px; height:11px; fill:none; stroke:currentColor; stroke-width:2.6; stroke-linecap:round }
+.prm:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+:root[data-theme="dark"] .prm { color:#1a0a0b }
+.pnote { display:flex; gap:10px; align-items:baseline; justify-content:space-between; margin-top:12px;
+  padding:9px 12px; border-radius:10px; background:var(--sky-soft); font-size:12.5px; color:var(--ink) }
+.pnote[hidden] { display:none }
+.pnote .txtbtn { margin:-4px -4px -4px 0; flex:none }
+.psec { margin-top:16px; padding-top:14px; border-top:1px solid var(--bline) }
+.psec[hidden] { display:none }
+.plist { display:flex; flex-direction:column }
+.prow { display:flex; align-items:center; gap:12px; width:100%; padding:10px 0; border:0;
+  border-top:1px solid var(--bline); background:transparent; text-align:left; cursor:pointer;
+  font:inherit; color:var(--ink) }
+.prow:first-child { border-top:0 }
+.prow > span:last-child { min-width:0 }
+.pclock { flex:none; display:grid; place-items:center; width:32px; height:32px; border-radius:999px;
+  background:var(--surface-2); color:var(--ink-2) }
+.pclock svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round;
+  stroke-linejoin:round }
+.prow b { display:block; font:500 13px/1.35 Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.prow small { display:block; font:400 12px/1.4 Inter; color:var(--ink-2); white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis }
+.prow:hover b, .alertrow:hover b { color:var(--sky) }
+.prow:focus-visible, .alertrow:focus-visible { outline:2px solid var(--sky); outline-offset:-2px; border-radius:8px }
+/* Live rows here and in the Live tool: kind icon, title, one line. */
+.alertrow { gap:12px; align-items:flex-start; padding:9px 0; border-top:1px solid var(--bline) }
+.alertrow:hover { background:transparent }
+.alertrow > span:last-child { min-width:0; flex:1 }
+.alertrow b { font:500 13px/1.35 Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.alertrow small { font:400 12px/1.4 Inter; color:var(--ink-2) }
+.alertrow .kicon { margin-top:1px }
+#plive .alertrow:first-child, #alertlist .alertrow:first-child { border-top:0 }
+.seeall { display:inline-flex; align-items:center; gap:2px; margin-top:6px; padding:6px 0; border:0;
+  background:none; color:var(--sky); font:500 12.5px Inter; cursor:pointer }
+.seeall svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round }
+.seeall:hover { text-decoration:underline; text-underline-offset:3px }
+.seeall:focus-visible { outline:2px solid var(--sky); outline-offset:2px; border-radius:4px }
+.seeall[hidden] { display:none }
+.psync { margin-top:18px; font-size:12px; color:var(--ink-3) }
+
+/* ── Map controls (board #3) ─────────────────────────────────── */
+.maptr { position:absolute; z-index:1000; top:16px; right:16px; display:flex; gap:8px; align-items:center }
+.mapfab { height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 12px; border:0;
+  border-radius:10px; background:var(--surface); color:var(--ink); box-shadow:var(--float);
+  font:500 14px Inter; cursor:pointer }
+.mapfab svg { width:16px; height:16px; fill:none; stroke:var(--ink-2); stroke-width:1.9; stroke-linecap:round;
+  stroke-linejoin:round; flex:none }
+.mapfab.sq { width:40px; padding:0; justify-content:center }
+.mapfab.sq svg { width:18px; height:18px }
+.mapfab:hover svg { stroke:var(--ink) }
+.mapfab[aria-expanded="true"] { color:var(--sky); background:var(--sky-soft) }
+.mapfab[aria-expanded="true"] svg { stroke:var(--sky) }
+.mapfab:focus-visible, .zoomstack button:focus-visible, .livepill:focus-visible, .cpalhint:focus-visible {
+  outline:2px solid var(--sky); outline-offset:2px }
+.offbadge { border-radius:999px; background:var(--surface-2); color:var(--ink-2); padding:2px 6px;
+  font:400 10.5px/1.3 var(--mono) }
+.offbadge[hidden] { display:none }
+#locbtn.on svg { stroke:var(--sky) }
+#locbtn.busy svg { animation:mlspin 1s linear infinite }
+.mapbr { position:absolute; z-index:1000; right:16px; bottom:24px; display:flex; flex-direction:column; gap:8px }
+.zoomstack { display:flex; flex-direction:column; border-radius:10px; background:var(--surface);
+  box-shadow:var(--float); overflow:hidden }
+.zoomstack button { width:40px; height:40px; display:grid; place-items:center; border:0; background:transparent;
+  color:var(--ink-2); cursor:pointer }
+.zoomstack button + button { border-top:1px solid var(--bline) }
+.zoomstack button:hover:not(:disabled) { background:var(--surface-2); color:var(--ink) }
+.zoomstack button:disabled { color:var(--bline-strong); cursor:default }
+.zoomstack svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round }
+.livepill { position:absolute; z-index:1000; bottom:24px; left:calc(var(--panel-w) + 24px); height:32px;
+  display:inline-flex; align-items:center; gap:6px; padding:0 12px; border:0; border-radius:999px;
+  background:var(--surface); color:var(--ink-2); box-shadow:var(--float); font:400 12px Inter;
+  white-space:nowrap; cursor:pointer }
+.livepill i { width:8px; height:8px; border-radius:99px; background:var(--k-ok); flex:none }
+.livepill.stale i { background:var(--k-fire) }
+.livepill .sep { color:var(--ink-3); margin:0 2px }
+.livepill svg { width:14px; height:14px; fill:none; stroke:var(--ink-3); stroke-width:2; stroke-linecap:round;
+  margin-left:2px }
+.livepill[aria-expanded="true"] svg { transform:rotate(180deg) }
+.shell.nopanel .livepill { left:16px }
+.cpalhint { height:40px; display:inline-flex; align-items:center; gap:8px; padding:0 8px 0 14px; border:0;
+  border-radius:999px; background:var(--surface); color:var(--ink-2); box-shadow:var(--float);
+  font:400 13.5px Inter; cursor:pointer }
+.cpalhint svg { width:15px; height:15px; fill:none; stroke:var(--ink-3); stroke-width:2; stroke-linecap:round }
+.cpalhint:hover { color:var(--ink) }
+.srcpanel.frompill { top:auto; right:auto }
+.mydot { border-radius:99px; background:var(--sky); border:3px solid #fff;
+  box-shadow:0 0 0 7px color-mix(in srgb, var(--sky) 25%, transparent) }
+.roadinfo { left:calc(var(--panel-w) + 24px); bottom:68px; background:var(--surface); color:var(--ink);
+  border-color:var(--bline) }
+.shell.nopanel .roadinfo { left:16px }
+.pickhint { left:calc(50% + var(--panel-w) / 2) }
+.maploading { left:calc(50% + var(--panel-w) / 2 + 6px); bottom:72px }
+.shell.nopanel .pickhint, .shell.nopanel .maploading { left:50% }
+
+/* ── Layers: a popover under the map's Layers button ───────────── */
+aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:1300; top:120px;
+  right:calc(16px + var(--insp-w) + var(--insp-gap)); width:340px; max-height:calc(100dvh - 140px);
+  overflow-y:auto; overscroll-behavior:contain; padding:12px 16px 16px; background:var(--surface);
+  border:1px solid var(--bline); border-radius:14px; box-shadow:var(--float), 0 24px 48px -16px rgb(11 26 44 / .25);
+  animation:lyrin .16s var(--ease) }
+@keyframes lyrin { from { opacity:0; transform:translateY(-4px) } to { opacity:1; transform:none } }
+.lyrhead { display:flex; align-items:center; justify-content:space-between; margin:0 -8px 4px 0 }
+.lyrhead .panehead { margin:0 }
+#pane-layers:not(.pop) .lyrhead .iconbtn { display:none }
+
+/* ── Details pane header (board #9) ───────────────────────────── */
+.inspector { background:var(--surface); border-left:1px solid var(--bline) }
+.insphead { padding:16px; gap:12px; align-items:flex-start; border-bottom:1px solid var(--bline);
+  background:var(--surface) }
+.inspicon { width:36px; height:36px; border-radius:10px; box-shadow:none;
+  background:color-mix(in srgb, var(--acc) 14%, var(--surface)) }
+.inspicon.square { border-radius:10px }
+.inspicon svg { width:19px; height:19px; stroke:var(--acc) }
+:root[data-theme="dark"] .inspicon svg { stroke:color-mix(in srgb, var(--acc) 60%, #fff) }
+.insphd { gap:2px; padding-top:1px }
+.insphd b { font:600 16px/1.3 Inter; letter-spacing:0; text-transform:none; color:var(--ink);
+  text-wrap:balance }
+.insphd span { font:400 12.5px/1.4 Inter; color:var(--ink-2) }
+.inspx { width:32px; height:32px; margin:-4px -6px 0 0; border-radius:8px; background:transparent;
+  color:var(--ink-3); font:300 24px/1 Inter; display:grid; place-items:center }
+.inspx:hover { background:var(--surface-2); color:var(--ink) }
+.inspx:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+.inspbody .inhead { display:none !important }
+.inspbody { padding-top:14px }
+.inspbody .p2 > .body:first-of-type { margin-top:0 }
+
+/* ── Route, planned (board #11) ───────────────────────────────── */
+.rhead { display:flex; align-items:center; gap:8px; margin:-16px -18px 0; padding:10px 12px;
+  border-bottom:1px solid var(--bline) }
+.rhead[hidden] { display:none }
+.rhtxt { flex:1; min-width:0 }
+.rhtxt h2 { font:600 15px/1.3 Inter; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.rhtxt p { font:400 12px/1.4 Inter; color:var(--ink-2); margin:0 }
+.rhtxt p b { font-weight:500; color:var(--ink) }
+.rhtxt .late, .rhtxt p b.late { color:var(--k-incident); font-weight:500 }
+.rhtxt p .late:not(b) { font-weight:400 }
+.leavebtn { flex:none; display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 10px;
+  border:1px solid var(--bline); border-radius:8px; background:var(--surface); color:var(--ink);
+  font:500 13px Inter; cursor:pointer; white-space:nowrap }
+.leavebtn svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round }
+.leavebtn:hover, .leavebtn[aria-expanded="true"] { border-color:var(--sky); color:var(--sky) }
+.leavebtn:focus-visible { outline:2px solid var(--sky); outline-offset:2px }
+#pane-plan.planned > .fld, #pane-plan.planned > #planbtn, #pane-plan.planned #routepresets,
+#pane-plan.planned #routesum, #pane-plan.planned #routeeta, #pane-plan.planned #viachips,
+#pane-plan.planned #routecond { display:none }
+#pane-plan.planned:not(.leaveopen) > .departrow { display:none }
+#pane-plan.planned.leaveopen > .departrow { margin:12px 0 0 }
+#pane-plan.planned .routealts { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 6px }
+#pane-plan.planned .routealts button { display:inline-flex; align-items:center; gap:0; height:34px; padding:0 14px;
+  border:1px solid var(--bline); border-radius:999px; background:var(--surface); color:var(--ink);
+  font:400 13px Inter; cursor:pointer; min-width:0; flex:none; text-align:left }
+#pane-plan.planned .routealts button b { font-weight:400 }
+#pane-plan.planned .routealts button small { font:inherit; color:inherit; display:inline }
+#pane-plan.planned .routealts button em { display:none }
+#pane-plan.planned .routealts button.on { border-color:var(--sky); background:var(--sky-soft); color:var(--sky) }
+#pane-plan.planned .routealts button:focus-visible { outline:2px solid var(--sky); outline-offset:2px }
+.althassle { flex-basis:100%; margin:2px 0 0; font-size:12px; color:var(--ink-2) }
+.plannote { font-size:12px }
+/* The strip: one row per item, mile, a line coloured by traffic, kind. */
+.rstrip { margin-top:10px }
+.rstrip[hidden] { display:none }
+.rshead { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px }
+.rsnav { display:flex; align-items:center; gap:2px }
+#rspos { font:400 11px var(--mono); color:var(--ink-3); margin-right:6px; font-variant-numeric:tabular-nums }
+.rsnav button { width:28px; height:28px; display:grid; place-items:center; border:0; border-radius:8px;
+  background:transparent; color:var(--ink-2); cursor:pointer }
+.rsnav button:hover:not(:disabled) { background:var(--surface-2); color:var(--ink) }
+.rsnav button:disabled { opacity:.35; cursor:default }
+.rsnav button:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+.rsnav svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round;
+  stroke-linejoin:round }
+.rstrack { display:flex; flex-direction:column; outline:none; border-radius:8px; margin:0 -6px }
+.rstrack:focus-visible { box-shadow:0 0 0 2px var(--sky) }
+.rsrow { display:grid; grid-template-columns:48px 20px 1fr; column-gap:12px; align-items:start; min-height:58px;
+  width:100%; padding:2px 6px 0; border:0; border-radius:8px; background:transparent; color:var(--ink);
+  text-align:left; cursor:pointer; font:inherit }
+.rsrow:hover, .rsrow.on { background:var(--surface-2) }
+.rsrow.on .rstxt b { color:var(--sky) }
+.rsmi { font:400 11px/20px var(--mono); color:var(--ink-3); text-align:right; white-space:nowrap;
+  font-variant-numeric:tabular-nums }
+.rsmark { position:relative; height:100%; display:flex; justify-content:center }
+.rsmark > .kicon, .rsmark > .rsend { position:relative; z-index:1 }
+.rsseg { position:absolute; left:50%; width:5px; margin-left:-2.5px; top:12px; bottom:-14px; border-radius:99px;
+  background:var(--bline-strong) }
+.rsseg.moving { background:var(--k-ok) }
+.rsseg.slow { background:var(--k-fire) }
+.rsseg.jam { background:var(--k-closure) }
+.rsend { width:14px; height:14px; margin-top:3px; border-radius:99px; background:var(--surface);
+  border:3px solid var(--ink) }
+.rsend.b { background:var(--k-closure); border-color:var(--k-closure) }
+.rstxt { min-width:0; padding-bottom:10px }
+.rstxt b { display:block; font:500 13.5px/20px Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.rstxt small { display:block; font:400 12px/1.4 Inter; color:var(--ink-2) }
+.rsfoot { position:sticky; bottom:-18px; z-index:2; display:flex; align-items:center; justify-content:space-between;
+  gap:12px; margin:8px -18px 0; padding:12px 18px; border-top:1px solid var(--bline); background:var(--surface);
+  font:400 12px Inter; color:var(--ink-2) }
+.rslegend { display:flex; gap:14px; flex-wrap:wrap }
+.rslegend[hidden] { display:none }
+.rslegend span { display:inline-flex; align-items:center; gap:6px }
+.rslegend i { width:16px; height:6px; border-radius:99px }
+.rslegend i.moving { background:var(--k-ok) } .rslegend i.slow { background:var(--k-fire) }
+.rslegend i.jam { background:var(--k-closure) }
+.rsfoot #sharebtn { margin-left:auto; border:0; background:none; padding:4px 0; color:var(--sky);
+  font:500 12.5px Inter; cursor:pointer }
+.rsfoot #sharebtn::after { content:" \203A" }
+.rsfoot #sharebtn:hover { text-decoration:underline; text-underline-offset:3px }
+.rsfoot #sharebtn:focus-visible { outline:2px solid var(--sky); outline-offset:2px; border-radius:4px }
+#pane-plan.planned .routebtns { margin-top:14px }
+
+/* ── Phone (390px): boards M1, M2, M6, M11, M13 ──────────────── */
+@media (max-width: 960px) {
+  aside#panel, .shell.nopanel aside#panel { top:auto; left:0; right:0; bottom:var(--tab-h); width:auto;
+    max-width:none; height:var(--sheet-h); border-radius:18px 18px 0 0; border:0; background:var(--surface);
+    box-shadow:0 -1px 0 var(--bline), 0 -10px 28px -8px rgb(11 26 44 / .25); overflow:visible }
+  aside#panel > section[data-tool].on { padding-top:4px }
+  .grab::before { width:36px; height:5px; margin-left:-18px; background:var(--bline-strong) }
+  /* The search floats at the top of the map, above the sheet (M2, M6). */
+  .phdr, .shell.nopanel .phdr { position:fixed; z-index:1250; top:calc(var(--bar-b, 56px) + 10px); left:12px; right:68px; padding:0 }
+  .shell.sheet-full .phdr { display:none }
+  .findbox input { height:44px; border-radius:12px; border-color:transparent; box-shadow:var(--float) }
+  .maptr { top:calc(var(--bar-over, 0px) + 12px); right:12px }
+  .cpalhint { display:none }
+  #layersbtn { width:44px; height:44px; padding:0; justify-content:center; border-radius:999px; position:relative }
+  #layersbtn svg { width:19px; height:19px }
+  #layersbtn .lbl { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0) }
+  #layersbtn .offbadge { position:absolute; top:-4px; right:-6px; padding:1px 5px; background:var(--sky);
+    color:var(--accent-ink); font-size:9.5px; box-shadow:0 0 0 2px var(--surface) }
+  .mapbr { right:12px; bottom:calc(var(--sheet-h) + var(--tab-h) + 12px); transition:bottom .2s ease }
+  .shell.sheet-full .mapbr { display:none }
+  .zoomstack, .livepill { display:none }
+  #locbtn { width:44px; height:44px; border-radius:999px }
+  .roadinfo { left:12px; bottom:calc(var(--sheet-h) + var(--tab-h) + 12px) }
+  .pickhint, .maploading { left:50% }
+  .maploading { bottom:calc(var(--sheet-h) + var(--tab-h) + 12px) }
+  /* The tab bar, in the rail's own look. */
+  .rail { background:var(--surface); border-right:0; border-top:1px solid var(--bline); align-items:center }
+  .rail .tool { color:var(--ink-2); gap:2px; padding:4px 0 2px; font-size:10.5px }
+  .rail .tool svg, .rail .railx svg { width:44px; height:28px; padding:5px 12px }
+  .rail .tool span { font-size:10.5px }
+  .rail .railx { border-top:0; margin:0; color:var(--ink-2); gap:2px; padding:4px 0 2px; font-size:10.5px }
+  .shell.railwide .railadv { background:var(--surface); border:1px solid var(--bline); box-shadow:var(--float),
+    0 -8px 32px rgb(11 26 44 / .18) }
+  .shell.railwide .rail .railadv .tool { color:var(--ink) }
+  .shell.railwide .rail .railadv .tool svg { width:36px; height:28px; padding:4.5px 8.5px }
+  .shell.railwide .rail > .tool, .shell.railwide .rail .railx { font:500 10.5px Inter; gap:2px }
+  .shell.railwide .rail > .tool svg, .shell.railwide .rail .railx svg { width:44px; height:28px; padding:5px 12px }
+  .inspector { border-radius:18px 18px 0 0; border-top:0; box-shadow:0 -10px 28px -8px rgb(11 26 44 / .3) }
+  aside#panel section#pane-layers.pop { top:auto; left:0; right:0; bottom:0; width:auto; max-height:72dvh;
+    border-radius:18px 18px 0 0; border:0; padding:8px 16px calc(16px + env(safe-area-inset-bottom));
+    box-shadow:0 -10px 32px -8px rgb(11 26 44 / .35); z-index:1400 }
+  .rhead { margin:-4px -16px 0; padding:4px 10px 10px }
+  .rsfoot { bottom:-16px; margin:8px -16px 0; padding:12px 16px }
+  .pfav { width:25% }
+}
+@media (prefers-reduced-motion: reduce) {
+  #locbtn.busy svg { animation:none }
+  aside#panel section#pane-layers.pop { animation:none }
+}
+.rhtxt p { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.rstxt small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }

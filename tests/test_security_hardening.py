@@ -122,6 +122,14 @@ def test_every_humanize_into_a_popup_is_escaped():
     """humanize() is a plain text transform of feed text, and v2() drops
     its args into raw HTML. Every call site must be esc-wrapped."""
     src = _map_src()
+    # incidentTitle() is itself a plain-text transform (it humanizes a CHP
+    # type); every place its text lands is esc-wrapped, pinned below.
+    body = src[src.index("function incidentTitle(type) {"):]
+    body = body[:body.index("\n}\n")]
+    src = src.replace(body, "")
+    assert "const title = esc(incidentTitle(m.type) || 'Incident');" in src
+    assert src.count("esc(String(row.title).slice(0, 110))") == 2
+    assert "esc(r.title)" in src
     unescaped = []
     for m in re.finditer(r"[^c(]humanize\(", src):
         # The 20 chars before the match should contain esc(
