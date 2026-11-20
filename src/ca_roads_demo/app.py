@@ -855,12 +855,18 @@ async def api_route(request: Request):
         return JSONResponse({"error": "preset must be one of "
                              + ", ".join(routing.PRESETS)}, status_code=400)
     units = "kilometers" if body.get("units") == "kilometers" else "miles"
+    # Optional, combinable: {"avoid": ["highways", "tolls", "chains"]}.
+    raw_avoid = body.get("avoid") or []
+    if not isinstance(raw_avoid, list) or any(a not in routing.AVOID for a in raw_avoid):
+        return JSONResponse({"error": "avoid: a list of " + ", ".join(routing.AVOID)},
+                            status_code=400)
+    avoid = tuple(sorted(set(raw_avoid)))
     api_key = os.environ.get("STADIA_API_KEY", "").strip()
     if not api_key:
         return JSONResponse({"error": "routing is not configured"}, status_code=503)
     if _client_over_daily(request, "route"):
         return _daily_cap_response()
-    key = (preset, units, tuple((p["lat"], p["lon"]) for p in locations))
+    key = (preset, avoid, units, tuple((p["lat"], p["lon"]) for p in locations))
     hit = _ROUTE_CACHE.get(key)
     now = time.monotonic()
     if hit and now - hit[0] < _ROUTE_TTL:
@@ -889,7 +895,7 @@ async def api_route(request: Request):
             return None
         return resp.json()
 
-    out = await routing.plan(fetch, markers, locations, preset, units=units)
+    out = await routing.plan(fetch, markers, locations, preset, units=units, avoid=avoid)
     if not out["routes"]:
         return JSONResponse({"error": "no route found"}, status_code=404)
     # The routes are known now, so the community alerts along them can

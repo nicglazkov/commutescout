@@ -45,9 +45,9 @@ function closureChipKind(cls) {
 
 // ── Loading animation ────────────────────────────────────────────────
 const LOAD_MSGS = [
-  'Waking up the dispatcher',
-  'Reading the CHP wire',
-  'Checking Caltrans closures',
+  'Reading the live feeds',
+  'Checking incident reports',
+  'Checking road closures',
   'Scanning chain controls',
   'Looking for fires near the road',
   'Putting the picture together',
@@ -528,22 +528,42 @@ fetch('/health').then(r => r.json()).then(d => {
   if (d.version) document.getElementById('ver').textContent = ' v' + d.version;
 }).catch(() => {});
 
-document.querySelectorAll('.examples button').forEach(b => {
-  b.addEventListener('click', () => {
-    beacon('example_click');
-    input.value = b.textContent; form.requestSubmit();
-  });
+// Example questions are built by map-app.js (renderAskExamples), from
+// your places; any button in the row asks its own text.
+document.getElementById('askexamples').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  beacon('example_click');
+  input.value = b.textContent; form.requestSubmit();
 });
 
+const feedbackEl = document.getElementById('feedback');
 const morebtn = document.getElementById('morebtn');
+const askedEl = document.getElementById('askedq');
+const askErr = document.getElementById('askerr');
+const askErrText = document.getElementById('askerrtext');
 let lastQuestion = '', lastAnswerRaw = '';
+let askAbort = null;       // the request in flight; a new question replaces it
+let lastAttempt = null;    // [question, prior] for Try again
+const THUMB_UP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11v9H4v-9zM7 11l4-7a2 2 0 0 1 2 2.2L12.5 10H19a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 17.8 20H7"/></svg>';
+const THUMB_DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 13V4h3v9zM17 13l-4 7a2 2 0 0 1-2-2.2l.5-3.8H5a2 2 0 0 1-2-2.3l1.2-6A2 2 0 0 1 6.2 4H17"/></svg>';
+function askFail(text) {
+  askErrText.textContent = text;
+  askErr.hidden = false;
+}
 
 async function runQuery(question, prior) {
+  if (askAbort) askAbort.abort();
+  const ctl = new AbortController();
+  askAbort = ctl;
+  lastAttempt = [question, prior];
   go.disabled = true;
+  askErr.hidden = true;
   morebtn.classList.remove('active');
   morebtn.disabled = true;
-  document.getElementById('feedback').classList.remove('active');
+  feedbackEl.classList.remove('active');
   result.classList.add('active');
+  result.setAttribute('aria-busy', 'true');
   let target = answer;
   if (prior) {
     // Follow-up detail streams under a divider; the map keeps building.
@@ -556,6 +576,9 @@ async function runQuery(question, prior) {
     answer.append(rule, heading, section);
     target = section;
   } else {
+    // The question stays above its answer, so the answer keeps its context.
+    askedEl.textContent = question;
+    askedEl.hidden = false;
     answer.innerHTML = '';
     resetMap();
   }
@@ -569,11 +592,11 @@ async function runQuery(question, prior) {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload),
+      signal: ctl.signal,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      stopLoader();
-      target.textContent = err.error || `Request failed (${res.status}).`;
+      askFail((err.error || `The assistant could not answer (error ${res.status}).`) + ' Try again in a moment.');
       return;
     }
     const reader = res.body.getReader();
@@ -587,7 +610,8 @@ async function runQuery(question, prior) {
       buffer = parts.pop();
       for (const part of parts) {
         if (!part.startsWith('data: ')) continue;
-        const msg = JSON.parse(part.slice(6));
+        let msg;
+        try { msg = JSON.parse(part.slice(6)); } catch (_) { continue; }
         if (msg.text) {
           raw += msg.text;
           target.innerHTML = renderMd(raw);
@@ -600,10 +624,12 @@ async function runQuery(question, prior) {
           else statusEl.textContent = label + '…';
         }
         if (msg.map) { drawGeo(msg.map); }
+        if (msg.error) askFail(String(msg.error));
         if (msg.done) { statusEl.textContent = ''; }
       }
     }
-    if (!prior) {
+    if (!raw && askErr.hidden) askFail('No answer came back. Try again in a moment.');
+    if (!prior && raw) {
       lastQuestion = question;
       lastAnswerRaw = raw;
       // Offer depth when there's clearly more behind the summary.
@@ -613,8 +639,8 @@ async function runQuery(question, prior) {
         morebtn.classList.add('active');
       }
       feedbackEl.innerHTML = '<span>Was this right?</span>' +
-        '<button type="button" data-fb="feedback_up" aria-label="Yes">&#128077;</button>' +
-        '<button type="button" data-fb="feedback_down" aria-label="No">&#128078;</button>';
+        '<button type="button" data-fb="feedback_up" aria-label="Yes, it was right">' + THUMB_UP + '</button>' +
+        '<button type="button" data-fb="feedback_down" aria-label="No, it was wrong">' + THUMB_DOWN + '</button>';
       feedbackEl.querySelectorAll('button').forEach(b => {
         b.addEventListener('click', () => {
           beacon(b.dataset.fb, {question: lastQuestion});
@@ -624,13 +650,25 @@ async function runQuery(question, prior) {
       feedbackEl.classList.add('active');
     }
   } catch (err) {
-    statusEl.textContent = 'Connection error. Try again.';
+    // A newer question replaced this one: say nothing.
+    if (ctl.signal.aborted) return;
+    askFail(raw ? 'The connection dropped before the answer finished. Try again.'
+      : 'Could not reach the assistant. Check your connection and try again.');
   } finally {
-    stopLoader();
-    go.disabled = false;
-    statusEl.textContent = '';
+    // Only the newest request owns the controls. The error message is
+    // its own element, so clearing the status line no longer wipes it.
+    if (askAbort === ctl) {
+      askAbort = null;
+      stopLoader();
+      go.disabled = false;
+      statusEl.textContent = '';
+      result.setAttribute('aria-busy', 'false');
+    }
   }
 }
+document.getElementById('askretry').addEventListener('click', () => {
+  if (lastAttempt) runQuery(lastAttempt[0], lastAttempt[1]);
+});
 
 form.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -638,13 +676,6 @@ form.addEventListener('submit', (e) => {
   if (question) runQuery(question, null);
 });
 
-const feedbackEl = document.getElementById('feedback');
-feedbackEl.querySelectorAll('button').forEach(b => {
-  b.addEventListener('click', () => {
-    beacon(b.dataset.fb, {question: lastQuestion});
-    feedbackEl.innerHTML = '<span class="thanks">Thanks, noted.</span>';
-  });
-});
 
 answer.addEventListener('click', (e) => {
   const btn = e.target.closest('.optbtn');

@@ -172,3 +172,21 @@ def test_unconfirmed_community_closures_never_steer_the_router():
     assert excluded(source_id="official", tier="approved", confirmations=0) == 1
     # Missing fields mean untrusted.
     assert excluded() == 0
+
+
+@pytest.mark.asyncio
+async def test_avoid_options_combine_on_top_of_a_preset():
+    # The map's route Options: avoid highways, tolls and chain controls in
+    # any combination, with Fastest or Shortest.
+    bodies = []
+
+    async def fetch(body):
+        bodies.append(body)
+        return {"trip": _trip(LINE, 3000)}
+
+    locs = [{"lat": 37.5, "lon": -122.4}, {"lat": 37.5, "lon": -121.9}]
+    await routing.plan(fetch, [], locs, "shortest", avoid=["highways", "tolls"])
+    assert bodies[0]["shortest"] is True
+    assert bodies[0]["costing_options"] == {"auto": {"use_highways": 0, "use_tolls": 0}}
+    await routing.plan(fetch, [], locs, "fastest", avoid=["nonsense"])
+    assert "costing_options" not in bodies[1]

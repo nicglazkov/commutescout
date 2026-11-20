@@ -183,7 +183,9 @@ def test_map_has_one_report_control_and_votes_on_plugin_popups():
     assert 'id="reportbtn"' not in HTML
     assert HTML.count('data-act="report"') == 1
     assert "function startReport()" in APP
-    assert "report: 'Click the map where it is'," in APP
+    # Map v2 (2026-11): the pick hint is one ternary for every pick (start,
+    # destination, stop, report), so the report text is no longer a table entry.
+    assert "pickMode === 'report' ? 'Click the map where it is'" in APP
     assert ("if (mode === 'report') "
             "{ openReportForm(await snapForReport(e.latlng), e.latlng); return; }") in APP
     block = APP[APP.index("const REPORT_KINDS"):APP.index("async function authToken")]

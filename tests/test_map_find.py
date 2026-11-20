@@ -37,12 +37,14 @@ def test_planner_fields_stay():
 
 def test_result_becomes_a_pin_with_navigate_here():
     assert "wireAddress('find', 'findval', 'findsugg', false, showFound)" in APP
-    assert "nav.textContent = 'Navigate here'" in APP
+    # Map v2 (2026-11): the button reads Directions, and the editor plans by
+    # itself once both ends are set (no Plan button), so the pin only fills
+    # the destination and opens Directions inside Places.
+    assert "nav.textContent = 'Directions'" in APP
     body = APP[APP.index("function navigateTo(c) {"):]
     body = body[:body.index("\n}\n")]
     assert "toF.pick(c);" in body
-    assert "setTool('route', { toggle: false, reveal: true });" in body
-    assert "if (fromF.input.dataset.lat) planbtn.click();" in body
+    assert "openDirections();" in body
 
 
 def test_coordinates_are_a_place_without_the_geocoder():

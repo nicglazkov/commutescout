@@ -101,41 +101,56 @@
      crawler or a screen reader to anchor on. -->
 <h1 class="visually-hidden">Live US road conditions map</h1>
 <div class="shell" id="shell">
+  <!-- The rail (board #4, round 4): the everyday tools and the things
+       people reach for often are always on it, at the same 76px width.
+       More opens a menu beside the rail for the rare ones; the rail
+       itself never widens. On a phone the first four are the tab bar
+       and More holds the rest. -->
   <nav class="rail" id="rail" aria-label="Map tools">
-    <button type="button" class="tool on" data-tool="places" aria-pressed="true" title="Your places">
+    <button type="button" class="tool on" data-tool="places" aria-pressed="true" title="Your places and directions">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>Places</span></button>
-    <button type="button" class="tool" data-tool="route" aria-pressed="false" title="Directions">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M8.5 16.5 15.5 7.5"/></svg><span>Route</span></button>
     <button type="button" class="tool" data-tool="alerts" aria-pressed="false" title="What is live right now">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 16.5v.01"/></svg><span>Live</span></button>
     <button type="button" class="tool" data-tool="ask" aria-pressed="false" title="Ask about your drive">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M12 8v3M12 13.5v.01"/></svg><span>Ask</span></button>
-    <span class="railgap" aria-hidden="true"></span>
-    <!-- The expanded rail: account, settings and the less frequent tools.
-         Folded, only the open one of these shows, so the rail always
-         marks where you are. -->
-    <div class="railadv" id="railadv" role="group" aria-labelledby="railadvlabel">
-      <p class="raillabel" id="railadvlabel">More</p>
-      <button type="button" class="tool" data-tool="watch" aria-pressed="false" title="Watch areas">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V7z"/><path d="m9 12 2 2 4-4"/></svg><span>Watch areas</span></button>
-      <button type="button" class="tool small" data-tool="about" aria-pressed="false" title="About the data">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.01"/></svg><span>Data</span></button>
-      <button type="button" class="tool small" data-tool="settings" aria-pressed="false" title="Settings">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
-      <button type="button" class="tool act" data-act="keys" title="API keys">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.2-8.2M16 7l2 2M14 9l2 2"/></svg><span>API keys</span></button>
-      <button type="button" class="tool act" data-act="report" title="Report something on the road">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4h11l-1.5 4L16 12H5"/></svg><span>Report</span></button>
+    <button type="button" class="tool" data-tool="watch" aria-pressed="false" title="Watch areas">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V7z"/><path d="m9 12 2 2 4-4"/></svg><span>Watch</span></button>
+    <span class="railsep" aria-hidden="true"></span>
+    <!-- Always shown on a computer; on a phone these move into More. -->
+    <div class="railalso" id="railalso">
+      <button type="button" class="tool" data-tool="about" aria-pressed="false" title="Data sources and their status">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg><span>Data</span></button>
+      <a class="tool" href="/marketplace" title="Plugins: alerts from the community and partners">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><path d="M16.5 13v7M13 16.5h7"/></svg><span>Plugins</span></a>
+      <button type="button" class="tool act" data-act="palette" title="Command palette" aria-keyshortcuts="Meta+K Control+K">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m7.5 10 2.5 2-2.5 2M12 14h4"/></svg><span>Commands</span></button>
       <button type="button" class="tool act" data-act="theme" title="Switch light or dark">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span id="railtheme">Dark mode</span></button>
-      <button type="button" class="tool act" data-act="palette" title="Command palette">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m7.5 10 2.5 2-2.5 2M12 14h4"/></svg><span>Commands</span></button>
-      <a class="tool act" href="/data-sources"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg><span>Data sources</span></a>
-      <a class="tool act" href="/marketplace"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><path d="M16.5 13v7M13 16.5h7"/></svg><span>Plugins</span></a>
+      <button type="button" class="tool" data-tool="settings" aria-pressed="false" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
     </div>
-    <button type="button" class="railx" id="railexpand" aria-expanded="false" aria-controls="railadv" title="Show more tools and labels">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>More</span></button>
+    <span class="railgap" aria-hidden="true"></span>
+    <button type="button" class="tool railmore" id="railmore" aria-haspopup="menu" aria-expanded="false" aria-controls="moremenu" title="More tools">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/></svg><span>More</span></button>
   </nav>
+  <!-- More: a menu that opens beside the rail (above the tab bar on a
+       phone). The first group repeats the rail's second group and only
+       shows on a phone, where the tab bar has room for four tools. -->
+  <div class="moremenu" id="moremenu" role="menu" aria-label="More tools" hidden>
+    <div class="mmphone" role="group" aria-label="Tools">
+      <button type="button" role="menuitem" data-tool="about"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg>Data sources</button>
+      <button type="button" role="menuitem" data-tool="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Settings</button>
+      <button type="button" role="menuitem" data-act="theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span class="mmtheme">Dark mode</span></button>
+      <button type="button" role="menuitem" data-act="palette"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m7.5 10 2.5 2-2.5 2M12 14h4"/></svg>Commands</button>
+      <a role="menuitem" href="/marketplace"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><path d="M16.5 13v7M13 16.5h7"/></svg>Plugins</a>
+    </div>
+    <div role="group" aria-label="More">
+      <button type="button" role="menuitem" data-act="report"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4h11l-1.5 4L16 12H5"/></svg>Report a road problem</button>
+      <button type="button" role="menuitem" data-tool="keys"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.2-8.2M16 7l2 2M14 9l2 2"/></svg>API keys</button>
+      <a role="menuitem" href="/developers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4"/></svg>Developer docs</a>
+      <a role="menuitem" href="/app"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/></svg>Get the app</a>
+    </div>
+  </div>
   <aside id="panel">
     <div class="grab" id="sheetgrab" role="separator" aria-orientation="horizontal" aria-label="Resize the panel" tabindex="0"></div>
     <!-- The search sits at the top of the floating panel. With the panel
@@ -146,18 +161,28 @@
         <svg class="findicon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input id="find" maxlength="200" placeholder="Search maps" autocomplete="off" aria-label="Find a place on the map">
         <button type="button" id="findclear" aria-label="Clear the search" hidden>&times;</button>
+        <button type="button" class="finddir" id="finddir" aria-label="Directions" title="Directions">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8 21.2 12 12 21.2 2.8 12z"/><path d="M9 14v-2.5a1.5 1.5 0 0 1 1.5-1.5H15M13 8l2 2-2 2"/></svg></button>
         <div class="sugg" id="findsugg"></div>
         <div class="val" id="findval"></div>
       </div>
     </div>
-    <section id="pane-places" data-tool="places" class="on">
-      <div class="phead"><h2 class="panehead">Your places</h2>
-        <button type="button" class="txtbtn" id="placesedit" aria-pressed="false">Edit</button></div>
+    <section id="pane-places" data-tool="places" class="on" aria-labelledby="placestitle">
+      <div class="phead"><h2 class="panehead" id="placestitle">Your places</h2>
+        <button type="button" class="txtbtn" id="placesedit" aria-pressed="false">Edit</button>
+        <button type="button" class="iconbtn paneclose" aria-label="Close Places"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
       <!-- Round buttons: Home, Work, saved places, then Add. Under each,
            the drive time from your last trip there, "Here" when you are
-           at it, or what is live around it. -->
+           at it, or what is live around it. A tap offers Directions. -->
       <ul class="ptiles" id="ptiles" aria-label="Your places"></ul>
+      <div class="pmenu" id="pmenu" role="menu" hidden></div>
       <p class="pnote" id="pnote" hidden></p>
+      <!-- Directions: opens the route editor in this same pane. With a
+           route planned, the row goes back to it instead. -->
+      <button type="button" class="direntry" id="direntry">
+        <span class="dirglyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.8 21.2 12 12 21.2 2.8 12z"/><path d="M9 14v-2.5a1.5 1.5 0 0 1 1.5-1.5H15M13 8l2 2-2 2"/></svg></span>
+        <span><b id="direntrytitle">Directions</b><small id="direntrysub">Plan a drive, with stops</small></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
       <div class="psec" id="precentwrap" hidden>
         <h3 class="psubhead">Recent</h3>
         <div class="plist" id="precent"></div>
@@ -170,49 +195,91 @@
       <p class="panenote psync"><span id="psync">Saved in this browser. Sign in to sync with the app and your AI assistant.</span>
         <button type="button" class="txtbtn" id="psignin">Sign in</button></p>
     </section>
-    <section id="pane-plan" data-tool="route">
-      <!-- A planned trip reads like the board's #11: where to where, the
-           time and what traffic adds, then the route item by item. The
-           arrow goes back to the From and To fields. -->
-      <div class="rhead" id="rhead" hidden>
-        <button type="button" class="iconbtn" id="rback" aria-label="Change the trip" title="Change the trip">
+    <section id="pane-plan" data-tool="route" aria-labelledby="dirtitle">
+      <!-- Directions, in the Places pane: the points stacked From, stops,
+           To on a dotted line, Add stop, then Leave now and Options. The
+           route plans itself once both ends are set. Steps, Share and
+           Export sit behind the selected route's Steps and More. -->
+      <div class="dirtop">
+        <button type="button" class="iconbtn" id="rback" aria-label="Back to your places" title="Back to your places">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
-        <div class="rhtxt"><h2 id="rhtitle">Your trip</h2><p id="rhmeta"></p></div>
-        <button type="button" class="leavebtn" id="rleave" aria-expanded="false" aria-controls="departrow">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span id="rleavetxt">Leave now</span></button>
+        <h2 class="panehead" id="dirtitle">Directions</h2>
+        <button type="button" class="txtbtn" id="clearroutebtn" hidden>Clear route</button>
+        <button type="button" class="iconbtn paneclose" aria-label="Close Directions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
-      <div class="fld"><label for="from">From</label>
-        <button type="button" class="pickmap" id="pickfrom" data-pick="from">Pick on map</button>
-        <input id="from" maxlength="200" placeholder="Address, place or city" autocomplete="off">
-        <div class="sugg" id="fromsugg"></div>
-        <div class="val" id="fromval"></div></div>
-      <div class="fld"><label for="to">To</label>
-        <button type="button" class="pickmap" id="pickto" data-pick="to">Pick on map</button>
-        <input id="to" maxlength="200" placeholder="Address, place or city" autocomplete="off">
-        <div class="sugg" id="tosugg"></div>
-        <div class="val" id="toval"></div></div>
-      <button type="button" class="planbtn" id="planbtn">Plan route</button>
-      <div class="departrow" id="departrow">
+      <div class="dirbox">
+        <ol class="dirpts" id="dirpts" aria-label="Route points, start to destination">
+          <li class="dirpt origin" id="fromrow">
+            <span class="dirmark" aria-hidden="true"></span>
+            <div class="dirfld"><label class="visually-hidden" for="from">Starting point</label>
+              <input id="from" maxlength="200" placeholder="Choose a starting point" autocomplete="off">
+              <div class="sugg" id="fromsugg"></div>
+              <div class="val" id="fromval"></div></div>
+            <button type="button" class="dirpick pickmap" id="pickfrom" data-pick="from" aria-label="Pick the start on the map" title="Pick on the map">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg></button>
+          </li>
+          <li class="dirpt dest" id="torow">
+            <span class="dirmark" aria-hidden="true"></span>
+            <div class="dirfld"><label class="visually-hidden" for="to">Destination</label>
+              <input id="to" maxlength="200" placeholder="Choose a destination" autocomplete="off">
+              <div class="sugg" id="tosugg"></div>
+              <div class="val" id="toval"></div></div>
+            <button type="button" class="dirpick pickmap" id="pickto" data-pick="to" aria-label="Pick the destination on the map" title="Pick on the map">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></svg></button>
+          </li>
+        </ol>
+        <button type="button" class="iconbtn dirswap" id="swapbtn" aria-label="Reverse the route" title="Reverse the route">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v15M4.5 15.5 8 19l3.5-3.5M16 20V5M12.5 8.5 16 5l3.5 3.5"/></svg></button>
+      </div>
+      <div class="diradd">
+        <button type="button" id="addstop"><span class="plus" aria-hidden="true">+</span>Add stop</button>
+        <span class="dircap" id="stopcap" hidden></span>
+      </div>
+      <div class="dirmeta">
+        <button type="button" class="leavebtn" id="rleave" aria-expanded="false" aria-controls="departrow">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span id="rleavetxt">Leave now</span>
+          <svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <button type="button" class="txtbtn" id="optsbtn" aria-expanded="false" aria-controls="diropts">Options<span class="optcount" id="optcount" hidden></span></button>
+      </div>
+      <div class="departrow" id="departrow" hidden>
         <label for="departmode">Depart</label>
         <select id="departmode">
           <option value="now" selected>now</option>
           <option value="later">later&hellip;</option>
         </select>
-        <input type="datetime-local" id="departat" class="hidden">
+        <input type="datetime-local" id="departat" class="hidden" aria-label="Departure date and time">
       </div>
-      <div id="printwrap" style="display:none">
-        <div class="routepresets" id="routepresets" role="group" aria-label="Route preference">
-          <button type="button" data-preset="fastest" class="on">Fastest</button>
-          <button type="button" data-preset="no_highways">No highways</button>
-          <button type="button" data-preset="no_tolls">Avoid tolls</button>
-          <button type="button" data-preset="shortest">Shortest</button>
-          <button type="button" data-preset="avoid_chains">Avoid chains</button>
+      <div class="diropts" id="diropts" hidden>
+        <fieldset><legend>Route by</legend>
+          <label><input type="radio" name="routeby" value="fastest" checked>Fastest</label>
+          <label><input type="radio" name="routeby" value="shortest">Shortest</label></fieldset>
+        <fieldset><legend>Avoid</legend>
+          <label><input type="checkbox" data-avoid="highways">Highways</label>
+          <label><input type="checkbox" data-avoid="tolls">Tolls</label>
+          <label><input type="checkbox" data-avoid="chains">Chain controls</label></fieldset>
+      </div>
+      <div class="plannote" id="plannote" hidden></div>
+      <p class="dirstatus" id="routesum" aria-live="polite"></p>
+      <div class="routealts" id="routealts" aria-label="Routes"></div>
+      <div id="printwrap" hidden>
+        <div class="routeacts" id="routeacts">
+          <button type="button" class="txtbtn" id="stepsbtn" aria-expanded="false" aria-controls="stepsdrop">Steps</button>
+          <div class="routemore">
+            <button type="button" class="iconbtn" id="routemorebtn" aria-haspopup="menu" aria-expanded="false" aria-controls="routemenu" aria-label="More route actions" title="Share, export, print">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/></svg></button>
+            <div class="routemenu" id="routemenu" role="menu" aria-label="Route actions" hidden>
+              <button type="button" role="menuitem" id="sharebtn">Copy a share link</button>
+              <button type="button" role="menuitem" id="gpxbtn">Export GPX</button>
+              <button type="button" role="menuitem" id="kmlbtn">Export KML</button>
+              <button type="button" role="menuitem" id="exportbtn">Export text</button>
+              <button type="button" role="menuitem" id="printbtn">Print</button>
+            </div>
+          </div>
         </div>
-        <div class="plannote" id="plannote" hidden></div>
-        <div class="routealts" id="routealts"></div>
-        <div class="routesum" id="routesum"></div>
-        <div class="routeeta" id="routeeta" hidden></div>
-        <div class="viachips" id="viachips"></div>
+        <div class="stepsdrop" id="stepsdrop" hidden>
+          <h3 class="kicker" id="stepssummary">Turn-by-turn directions</h3>
+          <ol class="steps" id="steps"></ol>
+        </div>
         <div class="rstrip" id="rstrip" role="region" hidden aria-labelledby="rsname">
           <div class="rshead">
             <h3 class="kicker" id="rsname">Along the way</h3>
@@ -227,43 +294,28 @@
           <div class="rstrack" id="rstrack" role="listbox" aria-label="Items along the route, start to finish" tabindex="0"></div>
           <div class="rsfoot" id="rsfoot">
             <span class="rslegend" id="rslegend" hidden><span><i class="moving"></i>moving</span><span><i class="slow"></i>slow</span><span><i class="jam"></i>stop and go</span></span>
-            <button type="button" id="sharebtn" class="pri">Share</button>
           </div>
         </div>
-        <div class="routebtns">
-          <details class="sharemenu">
-            <summary>Export</summary>
-            <div class="sharelist">
-              <button type="button" id="gpxbtn">GPX</button>
-              <button type="button" id="kmlbtn">KML</button>
-              <button type="button" id="exportbtn">Text</button>
-              <button type="button" id="printbtn">Print</button>
-            </div>
-          </details>
-          <button type="button" id="clearroutebtn">Clear route</button>
-        </div>
-        <details class="stepsdrop" id="stepsdrop">
-          <summary id="stepssummary">Turn-by-turn directions</summary>
-          <ol class="steps" id="steps"></ol>
-        </details>
-        <div class="routecond" id="routecond"></div>
+        <!-- Only with a later departure: each item's schedule against it. -->
+        <div class="routecond" id="routecond" hidden></div>
       </div>
     </section>
-    <section id="pane-ask" data-tool="ask">
-      <div class="askhead">
-        <h2>Ask about your drive</h2>
-        <p>Ask the way you'd say it out loud. The answer reads the live
-        feeds on the map.</p>
-      </div>
+    <section id="pane-ask" data-tool="ask" aria-labelledby="asktitle">
+      <div class="phead"><h2 class="panehead" id="asktitle">Ask about your drive</h2>
+        <button type="button" class="iconbtn paneclose" aria-label="Close Ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <p class="askintro" id="askintro">Ask the way you'd say it out loud. The answer reads the live feeds on the map.</p>
     <form id="form">
       <div class="searchrow">
         <input type="text" id="q" maxlength="300" required autocomplete="off"
-               aria-label="Ask about your drive"
-               placeholder="How's my drive looking right now?">
-        <button class="ask" id="go" type="submit">Check</button>
+               aria-label="Ask about your drive" enterkeyhint="send"
+               placeholder="Ask about a road, a place or a drive">
+        <button class="ask" id="go" type="submit" aria-label="Ask">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
       </div>
     </form>
-    <div class="result" id="result">
+    <div class="examples" id="askexamples" aria-label="Questions to try"></div>
+    <div class="result" id="result" aria-live="polite" aria-busy="false">
+      <p class="askedq" id="askedq" hidden></p>
       <div class="answer-card">
         <div class="loader" id="loader">
           <div class="roadbar"><span class="car"></span></div>
@@ -273,16 +325,14 @@
         <div class="status" id="status"></div>
         <div class="chips" id="chips"></div>
         <div class="text" id="answer"></div>
+        <div class="askerr" id="askerr" role="alert" hidden><span id="askerrtext"></span>
+          <button type="button" class="txtbtn" id="askretry">Try again</button></div>
         <button type="button" class="more-btn" id="morebtn">Tell me more</button>
-        <div class="feedback" id="feedback">
-          <span>Was this right?</span>
-          <button type="button" data-fb="feedback_up" aria-label="Yes">&#128077;</button>
-          <button type="button" data-fb="feedback_down" aria-label="No">&#128078;</button>
-        </div>
+        <div class="feedback" id="feedback"></div>
       </div>
     </div>
     <div class="routeasks-wrap" id="routeasks-wrap" style="display:none">
-      <b>Questions people ask about this drive</b>
+      <b>Questions about this route</b>
       <div class="routeasks" id="routeasks"></div>
     </div>
     </section>
@@ -334,8 +384,9 @@
       <div class="basemap" id="basemap" role="radiogroup" aria-label="Map style"></div>
     </div>
     </section>
-    <section id="pane-watch" data-tool="watch" class="watch" data-src="/static/watch-app.js?v=__ASSET_V__">
-      <h2 class="panehead">Watch areas <span class="badge">TRIAL</span></h2>
+    <section id="pane-watch" data-tool="watch" class="watch" data-src="/static/watch-app.js?v=__ASSET_V__" aria-labelledby="watchtitle">
+      <div class="phead"><h2 class="panehead" id="watchtitle">Watch areas <span class="badge">TRIAL</span></h2>
+        <button type="button" class="iconbtn paneclose" aria-label="Close Watch areas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
       <!-- signed out -->
       <section id="signin" class="hidden">
         <p class="panenote">Draw an area anywhere CommuteScout covers, once.
@@ -495,21 +546,33 @@
         </div>
       </section>
     </section>
-    <section id="pane-alerts" data-tool="alerts">
-      <h2 class="panehead">Live right now</h2>
-      <div class="kpis" id="kpis">
-        <div><b id="k-inc">–</b>active incidents</div>
-        <div><b id="k-clo">–</b>closures in place</div>
-        <div><b id="k-cc">–</b>chain controls</div>
-        <div><b id="k-wf">–</b>wildfires tracked</div>
-        <div><b id="k-cam">–</b>cameras online</div>
-        <div><b id="k-st">–</b>states covered</div>
+    <section id="pane-alerts" data-tool="alerts" aria-labelledby="alertstitle">
+      <div class="phead"><h2 class="panehead" id="alertstitle">Live right now</h2>
+        <button type="button" class="iconbtn paneclose" aria-label="Close Live"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <!-- What is in view, by kind: each chip is that kind's switch, on
+           the map as well as in this list (it flips the same layers as
+           the Layers popover), with how many of it are in view. -->
+      <div class="livefilters" id="livefilters" role="group" aria-label="Kinds to show, with how many are in view"></div>
+      <div class="liverow">
+        <span class="kcount" id="livecount" aria-live="polite"></span>
+        <label class="livesev"><input type="checkbox" id="liveserious"><span>Serious only</span></label>
       </div>
-      <h3 class="subhead">In view, worst first</h3>
       <div class="alertlist" id="alertlist"><p class="panenote">Move the map to list what is in view.</p></div>
+      <details class="kpiwrap">
+        <summary>Totals across every covered state</summary>
+        <div class="kpis" id="kpis">
+          <div><b id="k-inc">–</b>active incidents</div>
+          <div><b id="k-clo">–</b>closures in place</div>
+          <div><b id="k-cc">–</b>chain controls</div>
+          <div><b id="k-wf">–</b>wildfires tracked</div>
+          <div><b id="k-cam">–</b>cameras online</div>
+          <div><b id="k-st">–</b>states covered</div>
+        </div>
+      </details>
     </section>
-    <section id="pane-settings" data-tool="settings" class="watch">
-      <h2 class="panehead">Settings</h2>
+    <section id="pane-settings" data-tool="settings" class="watch" aria-labelledby="settingstitle">
+      <div class="phead"><h2 class="panehead" id="settingstitle">Settings</h2>
+        <button type="button" class="iconbtn paneclose" aria-label="Close Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
       <div class="setgroup">
         <h3 class="subhead">Distances</h3>
         <div class="pills" id="unitpick" role="radiogroup" aria-label="Distance units">
@@ -519,14 +582,39 @@
         <p class="panenote" id="unitnote"></p>
       </div>
       <div class="setgroup">
+        <h3 class="subhead">Appearance</h3>
+        <div class="pills" id="themepick" role="radiogroup" aria-label="Appearance">
+          <label><input type="radio" name="themepick" value="light">Light</label>
+          <label><input type="radio" name="themepick" value="dark">Dark</label>
+          <label><input type="radio" name="themepick" value="system">Match the system</label>
+        </div>
+      </div>
+      <div class="setgroup">
         <h3 class="subhead">Account</h3>
         <div class="who" id="who"></div>
         <p class="panenote" id="acctnote">Signed out. Sign in from the Watch tool to keep
           settings on your account, manage watch areas, and get API keys.
           <button type="button" class="detbtn" id="settingssignin">Open Watch</button></p>
-        <div class="card" id="keycard" hidden>
-          <h2>API keys</h2>
-          <p class="hint" style="margin-bottom:10px">A key calls the same tools as
+        <div class="card" id="acctcard" hidden>
+          <h2>Delete account</h2>
+          <p class="hint" style="margin-bottom:10px">Deleting your
+            account removes it completely and immediately: every watch
+            area, alert state, and registered device. There is no undo.</p>
+          <button class="ghost" id="deleteacct"
+                  style="color:var(--red);border-color:#e8c9c9">
+            Delete my account</button>
+          <div class="msg" id="acctmsg"></div>
+        </div>
+      </div>
+    </section>
+    <section id="pane-keys" data-tool="keys" class="watch" aria-labelledby="keystitle">
+      <!-- API keys: under More, so it never meets a first-time visitor.
+           The card is the account module's (watch-app.js fills it and
+           shows it once signed in); signed out, the note below says how. -->
+      <div class="phead"><h2 class="panehead" id="keystitle">API keys</h2>
+        <button type="button" class="iconbtn paneclose" aria-label="Close API keys"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+        <div class="keyblock" id="keycard" hidden>
+          <p class="hint">A key calls the same tools as
             the MCP server over plain HTTP, at mcp.commutescout.com/v1. Free keys get
             2,000 requests a day, Pro keys 10,000, counted once per account across all
             of its keys;
@@ -544,23 +632,20 @@
           </div>
           <div class="msg" id="keymsg"></div>
         </div>
-        <div class="card" id="acctcard" hidden>
-          <h2>Delete account</h2>
-          <p class="hint" style="margin-bottom:10px">Deleting your
-            account removes it completely and immediately: every watch
-            area, alert state, and registered device. There is no undo.</p>
-          <button class="ghost" id="deleteacct"
-                  style="color:var(--red);border-color:#e8c9c9">
-            Delete my account</button>
-          <div class="msg" id="acctmsg"></div>
-        </div>
-      </div>
+        <p class="panenote keysout">Sign in to create a key. A key calls the same tools as the
+          MCP server over plain HTTP. <button type="button" class="detbtn" id="keyssignin">Sign in</button></p>
+        <p class="panenote"><a href="/developers">Read the API reference</a></p>
     </section>
-    <section id="pane-about" data-tool="about">
-      <h2 class="panehead">About the data</h2>
+    <section id="pane-about" data-tool="about" aria-labelledby="abouttitle">
+      <div class="phead"><h2 class="panehead" id="abouttitle">Data sources</h2>
+        <button type="button" class="iconbtn paneclose" aria-label="Close Data sources"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <!-- One place for the data: each feed's live status, grouped by
+           state, then the full list page and the fine print. -->
+      <div class="srclist" id="srclist"><p class="panenote">Checking the feeds&hellip;</p></div>
+      <p class="panenote"><a href="/data-sources">Every source, with coverage and update rates</a></p>
     <p class="legalfoot">
       Data: CHP, Caltrans, WFIGS, CAL FIRE, NWS, USGS, TomTom, 511 SF Bay,
-      and the state DOT and 511 services listed in the data-sources panel
+      and the state DOT and 511 services listed above
       (including data powered by 511NY and TravelMidwest). Independent
       service, not affiliated with any agency. Conditions change fast; verify
       before you drive (511 or your state DOT).
@@ -573,7 +658,6 @@
       host. Map data (c) OpenStreetMap contributors.
       <a href="/privacy">Privacy</a>
       <a href="/terms">Terms</a>
-      <a href="/data-sources">Data sources</a>
       <a href="/pricing">Pricing</a>
       <a href="/about">About</a>
       <a href="/contact">Contact</a>

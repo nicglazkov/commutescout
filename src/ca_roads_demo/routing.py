@@ -30,6 +30,10 @@ PRESETS: dict[str, dict] = {
     "shortest": {"shortest": True},
     "avoid_chains": {},
 }
+# Things a driver can ask to avoid, any combination of them, on top of
+# a preset (the map's route Options). Highways and tolls are Valhalla
+# costs; chains are R-2/R-3 chain controls added to the exclusions.
+AVOID = ("highways", "tolls", "chains")
 
 NEAR_M = 200.0            # a thing counts when it sits on the road itself
 EXCLUDE_CAP = 50          # Valhalla's exclude_locations limit
@@ -283,7 +287,8 @@ Fetcher = Callable[[dict], Awaitable[dict | None]]
 
 
 async def plan(fetch: Fetcher, markers: list[dict], locations: list[dict],
-               preset: str = "fastest", *, units: str = "miles") -> dict:
+               preset: str = "fastest", *, units: str = "miles",
+               avoid: tuple[str, ...] | list[str] = ()) -> dict:
     """Plan through ``locations`` and rank what comes back.
 
     ``fetch(body)`` posts a Valhalla request body and returns the parsed
@@ -292,13 +297,21 @@ async def plan(fetch: Fetcher, markers: list[dict], locations: list[dict],
     says so.
     """
     preset = preset if preset in PRESETS else "fastest"
-    excl = exclusions(markers, avoid_chains=(preset == "avoid_chains"))
+    avoid = {a for a in avoid if a in AVOID}
+    excl = exclusions(markers, avoid_chains=(preset == "avoid_chains" or "chains" in avoid))
     body: dict[str, Any] = {
         "locations": locations, "costing": "auto",
         "alternates": 2 if len(locations) == 2 else 0,
         "directions_options": {"units": units},
         **PRESETS[preset],
     }
+    auto: dict[str, Any] = dict((body.get("costing_options") or {}).get("auto") or {})
+    if "highways" in avoid:
+        auto["use_highways"] = 0
+    if "tolls" in avoid:
+        auto["use_tolls"] = 0
+    if auto:
+        body["costing_options"] = {"auto": auto}
     if excl:
         body["exclude_locations"] = excl
     note = None

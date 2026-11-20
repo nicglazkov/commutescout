@@ -18,8 +18,11 @@ ASSIST = (STATIC / "map-assistant.js").read_text(encoding="utf-8")
 # of these silently breaks a feature, so the new shell wraps them.
 PINNED_IDS = [
     "from", "to", "pickfrom", "pickto", "fromsugg", "tosugg", "fromval",
-    "toval", "planbtn", "departmode", "departat", "printwrap", "routealts",
-    "routesum", "viachips", "printbtn", "exportbtn", "gpxbtn", "kmlbtn",
+    # Map v2 (2026-11): planbtn and viachips are gone on purpose. Directions
+    # plan by themselves once both ends are set, and stops are rows in the
+    # editor (stop1, stop2, ...) instead of chips under it.
+    "toval", "departmode", "departat", "printwrap", "routealts",
+    "routesum", "printbtn", "exportbtn", "gpxbtn", "kmlbtn",
     "sharebtn", "clearroutebtn", "routeasks-wrap", "routeasks", "stepsdrop",
     "stepssummary", "steps", "routecond", "form", "q", "go", "result",
     "loader", "loadmsg", "loadtime", "status", "chips", "answer", "morebtn",
@@ -48,27 +51,35 @@ def test_rail_has_four_primary_tools_and_the_rest_behind_more():
     """2026-11: a slim rail (Places, Route, Live, Ask) that expands to
     labels and the less frequent tools. Round 3 (board #3/#4) moves
     Layers off the rail to a button on the map."""
+    # Map v2 (2026-11): Route merged into Places (Directions open inside
+    # it), and the rail no longer expands. The everyday tools and the ones
+    # people reach for often stay on it at 76px; More opens a menu beside
+    # it for the rare ones (Report, API keys, docs, the app).
     rail = re.search(r'<nav class="rail"[^>]*>(.*?)\n  </nav>', HTML, re.S).group(1)
     tools = re.findall(r'data-tool="([a-z]+)"', rail)
-    assert tools == ["places", "route", "alerts", "ask", "watch", "about", "settings"]
-    primary, adv = rail.split('<div class="railadv"')
-    main_tools = re.findall(r'data-tool="([a-z]+)"', primary)
-    assert main_tools == ["places", "route", "alerts", "ask"]
-    for name in ("Places", "Route", "Live", "Ask", "Watch areas", "Settings", "Data"):
-        assert f"<span>{name}</span>" in rail
-    # Links only in the expanded part; one expand toggle, last.
-    assert "<a " not in primary
-    assert rail.count('id="railexpand"') == 1 and rail.rstrip().endswith("</button>")
-    assert 'aria-controls="railadv"' in rail
-    for act in ("keys", "report", "theme", "palette"):
-        assert f'data-act="{act}"' in adv
-    assert "cs-rail-wide" in APP and ".shell.railwide { --rail-w:224px !important }" in CSS
+    assert tools == ["places", "alerts", "ask", "watch", "about", "settings"]
+    primary, also = rail.split('<div class="railalso"')
+    assert re.findall(r'data-tool="([a-z]+)"', primary) == ["places", "alerts", "ask", "watch"]
+    for name in ("Places", "Live", "Ask", "Watch", "Data", "Plugins", "Commands", "Settings",
+                 "More"):
+        assert f"<span>{name}</span>" in rail, name
+    assert 'id="railtheme">Dark mode</span>' in rail
+    for act in ("theme", "palette"):
+        assert f'data-act="{act}"' in also
+    assert 'href="/marketplace"' in also
+    assert rail.rstrip().endswith("</button>") and rail.count('id="railmore"') == 1
+    assert 'aria-controls="moremenu"' in rail and 'aria-haspopup="menu"' in rail
+    more = HTML[HTML.index('id="moremenu"'):HTML.index('<aside id="panel">')]
+    for needle in ('data-act="report"', 'data-tool="keys"', 'href="/developers"', 'href="/app"'):
+        assert needle in more, needle
+    assert 'id="railexpand"' not in HTML and "cs-rail-wide" not in APP and "railwide" not in CSS
 
 
 def test_one_pane_per_tool_and_only_places_open_at_load():
+    # Map v2 (2026-11): API keys get their own pane (opened from More).
     panes = re.findall(r'<section id="([a-z-]+)" data-tool="([a-z]+)"([^>]*)>', HTML)
     assert [t for _, t, _ in panes] == ["places", "route", "ask", "layers", "watch", "alerts",
-                                        "settings", "about"]
+                                        "settings", "keys", "about"]
     assert [i for i, t, a in panes if 'class="on"' in a] == ["pane-places"]
     assert "setTool(known ? saved : 'places', { toggle: false })" in APP
 
@@ -95,11 +106,15 @@ def test_counts_moved_into_the_alerts_pane_and_the_band_is_gone():
 
 
 def test_exports_fold_into_one_menu_and_share_stays_primary():
+    # Map v2 (2026-11): Steps is the one visible route action; Share and the
+    # exports sit together behind the route's More button, as a real menu.
     route = _section("route")
-    menu = re.search(r'<details class="sharemenu">(.*?)</details>', route, re.S).group(1)
-    for i in ("gpxbtn", "kmlbtn", "exportbtn", "printbtn"):
-        assert f'id="{i}"' in menu
-    assert 'id="sharebtn" class="pri"' in route and 'id="sharebtn"' not in menu
+    menu = re.search(r'<div class="routemenu" id="routemenu" role="menu"[^>]*>(.*?)</div>',
+                     route, re.S).group(1)
+    for i in ("sharebtn", "gpxbtn", "kmlbtn", "exportbtn", "printbtn"):
+        assert re.search(rf'role="menuitem" id="{i}"', menu), i
+    assert 'id="stepsbtn"' in route and 'id="stepsbtn"' not in menu
+    assert 'aria-haspopup="menu"' in route and 'aria-controls="routemenu"' in route
     assert 'id="clearroutebtn"' not in menu
 
 
@@ -111,7 +126,9 @@ def test_legal_text_lives_behind_the_data_tool():
 
 def test_no_second_copy_of_any_control():
     # One planner, one question form, one layer list, one legal block.
-    for needle in ('id="planbtn"', 'id="form"', 'id="filters"', 'class="legalfoot"',
+    # Map v2 (2026-11): no Plan button any more (directions plan by
+    # themselves); the one Directions editor is pinned by its point list.
+    for needle in ('id="dirpts"', 'id="form"', 'id="filters"', 'class="legalfoot"',
                    'class="rail"', 'id="panelresize"', 'id="layersbtn"', 'id="livepill"'):
         assert HTML.count(needle) == 1, needle
 

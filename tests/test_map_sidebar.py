@@ -37,11 +37,23 @@ def test_set_tool_reaches_late_code_by_event_not_call():
     assert "addEventListener('cs-tool'" in APP
 
 
-def test_rail_expands_and_remembers_on_desktop_only():
-    assert 'id="railexpand"' in HTML and 'aria-controls="railadv"' in HTML
-    assert "RAIL_WIDE_KEY" in APP and "if (!isPhone()) store.set(RAIL_WIDE_KEY" in APP
-    # The phone menu escapes the rail's clipping.
-    assert "overflow:visible" in CSS.split(".shell.railwide .rail { padding:4px 6px")[1][:80]
+def test_rail_more_opens_a_menu_and_never_widens_the_rail():
+    # Map v2 (2026-11): replaces the expandable rail. More opens a fixed
+    # menu beside the rail (placed from the rail's right edge), so the rail
+    # stays 76px; there is no wide state to remember.
+    assert 'id="railexpand"' not in HTML and "RAIL_WIDE_KEY" not in APP
+    assert "railwide" not in CSS and "railwide" not in APP
+    assert "--rail-w:76px" in CSS
+    assert ".moremenu { position:fixed;" in CSS
+    assert "const setMoreMenu = wireMenu(railMore, moreMenu, {" in APP
+    assert "moreMenu.style.left = Math.round(rail.right + 8) + 'px';" in APP
+    # Nothing in the menu's wiring touches the rail's size.
+    wiring = APP[APP.index("const setMoreMenu"):APP.index("function runAction(name)")]
+    assert "--rail-w" not in wiring and "classList.toggle('railwide'" not in wiring
+    # On a phone the menu sits above the tab bar and holds the rail's
+    # second group, which the tab bar has no room for.
+    assert ".moremenu .mmphone { display:block }" in CSS
+    assert ".railalso, .railsep, .rail .railgap { display:none }" in CSS
 
 
 def test_details_pane_has_two_modes_and_a_lazy_overview():
@@ -71,7 +83,9 @@ def test_popup_is_a_peek_with_one_details_button():
 def test_route_strip_steps_by_mile():
     # Board #11: the strip is a vertical list in the route panel, so the
     # floating card and its reopen pill (rscard, rsopen) are gone.
-    for el in ("rstrip", "rsprev", "rsnext", "rstrack", "rslegend", "rhead", "rleave"):
+    # Map v2 (2026-11): rhead (the route's summary heading) is gone; the
+    # selected route row carries the time, so only the strip stays here.
+    for el in ("rstrip", "rsprev", "rsnext", "rstrack", "rslegend", "rleave"):
         assert f'id="{el}"' in HTML, el
     before, after = HTML.split('id="rstrack"', 1)
     assert 'role="listbox"' in before[-200:] + after[:200]
@@ -81,8 +95,11 @@ def test_route_strip_steps_by_mile():
     for key in ("ArrowRight: 1", "ArrowLeft: -1", "'Home'", "'End'", "'Enter'"):
         assert key in keys, key
     assert 'id="rscard"' not in HTML and 'id="rsopen"' not in HTML
+    # Map v2 (2026-11): Clear route moved to the editor's header, above
+    # everything, so it is the obvious way out.
     route = HTML[HTML.index('<section id="pane-plan"'):]
-    assert route.index('id="rstrip"') < route.index('id="clearroutebtn"')
+    order = [route.index(f'id="{i}"') for i in ("clearroutebtn", "dirpts", "rstrip")]
+    assert order == sorted(order)
 
 
 def test_command_palette_is_a_modal_combobox_on_cmd_k():
