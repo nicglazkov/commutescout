@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#f5f7fa" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0a111b" media="(prefers-color-scheme: dark)">
 <title>Watch areas - CommuteScout</title>
-<meta name="description" content="Draw an area once and get an alert when an incident, closure, chain control or wildfire shows up inside it.">
+<meta name="description" content="Draw an area once and get an alert when an incident, closure, chain control, wildfire or weather warning shows up inside it.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
@@ -85,12 +85,12 @@
         <p class="lead">Draw an area once, anywhere CommuteScout covers: around
           home, along your commute or over a mountain pass. CommuteScout checks
           it about every 5 minutes and tells you when an incident, closure,
-          chain control or wildfire shows up inside it.</p>
+          chain control, wildfire or weather warning shows up inside it.</p>
         <ol class="wp-steps">
           <li><span class="num" aria-hidden="true">01</span><div><b>Draw it</b>
-            <span>A circle, a shape of your own, or a route with a buffer.</span></div></li>
+            <span>A circle, a shape of your own, or a route with stops along the way.</span></div></li>
           <li><span class="num" aria-hidden="true">02</span><div><b>Pick what matters</b>
-            <span>Incidents, closures, chain controls, wildfires, in any mix.</span></div></li>
+            <span>Any mix of the five kinds, or only the report types you care about, such as crashes or full closures.</span></div></li>
           <li><span class="num" aria-hidden="true">03</span><div><b>Get the alert</b>
             <span>By push notification, email or both, at the next check after something changes.</span></div></li>
         </ol>
@@ -128,7 +128,7 @@
     <section class="wp-specs" aria-labelledby="specs-h">
       <div class="wp-specs-head">
         <h2 id="specs-h">What you can watch</h2>
-        <p>Three shapes, any of the four kinds of alert, sent the way you choose.</p>
+        <p>Three shapes, any of the five kinds of alert, sent the way you choose.</p>
       </div>
       <ul class="wp-shapes">
         <li>
@@ -144,7 +144,7 @@
         <li>
           <svg viewBox="0 0 120 72" aria-hidden="true"><path class="g" d="M0 36h120M44 0v72"/><path class="buf" d="M10 58C34 58 38 22 62 22S92 46 112 14"/><path class="r" d="M10 58C34 58 38 22 62 22S92 46 112 14"/><circle class="p" cx="10" cy="58" r="3.5"/><circle class="p" cx="112" cy="14" r="3.5"/></svg>
           <h3>Route</h3>
-          <p>Your drive from start to end, up to 250&nbsp;mi long, watched up to 2&nbsp;mi either side.</p>
+          <p>Your drive with up to 8 stops, start and end included, up to 250&nbsp;mi long, watched up to 2&nbsp;mi either side.</p>
         </li>
       </ul>
       <ul class="wp-kinds" aria-label="Kinds of alert">
@@ -152,6 +152,7 @@
         <li data-kind="closure">Closures</li>
         <li data-kind="chain">Chain controls</li>
         <li data-kind="fire">Wildfires</li>
+        <li data-kind="weather">Weather alerts</li>
       </ul>
     </section>
   </section>
@@ -222,13 +223,8 @@
                 <button type="button" class="ghost" id="clearpts">Start over</button>
               </div>
               <div class="field hidden" id="routerow">
-                <label for="rw-from">From</label>
-                <input type="text" id="rw-from" maxlength="200"
-                       placeholder="Address, place or city" autocomplete="off">
-                <label for="rw-to">To</label>
-                <input type="text" id="rw-to" maxlength="200"
-                       placeholder="Address, place or city" autocomplete="off">
-                <button type="button" class="ghost" id="rw-preview">Preview route</button>
+                <!-- The stops editor (start, stops, destination) is built
+                     here by watch-app.js. -->
                 <label for="rw-buffer">Alert distance from the route</label>
                 <div class="radius">
                   <input type="range" id="rw-buffer" min="1" max="2" value="2">
@@ -261,6 +257,7 @@
                   <label data-kind="closure"><input type="checkbox" data-kind="closure" checked>Closures</label>
                   <label data-kind="chain"><input type="checkbox" data-kind="chain">Chain controls</label>
                   <label data-kind="fire"><input type="checkbox" data-kind="fire" checked>Wildfires</label>
+                  <label data-kind="weather"><input type="checkbox" data-kind="weather">Weather alerts</label>
                 </div>
               </fieldset>
               <fieldset class="field">

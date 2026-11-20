@@ -203,8 +203,21 @@ def test_free_tier_figures_come_from_watch_limits():
     assert f"up to {int(area_sq_mi):,} sq mi" in text
     assert f"up to {route_mi} mi long" in text
     assert f"up to {buffer_mi} mi either side" in text
+    assert f"up to {watch.MAX_ROUTE_STOPS} stops, start and end included" in text
     assert f"up to {watch.FREE_MAX_WATCHES} watch areas" in text
     assert 'max="40.2"' in WATCH_HTML and watch.FREE_MAX_RADIUS_KM == 40.2
+
+
+def test_kinds_listed_match_the_server():
+    from ca_roads_demo import watch_filters as wf
+
+    text = _text(WATCH_HTML)
+    assert len(wf.KINDS) == 5 and "any of the five kinds of alert" in text
+    for kid, label, _ in wf.KINDS:
+        assert f'<li data-kind="{kid}">{label}</li>' in WATCH_HTML, kid
+        assert f'data-kind="{kid}">' in WATCH_HTML.split('class="kinds"')[1], kid
+    # The page reads the stop cap from the config, never its own copy.
+    assert "LIMITS.route_stops" in WATCH_APP_JS
 
 
 def test_check_interval_matches_scheduler():

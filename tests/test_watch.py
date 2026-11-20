@@ -127,6 +127,7 @@ def make_app():
         Route("/api/watch/me", watch.api_watch_me),
         Route("/api/watch/redeem", watch.api_watch_redeem, methods=["POST"]),
         Route("/api/watch/create", watch.api_watch_create, methods=["POST"]),
+        Route("/api/watch/options", watch.api_watch_options, methods=["POST"]),
         Route("/api/watch/push", watch.api_push_subscribe, methods=["POST"]),
         Route("/api/watch/account", watch.api_account_delete,
               methods=["DELETE"]),

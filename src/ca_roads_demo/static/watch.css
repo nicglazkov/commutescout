@@ -155,6 +155,93 @@
 .watch .keyrow > div { flex:1; min-width:0 }
 .watch .keyrow small { display:block; color:var(--dim); font-size:.72rem }
 
+/* ── Route stops: start, stops, destination ─────────────────────── */
+/* Lettered stops on a dotted rail, like directions with stops in a
+   maps app. Built by watch-app.js inside #routerow on both pages. */
+.watch .wstops { margin-bottom:14px }
+.watch .wstops-head { display:flex; justify-content:space-between; align-items:baseline;
+  margin-bottom:6px }
+.watch .wstops-title { font:600 .72rem Inter; letter-spacing:.6px; text-transform:uppercase;
+  color:var(--dim) }
+.watch .wstops-count { font-size:.74rem; color:var(--dim); font-variant-numeric:tabular-nums }
+.watch .wstops-list { list-style:none; margin:0; padding:0; position:relative }
+.watch .wstop { position:relative; display:grid; grid-template-columns:24px minmax(0, 1fr) 32px 32px;
+  gap:4px 6px; align-items:center; padding:3px 0; background:inherit;
+  transition:transform .12s }
+.watch .wstop + .wstop::before { content:""; position:absolute; left:11px; top:-9px; height:18px;
+  border-left:2px dotted var(--line) }
+.watch .wstop-mark { width:22px; height:22px; border-radius:99px; display:grid; place-items:center;
+  font:700 .7rem Inter; color:var(--dim); border:1.5px solid var(--line); background:#fff;
+  position:relative; z-index:1 }
+.watch .wstop.set .wstop-mark { background:var(--sky); border-color:var(--sky); color:#fff }
+.watch .wstop-field { position:relative; min-width:0 }
+.watch .wstop-field input[type=text] { width:100% }
+.watch .wstop-move, .watch .wstop-del { width:32px; height:32px; display:grid; place-items:center;
+  border:0; border-radius:8px; background:none; color:var(--dim); cursor:pointer; padding:0 }
+.watch .wstop-move { cursor:grab; touch-action:none }
+.watch .wstop-move:hover, .watch .wstop-del:hover { color:var(--ink); background:var(--bg) }
+.watch .wstop-del[hidden] { display:grid; visibility:hidden }
+.watch .wstop.dragging { z-index:3; transition:none }
+.watch .wstop.dragging .wstop-move { cursor:grabbing }
+.watch .wstop.dragging .wstop-field input { box-shadow:0 6px 18px rgba(15,28,43,.18) }
+.watch .wstop-sugg { position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:20;
+  list-style:none; margin:0; padding:4px; background:#fff; border:1px solid var(--line);
+  border-radius:10px; box-shadow:0 10px 28px rgba(15,28,43,.16); max-height:260px; overflow:auto }
+.watch .wstop-sugg li { padding:7px 10px; border-radius:7px; cursor:pointer; font-size:.84rem;
+  line-height:1.35 }
+.watch .wstop-sugg li b { display:block; font-weight:600 }
+.watch .wstop-sugg li span { display:block; color:var(--dim); font-size:.76rem }
+.watch .wstop-sugg li[aria-selected="true"], .watch .wstop-sugg li:hover { background:var(--bg) }
+.watch .wstops-actions { display:flex; flex-wrap:wrap; gap:4px 14px; margin:8px 0 0 30px }
+.watch .wstops-btn { display:inline-flex; align-items:center; gap:6px; border:0; background:none;
+  padding:6px 0; font:500 .82rem Inter; color:var(--sky); cursor:pointer }
+.watch .wstops-btn:disabled { color:var(--dim); cursor:default; opacity:.7 }
+.watch .wstops-btn.wstops-clear:not(:disabled) { color:var(--ink) }
+.watch .wstops-sum { margin-left:30px }
+.watch .wstops-sum.over { color:var(--red, #a02c2c) }
+.watch .wsr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0);
+  white-space:nowrap }
+.vhandle.stopmark { display:grid; place-items:center; width:26px; height:26px; border-width:2px;
+  color:#fff; font:700 12px/1 Inter, system-ui, sans-serif }
+.vhandle.stopmark span { display:block }
+
+/* ── Advanced: report types and source types ───────────────────── */
+.watch .wadv { margin:4px 0 12px; border:1px solid var(--line); border-radius:10px }
+.watch .wadv > summary { display:flex; align-items:center; gap:10px; padding:10px 12px;
+  cursor:pointer; list-style:none; font:600 .84rem Inter; color:var(--ink) }
+.watch .wadv > summary::-webkit-details-marker { display:none }
+.watch .wadv > summary::before { content:""; width:7px; height:7px; flex:none;
+  border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor;
+  transform:rotate(-45deg); transition:transform .15s; margin:0 2px }
+.watch .wadv[open] > summary::before { transform:rotate(45deg) }
+.watch .wadv-s { margin-left:auto; font:400 .76rem Inter; color:var(--dim); text-align:right }
+.watch .wadv-body { padding:0 12px 12px }
+.watch .wadv-where { margin:0 0 6px }
+.watch .wadv-kind { border:0; border-top:1px solid var(--line); margin:10px 0 0; padding:10px 0 0;
+  min-width:0; position:relative }
+.watch .wadv-kind legend { float:left; font:600 .82rem Inter; color:var(--ink); padding:0 }
+.watch .wadv-tools { display:flex; justify-content:flex-end; gap:12px }
+.watch .wadv-tools button { border:0; background:none; padding:2px 0; color:var(--sky);
+  font:500 .76rem Inter; cursor:pointer }
+.watch .wadv-kind > .hint { clear:both; margin:4px 0 0 }
+.watch .wadv-subs { clear:both; list-style:none; margin:6px 0 0; padding:0 }
+.watch .wadv-row { display:flex; align-items:center; gap:8px; min-height:32px }
+.watch .wadv-row label, .watch .wadv-raw label { display:flex; align-items:flex-start; gap:8px;
+  flex:1; min-width:0; font:400 .84rem/1.4 Inter; color:var(--ink); text-transform:none;
+  letter-spacing:0; margin:0; cursor:pointer; padding:3px 0 }
+.watch .wadv-row input, .watch .wadv-raw input { margin-top:2px; flex:none }
+.watch .wadv-more { flex:none; border:0; background:none; color:var(--sky); padding:4px 0;
+  font:500 .74rem Inter; cursor:pointer; white-space:nowrap }
+.watch .wadv-more::after { content:" \25BE" }
+.watch .wadv-more[aria-expanded="true"]::after { content:" \25B4" }
+.watch .wadv-raw { margin:2px 0 6px 7px; padding-left:16px; border-left:1px solid var(--line) }
+.watch .wadv-raw label { font-size:.8rem }
+.watch .wadv-src { font:600 .68rem Inter; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--dim); margin:6px 0 2px }
+.watch .wkinds span.narrow b { font-weight:600 }
+.watch .weditor .wdelete { margin-left:auto }
+.watch .weditor button.primary { width:auto; padding:7px 16px }
+
 /* Map handles for polygon corners live on whichever map draws them. */
 .vhandle { background:#2f81f7; border:2.5px solid #fff;
   border-radius:99px; box-shadow:0 1px 4px rgba(15,28,43,.4); cursor:grab }
@@ -166,5 +253,11 @@
   .watch .witem > button { padding:8px }
   .watch input, .watch select, .watch textarea { font-size:16px !important }
   .watch .kinds label, .watch .chans label { padding:4px 0 }
+  .watch .wstop { grid-template-columns:24px minmax(0, 1fr) 40px 40px }
+  .watch .wstop-move, .watch .wstop-del { width:40px; height:40px }
+  .watch .wadv-row, .watch .wadv-raw label { min-height:40px; align-items:center }
+  .watch .wstops-btn, .watch .wadv-more, .watch .wadv-tools button { min-height:40px }
   .watch .stepblock { gap:10px }
-}
+  }
+@media (prefers-reduced-motion: reduce) {
+  .watch .wstop, .watch .wadv > summary::before { transition:none } }

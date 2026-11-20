@@ -126,6 +126,10 @@
 .wp [data-kind="closure"] { --k:var(--cs-closure); --ks:var(--cs-closure-soft) }
 .wp [data-kind="chain"] { --k:var(--cs-chain); --ks:var(--cs-chain-soft) }
 .wp [data-kind="fire"] { --k:var(--cs-fire); --ks:var(--cs-fire-soft) }
+/* Weather has no map family of its own: a violet mixed from two of the
+   kind hues, so it follows the theme with them. */
+.wp [data-kind="weather"] { --k:color-mix(in oklab, var(--cs-chain) 60%, var(--cs-closure));
+  --ks:color-mix(in oklab, var(--cs-chain-soft) 55%, var(--cs-closure-soft)) }
 .wp-kinds li { display:inline-flex; align-items:center; gap:8px; height:32px; padding:0 12px;
   border-radius:99px; background:var(--ks); color:var(--k); font-size:.875rem; font-weight:500 }
 .wp-kinds li::before { content:""; width:7px; height:7px; border-radius:99px; background:currentColor }
@@ -175,8 +179,7 @@
 .wp .watch .steplabel { margin:2px 0 10px; font:600 .9375rem/1.3 var(--cs-font-sans); color:var(--cs-ink) }
 .wp .watch .stepbody .hint:first-of-type { margin:-4px 0 0 }
 .wp .watch .stepbody > .field, .wp #polytools { margin-top:14px }
-.wp #routerow input[type=text] { margin-bottom:10px }
-.wp #routerow #rw-preview { width:100%; margin-bottom:14px }
+.wp #routerow > label { margin-top:4px }
 .wp .watch .radius b { min-width:56px; font:500 .875rem var(--cs-font-mono); color:var(--cs-ink) }
 .wp .watch #createbtn { margin-top:22px }
 .wp .watch #canceledit { width:100%; margin-top:8px }
@@ -234,6 +237,61 @@
 .wp .watch .weditor .kinds label { min-height:32px }
 .wp .watch .weditor .devrow { margin-top:4px }
 .wp .watch .weditor button.primary { width:auto !important; min-height:40px; padding:0 16px !important }
+
+/* Route stops */
+.wp .watch .wstops { margin:2px 0 18px }
+.wp .watch .wstops-title { font:500 .8125rem var(--cs-font-sans); letter-spacing:0; text-transform:none;
+  color:var(--cs-ink-2) }
+.wp .watch .wstops-count { font:500 .75rem var(--cs-font-mono); color:var(--cs-ink-3) }
+.wp .watch .wstop { padding:4px 0; background:var(--cs-surface) }
+.wp .watch .wstop + .wstop::before { border-left-color:var(--cs-line-strong) }
+.wp .watch .wstop-mark { width:24px; height:24px; border-color:var(--cs-line-strong); background:var(--cs-surface);
+  color:var(--cs-ink-3); font:500 .75rem var(--cs-font-mono) }
+.wp .watch .wstop.set .wstop-mark { background:var(--cs-accent); border-color:var(--cs-accent); color:var(--cs-accent-ink) }
+.wp .watch .wstop-field input[type=text] { min-height:40px }
+.wp .watch .wstop-move, .wp .watch .wstop-del { color:var(--cs-ink-3); transition:background-color 150ms, color 150ms }
+.wp .watch .wstop-move:hover, .wp .watch .wstop-del:hover { background:var(--cs-surface-2); color:var(--cs-ink) }
+.wp .watch .wstop.dragging .wstop-field input { box-shadow:var(--cs-shadow-md) }
+.wp .watch .wstop-sugg { background:var(--cs-surface); border-color:var(--cs-line); border-radius:var(--cs-radius-md);
+  box-shadow:var(--cs-shadow-md) }
+.wp .watch .wstop-sugg li { color:var(--cs-ink); font-size:.875rem }
+.wp .watch .wstop-sugg li span { color:var(--cs-ink-3); font-size:.8125rem }
+.wp .watch .wstop-sugg li[aria-selected="true"], .wp .watch .wstop-sugg li:hover { background:var(--cs-surface-2) }
+.wp .watch .wstops-actions { margin-left:30px }
+.wp .watch .wstops-btn { min-height:36px; color:var(--cs-accent); font:500 .875rem var(--cs-font-sans) }
+.wp .watch .wstops-btn:hover:not(:disabled) { color:var(--cs-accent-hover) }
+.wp .watch .wstops-btn:disabled { color:var(--cs-ink-3); opacity:1 }
+.wp .watch .wstops-btn.wstops-clear:not(:disabled) { color:var(--cs-ink-2) }
+.wp .watch .wstops-btn.wstops-clear:hover:not(:disabled) { color:var(--cs-closure) }
+.wp .watch .wstops-sum { margin:4px 0 0 30px }
+.wp .watch .wstops-sum.over { color:var(--cs-closure) }
+.wp .vhandle.stopmark { background:var(--cs-accent); color:var(--cs-accent-ink); border-color:var(--cs-surface);
+  font:600 12px/1 var(--cs-font-mono) }
+
+/* Advanced: report types and source types */
+.wp .watch .wadv { margin:12px 0 0; border-color:var(--cs-line); border-radius:var(--cs-radius-md); background:var(--cs-surface) }
+.wp .watch .wadv > summary { min-height:44px; padding:0 14px; font:500 .875rem var(--cs-font-sans); color:var(--cs-ink);
+  border-radius:var(--cs-radius-md) }
+.wp .watch .wadv > summary:hover { background:var(--cs-surface-2) }
+.wp .watch .wadv > summary::before { color:var(--cs-ink-3) }
+.wp .watch .wadv-s { font:400 .8125rem var(--cs-font-sans); color:var(--cs-ink-3) }
+.wp .watch .wadv[open] > summary { border-bottom:1px solid var(--cs-line); border-radius:var(--cs-radius-md) var(--cs-radius-md) 0 0 }
+.wp .watch .wadv-body { padding:12px 14px 14px }
+.wp .watch .wadv .wadv-where { margin:0 }
+.wp .watch .wadv-kind { border-top-color:var(--cs-line); margin-top:14px; padding-top:12px }
+.wp .watch .wadv-kind legend { display:inline-flex; align-items:center; gap:8px; color:var(--k);
+  font:600 .875rem/1.6 var(--cs-font-sans) }
+.wp .watch .wadv-kind legend::before { content:""; width:8px; height:8px; border-radius:99px; background:var(--k) }
+.wp .watch .wadv-tools button { color:var(--cs-accent); font:500 .8125rem var(--cs-font-sans); border-radius:4px }
+.wp .watch .wadv-row label, .wp .watch .wadv-raw label { color:var(--cs-ink); font:400 .875rem/1.45 var(--cs-font-sans) }
+.wp .watch .wadv-raw label { font-size:.8125rem; color:var(--cs-ink-2) }
+.wp .watch .wadv-more { color:var(--cs-accent); font:500 .8125rem var(--cs-font-sans); border-radius:4px }
+.wp .watch .wadv-raw { border-left-color:var(--cs-line-strong) }
+.wp .watch .wadv-src { font:500 .6875rem var(--cs-font-mono); letter-spacing:.06em; color:var(--cs-ink-3) }
+.wp .watch .wadv input[type=checkbox] { width:16px; height:16px }
+
+.wp .watch .wkinds span.narrow { max-width:100%; border-radius:8px; white-space:normal; overflow-wrap:anywhere }
+.wp .watch .weditor .wdelete { margin-left:auto }
 
 .wp .watch .empty { padding:26px 16px; border:1px dashed var(--cs-line-strong); border-radius:var(--cs-radius-md) }
 .wp .watch .empty-ico::before { border-color:var(--cs-line-strong) }

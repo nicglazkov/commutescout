@@ -37,6 +37,7 @@ from starlette.responses import JSONResponse
 from ca_roads import apikeys, flare
 from ca_roads.feeds import lcs as lcs_feed
 from ca_roads_demo import lanecount, staticmap_sig
+from ca_roads_demo import watch_filters as wf
 from ca_roads_mcp import server as tools
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "ca-roads-mcp")
@@ -81,6 +82,13 @@ FREE_MAX_RADIUS_KM = 40.2
 FREE_MAX_POLYGON_SQ_KM = 5180.0
 FREE_MAX_ROUTE_KM = 402.0
 FREE_MAX_BUFFER_KM = 3.2
+# Stops on a route watch, start and end included. The route planner
+# (/api/route) takes 2 to 8 locations per request, so 8 is what one
+# drawn route can be built from; the page states it, the API enforces it.
+MAX_ROUTE_STOPS = 8
+# Weather alerts are asked of the National Weather Service per point;
+# a watch is sampled at this many points at most, per check.
+MAX_WEATHER_POINTS = 7
 MAX_ALERTS_PER_WATCH_CYCLE = 8
 MAX_SEEN_IDS = 1500
 # An event id stays in seen-state this long after vanishing from the
@@ -107,7 +115,7 @@ CA_BOUNDARY = [
     [31.8, -118.5], [32.5, -119.8], [33.8, -121.3], [36.3, -123.3],
     [39.0, -125.0],
 ]
-WATCH_KINDS = ("incident", "closure", "chain", "fire")
+WATCH_KINDS = wf.KIND_IDS
 MAX_BODY_BYTES = 64 * 1024  # every JSON body we accept is far smaller
 # Firestore document ids we mint are URL-safe tokens; reject anything
 # else on the path so a crafted id can never reach the client library.
@@ -397,6 +405,15 @@ class FirestoreStore:
         await self.db.collection("watch_state").document(watch_id).set(
             {"seen": top, "updated_at": datetime.now(UTC).isoformat()})
 
+    async def get_meta(self, key: str) -> dict | None:
+        """A small shared document under watch_meta (the learned
+        report-type catalog)."""
+        snap = await self.db.collection("watch_meta").document(key).get()
+        return snap.to_dict() if snap.exists else None
+
+    async def set_meta(self, key: str, data: dict) -> None:
+        await self.db.collection("watch_meta").document(key).set(data)
+
     async def add_waitlist_email(self, email: str) -> bool:
         """Store a Pro-waitlist signup. Returns False when the address
         is already on the list. Document id is the sha256 hex digest of
@@ -587,8 +604,15 @@ async def api_watch_config(_: Request) -> JSONResponse:
         # instead of carrying its own copy of the outline.
         "coverage": {"california": CA_BOUNDARY,
                      "states": _coverage_areas()},
+        # Every kind a watch can alert on, with its report types, so the
+        # pages never carry their own copy of the list.
+        "alertKinds": [
+            {"id": k, "label": label, "hint": hint,
+             "subtypes": [{"id": s, "label": sl} for s, sl in wf.SUBTYPES[k]]}
+            for k, label, hint in wf.KINDS],
         "limits": {"watches": MAX_WATCHES, "radius_km": MAX_RADIUS_KM,
                    "polygon_points": MAX_POLY_POINTS,
+                   "route_stops": MAX_ROUTE_STOPS,
                    "free_watches": FREE_MAX_WATCHES,
                    "free_radius_km": FREE_MAX_RADIUS_KM,
                    "free_polygon_sq_km": FREE_MAX_POLYGON_SQ_KM,
@@ -1117,6 +1141,82 @@ def _parse_polygon_points(raw) -> tuple[list | None, str | None]:
     return points, None
 
 
+def _parse_kinds(body: dict) -> tuple[list | None, dict | None, str | None]:
+    """(kinds, filters, error) from a create or update body."""
+    kinds = []
+    for k in body.get("kinds") or []:
+        if k in WATCH_KINDS and k not in kinds:
+            kinds.append(k)
+    if not kinds:
+        return None, None, "pick at least one alert kind"
+    filters, ferr = wf.clean_filters(body.get("filters"), kinds)
+    if ferr:
+        return None, None, ferr
+    return kinds, filters, None
+
+
+def _parse_stops(raw) -> tuple[list | None, str | None]:
+    """A route's stops, start and end included, as Firestore-safe
+    {lat, lon, label} maps. None (no stops sent) is fine: older clients
+    send the routed line only."""
+    if raw is None:
+        return None, None
+    if not isinstance(raw, list) or not 2 <= len(raw) <= MAX_ROUTE_STOPS:
+        return None, (f"a route has 2 to {MAX_ROUTE_STOPS} stops, "
+                      "start and end included")
+    stops = []
+    try:
+        for p in raw:
+            lat, lon = float(p["lat"]), float(p["lon"])
+            if not in_coverage(lat, lon):
+                return None, f"every stop {COVERAGE_ERROR}"
+            stops.append({"lat": round(lat, 6), "lon": round(lon, 6),
+                          "label": clean_text(p.get("label"), 120)})
+    except (TypeError, ValueError, KeyError, AttributeError):
+        return None, "stops must be {lat, lon, label} objects"
+    return stops, None
+
+
+def _parse_route(body: dict) -> tuple[dict | None, str | None]:
+    """The route fields of a watch (points, length_km, and stops when
+    sent) from a create or update body, validated against the free
+    limits."""
+    stops, stop_err = _parse_stops(body.get("stops"))
+    if stop_err:
+        return None, stop_err
+    raw = body.get("points") or []
+    if len(raw) < 2:
+        return None, "route needs at least two points"
+    step = max(1, len(raw) // MAX_ROUTE_POINTS)
+    sampled = raw[::step]
+    if sampled and raw and sampled[-1] != raw[-1]:
+        sampled.append(raw[-1])
+    points = []
+    total_km = 0.0
+    try:
+        prev = None
+        for pt in sampled:
+            lat, lon = float(pt[0]), float(pt[1])
+            if not in_coverage(lat, lon):
+                return None, f"every route point {COVERAGE_ERROR}"
+            if prev:
+                total_km += haversine_km(prev[0], prev[1], lat, lon)
+            prev = (lat, lon)
+            points.append({"lat": lat, "lon": lon})
+    except (TypeError, ValueError, IndexError, KeyError):
+        return None, "points must be [lat, lon] pairs"
+    if total_km > FREE_MAX_ROUTE_KM:
+        return None, (f"routes above {FREE_MAX_ROUTE_KM:.0f} km are "
+                      "over the free limit")
+    if total_km > MAX_ROUTE_KM:
+        return None, (f"routes are limited to {MAX_ROUTE_KM:.0f} km "
+                      "during the trial")
+    out = {"points": points, "length_km": round(total_km, 1)}
+    if stops is not None:
+        out["stops"] = stops
+    return out, None
+
+
 async def api_watch_create(request: Request) -> JSONResponse:
     claims = await verify_user(request)
     if not claims:
@@ -1129,9 +1229,9 @@ async def api_watch_create(request: Request) -> JSONResponse:
         return _err("json body required")
 
     name = clean_text(body.get("name"), 60) or "Watch area"
-    kinds = [k for k in (body.get("kinds") or []) if k in WATCH_KINDS]
-    if not kinds:
-        return _err("pick at least one alert kind")
+    kinds, filters, kind_err = _parse_kinds(body)
+    if kind_err:
+        return _err(kind_err)
     channels = body.get("channels") or {}
     watch: dict = {
         "uid": claims["sub"],
@@ -1144,6 +1244,10 @@ async def api_watch_create(request: Request) -> JSONResponse:
         "active": True,
         "created_at": datetime.now(UTC).isoformat(),
     }
+    # Additive: a watch without "filters" alerts on everything of its
+    # kinds, as every watch did before report types existed.
+    if filters:
+        watch["filters"] = filters
 
     wtype = body.get("type")
     if wtype == "circle":
@@ -1171,33 +1275,9 @@ async def api_watch_create(request: Request) -> JSONResponse:
                         "are over the free limit")
         watch.update({"type": "polygon", "points": points})
     elif wtype == "route":
-        raw = body.get("points") or []
-        if len(raw) < 2:
-            return _err("route needs at least two points")
-        step = max(1, len(raw) // MAX_ROUTE_POINTS)
-        sampled = raw[::step]
-        if sampled and raw and sampled[-1] != raw[-1]:
-            sampled.append(raw[-1])
-        points = []
-        total_km = 0.0
-        try:
-            prev = None
-            for pt in sampled:
-                lat, lon = float(pt[0]), float(pt[1])
-                if not in_coverage(lat, lon):
-                    return _err(f"every route point {COVERAGE_ERROR}")
-                if prev:
-                    total_km += haversine_km(prev[0], prev[1], lat, lon)
-                prev = (lat, lon)
-                points.append({"lat": lat, "lon": lon})
-        except (TypeError, ValueError, IndexError):
-            return _err("points must be [lat, lon] pairs")
-        if total_km > FREE_MAX_ROUTE_KM:
-            return _err(f"routes above {FREE_MAX_ROUTE_KM:.0f} km are "
-                        "over the free limit")
-        if total_km > MAX_ROUTE_KM:
-            return _err(f"routes are limited to {MAX_ROUTE_KM:.0f} km "
-                        "during the trial")
+        route, route_err = _parse_route(body)
+        if route_err:
+            return _err(route_err)
         try:
             buffer_km = float(body.get("buffer_km") or 3.0)
         except (TypeError, ValueError):
@@ -1206,9 +1286,8 @@ async def api_watch_create(request: Request) -> JSONResponse:
             return _err(f"buffers above {FREE_MAX_BUFFER_KM:g} km are "
                         "over the free limit")
         buffer_km = max(buffer_km, MIN_BUFFER_KM)
-        watch.update({"type": "route", "points": points,
-                      "buffer_km": round(buffer_km, 2),
-                      "length_km": round(total_km, 1)})
+        watch.update({"type": "route", **route,
+                      "buffer_km": round(buffer_km, 2)})
     else:
         return _err("type must be circle, polygon, or route")
 
@@ -1238,10 +1317,11 @@ async def api_watch_delete(request: Request) -> JSONResponse:
 
 
 async def api_watch_update(request: Request) -> JSONResponse:
-    """Edit a watch: name, kinds, channels, the active flag
-    (pause/resume), and - for polygons - the shape itself, so corners
-    can be dragged around after creation. Circle geometry stays
-    create-only; redrawing a circle is two taps."""
+    """Edit a watch: name, kinds and report-type filters, channels, the
+    active flag (pause/resume), and the shape itself for polygons
+    (corners dragged around) and routes (stops added, removed or
+    reordered, and the line re-routed through them). Circle geometry
+    stays create-only; redrawing a circle is two taps."""
     claims = await verify_user(request)
     if not claims:
         return _err("sign in required", 401)
@@ -1260,11 +1340,18 @@ async def api_watch_update(request: Request) -> JSONResponse:
     if "name" in body:
         updates["name"] = (clean_text(body.get("name"), 60)
                            or watch.get("name", "Watch area"))
-    if "kinds" in body:
-        kinds = [k for k in (body.get("kinds") or []) if k in WATCH_KINDS]
-        if not kinds:
-            return _err("pick at least one alert kind")
+    if "kinds" in body or "filters" in body:
+        # Kinds and their report-type filters travel together: changing
+        # the kinds without new filters keeps the stored ones that still
+        # apply.
+        kinds, filters, kind_err = _parse_kinds({
+            "kinds": body.get("kinds", watch.get("kinds")),
+            "filters": (body.get("filters") if "filters" in body
+                        else watch.get("filters"))})
+        if kind_err:
+            return _err(kind_err)
         updates["kinds"] = kinds
+        updates["filters"] = filters
     if "channels" in body:
         channels = body.get("channels") or {}
         updates["channels"] = {"push": bool(channels.get("push", True)),
@@ -1284,9 +1371,15 @@ async def api_watch_update(request: Request) -> JSONResponse:
             return _err(f"buffers above {FREE_MAX_BUFFER_KM:g} km are "
                         "over the free limit")
         updates["buffer_km"] = round(max(buffer_km, MIN_BUFFER_KM), 2)
-    if "points" in body:
+    if "points" in body and watch.get("type") == "route":
+        # Re-routed: new stops, the line through them, and its length.
+        route, route_err = _parse_route(body)
+        if route_err:
+            return _err(route_err)
+        updates.update(route)
+    elif "points" in body:
         if watch.get("type") != "polygon":
-            return _err("only polygon watches have editable points")
+            return _err("only polygon and route watches have editable points")
         points, point_err = _parse_polygon_points(body.get("points"))
         if point_err:
             return _err(point_err)
@@ -1303,6 +1396,49 @@ async def api_watch_update(request: Request) -> JSONResponse:
     watch.update(updates)
     watch["id"] = watch_id
     return JSONResponse(public_watch(watch))
+
+
+MAX_OPTION_POINTS = 2000
+
+
+async def api_watch_options(request: Request) -> JSONResponse:
+    """What a watch over a drawn shape can alert on: the states it
+    reaches, and per kind the report types and exact source types their
+    sources provide. POST the shape as the create body carries it
+    ({type, center, radius_km} or {type, points}); nothing is stored."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    user = await _load_user(claims)
+    if not _approved(user):
+        return _err("watch access is not enabled for this account", 403)
+    body = await _read_json(request)
+    if body is None:
+        return _err("json body required")
+    wtype = body.get("type")
+    shape: dict = {"type": wtype}
+    try:
+        if wtype == "circle":
+            c = body.get("center") or {}
+            shape["center"] = {"lat": float(c["lat"]), "lon": float(c["lon"])}
+            shape["radius_km"] = min(float(body.get("radius_km") or 1.0),
+                                     MAX_RADIUS_KM)
+        elif wtype in ("polygon", "route"):
+            raw = body.get("points") or []
+            if not 1 <= len(raw) <= MAX_OPTION_POINTS:
+                return _err(f"points: 1 to {MAX_OPTION_POINTS}")
+            shape["points"] = [
+                {"lat": float(p["lat"]), "lon": float(p["lon"])}
+                if isinstance(p, dict) else {"lat": float(p[0]), "lon": float(p[1])}
+                for p in raw]
+        else:
+            return _err("type must be circle, polygon, or route")
+    except (TypeError, ValueError, KeyError, IndexError):
+        return _err("shape needs a center and radius_km, or [lat, lon] points")
+    await _load_catalog()
+    states = wf.states_for_shape(shape, _coverage_areas(), in_california,
+                                 point_in_polygon)
+    return JSONResponse(wf.area_options(states))
 
 
 async def api_account_delete(request: Request) -> JSONResponse:
@@ -1485,7 +1621,7 @@ async def _collect_events() -> list[dict]:
     TTL-cached by the shared road object, so this piggybacks on the
     same fetches the map already makes."""
     road = tools.get_road()
-    chp, lcs, cc, wf = await asyncio.gather(
+    chp, lcs, cc, fires = await asyncio.gather(
         road.incidents(), road.lane_closures(), road.chain_controls(),
         road.wildfires(),
     )
@@ -1502,6 +1638,9 @@ async def _collect_events() -> list[dict]:
             "id": f"chp:{i.id}", "kind": "incident",
             "lat": i.lat, "lon": i.lon,
             "title": i.log_type or "Incident",
+            # What the report-type filters match on (watch_filters).
+            "src_id": wf.CHP, "raw_type": i.log_type or None,
+            "subtype": wf.classify("incident", i.log_type),
             "body": f"{i.location} ({i.area})",
             "meta": f"CHP call logged {when}" if when else "Live CHP call",
             # Structured extras for the event archive: the dispatch
@@ -1521,6 +1660,9 @@ async def _collect_events() -> list[dict]:
         events.append({
             "id": f"lcs:{c.index}", "kind": "closure",
             "lat": c.begin_lat, "lon": c.begin_lon,
+            "src_id": "caltrans-lcs", "src_label": "Caltrans lane closures",
+            "subtype": wf.classify("closure",
+                                   cls=lcs_feed.closure_class(c)),
             "title": f"{c.route} {lcs_feed.closure_class(c)}",
             "body": lcs_feed.describe(c),
             "meta": (f"{lanes} - {c.type_of_work}".strip(" -")
@@ -1539,12 +1681,15 @@ async def _collect_events() -> list[dict]:
             events.append({
                 "id": f"chain:{c.index}:{c.status}", "kind": "chain",
                 "lat": c.lat, "lon": c.lon,
+                "src_id": "caltrans-chains",
+                "src_label": "Caltrans chain controls",
+                "subtype": wf.classify("chain", status=c.status),
                 "title": f"Chain control {c.status} on {c.route}",
                 "body": c.status_description or c.location_name,
                 "meta": f"Checkpoint: {c.location_name}",
                 "payload": {"status": c.status, "route": c.route},
             })
-    for f in wf.records:
+    for f in fires.records:
         contained = (f"{f.percent_contained:.0f}% contained"
                      if f.percent_contained is not None else "containment unknown")
         events.append({
@@ -1599,9 +1744,18 @@ async def _collect_expansion_events(client) -> list[dict]:
                      "fire": "Wildfire"}.get(kind, "Reported event"))
         if kind == "fire" and m.get("name"):
             title = f"Wildfire: {m['name']}"
+        raw_type = m.get("type") if kind == "incident" else None
         out.append({
             "id": _expansion_id(m), "kind": kind,
             "lat": m["lat"], "lon": m["lon"],
+            "src_id": wf.source_id(src), "src_label": str(src)[:80],
+            "raw_type": raw_type,
+            "subtype": (wf.classify(kind, raw_type or m.get("label"))
+                        if kind == "incident"
+                        else wf.classify(kind, cls=m.get("cls"))
+                        if kind == "closure"
+                        else wf.classify(kind, status=m.get("status"))
+                        if kind == "chain" else None),
             "title": str(title)[:120],
             "body": str(m.get("label") or m.get("name") or "")[:300],
             "meta": f"Reported by {src}",
@@ -1669,11 +1823,12 @@ DEMO_URL = os.environ.get(
     "DEMO_URL", "https://commutescout.com")
 
 KIND_LABELS = {"incident": "Incident", "closure": "Closure",
-               "chain": "Chain control", "fire": "Wildfire"}
+               "chain": "Chain control", "fire": "Wildfire",
+               "weather": "Weather alert"}
 # Same colors the map legend uses for these kinds, so an email reads as
 # the same product.
 KIND_COLORS = {"incident": "#c9611a", "closure": "#a02c2c",
-               "chain": "#2b6cb0", "fire": "#d97706"}
+               "chain": "#2b6cb0", "fire": "#d97706", "weather": "#6b4fbb"}
 
 
 def render_alert_email(watch_name: str, events: list[dict],
@@ -1936,7 +2091,7 @@ def render_signin_email(link: str) -> tuple[str, str, str]:
 CLEAR_MISSES = 2
 ALERTED_KEEP_S = 24 * 3600
 MAX_QUIET_HELD = 20
-_TOP_KIND = {"fire": 0, "chain": 1, "incident": 2, "closure": 3}
+_TOP_KIND = {"fire": 0, "chain": 1, "incident": 2, "weather": 3, "closure": 4}
 
 
 def live_status(matched: list[dict], prev: dict | None, now_ts: float) -> dict:
@@ -1965,6 +2120,99 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}" + ("" if n == 1 else "s")
 
 
+def _weather_points(watch: dict) -> list[tuple[float, float]]:
+    """Where to ask the Weather Service about a watch: its middle and a
+    few points across it. Alerts cover forecast zones (county-sized), so
+    a handful of points finds every zone a watch area reaches."""
+    if watch.get("type") == "circle":
+        c = watch.get("center") or {}
+        lat, lon = float(c.get("lat") or 0), float(c.get("lon") or 0)
+        r = float(watch.get("radius_km") or 0) * 0.7
+        dlat = r / 110.57
+        dlon = r / (111.32 * max(0.2, math.cos(math.radians(lat))))
+        pts = [(lat, lon), (lat + dlat, lon), (lat - dlat, lon),
+               (lat, lon + dlon), (lat, lon - dlon)]
+    else:
+        pairs = [(float(p["lat"]), float(p["lon"])) if isinstance(p, dict)
+                 else (float(p[0]), float(p[1]))
+                 for p in watch.get("points") or []]
+        if not pairs:
+            return []
+        if watch.get("type") == "polygon":
+            mid = (sum(p[0] for p in pairs) / len(pairs),
+                   sum(p[1] for p in pairs) / len(pairs))
+            pairs = [mid, *pairs]
+        n = MAX_WEATHER_POINTS
+        if len(pairs) > n:
+            pairs = [pairs[round(i * (len(pairs) - 1) / (n - 1))]
+                     for i in range(n)]
+        pts = pairs
+    return pts[:MAX_WEATHER_POINTS]
+
+
+async def _weather_events(watch: dict) -> list[dict]:
+    """The National Weather Service alerts in force over a watch area,
+    as watchable events. Never raises: a Weather Service outage costs
+    weather alerts, nothing else."""
+    from ca_roads.feeds import nws as nws_feed
+
+    try:
+        alerts = await nws_feed.alerts_at_points(
+            tools.get_road().client, _weather_points(watch), with_ids=True)
+    except Exception:  # noqa: BLE001
+        return []
+    out = []
+    for a in alerts:
+        event = a.get("event") or "Weather alert"
+        point = a.get("point") or (None, None)
+        out.append({
+            "id": "nws:" + hashlib.sha1(
+                str(a.get("id") or a.get("headline") or event).encode()
+            ).hexdigest()[:20],
+            "kind": "weather", "lat": point[0], "lon": point[1],
+            "title": event,
+            "body": (a.get("headline") or a.get("areas") or "")[:300],
+            "meta": "National Weather Service",
+            "src_id": wf.NWS, "raw_type": event,
+            "subtype": wf.classify("weather", event),
+        })
+    return out
+
+
+# The learned report-type catalog is kept in Firestore so a restart does
+# not forget the categories each state's feeds publish. Loaded once,
+# saved at most this often when something new was learned.
+CATALOG_SAVE_SECONDS = 30 * 60
+_catalog_io = {"loaded": False, "saved": 0.0}
+
+
+async def _load_catalog() -> None:
+    if _catalog_io["loaded"]:
+        return
+    _catalog_io["loaded"] = True
+    getter = getattr(get_store(), "get_meta", None)
+    if getter is None:
+        return
+    with contextlib.suppress(Exception):
+        wf.load_snapshot(((await getter("report_types")) or {}).get("sources"))
+
+
+async def _save_catalog() -> None:
+    now = time.time()
+    if now - _catalog_io["saved"] < CATALOG_SAVE_SECONDS or not wf.take_dirty():
+        return
+    setter = getattr(get_store(), "set_meta", None)
+    if setter is None:
+        return
+    _catalog_io["saved"] = now
+    try:
+        await setter("report_types", {
+            "sources": wf.catalog_snapshot(),
+            "updated_at": datetime.now(UTC).isoformat(timespec="seconds")})
+    except Exception:  # noqa: BLE001 - the catalog is a convenience
+        log.exception("checker: could not save the report-type catalog")
+
+
 async def run_check_cycle() -> dict:
     """One pass over every active watch: new matching events get pushed
     (and emailed when configured), then the seen-set advances. First run
@@ -1984,6 +2232,11 @@ async def run_check_cycle() -> dict:
     # Toll price history rides the same cycle: cached prices only, one
     # row per changed (corridor, entry, destination). Never raises.
     await tollprices.observe()
+    # Learn which report and source types each state's feeds publish,
+    # for the watch form's "where the shape is" options.
+    await _load_catalog()
+    wf.observe(events, _coverage_areas(), in_california)
+    await _save_catalog()
     watches = await store.list_watches()
     users: dict[str, dict | None] = {}
     # One push-subs read per user per cycle, not per matched event: a
@@ -2014,9 +2267,14 @@ async def run_check_cycle() -> dict:
             if not user or user.get("status") != "approved":
                 continue
 
+            # Kind and report-type filters first (cheap), then place.
             matched = [e for e in events
-                       if e["kind"] in (watch.get("kinds") or [])
+                       if wf.passes(watch, e)
                        and watch_matches(watch, e["lat"], e["lon"])]
+            if "weather" in (watch.get("kinds") or []):
+                # Asked at the watch's own points, so already in place.
+                matched += [e for e in await _weather_events(watch)
+                            if wf.passes(watch, e)]
             prefs = user.get("prefs") or {}
             name = watch.get("name", "Watch")
             push_on = (prefs.get("alerts_push", True)
@@ -2085,9 +2343,12 @@ async def run_check_cycle() -> dict:
                     if push_on:
                         subs = await push_subs_for(uid)
                         lat, lon = event.get("lat"), event.get("lon")
+                        # Weather alerts cover zones, not a point on a
+                        # road: they open the watch page, not the map.
                         click = (f"{DEMO_URL}/?focus={lat:.5f},{lon:.5f}"
                                  f"&k={event.get('kind', 'incident')}"
-                                 if lat and lon else f"{DEMO_URL}/watch")
+                                 if lat and lon and event.get("kind") != "weather"
+                                 else f"{DEMO_URL}/watch")
                         sent = await _push_to_subs(subs, {
                             "title": title, "body": event["body"],
                             "url": click,
