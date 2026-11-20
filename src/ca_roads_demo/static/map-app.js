@@ -3852,6 +3852,8 @@ function valhallaTripToRoute(trip) {
     distance: trip.summary.length * perUnit,
     duration: trip.summary.time,
     via: best ? best.street_names[0].split(';')[0] : '',
+    // Each leg's own time, for the arrival at every stop.
+    legTimes: trip.legs.map((l) => (l.summary && l.summary.time) || null),
     steps: trip.legs.flatMap(l => l.maneuvers || []).map(s => ({
       text: s.instruction.replace(/\.$/, ''), miles: s.length,
     })),
@@ -4837,6 +4839,10 @@ function showRoute(route, others, a, b) {
     fromName: fromF.input.dataset.name || fromF.input.value, toName: toF.input.dataset.name || toF.input.value };
   plannedRoute.fromC = { name: plannedRoute.fromName, lat: a[0], lon: a[1] };
   plannedRoute.toC = { name: plannedRoute.toName, lat: b[0], lon: b[1] };
+  // The stops on this route, numbered as in the editor.
+  plannedRoute.stops = stops.map((s, k) => ({ n: k + 1, f: s.field })).filter((s) => pointSet(s.f))
+    .map((s) => ({ n: s.n, name: s.f.input.dataset.name || s.f.input.value,
+      lat: +s.f.input.dataset.lat, lon: +s.f.input.dataset.lon }));
   layerRoute.clearLayers();
   for (const alt of others) {
     L.polyline(alt.latlngs, { color: '#7d93ab', weight: 3.5, opacity: 0.65,
@@ -5632,18 +5638,33 @@ function buildRouteStrip(latlngs, along) {
   const dep = departEpoch();
   const leave = dep ? dep * 1000 : Date.now();
   const mins = plannedRoute.trafficMins || Math.round(r.duration / 60);
-  stripItems = [{ end: 'a', km: 0 }, ...hits, { end: 'b', km: total }];
+  // Each stop is a row at its mile, with its arrival time: from the
+  // legs' own times when the router gave them, else by distance.
+  const legT = (r.legTimes || []).every((t) => t > 0) ? r.legTimes : null;
+  const legSum = legT ? legT.reduce((x, y) => x + y, 0) : 0;
+  const stopRows = (plannedRoute.stops || []).map((s, k) => {
+    const km = along.at(s);
+    const frac = legT ? legT.slice(0, k + 1).reduce((x, y) => x + y, 0) / legSum : (total ? km / total : 0);
+    return { stop: s, km, eta: leave + frac * mins * 60000 };
+  });
+  stripItems = [{ end: 'a', km: 0 }, ...hits.concat(stopRows).sort((x, y) => x.km - y.km), { end: 'b', km: total }];
   stripSel = -1;
   const rows = stripItems.map((h, i) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.id = 'rsrow' + i;
-    b.className = 'rsrow' + (h.end ? ' end' : '');
+    b.className = 'rsrow' + (h.m ? '' : ' end');
     b.tabIndex = -1;
     b.setAttribute('role', 'option');
     b.setAttribute('aria-selected', 'false');
     let title, meta, mark;
-    if (h.end) {
+    if (h.stop) {
+      title = placeLabel(h.stop);
+      meta = 'Stop ' + h.stop.n + ' · arrive about ' + clockTxtMs(h.eta);
+      mark = '<span class="rsend stop" aria-hidden="true">' + h.stop.n + '</span>';
+      b.setAttribute('aria-label', 'Stop ' + h.stop.n + ': ' + title + ', at ' + csUnits.fmt(h.km, 1) +
+        ', arrive about ' + clockTxtMs(h.eta));
+    } else if (h.end) {
       title = placeLabel(h.end === 'a' ? plannedRoute.fromC : plannedRoute.toC);
       meta = h.end === 'a' ? 'Leave ' + clockTxtMs(leave)
         : 'Arrive about ' + clockTxtMs(leave + mins * 60000);
@@ -5681,30 +5702,39 @@ function selectStrip(i, fly) {
   rstrack.setAttribute('aria-activedescendant', 'rsrow' + stripSel);
   const rowEl = document.getElementById('rsrow' + stripSel);
   if (rowEl) rowEl.scrollIntoView({ block: 'nearest' });
-  const n = stripItems.length - 2;
-  document.getElementById('rspos').textContent = h.end ? (n + (n === 1 ? ' item' : ' items') + ' on the way')
-    : stripSel + ' of ' + n;
+  const hits = stripHits();
+  const n = hits.length;
+  document.getElementById('rspos').textContent = !h.m
+    ? (n ? n + (n === 1 ? ' item' : ' items') + ' on the way' : 'Nothing reported on the way')
+    : (hits.indexOf(stripSel) + 1) + ' of ' + n;
   if (!fly) return;
-  if (h.end) {
+  if (h.stop) map.setView([h.stop.lat, h.stop.lon], Math.max(map.getZoom(), 13));
+  else if (h.end) {
     const at = h.end === 'a' ? plannedRoute.a : plannedRoute.b;
     map.setView(at, Math.max(map.getZoom(), 13));
   } else openPeek(h.m, h.g, 12);
 }
-// The arrows step through the items, skipping the two ends.
+// The arrows step through the reported items, skipping the ends and
+// the stops.
+const stripHits = () => stripItems.map((x, i) => (x.m ? i : -1)).filter((i) => i >= 0);
 document.getElementById('rsprev').addEventListener('click', () => {
-  const n = stripItems.length - 2;
-  if (n > 0) selectStrip(stripSel <= 1 ? n : stripSel - 1, true);
+  const hits = stripHits();
+  if (!hits.length) return;
+  const k = hits.indexOf(stripSel);
+  selectStrip(hits[k <= 0 ? hits.length - 1 : k - 1], true);
 });
 document.getElementById('rsnext').addEventListener('click', () => {
-  const n = stripItems.length - 2;
-  if (n > 0) selectStrip(stripSel < 1 || stripSel >= n ? 1 : stripSel + 1, true);
+  const hits = stripHits();
+  if (!hits.length) return;
+  const k = hits.indexOf(stripSel);
+  selectStrip(hits[k < 0 || k >= hits.length - 1 ? 0 : k + 1], true);
 });
 rstrack.addEventListener('keydown', (e) => {
   const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
   if (step) { e.preventDefault(); selectStrip(stripSel < 0 ? (step > 0 ? 0 : stripItems.length - 1) : stripSel + step, true); }
   else if (e.key === 'Home') { e.preventDefault(); selectStrip(0, true); }
   else if (e.key === 'End') { e.preventDefault(); selectStrip(stripItems.length - 1, true); }
-  else if (e.key === 'Enter' && stripSel >= 0 && !stripItems[stripSel].end) {
+  else if (e.key === 'Enter' && stripSel >= 0 && stripItems[stripSel].m) {
     e.preventDefault(); openInspector(stripItems[stripSel].m, stripItems[stripSel].g);
   }
 });
@@ -5974,6 +6004,11 @@ function palMatch(cmd, words) {
   const hay = cmd.keys.toLowerCase().split(/[^a-z0-9]+/);
   return words.every((w) => hay.some((h) => h.startsWith(w)));
 }
+// A question mark, a question word first, or four or more words.
+function looksLikeQuestion(q) {
+  return /\?\s*$/.test(q) || /^(how|what|when|where|why|which|who|is|are|any|can|should|will|do|does)\b/i.test(q) ||
+    q.trim().split(/\s+/).length >= 4;
+}
 function renderPalette() {
   const q = cpalQ.value.trim();
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -5982,12 +6017,13 @@ function renderPalette() {
   if (q.length >= 2) {
     const coord = parseCoords(q);
     if (coord && !palPlaces.length) palCmds.unshift({ group: 'Search results', label: coord.name, run: () => showFound(coord), hint: 'Coordinates', keys: '' });
-    palCmds.push({ group: 'Ask', label: 'Ask: ' + q, hint: 'Assistant', keys: '', run: () => {
-      setTool('ask', { toggle: false, reveal: true });
-      const box = document.getElementById('q');
-      box.value = q.slice(0, 300);
-      document.getElementById('form').requestSubmit();
-    } });
+    // The typed text goes to Ask as the question. It leads the list
+    // (so Enter sends it) when no command matched, unless a place
+    // matched and the text does not read as a question.
+    const askCmd = { group: 'Ask', label: 'Ask: ' + q, hint: 'Assistant', keys: '', run: () => askAbout(q) };
+    const commands = palCmds.filter((c) => c.group !== 'Search results');
+    if (!commands.length && (!palPlaces.length || looksLikeQuestion(q))) palCmds.unshift(askCmd);
+    else palCmds.push(askCmd);
   }
   palSel = Math.min(palSel, Math.max(0, palCmds.length - 1));
   cpalList.replaceChildren();

@@ -140,3 +140,35 @@ def test_ask_has_retry_and_cancels_a_stale_answer():
     assert 'enterkeyhint="send"' in HTML
     assert "function askAbout(q)" in APP
     assert 'id="inspask"' in HTML or "inspask" in APP
+
+
+def test_palette_sends_typed_text_to_ask():
+    # Map v2 (2026-11): a question typed in the command palette goes to
+    # Ask as the question, by picking "Ask: ..." or by pressing Enter when
+    # no command matches (the Ask row leads then, so Enter runs it).
+    body = APP[APP.index("function renderPalette() {"):APP.index("function markPalette() {")]
+    assert "run: () => askAbout(q) }" in body
+    assert ("if (!commands.length && (!palPlaces.length || looksLikeQuestion(q))) "
+            "palCmds.unshift(askCmd);") in body
+    assert "else if (e.key === 'Enter') { e.preventDefault(); runPalette(palSel); }" in APP
+    ask = APP[APP.index("function askAbout(q) {"):]
+    ask = ask[:ask.index("\n}\n")]
+    assert "setTool('ask', { toggle: false, reveal: true });" in ask
+    assert "input.value = q.slice(0, 300);" in ask and "form.requestSubmit();" in ask
+
+
+def test_along_the_way_lists_every_stop_with_its_mile_and_arrival():
+    # Map v2 (2026-11): the strip had only the two ends; each stop on the
+    # route is now a row at its mile, numbered as in the editor, with an
+    # arrival time from the legs' own times (by distance without them).
+    assert "legTimes: trip.legs.map((l) => (l.summary && l.summary.time) || null)," in APP
+    assert "plannedRoute.stops = stops.map((s, k) => ({ n: k + 1, f: s.field }))" in APP
+    strip = APP[APP.index("function buildRouteStrip("):APP.index("function selectStrip(")]
+    assert "const km = along.at(s);" in strip
+    assert "meta = 'Stop ' + h.stop.n + ' · arrive about ' + clockTxtMs(h.eta);" in strip
+    assert "'<span class=\"rsend stop\" aria-hidden=\"true\">' + h.stop.n + '</span>'" in strip
+    # The arrows still step through reported items only.
+    assert "const stripHits = () => stripItems.map((x, i) => (x.m ? i : -1))" in APP
+    # The count sits on its own line under the label.
+    assert '<p class="rspos" id="rspos" aria-live="polite"></p>' in HTML
+    assert ".rshead .kicker { margin:0; white-space:nowrap }" in CSS

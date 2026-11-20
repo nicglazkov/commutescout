@@ -1276,7 +1276,10 @@ aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:130
 .rstrip[hidden] { display:none }
 .rshead { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px }
 .rsnav { display:flex; align-items:center; gap:2px }
-#rspos { font:400 11px var(--mono); color:var(--ink-3); margin-right:6px; font-variant-numeric:tabular-nums }
+.rshead .kicker { margin:0; white-space:nowrap }
+/* The count sits on its own line under the label, so neither wraps. */
+.rspos { margin:-2px 0 8px; font:400 12px/1.4 Inter; color:var(--ink-2); font-variant-numeric:tabular-nums }
+.rspos:empty { display:none }
 .rsnav button { width:28px; height:28px; display:grid; place-items:center; border:0; border-radius:8px;
   background:transparent; color:var(--ink-2); cursor:pointer }
 .rsnav button:hover:not(:disabled) { background:var(--surface-2); color:var(--ink) }
@@ -1303,6 +1306,8 @@ aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:130
 .rsend { width:14px; height:14px; margin-top:3px; border-radius:99px; background:var(--surface);
   border:3px solid var(--ink) }
 .rsend.b { background:var(--k-closure); border-color:var(--k-closure) }
+.rsend.stop { width:18px; height:18px; margin-top:1px; border:1.5px solid var(--ink-3); background:var(--surface-2);
+  display:grid; place-items:center; font:600 10px/1 Inter; color:var(--ink-2) }
 .rstxt { min-width:0; padding-bottom:10px }
 .rstxt b { display:block; font:500 13.5px/20px Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 .rstxt small { display:block; font:400 12px/1.4 Inter; color:var(--ink-2) }
