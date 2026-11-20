@@ -1,17 +1,28 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 
-// Self-hosted by Next's font optimizer at build time. This is the same
-// Inter family the map app self-hosts from /static/fonts/Inter-normal.woff2,
-// loaded here through next/font instead so the site build and dev server
-// don't depend on the Python app's static routes being reachable.
-const inter = Inter({
-  variable: "--font-inter",
+// Type: Geist for UI and display, Geist Mono for data (timestamps, counts,
+// URLs, labels). Both self-hosted by Next's font optimizer at build time,
+// so no request leaves the site for fonts. See site/DESIGN.md.
+const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
+  display: "swap",
 });
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+// Runs before first paint: applies the visitor's stored theme choice, or
+// the OS setting, as <html data-theme>. Without JavaScript the CSS media
+// query in globals.css does the same job, so this only prevents a flash
+// and makes the header's theme switch possible.
+const THEME_INIT = `(function(){try{var t=localStorage.getItem("cs-theme");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.dataset.theme=t}catch(e){}})();`;
 
 export const metadata: Metadata = {
   // Needed for og:image/twitter:image to resolve to an absolute URL: pages
@@ -74,8 +85,13 @@ const SITE_SCHEMA = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${geist.variable} ${geistMono.variable} h-full`}
+      suppressHydrationWarning
+    >
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <script
           type="application/ld+json"
           // SITE_SCHEMA is a build-time literal, so nothing user-supplied
@@ -106,7 +122,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             #main, the landmark below. */}
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-cs-navy focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cs-sky"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-cs-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-cs-accent-ink"
         >
           Skip to main content
         </a>

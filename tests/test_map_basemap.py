@@ -33,7 +33,8 @@ def test_the_styles_and_the_saved_choice_survive():
     assert "localStorage.getItem('cs-basemap')" in ASSIST
     assert "localStorage.setItem('cs-basemap', name)" in ASSIST
     # A saved choice that is no longer offered (Smooth, Light) falls back.
-    assert "if (!baseLayers[savedBase]) savedBase = CS_BASEMAP_DEFAULT;" in ASSIST
+    assert "if (!baseLayers[savedBase]) {" in ASSIST
+    assert "? 'Dark' : CS_BASEMAP_DEFAULT;" in ASSIST  # a dark page starts on Dark
     assert "map.removeLayer(baseOn);" in ASSIST  # one base layer at a time
 
 

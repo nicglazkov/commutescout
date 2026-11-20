@@ -47,6 +47,10 @@ export function TurnstileWidget({ sitekey }: { sitekey: string }) {
   const box = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | undefined>(undefined);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  // While the widget has failed to load, its frame is an empty box; hide it
+  // so the error line is not followed by a blank gap. Turnstile retries on
+  // its own, and a later success shows the box again.
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const el = box.current;
@@ -68,7 +72,9 @@ export function TurnstileWidget({ sitekey }: { sitekey: string }) {
         sitekey,
         "expired-callback": freshToken,
         "timeout-callback": freshToken,
+        callback: () => setFailed(false),
         "error-callback": () => {
+          setFailed(true);
           setStatus({
             kind: "error",
             text:
@@ -185,7 +191,7 @@ export function TurnstileWidget({ sitekey }: { sitekey: string }) {
       {status.kind === "sent" && (
         <div
           role="status"
-          className="border-cs-sky/40 bg-cs-sky/10 text-cs-ink rounded-xl border px-4 py-3 text-sm"
+          className="rounded-[var(--cs-radius-md)] border border-cs-ok/30 bg-cs-ok-soft px-4 py-3 text-sm text-cs-ink"
         >
           <span className="font-medium">Message sent.</span>{" "}
           {status.email
@@ -196,12 +202,12 @@ export function TurnstileWidget({ sitekey }: { sitekey: string }) {
       {status.kind === "error" && (
         <div
           role="alert"
-          className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800"
+          className="rounded-[var(--cs-radius-md)] border border-cs-closure/30 bg-cs-closure-soft px-4 py-3 text-sm text-cs-ink"
         >
           {status.text}
         </div>
       )}
-      <div ref={box} />
+      <div ref={box} hidden={failed} />
     </>
   );
 }

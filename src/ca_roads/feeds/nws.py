@@ -20,10 +20,17 @@ TIMEOUT_SECONDS = 10.0
 TTL_SECONDS = 300.0
 
 # Alert types that matter to a driver; everything else (beach hazards,
-# air quality) is noise in a road report.
+# air quality) is noise in a road report. The list began with western
+# hazards only, so a Hurricane or Tornado Warning (neither says "storm")
+# was dropped from every route east of the Rockies; it covers every
+# region's warnings now: hurricanes and tropical storms on the Gulf and
+# Atlantic, tornadoes on the Plains, extreme cold up north, tsunamis
+# and volcanic ash in Alaska and Hawaii.
 ROAD_EVENTS = (
     "winter", "snow", "blizzard", "ice", "freez", "wind", "dust", "flood",
     "fire weather", "red flag", "fog", "storm", "heat", "avalanche",
+    "hurricane", "tropical", "typhoon", "tornado", "cold", "smoke",
+    "tsunami", "ashfall", "volcan", "evacuation", "civil emergency",
 )
 
 _cache: dict[tuple[float, float], tuple[float, list[dict]]] = {}
@@ -178,9 +185,12 @@ async def hourly_forecast(
 
 
 # Forecast words that change a drive, worst first.
-DRIVING_HAZARDS = ("blizzard", "freezing", "ice", "sleet", "snow", "thunder",
-                   "fog", "heavy rain", "rain", "showers", "drizzle", "smoke",
-                   "dust", "wind")
+DRIVING_HAZARDS = ("hurricane", "tropical storm", "blizzard", "freezing", "ice",
+                   "sleet", "snow", "thunder", "fog", "heavy rain", "rain",
+                   "showers", "drizzle", "smoke", "dust", "wind")
+# The hazards that make a departure a bad pick whatever the drive time.
+SEVERE_HAZARDS = frozenset({"hurricane", "tropical storm", "blizzard",
+                            "freezing", "ice", "sleet", "snow"})
 
 
 def driving_hazard(period: dict) -> str | None:

@@ -284,6 +284,63 @@ def _is_mcp(scope) -> bool:
     return path == "/mcp" or path.startswith("/mcp/")
 
 
+# MCP traffic that is protocol, not work: the handshake, listings, pings
+# and notifications. Clients send a lot of it (mcp-remote probes the OAuth
+# discovery paths and the GET stream on every launch, and one app can
+# open several sessions at once), so it is not billed to the account's
+# tier bucket or daily count; a separate, generous per-account bucket
+# still bounds it.
+_FREE_MCP_METHODS = frozenset({
+    "initialize", "ping", "tools/list", "prompts/list", "resources/list",
+    "resources/templates/list", "logging/setLevel", "completion/complete",
+})
+_MAX_PEEK = 1_000_000
+
+
+async def metered(scope, receive):
+    """Whether a keyed request counts against the tier, plus a ``receive``
+    that replays any body read to decide. Tool calls on ``/mcp`` and every
+    ``/v1/tools/*`` call count; MCP protocol traffic (see
+    ``_FREE_MCP_METHODS``), non-POST requests under ``/mcp`` and the open
+    discovery paths do not. Anything unreadable counts."""
+    if not _is_mcp(scope):
+        return needs_key(scope), receive
+    if scope.get("method") != "POST" or scope.get("path") not in ("/mcp", "/mcp/"):
+        return False, receive
+    msgs, size = [], 0
+    while True:
+        m = await receive()
+        msgs.append(m)
+        if m.get("type") != "http.request":
+            break
+        size += len(m.get("body", b""))
+        if not m.get("more_body") or size > _MAX_PEEK:
+            break
+    pending = iter(msgs)
+
+    async def replay():
+        for m in pending:
+            return m
+        return await receive()
+
+    if size > _MAX_PEEK or msgs[-1].get("type") != "http.request" or msgs[-1].get("more_body"):
+        return True, replay
+    try:
+        data = json.loads(b"".join(m.get("body", b"") for m in msgs))
+    except ValueError:
+        return True, replay
+    for item in data if isinstance(data, list) else [data]:
+        if not isinstance(item, dict):
+            return True, replay
+        method = item.get("method")
+        if method is None:  # a client's response to the server
+            continue
+        if not isinstance(method, str) or not (
+                method in _FREE_MCP_METHODS or method.startswith("notifications/")):
+            return True, replay
+    return False, replay
+
+
 def _auth_error(scope, code: str, message: str, hint: str) -> tuple[int, list, bytes]:
     """A 401 that both kinds of client read. The REST bridge gets the
     API's envelope; the MCP transport gets a JSON-RPC error (what MCP
@@ -329,6 +386,8 @@ class ApiKeyMiddleware:
         # Same store the keys come from, so tests never reach Firestore.
         self.usage = apikeys.UsageMirror(lambda: self.resolver.store)
         self.buckets: dict[str, TokenBucket] = {}
+        # MCP protocol traffic (see ``metered``): bounded, not billed.
+        self.free_buckets: dict[str, TokenBucket] = {}
         # A bad key is answered here, before the address limiter, and a
         # fresh random key misses the resolver cache, so guessing used to
         # cost one store read per request with no ceiling. Each address
@@ -390,19 +449,32 @@ class ApiKeyMiddleware:
             return
         limits = apikeys.tier_limits(info["tier"])
         who = f"acct:{info['uid']}" if info.get("uid") else info["id"]
+        counts, receive = await metered(scope, receive)
+        if not counts:
+            free = self.free_buckets.get(who)
+            if free is None:
+                if len(self.free_buckets) > 10_000:
+                    self.free_buckets.clear()
+                free = self.free_buckets[who] = TokenBucket(240, 4.0)
+            if not free.allow():
+                await self._send_error(send, 429, "rate_limited",
+                                       "Too many connection requests for this account.",
+                                       "Reuse one MCP session instead of opening new ones.",
+                                       ((b"retry-after", b"2"),))
+                return
         bucket = self.buckets.get(who)
         if bucket is None:
             if len(self.buckets) > 10_000:
                 self.buckets.clear()
             bucket = self.buckets[who] = TokenBucket(
                 limits["burst"], limits["per_second"])
-        if not bucket.allow():
+        if counts and not bucket.allow():
             await self._send_error(send, 429, "rate_limited",
                                    "Too many requests at once for this account.",
                                    "Slow to the sustained rate for your tier.",
                                    ((b"retry-after", b"2"),))
             return
-        if not self.daily.allow(who, limits["daily"]):
+        if counts and not self.daily.allow(who, limits["daily"]):
             await self._send_error(
                 send, 429, "daily_limit",
                 f"This account's keys have used {limits['daily']} requests today (UTC).",
@@ -412,7 +484,7 @@ class ApiKeyMiddleware:
                  (b"ratelimit-remaining", b"0")))
             return
         remaining = max(0, limits["daily"] - self.daily.used(who))
-        if info.get("uid"):
+        if counts and info.get("uid"):
             self.usage.note(info["uid"], self.daily.day, self.daily.used(who),
                             limits["daily"], info["tier"])
         scope.setdefault("state", {})["api_key"] = info

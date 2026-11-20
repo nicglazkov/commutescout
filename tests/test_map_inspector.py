@@ -23,9 +23,12 @@ def test_alerts_pane_lists_the_view_under_the_counts():
     assert alerts.index('id="kpis"') < alerts.index('id="alertlist"')
 
 
-def test_popups_get_one_inspector_button_at_open_time():
+def test_popups_get_one_details_button_at_open_time():
     # Added on popupopen, never inside the builders: they stay untouched.
-    assert APP.count("'Show in inspector'") == 1
+    # The popup is a peek; its one button opens the details pane.
+    assert APP.count("btn.className = 'detbtn inspbtn';") == 1
+    assert "btn.innerHTML = 'Details <svg" in APP
+    assert "b.classList.add('peek')" in APP and ".leaflet-popup .peek .foot" in CSS
     assert "box.querySelector('.inspbtn')" in APP  # never twice on one popup
     builders = APP[APP.index("function popupFor(m, g)"):APP.index("function pointMarker")]
     assert "inspbtn" not in builders

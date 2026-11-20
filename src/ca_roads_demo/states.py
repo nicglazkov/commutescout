@@ -1372,8 +1372,10 @@ WZDX_FEEDS = {
            "https://511.idaho.gov/api/wzdx"),
     "wi": ("Wisconsin", "WisDOT", (42.4, -92.9, 47.1, -86.7),
            "https://511wi.gov/api/wzdx"),
-    "ny": ("New York", "511NY", (40.4, -79.8, 45.1, -71.8),
-           "https://511ny.org/api/wzdx"),
+    # New York left this registry in 2026-11: 511NY moved to the CARS
+    # platform, /api/wzdx now answers with the new site's HTML shell,
+    # and the platform's own WZDx endpoint wants a key. NY reads the
+    # public map's event layers instead (_fetch_ny).
     "in": ("Indiana", "INDOT", (37.7, -88.1, 41.8, -84.7),
            "https://in.carsprogram.org/carsapi_v1/api/wzdx"),
     "mnw": ("Minnesota", "MnDOT", (43.4, -97.3, 49.4, -89.4),
@@ -1578,11 +1580,104 @@ async def _fetch_il(client) -> dict:
     return {"markers": markers + _keep_cameras("il", cameras)}
 
 
+ALGO_BASE = "https://api.algotraffic.com/v4.0"
+AL_SRC = "ALGO Traffic (ALDOT)"
+
+
+def _al_loc(loc: dict | None) -> tuple[float | None, float | None]:
+    loc = loc or {}
+    return loc.get("latitude"), loc.get("longitude")
+
+
+def _al_events(events: list[dict], now: float | None = None) -> list[dict]:
+    """ALGO TrafficEvents to incident and closure markers. Roadwork is a
+    closure from its start to its end location; crashes and other
+    incidents are points. Rest-area and welcome-center "Facility" rows
+    are not on the road and are left out, as is anything not in effect
+    right now (ALGO lists planned work ahead of its start)."""
+    now = time.time() if now is None else now
+    out: list[dict] = []
+    for e in events or []:
+        if e.get("active") is False:
+            continue
+        since, until = _iso_epoch(e.get("start")), _iso_epoch(e.get("end"))
+        if (since and since > now) or (until and until < now):
+            continue
+        etype = (e.get("type") or "").strip()
+        if etype == "Facility":
+            continue
+        start, end = e.get("startLocation") or {}, e.get("endLocation") or {}
+        lat, lon = _al_loc(start)
+        if not lat or not lon:
+            continue
+        title = (e.get("title") or etype or "Incident").strip()
+        where = (e.get("subTitle") or "").strip()
+        desc = (e.get("description") or "").strip()
+        label = " - ".join(x for x in (title, where) if x)[:220]
+        route = start.get("displayRouteDesignator") or None
+        if etype == "Roadwork":
+            m = {"kind": "lane_closure", "lat": lat, "lon": lon,
+                 "cls": ("full-roadway" if e.get("severity") == "Closed"
+                         else "lane"),
+                 "label": label or "Roadwork", "route": route,
+                 "src": AL_SRC, "since": since, "until": until}
+            elat, elon = _al_loc(end)
+            if elat and elon and (elat, elon) != (lat, lon):
+                m["path"] = [[lat, lon], [elat, elon]]
+                m["end"] = [elat, elon]
+            if desc:
+                m["detail"] = desc[:250]
+            out.append(m)
+        else:
+            out.append({"kind": "incident", "lat": lat, "lon": lon,
+                        "type": title, "label": label or title,
+                        "route": route, "src": AL_SRC,
+                        **({"detail": desc[:250]} if desc else {})})
+    return out
+
+
+def _al_signs(signs: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    for s in signs or []:
+        loc = s.get("location") or {}
+        lat, lon = _al_loc(loc)
+        if not lat or not lon:
+            continue
+        lines = [ln.get("text").strip()
+                 for page in s.get("pages") or []
+                 for ln in page.get("lines") or []
+                 if (ln.get("text") or "").strip()][:6]
+        m = {"kind": "sign", "lat": lat, "lon": lon,
+             "route": loc.get("displayRouteDesignator"),
+             "direction": loc.get("direction"),
+             "near": " at ".join(x for x in (
+                 loc.get("displayRouteDesignator"),
+                 loc.get("displayCrossStreet")) if x) or "Message sign",
+             "message": " / ".join(lines), "lines": lines, "src": AL_SRC}
+        if not lines:
+            m["blank"] = True
+        out.append(m)
+    return out
+
+
 async def _fetch_al(client) -> dict:
-    """Alabama ALGO Traffic cameras (snapshots + camera pages)."""
-    cams = (await client.get("https://api.algotraffic.com/v4.0/cameras",
-                             headers=UA, timeout=30.0)).json()
-    markers: list[dict] = []
+    """Alabama ALGO Traffic (ALDOT's keyless public API): live traffic
+    events (crashes, incidents, roadwork with start and end points),
+    cameras with snapshots and camera pages, and message signs. Until
+    2026-11 only the cameras were read, so Alabama answered every event
+    question with nothing."""
+    async def get_json(path: str):
+        resp = await client.get(f"{ALGO_BASE}/{path}", headers=UA,
+                                timeout=30.0)
+        resp.raise_for_status()
+        return resp.json()
+
+    events, cams = await asyncio.gather(get_json("TrafficEvents"),
+                                        get_json("cameras"))
+    signs: list = []
+    with contextlib.suppress(Exception):
+        signs = await get_json("MessageSigns")
+    markers: list[dict] = _al_events(events) + _al_signs(signs)
     for c in cams or []:
         loc = c.get("location") or {}
         lat, lon = loc.get("latitude"), loc.get("longitude")
@@ -1602,7 +1697,7 @@ async def _fetch_al(client) -> dict:
             "route": loc.get("routeDesignator"),
             "direction": loc.get("direction"),
             "near": loc.get("city"),
-            "src": "ALGO Traffic (ALDOT)",
+            "src": AL_SRC,
             "image": snap, "stream": c.get("permLink"),
         })
     return {"markers": markers}
@@ -1648,16 +1743,21 @@ async def _fetch_mi(client) -> dict:
     AllForMap metadata by id); one request, not one per camera. Signs
     still carry no message text in any bulk feed."""
     base = "https://mdotjboss.state.mi.us/MiDrive"
-    inc = (await client.get(f"{base}/incidents/AllForMap/", headers=UA,
-                            timeout=30.0)).json()
-    con = (await client.get(f"{base}/construction/AllForMap/", headers=UA,
-                            timeout=30.0)).json()
+
+    async def get_json(path: str):
+        # No trailing slash: MiDrive moved to Spring 6, which stopped
+        # matching "AllForMap/" to "AllForMap". Every request 404'd and
+        # Michigan was empty for weeks while its status read "live".
+        resp = await client.get(f"{base}/{path}", headers=UA, timeout=30.0)
+        resp.raise_for_status()
+        return resp.json()
+
+    inc = await get_json("incidents/AllForMap")
+    con = await get_json("construction/AllForMap")
     cam_meta, cam_rows = [], []
     with contextlib.suppress(Exception):
-        cam_meta = (await client.get(f"{base}/camera/AllForMap/",
-                                     headers=UA, timeout=30.0)).json()
-        cam_rows = (await client.get(f"{base}/camera/list",
-                                     headers=UA, timeout=30.0)).json()
+        cam_meta = await get_json("camera/AllForMap")
+        cam_rows = await get_json("camera/list")
     img_by_id: dict[str, str] = {}
     for row in cam_rows or []:
         blob = " ".join(str(v) for v in row.values() if isinstance(v, str))
@@ -1822,9 +1922,123 @@ async def _fetch_tn(client) -> dict:
     return {"markers": markers}
 
 
+NY_BOUNDS = (40.4, -79.8, 45.1, -71.8)
+NY_EVENTS_URL = "https://api-511x-nysdot.carsprogram.org/events/map-features"
+NY_SRC = "511NY"
+_NY_FULL = re.compile(r"road closed|all lanes closed|closed in both",
+                      re.IGNORECASE)
+
+
+def _ny_points(geom: dict | None) -> list[list[float]]:
+    """[lon, lat] pairs from any GeoJSON point or line geometry."""
+    geom = geom or {}
+    gtype, coords = geom.get("type"), geom.get("coordinates") or []
+    if gtype == "Point":
+        coords = [coords]
+    elif gtype == "MultiLineString":
+        coords = [c for line in coords for c in (line or [])]
+    elif gtype not in ("LineString", "MultiPoint"):
+        return []
+    return [c for c in coords if isinstance(c, list | tuple) and len(c) >= 2
+            and isinstance(c[0], int | float) and isinstance(c[1], int | float)]
+
+
+def _parse_ny(layers: dict[str, list[dict]]) -> list[dict]:
+    """511NY map features (one list per event classification) to
+    markers. Only events in effect now ship: the layers also carry
+    scheduled work that has not started (``active`` false). An event
+    listed under two classifications is drawn once."""
+    seen: set[str] = set()
+    out: list[dict] = []
+    for cls_name in ("incidents", "closures", "construction"):
+        for feat in layers.get(cls_name) or []:
+            props = feat.get("properties") or {}
+            if not props.get("active"):
+                continue
+            eid = str(props.get("id") or "")
+            if eid and eid in seen:
+                continue
+            pts = _ny_points(feat.get("geometry"))
+            if not pts:
+                continue
+            seen.add(eid)
+            lon, lat = float(pts[0][0]), float(pts[0][1])
+            report = (props.get("eventReport") or {}).get(
+                "eventDescription") or {}
+            tooltip = re.sub(r"\s+", " ", props.get("tooltip")
+                             or props.get("title") or "").strip()
+            detail = re.sub(r"\s+", " ", _TAG_RE.sub(
+                " ", props.get("description") or "")).strip()
+            headline = (report.get("headlinePhrase") or "").strip()
+            route = props.get("route") or None
+            if cls_name == "incidents":
+                m = {"kind": "incident", "lat": lat, "lon": lon,
+                     "type": headline or tooltip.split(": ", 1)[-1].rstrip(".")
+                     or "Incident",
+                     "label": tooltip[:220] or "Incident",
+                     "route": route, "src": NY_SRC}
+            else:
+                full = _NY_FULL.search(" ".join((tooltip, headline, detail)))
+                m = {"kind": "lane_closure", "lat": lat, "lon": lon,
+                     "cls": "full-roadway" if full else "lane",
+                     "label": tooltip[:220] or "Roadwork",
+                     "route": route, "src": NY_SRC}
+                if len(pts) > 1:
+                    step = max(1, len(pts) // 60)
+                    path = [[round(c[1], 5), round(c[0], 5)]
+                            for c in pts[::step]]
+                    last = [round(pts[-1][1], 5), round(pts[-1][0], 5)]
+                    if path[-1] != last:
+                        path.append(last)
+                    m["path"], m["end"] = path, path[-1]
+            if detail:
+                m["detail"] = detail[:250]
+            out.append(m)
+    return out
+
+
+async def _fetch_ny(client) -> dict:
+    """New York via 511NY's public map layers (keyless GeoJSON from the
+    CARS platform the site moved to in 2026-11): incidents, closures
+    and construction in effect now. Construction runs ~5 MB, so the
+    parse runs off the event loop."""
+    async def layer(name: str) -> bytes:
+        # The gateway throws the odd 502 between good answers; one retry
+        # keeps a blip from blanking the whole state for a cycle.
+        for attempt in (0, 1):
+            resp = await client.get(NY_EVENTS_URL, headers=UA, timeout=45.0,
+                                    params={"eventClassifications": name})
+            if resp.status_code < 500 or attempt:
+                break
+            await asyncio.sleep(1.0)
+        resp.raise_for_status()
+        return resp.content
+
+    names = ("incidents", "closures", "construction")
+    raw = await asyncio.gather(*(layer(n) for n in names))
+
+    def parse() -> list[dict]:
+        layers = {}
+        for name, body in zip(names, raw, strict=True):
+            payload = json.loads(body)
+            if not isinstance(payload, dict) or not isinstance(
+                    payload.get("features"), list):
+                raise ValueError(f"511NY {name}: not a feature collection")
+            layers[name] = payload["features"]
+        return _parse_ny(layers)
+
+    return {"markers": await asyncio.to_thread(parse)}
+
+
 async def _fetch_ms(client) -> dict:
     """Mississippi MDOT Traffic alerts (keyless WebMethod POST):
-    construction and incident markers with human tooltips."""
+    construction and incident markers with human tooltips.
+
+    Since 2026-11 mdottraffic.com mostly answers 403 to production's
+    requests from Google Cloud (the same request from a residential
+    address succeeds), with short spells where it works. Until MDOT
+    allows the service, /api/sources reports it down or stale, not
+    "live"."""
     resp = await client.post(
         "https://www.mdottraffic.com/default.aspx/LoadAlertData",
         headers={**UA, "Content-Type": "application/json; charset=utf-8"},
@@ -1856,13 +2070,16 @@ FL_BOUNDS = (24.3, -87.7, 31.1, -79.8)
 FL_DIVAS_BASE = "https://gis.fdot.gov/arcgis/rest/services"
 
 
-async def _fl_layer(client, service: str, cap: int = 6000) -> list[dict]:
-    """One DIVAS FeatureServer layer, paged (server max is below the
-    camera count)."""
+async def _fl_layer(client, service: str, cap: int = 6000,
+                    server: str = "FeatureServer") -> list[dict]:
+    """One DIVAS layer, paged (server max is below the camera count).
+    Attribute names come back lower-cased: the same data has shipped as
+    ``descriptionen`` and as ``DescriptionEn`` depending on the service
+    type."""
     out: list[dict] = []
     for offset in range(0, cap, 2000):
         resp = await client.get(
-            f"{FL_DIVAS_BASE}/{service}/FeatureServer/0/query",
+            f"{FL_DIVAS_BASE}/{service}/{server}/0/query",
             headers=UA, timeout=30.0, params={
                 "where": "1=1", "outFields": "*", "returnGeometry": "true",
                 "outSR": 4326, "f": "json",
@@ -1873,6 +2090,9 @@ async def _fl_layer(client, service: str, cap: int = 6000) -> list[dict]:
         if "error" in payload:
             raise RuntimeError(f"DIVAS {service}: {payload['error']}")
         feats = payload.get("features") or []
+        for f in feats:
+            f["attributes"] = {str(k).lower(): v for k, v in
+                               (f.get("attributes") or {}).items()}
         out.extend(feats)
         if len(feats) < 2000:
             break
@@ -1883,9 +2103,17 @@ async def _fetch_fl(client) -> dict:
     """Florida via FDOT's keyless DIVAS ArcGIS layers: the same live
     events FL511 shows, 4,900+ cameras with still images, and message
     boards. FL511's own API is agreement-gated; this is FDOT's public
-    distribution of the same SunGuide data."""
+    distribution of the same SunGuide data.
+
+    Since 2026-11 gis.fdot.gov sits behind an Azure WAF that answers 403
+    to this client's User-Agent (a browser's passes). This is not worked
+    around: until FDOT allows the feed client, the fetch fails and
+    /api/sources says Florida DIVAS is down rather than "live"."""
+    # Events left the FeatureServer in 2026 ("Server object extension
+    # 'featureserver' not found"); the same layer is served as a
+    # MapServer. Cameras and message boards are still FeatureServers.
     events, cams, dms = await asyncio.gather(
-        _fl_layer(client, "DIVAS_GetEvent", cap=2000),
+        _fl_layer(client, "DIVAS_GetEvent", cap=2000, server="MapServer"),
         _fl_layer(client, "DIVAS_Cameras"),
         _fl_layer(client, "DIVAS_MessageBoard", cap=2000))
     markers: list[dict] = []
@@ -2095,6 +2323,7 @@ KEYLESS_STATES = {
     "tn": ("Tennessee", TN_BOUNDS, _fetch_tn),
     "ms": ("Mississippi", MS_BOUNDS, _fetch_ms),
     "fl": ("Florida", FL_BOUNDS, _fetch_fl),
+    "ny": ("New York", NY_BOUNDS, _fetch_ny),
     "usf": ("Nationwide", US_BOUNDS, _fetch_us_fires),
 }
 
@@ -2748,39 +2977,79 @@ async def _prewarm_all(client) -> None:
 _STATE_NAMES = {"me": "Maine", "nh": "New Hampshire", "vt": "Vermont"}
 
 
+def _feed_error(key: str) -> str | None:
+    """The last fetch error for a cache key, with any query string (API
+    keys ride in some) cut off."""
+    err = _cache._errors.get(key)  # noqa: SLF001 - read-only peek
+    return re.sub(r"\?[^\s']*", "?...", err)[:160] if err else None
+
+
 def _status_entry(key: str, name: str, agency: str, state: str) -> dict:
+    """One /api/sources row from the cache, without forcing a fetch.
+
+    A feed whose every fetch has failed has no cache entry, and that
+    used to read as "on demand" (status "live"): 511NY, MiDrive, FDOT,
+    Mississippi and VDOT all sat in the panel as healthy while not one
+    of their records reached the map. A recorded error with nothing to
+    serve is a down feed; an error behind a still-served copy is stale.
+    """
     entry = _cache._entries.get(key)  # noqa: SLF001 - read-only peek
-    return {
-        "name": name, "agency": agency, "state": state,
-        "on_demand": entry is None,
-        **({"ok": True, "stale": False,
-            "count": len(entry.value["markers"]),
-            "as_of": entry.fetched_at.isoformat()} if entry else {}),
-    }
+    error = _feed_error(key)
+    row = {"name": name, "agency": agency, "state": state,
+           "on_demand": entry is None and error is None}
+    if entry is not None:
+        row.update(ok=True, stale=error is not None,
+                   count=len(entry.value["markers"]),
+                   as_of=entry.fetched_at.isoformat())
+    elif error is not None:
+        row.update(ok=False, stale=False, count=0, as_of=None)
+    if error is not None:
+        row["error"] = error
+    return row
 
 
-def _expected_keys() -> list[str]:
+def _expected_keys(box=None, want=None) -> list[str]:
     """Cache keys the boot path depends on (camera bundles excluded:
-    they load in the heavy phase and never gate first paint)."""
-    keys = [f"nec:{c}" for c in NEC_STATES]
-    keys += [f"wzdx:{c}" for c in WZDX_FEEDS if not _wzdx_superseded(c)]
-    keys += [f"{c}:all" for c in KEYLESS_STATES]
-    keys += [f"{c}:all" for c, (_n, _b, _f, ready) in KEYED_STATES.items()
-             if ready()]
-    keys += [f"toll:{c}" for c, (_s, _b, _f, ready, _t)
-             in TOLL_SOURCES.items() if not ready or ready()]
+    they load in the heavy phase and never gate first paint). With
+    ``box`` (and ``want``), only the feeds a lookup of that box for
+    those kinds would fetch."""
+    def near(bounds) -> bool:
+        return box is None or _overlaps(box, bounds)
+
+    keys = [f"nec:{c}" for c, (_n, _a, b) in NEC_STATES.items() if near(b)]
+    keys += [f"wzdx:{c}" for c, (_s, _l, b, _u) in WZDX_FEEDS.items()
+             if not _wzdx_superseded(c) and near(b)]
+    keys += [f"{c}:all" for c, (_n, b, _f) in KEYLESS_STATES.items()
+             if near(b)]
+    keys += [f"{c}:all" for c, (_n, b, _f, ready) in KEYED_STATES.items()
+             if ready() and near(b)]
+    keys += [f"toll:{c}" for c, (_s, b, _f, ready, _t)
+             in TOLL_SOURCES.items() if (not ready or ready()) and near(b)
+             and (want is None or "toll" in want)]
     return keys
 
 
-def warm_progress() -> tuple[int, int]:
+def warm_progress(box=None, want=None) -> tuple[int, int]:
     """(feeds cached, feeds expected): lets the page show real warm-up
     progress on a fresh instance instead of an unexplained wait. Once
     the boot prewarm finishes, warm-up is reported complete even if
-    some feeds failed: their absence is an outage, not a wait."""
-    keys = _expected_keys()
+    some feeds failed: their absence is an outage, not a wait.
+
+    ``box`` limits the count to the feeds that box touches. A process
+    that never prewarms (the MCP server building its own markers when
+    the snapshot is unavailable) only ever fetches the states its
+    question touches, so counting the whole country there reads as
+    "still loading" forever."""
+    keys = _expected_keys(box, want)
     if _PREWARM_DONE:
         return len(keys), len(keys)
-    ready = sum(1 for k in keys if k in _cache._entries)  # noqa: SLF001
+    # A feed that has answered with an error is settled too: waiting on
+    # it would hold every map build "warming" until the boot prewarm
+    # finishes, and forever in a process that never runs one (the MCP
+    # server's own fallback build, which then told every plan_trip that
+    # "some state feeds were still loading").
+    ready = sum(1 for k in keys if k in _cache._entries  # noqa: SLF001
+                or k in _cache._errors)  # noqa: SLF001
     return ready, len(keys)
 
 
@@ -2835,7 +3104,9 @@ def coverage_areas() -> list[dict]:
 
 def coverage_summary() -> dict:
     """How many sources and states are live right now (topbar text)."""
-    entries = source_status()
+    # A feed that is down right now delivers nothing, so it is not a
+    # live source and a state whose only feeds are down is not covered.
+    entries = [e for e in source_status() if e.get("ok") is not False]
     states_set = {_state_key(e["state"]) for e in entries if e.get("state")
                   not in (None, "Nationwide")}
     states_set.update({"California", "Nevada"})
@@ -2866,6 +3137,7 @@ def source_status() -> list[dict]:
                                   "tn": "TDOT SmartWay",
                                   "ms": "MDOT Traffic (MS)",
                                   "fl": "FDOT DIVAS",
+                                  "ny": "511NY",
                                   "usf": "WFIGS wildfires"}[code], st))
     for code, (name, _bounds, _fetcher, ready) in KEYED_STATES.items():
         if not ready():

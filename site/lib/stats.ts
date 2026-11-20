@@ -9,3 +9,7 @@
 // Python backend and this Next.js site.
 export const AGENCY_FEED_COUNT = 53;
 export const STATE_COUNT = 37;
+// Toll-price feeds (WSDOT toll rates, 511 SF Bay tolls, NTTA, HCTRA and the
+// posted Bay Area bridge tolls) are listed on their own, not in the agency
+// feed count above: /api/sources shows 58 = 53 agency feeds + these 5.
+export const TOLL_FEED_COUNT = 5;

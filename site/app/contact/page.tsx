@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ArrowUpRight, Bug, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, Bug, Mail, ShieldAlert } from "lucide-react";
 
 import { TurnstileWidget } from "@/components/turnstile-widget";
 import { FormNotice } from "@/components/form-notice";
@@ -34,164 +34,119 @@ export const metadata: Metadata = {
 // still has a working form even though this widget errors quietly.
 const TURNSTILE_SITEKEY = "0x4AAAAAAEOZmJkCus9gRJcl";
 
-// "Other ways to reach us" cards. Icons are generic lucide glyphs (bug
-// report, security shield, external-link arrow) chosen for the visual
-// engagement pass - no brand marks, no new copy. Link destinations and
-// visible text are unchanged from the plain-list version this replaces.
+// Other ways to reach us. Same destinations and text as before, plus the
+// plain address for anyone who would rather write directly.
 const OTHER_WAYS = [
+  {
+    icon: Mail,
+    href: "mailto:hello@commutescout.com",
+    text: "Email hello@commutescout.com",
+    note: "Pro, partnerships and anything else.",
+  },
   {
     icon: Bug,
     href: "https://github.com/nicglazkov/commutescout/issues",
     text: "Found a bug? Open a GitHub issue.",
+    note: "Public, so others can see it too.",
   },
   {
     icon: ShieldAlert,
     href: "https://github.com/nicglazkov/commutescout/security/advisories/new",
     text: "Security issue? Report it privately.",
+    note: "A private GitHub security advisory.",
   },
 ];
 
+const field =
+  "mt-2 block w-full rounded-[var(--cs-radius-md)] border border-cs-line-strong bg-cs-surface px-3.5 text-[0.9375rem] text-cs-ink placeholder:text-cs-ink-3 transition-colors duration-150 hover:border-cs-ink-3";
+
 export default function ContactPage() {
   return (
-    <>
-      {/* Navy header band, matching the /mcp and homepage developer-band
-          treatment (bg-cs-navy text-white). Heading and subtitle text are
-          unchanged from the previous plain layout. */}
-      <section className="bg-cs-navy text-white">
-        <div className="mx-auto max-w-5xl px-6 py-14 md:py-20">
-          <h1 className="text-balance text-4xl font-medium tracking-tight lg:text-5xl">
-            Contact
-          </h1>
-          <p className="text-white/70 mt-4 max-w-xl text-balance">
+    <section className="cs-container pb-20 pt-14 md:pb-28 md:pt-20">
+      <div className="grid gap-14 lg:grid-cols-12 lg:gap-10">
+        <div className="lg:col-span-5">
+          <h1 className="cs-display cs-rise">Contact</h1>
+          <p className="cs-lede cs-rise mt-6 max-w-[30rem] [animation-delay:120ms]">
             Send a message and the CommuteScout team will get back to you.
           </p>
-        </div>
-      </section>
 
-      <section className="py-16 md:py-20">
-        <div className="mx-auto max-w-5xl px-6">
-          <div className="grid gap-12 md:grid-cols-[3fr_2fr] md:gap-10 lg:gap-16">
-            <div>
-              {/* Plain form POST to /api/contact (Task 11, form-encoded name,
-                  email, message): no JS submission handler. The endpoint returns a
-                  plain-text response rather than a redirect, so a no-JS submission
-                  lands on a plain "Thanks. Your message is on its way." page; that
-                  is the accepted v1 behavior, matching the pricing page's waitlist
-                  form. Fields, attributes, the honeypot, and the action are
-                  unchanged from the previous layout - only the surrounding grid
-                  and vertical rhythm changed. */}
-              <form method="post" action="/api/contact" className="space-y-5">
+          <h2 className="mt-14 text-sm font-medium text-cs-ink">Other ways to reach us</h2>
+          <ul className="mt-3 border-t border-cs-line">
+            {OTHER_WAYS.map(({ icon: Icon, href, text, note }) => (
+              <li key={href} className="border-b border-cs-line">
+                <a href={href} className="group flex items-start gap-3.5 py-4">
+                  <Icon aria-hidden className="mt-0.5 size-[18px] shrink-0 text-cs-ink-2 transition-colors group-hover:text-cs-accent" strokeWidth={1.75} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[0.9375rem] font-medium text-cs-ink group-hover:text-cs-accent">{text}</span>
+                    <span className="mt-0.5 block text-sm text-cs-ink-3">{note}</span>
+                  </span>
+                  <ArrowUpRight aria-hidden className="mt-0.5 size-4 shrink-0 text-cs-ink-3 transition-transform duration-150 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-cs-accent" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="lg:col-span-6 lg:col-start-7">
+          <div className="rounded-[var(--cs-radius-lg)] border border-cs-line bg-cs-surface p-6 shadow-[var(--cs-shadow-sm)] sm:p-8">
+            {/* Plain form POST to /api/contact (name, email, message). A
+                browser post comes back here with ?notice=<key>. */}
+            <form method="post" action="/api/contact" className="space-y-5">
+              <div className="grid gap-5 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="name" className="text-cs-ink text-sm font-medium">
+                  <label htmlFor="name" className="text-sm font-medium text-cs-ink">
                     Name
                   </label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    autoComplete="name"
-                    required
-                    maxLength={80}
-                    className="border-cs-line bg-cs-paper text-cs-ink placeholder:text-cs-ink/40 focus:ring-cs-sky mt-1.5 w-full rounded-lg border px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2"
-                  />
+                  <input type="text" id="name" name="name" autoComplete="name" required maxLength={80} className={`${field} h-11`} />
                 </div>
-
                 <div>
-                  <label htmlFor="email" className="text-cs-ink text-sm font-medium">
+                  <label htmlFor="email" className="text-sm font-medium text-cs-ink">
                     Email
                   </label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    autoComplete="email"
-                    required
-                    placeholder="you@example.com"
-                    className="border-cs-line bg-cs-paper text-cs-ink placeholder:text-cs-ink/40 focus:ring-cs-sky mt-1.5 w-full rounded-lg border px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2"
-                  />
+                  <input type="email" id="email" name="email" autoComplete="email" required placeholder="you@example.com" className={`${field} h-11`} />
                 </div>
+              </div>
 
-                <div>
-                  <label htmlFor="message" className="text-cs-ink text-sm font-medium">
-                    Message
-                  </label>
-                  <textarea
-                    id="message"
-                    name="message"
-                    required
-                    maxLength={2000}
-                    rows={6}
-                    className="border-cs-line bg-cs-paper text-cs-ink placeholder:text-cs-ink/40 focus:ring-cs-sky mt-1.5 w-full rounded-lg border px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2"
-                  />
-                </div>
+              <div>
+                <label htmlFor="message" className="text-sm font-medium text-cs-ink">
+                  Message
+                </label>
+                <textarea id="message" name="message" required maxLength={2000} rows={7} className={`${field} resize-y py-3 leading-relaxed`} />
+                <p className="mt-1.5 text-xs text-cs-ink-3">Up to 2,000 characters.</p>
+              </div>
 
-                {/* Honeypot: hidden from sighted users and assistive tech, skipped
-                    in tab order. The endpoint returns success without sending if
-                    this is filled, same as the pricing page's waitlist form. */}
-                <input
-                  type="text"
-                  name="website"
-                  tabIndex={-1}
-                  autoComplete="off"
-                  className="hidden"
-                  aria-hidden="true"
-                />
+              {/* Honeypot: hidden, skipped in tab order. The endpoint
+                  returns success without sending if this is filled. */}
+              <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
 
-                {/* Turnstile bot check, rendered post-hydration by the
-                    client component (see turnstile-widget.tsx for why
-                    the implicit script-tag mode broke on fast reloads).
-                    Managed mode is invisible for most visitors, so
-                    reserving no layout height is deliberate: the widget
-                    only grows when a visitor is actually challenged. No
-                    SRI hash on the loader: Cloudflare rolls it
-                    continuously, so pinning would break the widget on
-                    their next release (same reasoning as the Firebase
-                    SDK imports). */}
-                <TurnstileWidget sitekey={TURNSTILE_SITEKEY} />
+              {/* Turnstile bot check, rendered after hydration by the
+                  client component (see turnstile-widget.tsx). Managed
+                  mode is invisible for most visitors, so no height is
+                  reserved. The server only enforces it when
+                  TURNSTILE_SECRET_KEY is set. */}
+              <TurnstileWidget sitekey={TURNSTILE_SITEKEY} />
 
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-cs-line pt-5">
+                <p className="text-sm text-cs-ink-3">We read every message.</p>
                 <button
                   type="submit"
-                  className="bg-cs-sky hover:bg-cs-sky/90 rounded-full px-5 py-2.5 text-sm font-medium text-white transition-colors"
+                  className="inline-flex h-11 items-center rounded-[var(--cs-radius-md)] bg-cs-accent px-5 text-[0.9375rem] font-medium text-cs-accent-ink shadow-[var(--cs-shadow-sm)] transition-colors duration-150 hover:bg-cs-accent-hover"
                 >
                   Send message
                 </button>
-              </form>
-              <FormNotice
-                messages={{
-                  sent: { ok: true, text: "Message sent. We will get back to you soon." },
-                  invalid: { ok: false, text: "Name, a valid email, and a message are required." },
-                  verify: { ok: false, text: "The bot check did not pass. Please try again." },
-                  failed: { ok: false, text: "Sending failed. Please try again in a minute." },
-                }}
-              />
-            </div>
-
-            {/* "Other ways to reach us" card: page-owned markup pairing the
-                two links that used to sit below the form as a plain list.
-                Link destinations and visible text are byte-for-byte the
-                same; only the presentation (card, icon, hover state) is
-                new. */}
-            <div className="border-cs-line bg-cs-paper h-fit rounded-2xl border p-6 lg:p-8">
-              <h2 className="text-cs-ink text-lg font-medium">
-                Other ways to reach us
-              </h2>
-              <div className="mt-5 space-y-3">
-                {OTHER_WAYS.map(({ icon: Icon, href, text }) => (
-                  <a
-                    key={href}
-                    href={href}
-                    className="group border-cs-line hover:border-cs-sky hover:bg-cs-sky/5 flex items-start gap-3 rounded-xl border p-4 transition-colors"
-                  >
-                    <Icon className="text-cs-sky mt-0.5 size-5 shrink-0" />
-                    <span className="text-cs-ink text-sm font-medium">{text}</span>
-                    <ArrowUpRight className="text-cs-ink/30 group-hover:text-cs-sky ml-auto mt-0.5 size-4 shrink-0 transition-colors" />
-                  </a>
-                ))}
               </div>
-            </div>
+            </form>
+            <FormNotice
+              messages={{
+                sent: { ok: true, text: "Message sent. We will get back to you soon." },
+                invalid: { ok: false, text: "Name, a valid email, and a message are required." },
+                verify: { ok: false, text: "The bot check did not pass. Please try again." },
+                failed: { ok: false, text: "Sending failed. Please try again in a minute." },
+              }}
+            />
           </div>
         </div>
-      </section>
-    </>
+      </div>
+    </section>
   );
 }

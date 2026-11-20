@@ -4,33 +4,33 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 // Source: Tailark OSS registry, Dusk kit, dusk-button
-// (https://oss.tailark.com/r/dusk-button.json). Adapted: every color class
-// now points at the shared --cs-* tokens (src/ca_roads_demo/static/tokens.css)
-// instead of the kit's own --primary/--secondary/--destructive/etc. slots.
-// The "destructive" variant was dropped; this is a marketing site with no
-// delete-style actions.
+// (https://oss.tailark.com/r/dusk-button.json). Restyled to the Clear Coat
+// tokens (app/globals.css, site/DESIGN.md): 10px radius, the one accent
+// for primary, hairline outline, quiet ghost. No destructive variant; this
+// is a marketing site with no delete-style actions.
 const buttonVariants = cva(
-  "cursor-pointer inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cs-sky disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none active:scale-98 duration-200 [&_svg]:size-4 [&_svg]:shrink-0",
+  "cursor-pointer inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--cs-radius-md)] text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-[var(--cs-ease)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cs-accent disabled:pointer-events-none disabled:opacity-50 active:translate-y-px [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-cs-sky text-white shadow-sm shadow-cs-navy/10 hover:bg-cs-sky/90",
+        default:
+          "bg-cs-accent text-cs-accent-ink shadow-[var(--cs-shadow-sm)] hover:bg-cs-accent-hover",
         outline:
-          "bg-cs-ink/5 shadow-sm shadow-cs-navy/10 ring-1 ring-cs-line duration-200 hover:bg-cs-line/50",
-        secondary: "bg-cs-navy text-white hover:bg-cs-navy/90",
-        ghost: "hover:bg-cs-ink/6 hover:text-cs-navy",
-        link: "text-cs-sky underline-offset-4 hover:underline",
+          "border border-cs-line-strong bg-cs-surface text-cs-ink shadow-[var(--cs-shadow-sm)] hover:bg-cs-surface-2",
+        secondary: "bg-cs-surface-2 text-cs-ink hover:bg-cs-inset",
+        ghost: "text-cs-ink-2 hover:bg-cs-surface-2 hover:text-cs-ink",
+        link: "text-cs-accent underline-offset-4 hover:underline",
       },
       size: {
         default:
-          "h-9 px-4 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5",
-        xs: "h-6 px-2 text-xs has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 px-3 text-[0.8rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-10 px-5 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
-        icon: "size-9",
+          "h-10 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        xs: "h-6 rounded-[var(--cs-radius-sm)] px-2 text-xs [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-8 rounded-[var(--cs-radius-sm)] px-3 text-[0.8125rem] [&_svg:not([class*='size-'])]:size-3.5",
+        lg: "h-11 px-5 text-[0.9375rem] has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
+        icon: "size-10",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3",
         "icon-sm": "size-8",
-        "icon-lg": "size-10",
+        "icon-lg": "size-11",
       },
     },
     defaultVariants: {

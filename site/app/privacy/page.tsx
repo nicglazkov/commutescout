@@ -1,43 +1,29 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import type { ReactNode } from "react";
 
-// Privacy page (Task 10 brief): ported into the site shell from the
-// pre-reskin src/ca_roads_demo/static/privacy.html. The wording is
-// CalOPPA-reviewed and unchanged word-for-word - see the content-
-// preservation test in tests/test_site_pages.py and the pre-reskin
-// extraction committed at tests/fixtures/privacy_text.txt. Only the
-// outer chrome (SiteHeader/SiteFooter, arriving via app/layout.tsx),
-// heading levels, and link styling classes were adapted; the old page's
-// own topbar nav (which pointed "Live map" at "/", stale now that "/" is
-// the marketing homepage) is gone, replaced by the shared SiteHeader.
+import { LegalPage, legalStyles as s } from "../terms/_legal/legal-page";
+
+// Privacy policy. Every factual sentence was checked against the code
+// (server: src/ca_roads_demo, src/ca_roads_mcp, src/ca_roads; apps:
+// nicglazkov/commutescout-app) on 2026-11-19. The sentence-by-sentence
+// evidence table is in the rebuild report (realsite/C.md). Change the
+// code, change this page.
 //
-// Owner-approved edit 2026-08-05: the personal name in the Contact
-// section's byline was removed, leaving just the email contact.
-// tests/fixtures/privacy_text.txt was regenerated from this new content
-// with the same _visible() normalization so the content-preservation
-// test re-pins on the updated wording.
-//
-// Owner-approved edit 2026-10-27: brought up to date with what the
-// service stores now (shared trips, saved places, reports, plugin
-// choices, API keys, the apps, request logs). The fixture was
-// regenerated from the build the same way.
-//
-// Owner-approved edit 2026-11-19: checked line by line against the code
-// (watch.py, apikeys.py, ratelimit.py, telemetry.py, the contact form's
-// Turnstile check) and brought up to date: the MCP server and REST API,
-// browser push services, Turnstile, federal data sources, Apple sign-in
-// in the iPhone app. The fixture was regenerated from the build.
+// The wording is pinned by the content-preservation test in
+// tests/test_site_pages.py against tests/fixtures/privacy_text.txt, which
+// was regenerated from this build on 2026-11-19 with the test's own
+// _visible() normalization. Regenerate it after any approved wording change.
 export const metadata: Metadata = {
   title: "Privacy - CommuteScout",
   description:
-    "What CommuteScout collects: nothing identifying you on the map, assistant or API, just your email and what you save if you make an account. Nothing is sold.",
+    "What CommuteScout collects, why, who processes it, how long it is kept, and how to delete it. No ads, no tracking cookies, nothing sold or shared for advertising.",
   alternates: {
     canonical: "https://commutescout.com/privacy",
   },
   openGraph: {
     title: "Privacy - CommuteScout",
     description:
-      "What CommuteScout collects: nothing identifying you on the map, assistant or API, just your email and what you save if you make an account. Nothing is sold.",
+      "What CommuteScout collects, why, who processes it, how long it is kept, and how to delete it. No ads, no tracking cookies, nothing sold or shared for advertising.",
     url: "https://commutescout.com/privacy",
     images: ["/static/shots/og.png"],
   },
@@ -47,336 +33,748 @@ export const metadata: Metadata = {
   },
 };
 
+const HELLO = "hello@commutescout.com";
+
+function Mail({ to }: { to: string }) {
+  return <a href={`mailto:${to}`}>{to}</a>;
+}
+
+function Table({
+  head,
+  rows,
+  caption,
+}: {
+  head: string[];
+  rows: ReactNode[][];
+  caption: string;
+}) {
+  return (
+    <div className={s.tableWrap}>
+      <table className={s.table}>
+        <caption className="sr-only">{caption}</caption>
+        <thead>
+          <tr>
+            {head.map((h) => (
+              <th key={h} scope="col">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              {r.map((c, j) => (
+                <td key={j} data-label={j === 0 ? undefined : head[j]}>
+                  {c}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const summary = [
+  <>
+    <strong>No account needed</strong> for the map, routes, the assistant, the
+    MCP server or the API. Without one we keep no profile of you.
+  </>,
+  <>
+    <strong>No ads, no tracking cookies, no cross-site tracking.</strong> We do
+    not sell your personal information or share it for advertising.
+  </>,
+  <>
+    <strong>With an account</strong> we store your email address and what you
+    save: watch areas, places, plugin choices, settings and API keys.
+  </>,
+  <>
+    <strong>Location</strong> is used to answer what you ask: a route, the area
+    on screen, alerts ahead. Our own logs round coordinates to about a
+    kilometer.
+  </>,
+  <>
+    <strong>Road reports are public.</strong> Others see what you reported and
+    where, never your name or email.
+  </>,
+  <>
+    <strong>You can delete your account</strong> yourself in the app or on the
+    web, or ask us at <Mail to={HELLO} />.
+  </>,
+];
+
 export default function PrivacyPage() {
   return (
-    <section className="py-16 md:py-20">
-      <div className="mx-auto max-w-3xl px-6">
-        <h1 className="text-cs-ink text-balance text-4xl font-medium tracking-tight lg:text-5xl">
-          Privacy
-        </h1>
-        <p className="text-cs-ink/70 mt-3 text-sm">
-          Effective November 19, 2026. Material changes will be posted here with
-          a new effective date; account holders get an email when a change
-          affects them.
-        </p>
+    <LegalPage
+      eyebrow="Legal"
+      title="Privacy policy"
+      effective="November 19, 2026"
+      updated="Covers commutescout.com, the MCP server and API, and the CommuteScout Drive apps."
+      lede={
+        <>
+          CommuteScout is an independent project based in California
+          (&ldquo;CommuteScout&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;). This policy says
+          what we collect, why, who helps us process it, how long we keep it,
+          and how you can see or delete it. The code behind the service is open
+          source, so you can check any of this yourself.
+        </>
+      }
+      summaryTitle="The short version"
+      summaryNote="A summary for convenience. The numbered sections below are the policy."
+      summary={summary}
+      summaryKeys={[1]}
+      sections={[
+        {
+          id: "scope",
+          title: "Who we are and what this covers",
+          body: (
+            <>
+              <p>
+                This policy covers the CommuteScout website at
+                commutescout.com (including the live map, route planner,
+                assistant, watch areas and account settings), the CommuteScout
+                MCP server and REST API, and the CommuteScout Drive navigation
+                apps for iPhone and Android. We are responsible for the
+                personal information described here.
+              </p>
+              <p>
+                It does not cover plugins run by other people, the AI assistant
+                you connect our MCP server to, app stores, or the agencies
+                whose public data we show. Each of those has its own terms and
+                privacy policy.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "collect",
+          title: "What we collect and why",
+          body: (
+            <>
+              <h3>Using the site, map and assistant without an account</h3>
+              <ul>
+                <li>
+                  <strong>The area you are looking at.</strong> To draw
+                  conditions, the map asks our server for the area on screen or
+                  the route you planned. Route and address searches are sent to
+                  our server to answer them.
+                </li>
+                <li>
+                  <strong>Your approximate area, once.</strong> The map opens on
+                  your region without asking for location permission: our CDN,
+                  Cloudflare, estimates a city-level position from your IP
+                  address, we round it to about a kilometer, and we use it only
+                  to choose the first view. We do not store or log it. Without
+                  that estimate, your browser&rsquo;s time zone, read on your
+                  device, picks a region instead.
+                </li>
+                <li>
+                  <strong>Precise location, only if you ask.</strong> If you
+                  choose &ldquo;Use my location&rdquo; in the route planner, your
+                  browser asks your permission and then gives the map your
+                  position, which is sent to our server as the start of the
+                  route.
+                </li>
+                <li>
+                  <strong>Assistant questions.</strong> What you type is sent to
+                  Anthropic to generate the answer and is logged by us to
+                  improve answers. The log entry carries a visitor code made
+                  from a salted hash of your IP address that changes every day,
+                  never the address itself. If you rate an answer with
+                  &ldquo;Was this right?&rdquo;, the vote is logged with the
+                  question the same way.
+                </li>
+                <li>
+                  <strong>Page events.</strong> The map records a few
+                  interaction events, such as a page view, with the same
+                  daily-changing visitor code and nothing else.
+                </li>
+              </ul>
 
-        <div className="text-cs-ink/60 mt-8 space-y-8 md:text-lg">
-          <p>
-            CommuteScout is an independent, one-person project. The short
-            version: the map, the assistant, the MCP server and the API
-            work without an account and store nothing that identifies
-            you; if you create an account,
-            we store your email and what you save to it (watch areas,
-            places, reports, plugin choices, API keys), because that is
-            what those features are; nothing is sold, there are no ads,
-            and there is no cross-site tracking.
-          </p>
+              <h3>Accounts</h3>
+              <p>
+                An account is optional. It is needed for watch areas, road
+                reports, syncing places and plugins, and API keys. Creating
+                one requires agreeing to the <a href="/terms">terms of use</a>{" "}
+                and this privacy policy. When you
+                sign in with Google, with Apple (in the iPhone app) or with an
+                email link, we receive your email address and a user ID from
+                that sign-in. Accounts are managed with Google Firebase
+                Authentication and stored in Google Cloud Firestore. Sign-in
+                emails are sent through Resend.
+              </p>
 
-          <div>
-            <h2 className="text-cs-ink text-xl font-medium">
-              What we collect
-            </h2>
-            <ul className="mt-4 list-disc space-y-4 pl-5">
-              <li>
-                <strong>Without an account</strong> (the map, route
-                planner, and assistant): questions you ask the assistant
-                are logged to improve answers, tied to a salted daily hash
-                instead of your address, with coordinates rounded to about
-                a kilometer. If you press the &quot;Was this right?&quot;
-                thumbs, that vote is logged with the question the same way
-                and reviewed to improve answers. Route and address searches
-                are processed to answer them and appear in the same
-                anonymized logs. The map opens on your approximate area so
-                you do not have to scroll to it: our CDN derives a
-                city-level position from your IP address, rounded to about
-                a kilometer, and we use it only to choose that first view.
-                It is never stored or logged, and no location permission is
-                requested. If that lookup is unavailable, your
-                browser&apos;s timezone (read locally, never sent to us)
-                picks a region instead. To show conditions, the map sends
-                us the area or route on screen; our request logs drop
-                precise positions, except for requests that failed with a
-                server error, which we keep to fix the failure. No cookies
-                are set. Your browser keeps a few settings in local
-                storage: the base map you picked, the plugins you switched
-                on or off, and the email you typed to sign in. They stay
-                on your device, except that the plugin switches travel
-                with a report you post, so it reaches only the plugins you
-                use.
-              </li>
-              <li>
-                <strong>If you share a trip</strong>: the trip you share
-                (the start and end names, the route, and its directions) is
-                stored so the link works, and anyone with the link can open
-                it. It is not tied to an account and is deleted after 180
-                days.
-              </li>
-              <li>
-                <strong>With an account</strong>: your email address, your
-                sign-in identity from Google, Apple (in the iPhone app), or
-                the email link you used, and what you save. Accounts are
-                stored in Google Cloud Firestore:
-                <ul className="mt-3 list-[circle] space-y-3 pl-5">
-                  <li>
-                    Watch areas you draw (names, shapes, alert settings),
-                    the alerts already sent for each (so you are not told
-                    twice), and, if you enable notifications, the push
-                    subscription or app push token for each device. Alerts
-                    go out as app notifications, browser notifications, or
-                    email, as you choose; emails are delivered through
-                    Resend.
-                  </li>
-                  <li>
-                    Places you save or go to (Home, Work, favorites, and
-                    recent destinations), so they follow you between
-                    devices.
-                  </li>
-                  <li>
-                    Your plugin choices: the plugins you switched off, and
-                    any private plugin you added by address, with the access
-                    token you gave it.
-                  </li>
-                  <li>
-                    Reports you post on the map (what you saw, where, which
-                    way you were heading, and any note), linked to your
-                    account so daily limits and votes work. Others see the
-                    report on the map without your identity until it
-                    expires, between 20 minutes and a day depending on the
-                    kind. It is also sent to the public plugins you have
-                    switched on that accept reports, under a separate
-                    pseudonym for each plugin, never your account or email.
-                  </li>
-                  <li>
-                    API keys: the name you give each key, a one-way hash of
-                    its secret, and when it was created and last used, plus
-                    the account&apos;s request count for the current day.
-                    Each keyed request is logged with the key id, the tool,
-                    and the result, and counted against the account&apos;s
-                    daily allowance. Anyone holding one of your keys can
-                    read your saved places through it, so keep keys
-                    private.
-                  </li>
-                </ul>
-              </li>
-              <li>
-                <strong>The CommuteScout Drive apps</strong> (iPhone and
-                Android): your device&apos;s location is used on the phone
-                to guide you and to ask us for alerts along your route,
-                which reach us the same way map requests do. Downloaded
-                maps and voices, and the drive log, stay on the phone; the
-                drive log leaves it only if you share it from Settings. The
-                apps contain no analytics or advertising code. Some plugins
-                answer the app directly: when you switch one on, it sees
-                the area you are driving through, and a plugin that shows
-                alerts meant for you also receives a sign-in token that
-                proves which account is asking.
-              </li>
-              <li>
-                <strong>The MCP server and REST API</strong>: each tool call
-                is logged with the tool name, whether it worked, and how
-                long it took, never its arguments. The places and
-                coordinates in a request are used to answer it, which can
-                mean passing them to the routing, geocoding, traffic, and
-                weather services listed below. Your IP address is used in
-                memory to apply the per-address limits on requests without
-                a key; it is not written to these logs.
-              </li>
-              <li>
-                <strong>If you write to us</strong> (the contact form): the
-                name, email address, and message you type. We use them to
-                read and answer you, and for nothing else. The message is
-                delivered to us as email; we do not add you to any list.
-              </li>
-              <li>
-                <strong>If you join the Pro waitlist</strong>: your email
-                address, and nothing else. We use it once, to tell you when
-                Pro launches. Ask us at any time to remove it.
-              </li>
-              <li>
-                <strong>Analytics</strong>: cookieless Cloudflare Web
-                Analytics counts visits and page timings. It sets no
-                cookies, stores no device identifiers, and does not follow
-                you to other sites.
-              </li>
-            </ul>
-          </div>
+              <h3>Watch areas and alerts</h3>
+              <p>
+                Watch areas are an invite-only trial. For each area we store
+                its name, its shape (a circle, a drawn outline or a route), the
+                kinds of events you want, your alert settings (push or email,
+                quiet hours with your time zone, and whether to hear when
+                something clears), and a record of alerts already sent so you
+                are not told twice. To deliver alerts we store, per device, the
+                browser push subscription or the app&rsquo;s push token, and we
+                send email alerts to your account address through Resend. Your
+                browser or phone asks your permission before notifications are
+                turned on.
+              </p>
 
-          <div>
-            <h2 className="text-cs-ink text-xl font-medium">
-              Who touches the data
-            </h2>
-            <p className="mt-4">
-              Categories of third parties that process data to run the
-              service. None of them get your data for their own marketing,
-              and we do not sell or rent anything:
+              <h3>Places, plugin choices and settings</h3>
+              <p>
+                When you are signed in, the places you save or go to (Home,
+                Work, up to 20 favorites and up to 20 recent destinations, each
+                with a name and coordinates) sync to your account so they follow
+                you between devices. We also store the plugins you switched
+                off, any private plugin you added by address together with the
+                access token you gave it, and settings such as units.
+              </p>
+
+              <h3>Road reports and votes</h3>
+              <p>
+                When you post a report (what you saw, where, which way you were
+                heading, and any note you add), we store it with your account
+                ID so daily limits and voting work. It is shown to everyone on
+                the map and in our public data files until it expires, which
+                takes between 20 minutes and a day depending on the kind,
+                without your name, email or account ID. Your votes on reports
+                (&ldquo;still there&rdquo; or &ldquo;gone&rdquo;) are stored
+                with the report the same way. See{" "}
+                <a href="#recipients">who receives data</a> for how reports
+                reach plugins.
+              </p>
+
+              <h3>Shared trips</h3>
+              <p>
+                If you share a trip, we store the start and end names, the
+                route, its distance, time and directions so the link works.
+                Anyone with the link can open it. It is not tied to your
+                account.
+              </p>
+
+              <h3>API keys, the MCP server and the REST API</h3>
+              <ul>
+                <li>
+                  For each API key we store its name, a one-way hash of its
+                  secret (never the secret itself), your account ID and email,
+                  when it was created and last used, and your account&rsquo;s
+                  request count for the day.
+                </li>
+                <li>
+                  Each request made with a key is logged with the key ID, the
+                  path and the result. Each MCP tool call is logged with the
+                  tool name, whether it worked and how long it took, never its
+                  arguments.
+                </li>
+                <li>
+                  The places and coordinates in a request are used to answer
+                  it, which can mean passing them to the routing, address,
+                  traffic and weather providers listed below. Requests made
+                  with your key can read your saved places, so treat a key like
+                  a password.
+                </li>
+                <li>
+                  Your IP address is used in memory to apply the limits on
+                  requests made without a key.
+                </li>
+              </ul>
+
+              <h3>The CommuteScout Drive apps</h3>
+              <ul>
+                <li>
+                  <strong>Location.</strong> With your permission, the apps use
+                  your device&rsquo;s precise location to guide you and to warn
+                  you about what is ahead. While you are navigating, they keep
+                  using it with the screen off or the app in the background (on
+                  Android, with an ongoing notification), so spoken directions
+                  and alerts keep working. They do not use location in the
+                  background when you are not navigating.
+                </li>
+                <li>
+                  <strong>What reaches our server.</strong> The apps send us
+                  your position and the next stretch of your route to fetch
+                  conditions and alerts ahead, your start and destination to
+                  plan routes, your position and heading to look up the speed
+                  limit, the route when you save an offline map for a trip, and
+                  your approximate position (about 100 meters) with an
+                  assistant question. We use these to answer the request. For
+                  plugin alerts, positions are rounded to a grid of about 5 to
+                  10 kilometers before they are kept in memory or sent to a
+                  plugin.
+                </li>
+                <li>
+                  <strong>On your phone only.</strong> Downloaded maps and
+                  voices, the trip in progress, unsent reports and the iPhone
+                  app&rsquo;s drive log stay on the phone. Spoken directions
+                  are generated on the phone. The drive log leaves it only if
+                  you share it yourself from Settings.
+                </li>
+                <li>
+                  <strong>No analytics or ad code.</strong> The apps contain no
+                  analytics, crash-reporting or advertising SDKs and do not read
+                  your device&rsquo;s advertising identifier. They use Firebase
+                  for sign-in and push notifications; Firebase Cloud Messaging
+                  creates an installation ID to deliver them.
+                </li>
+              </ul>
+
+              <h3>When you write to us</h3>
+              <p>
+                The contact form sends us the name, email address and message
+                you type, as an email delivered through Resend; a Cloudflare
+                Turnstile check confirms you are a person. If you joined the
+                Pro waitlist, we store that email address only to tell you when
+                Pro launches. We do not add you to any other list.
+              </p>
+
+              <h3>Analytics and logs</h3>
+              <ul>
+                <li>
+                  <strong>Visit counts.</strong> The website uses Cloudflare Web
+                  Analytics, which counts page views and load times without
+                  cookies or device identifiers and does not follow you across
+                  sites.
+                </li>
+                <li>
+                  <strong>Our application logs</strong> round coordinates to
+                  about a kilometer and identify visitors only by the
+                  daily-changing code above. A request that fails with a server
+                  error may be logged in more detail so we can fix it.
+                </li>
+                <li>
+                  <strong>Request logs.</strong> Our hosting provider (Google
+                  Cloud) and our CDN (Cloudflare) keep standard request logs:
+                  the time, the address requested (which can include map
+                  coordinates), the response, the browser or app version, and
+                  the network address the request came from. We use them only
+                  to run, secure and debug the service.
+                </li>
+              </ul>
+              <p>
+                We do not build profiles of you or draw inferences about you
+                from any of this.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "cookies",
+          title: "Cookies, local storage and Do Not Track",
+          body: (
+            <>
+              <p>
+                The public site sets no cookies of its own and uses no
+                advertising or cross-site tracking technology. Your browser
+                keeps a few settings in local storage on your device: the base
+                map, units, the panel you had open, the plugins you switched on
+                or off, and the email address you typed to sign in by link. For
+                the current tab only, it also remembers where the map was
+                looking.
+                Signing in keeps your session in your browser&rsquo;s storage
+                through Firebase. Google&rsquo;s sign-in window and the
+                Turnstile check on the contact form are run by Google and
+                Cloudflare under their own policies.
+              </p>
+              <p>
+                <strong>Do Not Track.</strong> We do not change our behavior in
+                response to Do Not Track signals, because there is nothing to
+                switch off: we do not track you across other sites, and we do
+                not allow other companies to do so through our service.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "recipients",
+          title: "Who receives data",
+          body: (
+            <>
+              <p>
+                These service providers process data for us to run the service,
+                under their own terms, and each receives only what its job
+                needs. We do not sell or rent personal information to anyone.
+              </p>
+              <Table
+                caption="Service providers and other recipients"
+                head={["Recipient", "What for", "What they see"]}
+                rows={[
+                  [
+                    "Google Cloud and Firebase",
+                    "Hosting, database, sign-in, push to the apps (Firebase Cloud Messaging), request logs",
+                    "What the service stores, as our host",
+                  ],
+                  [
+                    "Cloudflare",
+                    "CDN and security in front of the site, visit counts, map and data files, the contact form check",
+                    "Your IP address and the requests you make, as any CDN does",
+                  ],
+                  [
+                    "Anthropic",
+                    "Generating assistant answers",
+                    "Your question, earlier questions in the same chat, and the app's approximate location if sent",
+                  ],
+                  [
+                    "Resend",
+                    "Sign-in emails, alert emails, contact form messages",
+                    "Email addresses and message content",
+                  ],
+                  [
+                    "Stadia Maps",
+                    "Routing, address search, speed limits, matching a point to a road",
+                    "Coordinates and place names in the request, sent by our server",
+                  ],
+                  [
+                    "TomTom",
+                    "Live traffic speeds",
+                    "Road coordinates being checked, sent by our server",
+                  ],
+                  [
+                    "National Weather Service",
+                    "Forecasts and weather alerts",
+                    "Coordinates our server asks about",
+                  ],
+                  [
+                    "OpenFreeMap",
+                    "Map tiles for two of the base map styles",
+                    "Your IP address and the map area you view, from your browser or app",
+                  ],
+                  [
+                    "Apple, Google, Mozilla, Microsoft",
+                    "Delivering push notifications to phones and browsers",
+                    "The notification and your device's push token",
+                  ],
+                  [
+                    "GitHub",
+                    "Hosting the apps' voice downloads",
+                    "Your IP address when you download a voice",
+                  ],
+                ]}
+              />
+              <h3>Plugin operators</h3>
+              <p>
+                Plugins add alerts from sources other than public agencies, and
+                some are run by other people. Our server asks plugins about
+                areas rounded to about 5 to 10 kilometers, under our own
+                identity,
+                never yours. When you post a report, it is also sent to the
+                public plugins you have switched on that accept that kind of
+                report, under a separate pseudonym for each plugin instead of
+                your account or email; your votes on a plugin&rsquo;s alerts go
+                to that plugin the same way. A plugin you add by address in the
+                app is contacted by your phone directly, so it sees your IP
+                address, the approximate center of your map and the access
+                token you gave it. Only plugins run by CommuteScout itself ever
+                receive your sign-in token.
+              </p>
+              <h3>Your AI assistant</h3>
+              <p>
+                If you connect our MCP server to an AI assistant, what our tools
+                return, including your saved places when you use an API key,
+                goes to that assistant and its provider under their privacy
+                policy.
+              </p>
+              <h3>Public agencies and camera images</h3>
+              <p>
+                Our server fetches public feeds from state and federal agencies
+                (listed on <a href="/data-sources">Data sources</a>); they
+                receive nothing about you. Some camera images load in your
+                browser or app directly from the agency&rsquo;s image host,
+                which sees that request the way any image load does.
+              </p>
+              <h3>Legal reasons</h3>
+              <p>
+                We may disclose information if the law requires it, to protect
+                someone&rsquo;s safety, or to protect the service and its users
+                from fraud or abuse. If the project were ever transferred to
+                someone else, this policy would keep applying to the data
+                transferred with it.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "no-sale",
+          title: "No sale, no sharing for advertising",
+          body: (
+            <p>
+              We do not sell personal information and do not
+              &ldquo;share&rdquo; it for cross-context behavioral advertising,
+              as California law defines those terms, and have not done so in
+              the past 12 months. We show no ads. We do not use personal
+              information to make automated decisions about you. The only
+              sensitive personal information we collect is the location
+              described above, and we use it only to provide what you ask for.
             </p>
-            <ul className="mt-4 list-disc space-y-3 pl-5">
-              <li>
-                <strong>Google Cloud and Firebase</strong> host the
-                service, sign-ins, and the database that stores accounts
-                and watch areas.
-              </li>
-              <li>
-                <strong>Anthropic</strong> processes assistant questions to
-                generate answers.
-              </li>
-              <li>
-                <strong>Resend</strong> delivers alert and sign-in emails,
-                and the messages you send through the contact form.
-              </li>
-              <li>
-                <strong>Cloudflare</strong> provides the cookieless visit
-                counts, serves the downloadable map files and data
-                snapshots, and runs the Turnstile bot check on the contact
-                form, which sees your browser and IP address the way any
-                such check does.
-              </li>
-              <li>
-                <strong>Apple and Google</strong> distribute the apps and
-                deliver their push notifications. Browser notifications are
-                delivered through your browser maker&apos;s push service
-                (Google, Apple, Mozilla, or Microsoft).
-              </li>
-              <li>
-                <strong>Plugin operators</strong> receive reports and
-                votes under a pseudonym, as described above, and the
-                requests of apps that use their plugin directly.
-              </li>
-              <li>
-                <strong>TomTom</strong> provides live traffic speeds; the
-                server sends it road coordinates being checked, never your
-                identity.
-              </li>
-              <li>
-                <strong>State transportation agencies</strong> publish the
-                public road data shown for their states (WSDOT, Oregon DOT
-                TripCheck, OHGO, UDOT, ADOT, Alaska DOT&PF, CDOT, FDOT, VDOT
-                SmarterRoads, Idaho 511, 511NY, WisDOT, INDOT, MnDOT, KDOT,
-                NJDOT, MDOT SHA, MDOT MiDrive, MDOT Traffic Mississippi,
-                MoDOT, TravelMidwest/IDOT, ALGO Traffic/ALDOT, NCDOT, Iowa
-                DOT, KYTC, Oklahoma DOT, HDOT, Louisiana DOTD, DelDOT, TDOT
-                SmartWay, the City of Austin, and the NE Compass portal for
-                Maine, New Hampshire, and Vermont). Our server fetches
-                their public feeds; they never receive anything about you.
-                Camera snapshots load in your browser directly from the
-                agency&apos;s image host, which sees the request the way
-                any image load does.
-              </li>
-              <li>
-                <strong>Federal sources</strong>: the National Weather
-                Service receives the coordinates our server asks about for
-                forecasts and alerts; national wildfire and earthquake
-                feeds are fetched whole. None of them receive anything
-                about who is asking.
-              </li>
-              <li>
-                <strong>Stadia Maps</strong> provides routing and address
-                lookup; it sees the coordinates and place names involved
-                in what you look up, as our server queries it.
-              </li>
-              <li>
-                <strong>OpenFreeMap</strong> serves the tiles for the
-                Positron and Bright base maps; when you use one of them,
-                your browser requests tiles from tiles.openfreemap.org,
-                which sees your IP address and the map area you are
-                viewing. The other base maps are drawn from files we
-                host. Map data comes from OpenStreetMap contributors.
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h2 className="text-cs-ink text-xl font-medium">
-              Review, change, delete
-            </h2>
-            <p className="mt-4">
-              Signed-in users can see every watch area on the{" "}
-              <Link
-                href="/watch"
-                prefetch={false}
-                className="text-cs-sky font-medium hover:underline"
-              >
-                watch page
-              </Link>
-              , edit or delete any of them, and delete the whole account
-              with the &quot;Delete my account&quot; button there - that
-              immediately removes the account record (with your saved
-              places and plugin choices), all watch areas, alert state,
-              push subscriptions, and API keys. Reports you posted expire
-              on their own within two days. Anything else, or any
-              question about data we hold: email{" "}
-              <a
-                href="mailto:privacy@commutescout.com"
-                className="text-cs-sky font-medium hover:underline"
-              >
-                privacy@commutescout.com
+          ),
+        },
+        {
+          id: "retention",
+          title: "How long we keep it",
+          body: (
+            <>
+              <Table
+                caption="Retention periods"
+                head={["Data", "Kept for"]}
+                rows={[
+                  [
+                    "Account, watch areas, places, plugin choices, settings, API keys",
+                    "Until you delete them or your account",
+                  ],
+                  [
+                    "Push subscriptions and app push tokens",
+                    "Until you sign out of the app on that device, delete the account, or the push service reports the device gone",
+                  ],
+                  [
+                    "Road reports and their votes",
+                    "Shown for 20 minutes to a day depending on the kind; set to be deleted from storage two days after posting",
+                  ],
+                  ["Shared trips", "180 days, then deleted automatically"],
+                  [
+                    "Application and request logs, including assistant questions",
+                    "About 30 days, the standard log retention of our hosting provider",
+                  ],
+                  [
+                    "Contact form messages",
+                    "In our email until the conversation is finished",
+                  ],
+                  [
+                    "Pro waitlist email",
+                    "Until Pro launches or you ask us to remove it",
+                  ],
+                  [
+                    "Approximate map location from your IP address",
+                    "Not stored",
+                  ],
+                ]}
+              />
+              <p>
+                Separately, we keep a long-term archive of public road events
+                (incidents, closures, chain controls and fires as the agencies
+                publish them) for history features. It contains no data about
+                users.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "choices",
+          title: "Your choices and rights",
+          body: (
+            <>
+              <ul>
+                <li>
+                  <strong>See and change your data.</strong> Signed in, you can
+                  view and edit your watch areas, places, plugins, alert
+                  settings and API keys in the app or in the map&rsquo;s
+                  Settings and Watch panels.
+                </li>
+                <li>
+                  <strong>Notifications.</strong> Turn them off per device in
+                  your phone or browser settings, or switch push and email
+                  alerts off in your alert settings.
+                </li>
+                <li>
+                  <strong>Location.</strong> You can deny or revoke location
+                  permission at any time in your browser or phone settings. The
+                  map still works; the apps cannot guide you without it.
+                </li>
+                <li>
+                  <strong>Ask us.</strong> Wherever you live, you can ask us what
+                  personal information we hold about you and what we do with
+                  it, for a copy, to correct it, or to delete it. Email{" "}
+                  <Mail to={HELLO} /> from the address on your account. We may
+                  ask you to confirm the request from that address before we
+                  act on it, and we answer within 45 days. Someone you authorize
+                  can ask for you if they show us your signed permission.
+                </li>
+                <li>
+                  <strong>No penalty.</strong> We will not deny you the service,
+                  charge you differently or give you a worse service because you
+                  used any of these rights.
+                </li>
+              </ul>
+              <p>
+                California residents: the rights above include the rights to
+                know, delete, correct and limit the use of sensitive personal
+                information under the California Consumer Privacy Act, as
+                amended by the CPRA. We do not sell or share personal
+                information, so there is nothing to opt out of; we treat a
+                Global Privacy Control signal as an opt-out request all the
+                same. Under California&rsquo;s &ldquo;Shine the Light&rdquo;
+                law: we do not disclose personal information to third parties
+                for their direct marketing.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "delete",
+          title: "Deleting your account",
+          body: (
+            <>
+              <ul>
+                <li>
+                  <strong>In the app:</strong> Settings, then your account, then
+                  Delete account.
+                </li>
+                <li>
+                  <strong>On the web:</strong> sign in on the{" "}
+                  <a href="/map">map</a>, open Settings and choose Delete my
+                  account (the same button is on the{" "}
+                  <a href="/watch">watch page</a>).
+                </li>
+                <li>
+                  <strong>By email:</strong> write to <Mail to={HELLO} /> from
+                  the address on your account.
+                </li>
+              </ul>
+              <p>
+                Deleting immediately removes your account record (with your
+                saved places, plugin choices and settings), all watch areas and
+                their alert history, every registered device, and all API keys
+                with their usage counts, so a key stops working at once.
+                Deleting in the app also removes your sign-in record. Deleting
+                on the web leaves your sign-in record (your email address and
+                sign-in method) in Firebase Authentication; to remove it as
+                well, delete from the app or email us and we will. Reports you
+                posted never showed your identity and expire on their own, as
+                described above. Copies in logs age out on the schedule above.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "california",
+          title: "California disclosures",
+          body: (
+            <>
+              <p>
+                The categories of personal information we have collected in the
+                past 12 months, where they come from, why we use them and who
+                receives them. Details are in{" "}
+                <a href="#collect">what we collect</a> and{" "}
+                <a href="#recipients">who receives data</a>.
+              </p>
+              <Table
+                caption="California categories of personal information"
+                head={["Category", "Examples", "Source", "Purpose", "Disclosed to"]}
+                rows={[
+                  [
+                    "Identifiers",
+                    "Email address, account ID, API key ID, push tokens, IP address",
+                    "You; your browser or phone; Google or Apple sign-in",
+                    "Accounts, alerts, limits, security",
+                    "Google Cloud and Firebase, Resend, Cloudflare, push services",
+                  ],
+                  [
+                    "Precise geolocation (sensitive)",
+                    "Device position in the apps or with Use my location; saved places; watch areas",
+                    "You; your browser or phone",
+                    "Routes, alerts ahead, nearby conditions, answering questions",
+                    "Google Cloud, Stadia Maps, Anthropic (approximate only), plugin operators (rounded to 5 to 10 km)",
+                  ],
+                  [
+                    "Internet activity",
+                    "Requests, pages viewed, tool calls, errors",
+                    "Your browser, app or API client",
+                    "Running, securing and improving the service",
+                    "Google Cloud, Cloudflare",
+                  ],
+                  [
+                    "Content you provide",
+                    "Assistant questions, road reports, contact messages",
+                    "You",
+                    "Answering you, showing reports to others",
+                    "Anthropic, Resend, plugin operators (reports, under a pseudonym), the public (reports)",
+                  ],
+                ]}
+              />
+            </>
+          ),
+        },
+        {
+          id: "international",
+          title: "Visitors outside the United States",
+          body: (
+            <>
+              <p>
+                CommuteScout is built for US roads and run from the United
+                States. Our servers run in Google Cloud&rsquo;s us-west1 region,
+                and the providers above process data in the US. If you use the
+                service from elsewhere, your information is transferred to and
+                processed in the US.
+              </p>
+              <p>
+                If laws such as the EU or UK GDPR apply to you, we rely on these
+                legal bases: providing the service you asked for (accounts,
+                alerts, places, reports); our legitimate interest in running,
+                securing and improving the service (logs, limits, visit
+                counts); and your consent where we ask for it (location and
+                notification permissions, which you can withdraw in your device
+                settings). You can use the rights in{" "}
+                <a href="#choices">your choices and rights</a>, object to
+                processing based on legitimate interest, and complain to your
+                local data protection authority.
+              </p>
+            </>
+          ),
+        },
+        {
+          id: "children",
+          title: "Children",
+          body: (
+            <p>
+              CommuteScout is not directed to children under 13, and we do not
+              knowingly collect personal information from them. If you believe a child under 13 has
+              given us personal information, email <Mail to={HELLO} /> and we
+              will delete it.
+            </p>
+          ),
+        },
+        {
+          id: "security",
+          title: "Security",
+          body: (
+            <p>
+              Connections are encrypted with HTTPS. API key secrets are stored
+              only as one-way hashes, the apps keep plugin tokens in the
+              phone&rsquo;s secure storage, and access to stored data is
+              limited to the operator. No system is perfectly secure. If a
+              breach affects your personal information, we will tell you as the
+              law requires. To report a security problem, see our{" "}
+              <a href="https://github.com/nicglazkov/commutescout/security/policy">
+                security policy
               </a>
               .
             </p>
-          </div>
-
-          <div>
-            <h2 className="text-cs-ink text-xl font-medium">
-              Do Not Track
-            </h2>
-            <p className="mt-4">
-              We do not respond to Do Not Track signals, because there is
-              nothing to turn off: no advertising trackers, no cross-site
-              tracking, and no cookies on the public site. No other
-              parties conduct cross-site tracking through this service.
+          ),
+        },
+        {
+          id: "changes",
+          title: "Changes to this policy",
+          body: (
+            <p>
+              We will post any change here with a new effective date. If a
+              change is material, we will also email account holders before it
+              takes effect. We will not use personal information we already hold
+              in a materially different way without your consent.
             </p>
-          </div>
-
-          <div>
-            <h2 className="text-cs-ink text-xl font-medium">
-              Where and how long
-            </h2>
-            <p className="mt-4">
-              Data lives in Google Cloud&apos;s us-west1 region.
-              Anonymized question logs and request logs age out with
-              normal log retention (about 30 days). Account data stays
-              until you delete it. Reports are deleted from storage two
-              days after they are posted, and shared trips after 180
-              days.
-              Push subscriptions are dropped automatically when a device
-              unsubscribes. Contact messages stay in our email until we
-              have dealt with them. A waitlist email stays until Pro
-              launches or until you ask us to remove it, whichever comes
-              first. Separately, we keep a long-term archive of the
-              public road events themselves (incidents, closures, fires,
-              as the agencies publish them) to build history features; it
-              contains no user data of any kind.
-            </p>
-          </div>
-
-          <div>
-            <h2 className="text-cs-ink text-xl font-medium">Contact</h2>
-            <p className="mt-4">
-              <a
-                href="mailto:hello@commutescout.com"
-                className="text-cs-sky font-medium hover:underline"
-              >
-                hello@commutescout.com
-              </a>{" "}
-              (privacy requests:{" "}
-              <a
-                href="mailto:privacy@commutescout.com"
-                className="text-cs-sky font-medium hover:underline"
-              >
-                privacy@commutescout.com
-              </a>
-              ). The code behind the service is open source at{" "}
-              <a
-                href="https://github.com/nicglazkov/commutescout"
-                className="text-cs-sky font-medium hover:underline"
-              >
+          ),
+        },
+        {
+          id: "contact",
+          title: "Contact",
+          body: (
+            <p>
+              Privacy requests and anything else: <Mail to={HELLO} />. The code is open source at{" "}
+              <a href="https://github.com/nicglazkov/commutescout">
                 github.com/nicglazkov/commutescout
               </a>
-              , so you can check any of this yourself.
+              . See also the <a href="/terms">terms of use</a>.
             </p>
-          </div>
-        </div>
-      </div>
-    </section>
+          ),
+        },
+      ]}
+    />
   );
 }

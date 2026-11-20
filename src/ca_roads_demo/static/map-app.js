@@ -1317,37 +1317,12 @@ function openStacked(latlng) {
   if (toll) openTollPanel(toll.m);
   return true;
 }
-// ---- toll details panel (left-hand sidebar) ----
-const tollSide = document.createElement('div');
-tollSide.className = 'tollside';
-map.getContainer().appendChild(tollSide);
-L.DomEvent.disableClickPropagation(tollSide);
-L.DomEvent.disableScrollPropagation(tollSide);
-function closeTollPanel() {
-  if (!tollSide.classList.contains('open')) return;
-  tollSide.classList.remove('open');
-  tollSide.innerHTML = '';
-  tollSide.__m = null;
-  tollHiClear();
-}
-function openTollPanel(m) {
-  tollSide.innerHTML =
-    '<button type="button" class="tollx" aria-label="Close">&times;</button>' +
-    popupFor(m, 'toll');
-  tollSide.classList.add('open');
-  tollSide.__m = m;
-  tollSide.querySelector('.tollx').addEventListener('click', closeTollPanel);
-  // Hover a rate row: light up that stretch of the corridor. Wired
-  // directly on the panel DOM, no popup-event bookkeeping to miss.
-  tollSide.querySelectorAll('[data-tg]').forEach((row) => {
-    const gi = +row.dataset.tg;
-    const di = row.dataset.td !== undefined ? +row.dataset.td : null;
-    row.addEventListener('mouseenter', () => tollHighlight(m, gi, di));
-    row.addEventListener('mouseleave', tollHiClear);
-    row.addEventListener('click', () => tollHighlight(m, gi, di));
-  });
-}
-// Click-off dismisses: a bare map click, opening any popup, or Escape.
+// ---- toll details: the right-hand details pane, like every other kind ----
+// Hovering a rate row lights up that stretch of the corridor (wired in
+// openInspector). Closing the pane, a bare map click, any popup, or
+// Escape clears the highlight.
+function closeTollPanel() { tollHiClear(); }
+function openTollPanel(m) { openInspector(m, 'toll'); }
 map.on('click', closeTollPanel);
 map.on('popupopen', closeTollPanel);
 document.addEventListener('keydown', (e) => {
@@ -2175,7 +2150,7 @@ function setTool(name, opts) {
   const current = railEl.querySelector('.tool.on');
   const collapsing = toggle && current && current.dataset.tool === name
     && !shellEl.classList.contains('nopanel');
-  railEl.querySelectorAll('.tool').forEach((b) => {
+  railEl.querySelectorAll('.tool[data-tool]').forEach((b) => {
     const on = !collapsing && b.dataset.tool === name;
     b.classList.toggle('on', on);
     if (b.tagName === 'BUTTON') b.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2188,6 +2163,8 @@ function setTool(name, opts) {
   showWatch(name === 'watch' && !collapsing);
   // Settings shows the account: the watch module owns sign-in state.
   if (name === 'settings' && !collapsing) loadWatch();
+  // Tools defined further down (Your places) listen for this.
+  document.dispatchEvent(new CustomEvent('cs-tool', { detail: collapsing ? '' : name }));
   if (opts && opts.reveal && isPhone() && sheetState === 'peek') setSheet('half');
   setTimeout(() => map.invalidateSize(), 60);
 }
@@ -2297,7 +2274,7 @@ if (grabEl) {
 
 railEl.addEventListener('click', (e) => {
   const btn = e.target.closest('.tool');
-  if (!btn || btn.tagName !== 'BUTTON') return;
+  if (!btn || btn.tagName !== 'BUTTON' || !btn.dataset.tool) return;
   if (isPhone()) {
     const same = btn.classList.contains('on');
     setTool(btn.dataset.tool, { toggle: false });
@@ -2312,8 +2289,24 @@ railEl.addEventListener('click', (e) => {
   const saved = store.get(TOOL_KEY);
   // A panel collapsed on a desktop has no meaning on a phone: the
   // sheet always shows one tool.
-  if (saved === '' && !isPhone()) setTool('route', { toggle: false }), setTool('route');
-  else setTool(saved || 'route', { toggle: false });
+  // Your places is the front door: Home, Work, saved spots and what is
+  // live around you. A tool that no longer exists falls back to it.
+  const known = saved && railEl.querySelector('.tool[data-tool="' + saved + '"]');
+  if (saved === '' && !isPhone()) setTool('places', { toggle: false }), setTool('places');
+  else setTool(known ? saved : 'places', { toggle: false });
+}
+// Deep link: /map?settings=keys opens Settings at the API keys card (the
+// docs' "Get a free key" button). Signed out, the card is hidden and the
+// account note with its sign-in button is shown instead, so scroll to
+// whichever of the two is visible once the account module has loaded.
+// No parameter, no change.
+if (new URLSearchParams(location.search).get('settings') === 'keys') {
+  setTool('settings', { toggle: false, reveal: true });
+  loadWatch().then(() => setTimeout(() => {
+    const card = document.getElementById('keycard');
+    const target = card && !card.hidden ? card : document.getElementById('acctnote');
+    if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, 400));
 }
 // Drag handles. Bounds from the spec: rail 56-88px; panel 300-520px
 // and never more than 40% of the viewport.
@@ -2731,6 +2724,43 @@ function inspectorActions(m, g) {
   });
   return row;
 }
+// Basic or Advanced, remembered per visitor. Basic is the popup's own
+// account of the item; Advanced is the record itself: timing, source,
+// IDs, every field, and the JSON, each said once.
+const INSP_MODE_KEY = 'cs-insp-mode';
+const inspScroll = document.getElementById('inspscroll');
+const inspAdv = document.getElementById('inspadv');
+const inspAi = document.getElementById('inspai');
+const inspAiText = document.getElementById('inspaitext');
+const inspTabs = Array.from(document.querySelectorAll('#inspmode [role="tab"]'));
+let inspMode = store.get(INSP_MODE_KEY) === 'advanced' ? 'advanced' : 'basic';
+let inspItem = null;        // { m, g } on show
+let inspOpener = null;      // focus returns here when the pane closes
+let inspGen = 0;
+function setInspMode(mode, focusTab) {
+  inspMode = mode === 'advanced' ? 'advanced' : 'basic';
+  store.set(INSP_MODE_KEY, inspMode);
+  inspTabs.forEach((t) => {
+    const on = t.dataset.mode === inspMode;
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+    t.tabIndex = on ? 0 : -1;
+    if (on && focusTab) t.focus();
+  });
+  inspBody.hidden = inspMode !== 'basic';
+  inspAdv.hidden = inspMode !== 'advanced';
+  if (inspMode === 'advanced' && inspItem && !inspAdv.dataset.built) {
+    inspAdv.replaceChildren(advancedView(inspItem.m, inspItem.g));
+    inspAdv.dataset.built = '1';
+  }
+}
+inspTabs.forEach((t, i) => {
+  t.addEventListener('click', () => setInspMode(t.dataset.mode));
+  t.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    setInspMode(inspTabs[(i + 1) % inspTabs.length].dataset.mode, true);
+  });
+});
 function openInspector(m, g) {
   const plugin = g === 'plugin';
   const acc = plugin ? csPlugin.color(csPlugin.sourceId(m)) : (GROUP_DOT[g] || '#64748b');
@@ -2743,13 +2773,35 @@ function openInspector(m, g) {
   // The popup's own "how long ago" moves into the header.
   const ago = inspBody.querySelector('.ago');
   inspWhen.textContent = ago ? ago.textContent : '';
-  inspBody.scrollTop = 0;
+  inspScroll.scrollTop = 0;
   wireDispatchLog(inspBody, null);
+  if (g === 'toll') {
+    // Hover a rate row: light up that stretch of the corridor.
+    inspBody.querySelectorAll('[data-tg]').forEach((row) => {
+      const gi = +row.dataset.tg;
+      const di = row.dataset.td !== undefined ? +row.dataset.td : null;
+      row.addEventListener('mouseenter', () => tollHighlight(m, gi, di));
+      row.addEventListener('mouseleave', tollHiClear);
+      row.addEventListener('click', () => tollHighlight(m, gi, di));
+    });
+  }
   inspFoot.replaceChildren(inspectorActions(m, g));
+  inspItem = { m, g };
+  delete inspAdv.dataset.built;
+  inspAdv.replaceChildren();
+  setInspMode(inspMode);
+  loadOverview(m, g, ++inspGen);
+  const wasHidden = inspectorEl.hidden;
+  if (wasHidden) {
+    const active = document.activeElement;
+    inspOpener = active && active !== document.body && !inspectorEl.contains(active) ? active : null;
+  }
   inspectorEl.hidden = false;
   if (inspResize) inspResize.hidden = false;
   shellEl.classList.add('insp');
   if (isPhone()) setSheet('peek');
+  // Focus moves into the pane so a keyboard user lands on what opened.
+  document.getElementById('inspclose').focus({ preventScroll: true });
   setTimeout(() => map.invalidateSize(), 60);
 }
 function closeInspector() {
@@ -2758,12 +2810,217 @@ function closeInspector() {
   if (inspResize) inspResize.hidden = true;
   shellEl.classList.remove('insp');
   inspBody.innerHTML = '';
+  inspAdv.replaceChildren();
+  inspItem = null;
+  inspGen += 1;
+  inspAi.hidden = true;
+  tollHiClear();
+  if (inspOpener && document.contains(inspOpener)) inspOpener.focus({ preventScroll: true });
+  inspOpener = null;
   setTimeout(() => map.invalidateSize(), 60);
 }
 document.getElementById('inspclose').addEventListener('click', closeInspector);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInspector(); });
-// Every marker popup gets one "Show in inspector" button, appended at
-// open time so the popup builders stay untouched.
+
+// ── One-line AI overview at the top of the pane ──────────────────
+// Asked for lazily, once per item (the server caches too), never on the
+// critical path: a calm placeholder while it loads, and on any error or
+// limit the line simply is not there.
+const overviewCache = new Map();
+const OVERVIEW_SKIP = new Set(['camera']);  // a camera has nothing to summarise
+function overviewRecord(m) {
+  const out = {};
+  for (const [k, v] of Object.entries(m)) {
+    if (k.startsWith('_') || ['path', 'poly', 'segs', 'entries', 'image', 'stream'].includes(k)) continue;
+    if (v == null || typeof v !== 'object') out[k] = v;
+    else if (Array.isArray(v) && v.length <= 12 && v.every((x) => x == null || typeof x !== 'object')) out[k] = v;
+  }
+  return out;
+}
+async function loadOverview(m, g, gen) {
+  inspAi.hidden = true;
+  inspAi.classList.remove('loading');
+  if (OVERVIEW_SKIP.has(g)) return;
+  const record = overviewRecord(m);
+  const key = g + '|' + JSON.stringify(record);
+  let hit = overviewCache.get(key);
+  if (hit === null) return;  // failed before: do not ask again this visit
+  if (!hit) {
+    inspAiText.textContent = '';
+    inspAi.classList.add('loading');
+    inspAi.hidden = false;
+    hit = fetch('/api/overview', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: POP_LABEL[g] || g, record, tz: VIEWER_TZ }),
+    }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overview) || null)
+      .catch(() => null);
+    overviewCache.set(key, hit);
+    if (overviewCache.size > 200) overviewCache.delete(overviewCache.keys().next().value);
+  }
+  const text = await hit;
+  if (!text) overviewCache.set(key, null);
+  if (gen !== inspGen) return;
+  inspAi.classList.remove('loading');
+  if (!text) { inspAi.hidden = true; return; }
+  inspAiText.textContent = text;
+  inspAi.hidden = false;
+}
+
+// ── Advanced: the record itself ──────────────────────────────────
+const TIME_KEYS = /^(reported|since|until|updated|discovered|as_of|start|end|starts|ends|created|modified|observed|time|ts|last_updated|[a-z]+_at)$/;
+const ID_KEYS = /^(id|uid|key|inc|incident_id|event_id|[a-z]+_id)$/;
+const GEOM_KEYS = new Set(['path', 'poly', 'segs', 'entries', 'lane_layout']);
+function asTime(v) {
+  if (typeof v === 'number' && v > 1e8) return new Date(v < 1e12 ? v * 1000 : v);
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+    const d = new Date(v);
+    return Number.isFinite(d.getTime()) ? d : null;
+  }
+  return null;
+}
+function relTime(d) {
+  const mins = Math.round((d.getTime() - Date.now()) / 60000);
+  const a = Math.abs(mins);
+  const txt = a < 1 ? 'now' : a < 60 ? a + ' min' : a < 48 * 60 ? Math.round(a / 60) + ' h'
+    : Math.round(a / 1440) + ' days';
+  return a < 1 ? 'now' : mins < 0 ? txt + ' ago' : 'in ' + txt;
+}
+function countPoints(v) {
+  let n = 0;
+  const walk = (x) => {
+    if (!Array.isArray(x)) return;
+    if (x.length === 2 && typeof x[0] === 'number' && typeof x[1] === 'number') { n += 1; return; }
+    x.forEach(walk);
+  };
+  walk(v);
+  return n;
+}
+function fieldText(k, v) {
+  if (v == null || v === '') return '—';
+  if (GEOM_KEYS.has(k) || (Array.isArray(v) && v.length > 12)) {
+    const pts = countPoints(v);
+    if (pts) return pts.toLocaleString() + ' points';
+    if (Array.isArray(v)) return v.length.toLocaleString() + ' entries';
+    return Object.keys(v).length + ' fields (in the JSON below)';
+  }
+  if (Array.isArray(v)) return v.map((x) => (typeof x === 'object' ? JSON.stringify(x) : String(x))).join(' / ');
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+// Long coordinate arrays stay in the copy and the download, but the
+// on-screen JSON shows how many points they hold instead of a wall.
+function displayJson(m) {
+  return JSON.stringify(m, (k, v) => {
+    if (k && Array.isArray(v) && (GEOM_KEYS.has(k) || v.length > 24)) {
+      const pts = countPoints(v);
+      return '[' + (pts ? pts.toLocaleString() + ' points' : v.length + ' items') + ' in the copy]';
+    }
+    return v;
+  }, 2);
+}
+function advancedView(m, g) {
+  const frag = document.createDocumentFragment();
+  const section = (title, note) => {
+    const sec = document.createElement('section');
+    sec.className = 'advsec';
+    const h = document.createElement('h5');
+    h.textContent = title;
+    sec.append(h);
+    if (note) {
+      const p = document.createElement('p');
+      p.className = 'advnote';
+      p.textContent = note;
+      sec.append(p);
+    }
+    frag.append(sec);
+    return sec;
+  };
+  const table = (sec, rows, mono) => {
+    const dl = document.createElement('dl');
+    dl.className = 'advtbl' + (mono ? ' mono' : '');
+    for (const [k, v, extra] of rows) {
+      const dt = document.createElement('dt'); dt.textContent = k;
+      const dd = document.createElement('dd'); dd.textContent = v;
+      if (extra) { const sm = document.createElement('small'); sm.textContent = extra; dd.append(sm); }
+      dl.append(dt, dd);
+    }
+    sec.append(dl);
+  };
+  // Timing: every time the record carries, in your zone and relative,
+  // then how fresh the map's copy is.
+  const timeRows = [];
+  for (const [k, v] of Object.entries(m)) {
+    if (!TIME_KEYS.test(k)) continue;
+    const d = asTime(v);
+    if (d) timeRows.push([k, d.toLocaleString([], { month: 'short', day: 'numeric',
+      year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), relTime(d)]);
+  }
+  if (snapPublished) {
+    const d = new Date(snapPublished);
+    timeRows.push(['data_as_of', d.toLocaleString([], { hour: 'numeric', minute: '2-digit',
+      second: '2-digit', timeZoneName: 'short' }), relTime(d) + ', when this map copy was published']);
+  }
+  if (timeRows.length) table(section('Timing'), timeRows);
+  // Source and identity.
+  const src = m.src || m.source || SOURCE_DEFAULT[g] || null;
+  const idRows = [];
+  if (src) idRows.push(['source', String(src)]);
+  idRows.push(['kind', String(m.kind || '—'), 'map group: ' + g]);
+  for (const [k, v] of Object.entries(m)) {
+    if (ID_KEYS.test(k) && v != null && typeof v !== 'object') idRows.push([k, String(v)]);
+  }
+  if (Number.isFinite(m.lat) && Number.isFinite(m.lon)) {
+    idRows.push(['lat, lon', m.lat.toFixed(5) + ', ' + m.lon.toFixed(5)]);
+  }
+  table(section('Source and IDs'), idRows, true);
+  // Every field, in the record's own order, once.
+  const shown = new Set(['src', 'source', 'kind', 'lat', 'lon']);
+  idRows.forEach(([k]) => shown.add(k));
+  timeRows.forEach(([k]) => shown.add(k));
+  const rest = Object.keys(m).filter((k) => !shown.has(k) && !k.startsWith('_'))
+    .map((k) => [k, fieldText(k, m[k])]);
+  if (rest.length) table(section('Every other field'), rest, true);
+  // The record as JSON, copyable and downloadable in full.
+  const js = section('Record JSON',
+    'This is the record as CommuteScout publishes it, after normalising the agency feed. ' +
+    'The agency\'s original payload is not kept in the browser.' +
+    (g.startsWith('inc_') && m.log_n ? ' For CHP incidents the dispatch log, in Basic, is the closest raw source.' : ''));
+  const bar = document.createElement('div');
+  bar.className = 'advbar';
+  const full = JSON.stringify(m, null, 2);
+  const copy = document.createElement('button');
+  copy.type = 'button'; copy.className = 'inspact'; copy.textContent = 'Copy JSON';
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(full);
+      copy.textContent = 'Copied';
+    } catch (_) { copy.textContent = 'Copy failed: select the text below'; }
+    setTimeout(() => { copy.textContent = 'Copy JSON'; }, 1800);
+  });
+  const dl = document.createElement('button');
+  dl.type = 'button'; dl.className = 'inspact'; dl.textContent = 'Download .json';
+  dl.addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([full], { type: 'application/json' }));
+    a.download = (m.kind || g) + '-' + (m.id || (Number.isFinite(m.lat) ? m.lat.toFixed(4) + '_' + m.lon.toFixed(4) : 'record')) + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  bar.append(copy, dl);
+  const pre = document.createElement('pre');
+  pre.className = 'advjson';
+  pre.tabIndex = 0;
+  pre.setAttribute('aria-label', 'Record JSON');
+  pre.textContent = displayJson(m);
+  js.append(bar, pre);
+  return frag;
+}
+
+// Every marker popup is a peek: what it is, where, and the one line that
+// matters, with one "Details" button that opens the pane. Appended at
+// open time so the popup builders stay untouched; the fuller sections
+// are folded by CSS (.peek), never removed.
 map.on('popupopen', (e) => {
   const src = (e.popup && e.popup.__m) ? e.popup : (e.popup && e.popup._source);
   const m = src && src.__m;
@@ -2771,12 +3028,22 @@ map.on('popupopen', (e) => {
   const el = e.popup.getElement();
   const box = el && el.querySelector('.p2, .pop');
   if (!m || !g || !box || box.querySelector('.inspbtn')) return;
+  el.querySelectorAll('.p2, .pop').forEach((b) => b.classList.add('peek'));
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'detbtn inspbtn';
-  btn.textContent = 'Show in inspector';
+  btn.innerHTML = 'Details <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+  btn.setAttribute('aria-label', 'Open the details pane');
   btn.addEventListener('click', () => { openInspector(m, g); map.closePopup(); });
   box.appendChild(btn);
+  e.popup._updateLayout();
+  e.popup._updatePosition();
+  // Opened from the keyboard (a list, the strip, the palette): focus
+  // follows into the popup instead of staying on a control behind it.
+  const active = document.activeElement;
+  if (active && active !== document.body && !map.getContainer().contains(active)) {
+    btn.focus({ preventScroll: true });
+  }
 });
 
 // On a phone a popup is the point: fold the sheet to a peek and nudge
@@ -2922,7 +3189,7 @@ function refreshAlerts() {
 }
 function scheduleAlerts() {
   clearTimeout(alertsTimer);
-  alertsTimer = setTimeout(refreshAlerts, 250);
+  alertsTimer = setTimeout(() => { refreshAlerts(); refreshPlacesLive(); }, 250);
 }
 map.on('moveend zoomend', scheduleAlerts);
 document.querySelectorAll('#filters input[data-group]').forEach((box) => {
@@ -2954,29 +3221,47 @@ function parseCoords(s) {
   return { name: lat.toFixed(5) + ', ' + lon.toFixed(5), lat, lon };
 }
 
-// Home, Work, favorites and the last 10 destinations, kept in this
-// browser (localStorage), the same shape the phone apps keep. Shown under
-// an empty address field as quick picks; each one can be removed.
+// Home, Work, favorites and recent destinations. Kept in this browser
+// (localStorage) when signed out and as the offline copy; when signed in
+// they follow the account (PlaceSync below), the same list the phone
+// apps and the MCP server's get_my_places read. Shown under an empty
+// address field as quick picks; each one can be removed.
+const PLACES_CAP = 20;  // the account keeps 20 saved and 20 recents (watch.py)
+function placeId() {
+  return (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+    : 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
 const Places = {
   KEY: 'cs.places.v1',
+  empty() { return { home: null, work: null, saved: [], recents: [] }; },
   load() {
-    try { return Object.assign({ home: null, work: null, saved: [], recents: [] }, JSON.parse(store.get(this.KEY) || '{}')); }
-    catch (_) { return { home: null, work: null, saved: [], recents: [] }; }
+    let p;
+    try { p = Object.assign(this.empty(), JSON.parse(store.get(this.KEY) || '{}')); }
+    catch (_) { p = this.empty(); }
+    // Older copies have no ids; the account needs one per place.
+    for (const r of [p.home, p.work, ...p.saved, ...p.recents]) if (r && !r.id) r.id = placeId();
+    return p;
   },
-  save(p) { store.set(this.KEY, JSON.stringify(p)); },
+  // A change made here: stored, then pushed to the account when signed in.
+  save(p, removal) { store.set(this.KEY, JSON.stringify(p)); PlaceSync.changed(!!removal); },
   same(a, b) { return a && b && Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4; },
   noteRecent(c) {
     if (!c || c.name === 'My location' || !isFinite(c.lat)) return;
     const p = this.load();
-    p.recents = [{ name: c.name, lat: +c.lat, lon: +c.lon, at: Date.now() }]
-      .concat(p.recents.filter(r => !this.same(r, c))).slice(0, 10);
+    const was = p.recents.find(r => this.same(r, c));
+    p.recents = [{ id: was ? was.id : placeId(), name: c.name, lat: +c.lat, lon: +c.lon, at: Date.now() }]
+      .concat(p.recents.filter(r => !this.same(r, c))).slice(0, PLACES_CAP);
     this.save(p);
   },
   set(kind, c) {
     const p = this.load();
-    const rec = { name: c.name, lat: +c.lat, lon: +c.lon, at: Date.now() };
+    const rec = { id: placeId(), name: c.name, lat: +c.lat, lon: +c.lon, at: Date.now() };
     if (kind === 'home' || kind === 'work') p[kind] = rec;
-    else p.saved = [rec].concat(p.saved.filter(r => !this.same(r, c))).slice(0, 5);
+    else {
+      const was = p.saved.find(r => this.same(r, c));
+      if (was) rec.id = was.id;
+      p.saved = [rec].concat(p.saved.filter(r => !this.same(r, c))).slice(0, PLACES_CAP);
+    }
     this.save(p);
   },
   remove(kind, c) {
@@ -2984,8 +3269,32 @@ const Places = {
     if (kind === 'home' || kind === 'work') p[kind] = null;
     else if (kind === 'saved') p.saved = p.saved.filter(r => !this.same(r, c));
     else p.recents = p.recents.filter(r => !this.same(r, c));
-    this.save(p);
+    this.save(p, true);
   },
+  // The account's wire shape (watch.py merge_places, the apps' Places):
+  // {id, kind: home|work|saved|recent, name, lat, lon, used_at seconds}.
+  toWire(p) {
+    const w = (r, kind) => ({ id: r.id, kind, name: r.name || '', lat: +r.lat, lon: +r.lon,
+      used_at: (r.at || 0) / 1000 });
+    return [p.home && w(p.home, 'home'), p.work && w(p.work, 'work'),
+      ...p.saved.map(r => w(r, 'saved')), ...p.recents.map(r => w(r, 'recent'))].filter(Boolean);
+  },
+  fromWire(list) {
+    const p = this.empty();
+    const r = (x) => ({ id: String(x.id), name: String(x.name || ''), lat: +x.lat, lon: +x.lon,
+      at: Math.round((+x.used_at || 0) * 1000) });
+    for (const x of list || []) {
+      if (!x || !isFinite(x.lat) || !isFinite(x.lon)) continue;
+      if (x.kind === 'home' || x.kind === 'work') { if (!p[x.kind]) p[x.kind] = r(x); }
+      else if (x.kind === 'saved') p.saved.push(r(x));
+      else if (x.kind === 'recent') p.recents.push(r(x));
+    }
+    p.saved.sort((a, b) => b.at - a.at);
+    p.recents.sort((a, b) => b.at - a.at);
+    return p;
+  },
+  // The account's list replaces the local copy; no push back.
+  adopt(list) { store.set(this.KEY, JSON.stringify(this.fromWire(list))); },
   // The quick picks, in the order the apps use: Home, Work, favorites, recents.
   quick() {
     const p = this.load();
@@ -2997,6 +3306,85 @@ const Places = {
     return out;
   },
 };
+
+// Account sync, the same protocol as the phone apps (Places.swift):
+// on sign-in, one merging PUT of this browser's list, and the merged list
+// comes back and replaces it. After that every change is pushed, debounced:
+// additions merge, a removal replaces, but only once this browser holds
+// the account's whole list, so a partial copy never wipes places saved in
+// the app. Signed out, the list simply stays in this browser.
+const PlaceSync = {
+  signedIn: false,
+  synced: false,
+  timer: null,
+  removal: false,
+  async token() {
+    try { return window.csAuth ? await window.csAuth.token() : null; } catch (_) { return null; }
+  },
+  async put(body) {
+    const token = await this.token();
+    if (!token) return null;
+    try {
+      const r = await fetch('/api/me/places', { method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify(body) });
+      if (!r.ok) return null;
+      const d = await r.json();
+      return Array.isArray(d.places) ? d.places : null;
+    } catch (_) { return null; }
+  },
+  async syncNow() {
+    clearTimeout(this.timer); this.timer = null; this.removal = false;
+    const merged = await this.put({ places: Places.toWire(Places.load()) });
+    if (!merged || !this.signedIn) return;
+    Places.adopt(merged);
+    this.synced = true;
+    placesSyncChanged();
+  },
+  changed(removal) {
+    if (!this.signedIn) return;
+    this.removal = this.removal || removal;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(async () => {
+      this.timer = null;
+      const body = { places: Places.toWire(Places.load()) };
+      if (this.removal && this.synced) body.replace = true;
+      this.removal = false;
+      const merged = await this.put(body);
+      if (!merged || !this.signedIn) return;
+      Places.adopt(merged);
+      this.synced = true;
+      placesSyncChanged();
+    }, 1500);
+  },
+  setSignedIn(on) {
+    store.set(PLACES_ACCT_KEY, on ? '1' : '');
+    if (on === this.signedIn) return;
+    const signingOut = this.signedIn && !on;
+    this.signedIn = on;
+    this.synced = false;
+    if (signingOut) {
+      // As the apps do: signing out drops the account's list from this
+      // browser, so the next person to sign in here does not merge it in.
+      // Nothing is pushed: a push now would need the token that just went.
+      clearTimeout(this.timer); this.timer = null; this.removal = false;
+      store.set(Places.KEY, '');
+    }
+    if (on) this.syncNow();
+    placesSyncChanged();
+  },
+};
+const PLACES_ACCT_KEY = 'cs-acct';
+// Sign-in lives in the watch module (Firebase), loaded on demand. It
+// announces every change; a browser that was signed in last time loads
+// it once the map is idle, so the account's places arrive on their own.
+document.addEventListener('cs-auth', (e) => PlaceSync.setSignedIn(!!(e.detail && e.detail.signedIn)));
+if (store.get(PLACES_ACCT_KEY) === '1') {
+  (window.requestIdleCallback || ((f) => setTimeout(f, 1500)))(() => loadWatch(), { timeout: 4000 });
+}
+function placesSyncChanged() {
+  document.dispatchEvent(new CustomEvent('cs-places'));
+}
 
 function wireAddress(inputId, valId, suggId, withMyLocation, onPick) {
   const input = document.getElementById(inputId);
@@ -3212,7 +3600,7 @@ function showFound(c) {
   [['home', 'Save as Home'], ['work', 'Save as Work'], ['saved', 'Save to favorites']].forEach(([k, label]) => {
     const btn = document.createElement('button');
     btn.type = 'button'; btn.className = 'linkbtn'; btn.textContent = label;
-    btn.addEventListener('click', () => { Places.set(k, c); btn.textContent = 'Saved'; btn.disabled = true; });
+    btn.addEventListener('click', () => { Places.set(k, c); btn.textContent = 'Saved'; btn.disabled = true; renderPlaces(); });
     save.append(btn);
   });
   box.append(name, sub, nav, save);
@@ -3220,6 +3608,7 @@ function showFound(c) {
   map.flyTo(at, Math.max(map.getZoom(), 14), { duration: 0.7 });
   setTimeout(() => findPin && findPin.openPopup(), 750);
   findF.input.blur();   // the popup folds the phone sheet by itself
+  placesPicked(c);      // Your places asked for this pick: save it there
 }
 // Into the planner: the pin is the destination; the start is the
 // driver's own location unless From already says otherwise.
@@ -3477,6 +3866,7 @@ function clearRoute() {
   if (wrap) wrap.style.display = 'none';
   const pw = document.getElementById('printwrap');
   if (pw) pw.style.display = 'none';
+  hideRouteStrip();
 }
 document.getElementById('clearroutebtn')
   .addEventListener('click', clearRoute);
@@ -4128,57 +4518,75 @@ function renderRouteConditions(latlngs) {
     'chain', 'fire_pt', 'sign'];
   // Read the marker data, not the Leaflet layer groups: under the WebGL
   // renderer those groups stay empty and this list said "nothing
-  // notable" on every modern browser.
+  // notable" on every modern browser. Listed in driving order, by the
+  // mile each one sits at, start to finish.
+  const along = routeMiles(latlngs);
+  const hits = [];
   for (const g of condGroups) {
     for (const it of (items[g] || [])) {
-      if (shown >= 12) break;
       const m = it.m;
+      if (!along.box.contains([m.lat, m.lon])) continue;
       // 0.35 km: on the roadway itself (plus GPS slop), not "nearby".
       if (!nearRoute(m, latlngs, 0.35)) continue;
-      const row = document.createElement('div');
-      row.className = 'condrow';
-      const dot = document.createElement('i');
-      dot.style.background = GROUP_DOT[g];
-      const txt = document.createElement('span');
-      const popEl = document.createElement('div');
-      popEl.innerHTML = popupFor(m, g);
-      const head = popEl.querySelector('h4, .t');
-      const sub = popEl.querySelector('.sub, .d');
-      txt.textContent = (head ? head.textContent : POP_LABEL[g]) +
-        (sub && sub.textContent ? ' - ' + sub.textContent : '');
-      row.append(dot, txt);
-      if (dep) {
-        const [cls, noteTxt] = departNote(m, g, dep);
-        if (noteTxt) {
-          const when = document.createElement('span');
-          when.className = 'when' + (cls ? ' ' + cls : '');
-          when.textContent = noteTxt;
-          txt.append(when);
-        }
-      }
-      const at = [m.lat, m.lon];
-      row.addEventListener('mouseenter', () => {
-        if (condHighlight) map.removeLayer(condHighlight);
-        condHighlight = L.circleMarker(at, {
-          radius: 15, color: '#0b1f33', weight: 3, fill: false,
-        }).addTo(map);
-      });
-      row.addEventListener('mouseleave', () => {
-        if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
-      });
-      row.addEventListener('click', () => {
-        if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
-        map.flyTo(at, Math.max(map.getZoom(), 12), { duration: 0.7 });
-        setTimeout(() => {
-          const p = L.popup({ maxWidth: 320 }).setLatLng(at).setContent(popupFor(m, g));
-          p.__m = m; p.__g = g;
-          p.openOn(map);
-        }, 750);
-      });
-      box.append(row);
-      shown++;
+      hits.push({ m, g, km: along.at(m) });
     }
   }
+  hits.sort((x, y) => x.km - y.km);
+  for (const { m, g, km } of hits.slice(0, 25)) {
+    const row = document.createElement('div');
+    row.className = 'condrow';
+    const dot = document.createElement('i');
+    dot.style.background = GROUP_DOT[g];
+    const txt = document.createElement('span');
+    const popEl = document.createElement('div');
+    popEl.innerHTML = popupFor(m, g);
+    const head = popEl.querySelector('h4, .t');
+    const sub = popEl.querySelector('.sub, .d');
+    txt.textContent = (head ? head.textContent : POP_LABEL[g]) +
+      (sub && sub.textContent ? ' - ' + sub.textContent : '');
+    const mi = document.createElement('b');
+    mi.className = 'condmi';
+    mi.textContent = csUnits.fmt(km, km < 10 ? 1 : 0);
+    row.append(dot, txt, mi);
+    if (dep) {
+      const [cls, noteTxt] = departNote(m, g, dep);
+      if (noteTxt) {
+        const when = document.createElement('span');
+        when.className = 'when' + (cls ? ' ' + cls : '');
+        when.textContent = noteTxt;
+        txt.append(when);
+      }
+    }
+    const at = [m.lat, m.lon];
+    row.addEventListener('mouseenter', () => {
+      if (condHighlight) map.removeLayer(condHighlight);
+      condHighlight = L.circleMarker(at, {
+        radius: 15, color: '#0b1f33', weight: 3, fill: false,
+      }).addTo(map);
+    });
+    row.addEventListener('mouseleave', () => {
+      if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
+    });
+    row.addEventListener('click', () => {
+      if (condHighlight) { map.removeLayer(condHighlight); condHighlight = null; }
+      map.flyTo(at, Math.max(map.getZoom(), 12), { duration: 0.7 });
+      setTimeout(() => {
+        const p = L.popup({ maxWidth: 320 }).setLatLng(at).setContent(popupFor(m, g));
+        p.__m = m; p.__g = g;
+        p.openOn(map);
+      }, 750);
+    });
+    box.append(row);
+    shown++;
+  }
+  if (hits.length > shown) {
+    const more = document.createElement('p');
+    more.className = 'panenote';
+    more.textContent = 'Showing the first ' + shown + ' of ' + hits.length +
+      ' along the route. The route strip on the map has every one.';
+    box.append(more);
+  }
+  buildRouteStrip(latlngs, along);
   if (!shown) {
     const row = document.createElement('div');
     row.textContent = 'Nothing notable reported along this route right now.';
@@ -4290,3 +4698,657 @@ document.getElementById('exportbtn').addEventListener('click', () => {
   URL.revokeObjectURL(aEl.href);
 });
 
+
+// ── Open one item's peek popup, after the map has landed on it ────
+// The Live list, the Places list, the route strip and the palette all
+// open items the same way the map does.
+function openPeek(m, g, zoom) {
+  const at = L.latLng(m.lat, m.lon);
+  const z = Math.max(map.getZoom(), zoom || 11);
+  const open = () => {
+    const p = L.popup({ maxWidth: 320 }).setLatLng(at).setContent(popupFor(m, g));
+    p.__m = m; p.__g = g;
+    p.openOn(map);
+  };
+  if (map.getCenter().distanceTo(at) < 1 && map.getZoom() === z) open();
+  else { map.once('moveend', open); map.setView(at, z); }
+}
+function kmBetween(a, b) {
+  const dlat = (a.lat - b.lat) * 111.32;
+  const dlon = (a.lon - b.lon) * 111.32 * Math.cos(a.lat * Math.PI / 180);
+  return Math.sqrt(dlat * dlat + dlon * dlon);
+}
+// The live items the Live tool would list, inside a test, worst first.
+function liveWhere(test) {
+  const rows = [];
+  for (const g of Object.keys(SEVERITY)) {
+    if (!items[g] || !groupOn(g)) continue;
+    for (const it of items[g]) if (test(it.m)) rows.push({ it, sev: SEVERITY[g] });
+  }
+  return rows;
+}
+
+// ── Your places: Home, Work, saved spots, recents, and what is live ──
+// Kept in this browser (Places, cs.places.v1). Each place says how much
+// is live within 5 km of it right now, counted from the map's own data.
+const PLACE_KM = 5;
+const placesPane = document.getElementById('pane-places');
+const ptiles = document.getElementById('ptiles');
+const pnote = document.getElementById('pnote');
+const placesEditBtn = document.getElementById('placesedit');
+let placesEditing = false;
+let placeSlot = null;     // 'home' | 'work' | 'saved': the next search pick fills it
+const PLACE_ICON = {
+  home: '<path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4z"/>',
+  work: '<rect x="4" y="8" width="16" height="11" rx="2"/><path d="M9 8V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v2M4 13h16"/>',
+  saved: '<path d="m12 4 2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16.4 7.2 18.9l.9-5.4-3.9-3.8 5.4-.8z"/>',
+  recent: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+  add: '<path d="M12 6v12M6 12h12"/>',
+};
+const svgIcon = (d) => '<svg viewBox="0 0 24 24" aria-hidden="true">' + d + '</svg>';
+function liveNear(c) {
+  return liveWhere((m) => kmBetween(m, c) <= PLACE_KM).length;
+}
+function armPlaceSlot(slot) {
+  placeSlot = slot;
+  const label = slot === 'home' ? 'Home' : slot === 'work' ? 'Work' : 'a saved place';
+  pnote.hidden = false;
+  pnote.innerHTML = '';
+  const t = document.createElement('span');
+  t.textContent = 'Search above the map, then pick a result to save it as ' + label + '.';
+  const cancel = document.createElement('button');
+  cancel.type = 'button'; cancel.className = 'txtbtn'; cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', () => { placeSlot = null; pnote.hidden = true; findF.input.placeholder = findPlaceholder; });
+  pnote.append(t, cancel);
+  findF.input.placeholder = slot === 'home' ? 'Search for your home address'
+    : slot === 'work' ? 'Search for your work address' : 'Search for a place to save';
+  if (isPhone()) setSheet('peek');
+  findF.input.focus();
+}
+const findPlaceholder = findF.input.placeholder;
+// Called by showFound: a pick made while a slot is armed is saved there.
+function placesPicked(c) {
+  if (!placeSlot) return;
+  Places.set(placeSlot, c);
+  placeSlot = null;
+  pnote.hidden = true;
+  findF.input.placeholder = findPlaceholder;
+  renderPlaces();
+}
+function placeTile(kind, c, label) {
+  const tile = document.createElement('div');
+  tile.className = 'ptile ' + kind + (c ? '' : ' unset');
+  const main = document.createElement('button');
+  main.type = 'button';
+  main.className = 'pmain';
+  const n = c ? liveNear(c) : 0;
+  const sub = c
+    ? (n ? n + ' live within ' + csUnits.fmt(PLACE_KM, 0) : 'Nothing live within ' + csUnits.fmt(PLACE_KM, 0))
+    : 'Set ' + label.toLowerCase();
+  main.innerHTML = '<span class="pic">' + svgIcon(PLACE_ICON[kind]) + '</span>' +
+    '<span class="ptxt"><b>' + esc(label) + '</b><small' + (c && n ? ' class="haslive"' : '') + '>' +
+    esc(sub) + '</small></span>';
+  main.title = c ? 'Directions to ' + c.name : 'Set your ' + label.toLowerCase() + ' address';
+  main.addEventListener('click', () => {
+    if (placesEditing && c) return;
+    if (c) navigateTo(Object.assign({}, c));
+    else armPlaceSlot(kind);
+  });
+  tile.append(main);
+  if (c) {
+    const look = document.createElement('button');
+    look.type = 'button'; look.className = 'plook';
+    look.setAttribute('aria-label', 'Show ' + label + ' on the map');
+    look.title = 'Show on the map';
+    look.innerHTML = svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>');
+    look.addEventListener('click', () => showFound(Object.assign({}, c)));
+    tile.append(look);
+  }
+  if (c && placesEditing) {
+    const rm = document.createElement('button');
+    rm.type = 'button'; rm.className = 'prm';
+    rm.setAttribute('aria-label', 'Remove ' + label);
+    rm.textContent = 'Remove';
+    rm.addEventListener('click', () => { Places.remove(kind, c); renderPlaces(); });
+    tile.append(rm);
+  }
+  return tile;
+}
+function renderPlaces() {
+  if (!placesPane.classList.contains('on')) return;
+  const p = Places.load();
+  ptiles.replaceChildren(
+    placeTile('home', p.home, 'Home'),
+    placeTile('work', p.work, 'Work'),
+    ...p.saved.map((c) => placeTile('saved', c, c.name.split(', ')[0])));
+  if (p.saved.length < PLACES_CAP) {
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'padd';
+    add.innerHTML = svgIcon(PLACE_ICON.add) + '<span>Save a place</span>';
+    add.addEventListener('click', () => armPlaceSlot('saved'));
+    ptiles.append(add);
+  }
+  placesEditBtn.hidden = !(p.home || p.work || p.saved.length);
+  document.getElementById('psync').textContent = PlaceSync.signedIn
+    ? 'Synced with your account.'
+    : 'Saved in this browser. Sign in to sync with the app and your AI assistant.';
+  document.getElementById('psignin').hidden = PlaceSync.signedIn;
+  const recents = p.recents.filter((r) => !Places.same(r, p.home) && !Places.same(r, p.work)).slice(0, 4);
+  const wrap = document.getElementById('precentwrap');
+  const list = document.getElementById('precent');
+  wrap.hidden = !recents.length;
+  list.replaceChildren(...recents.map((c) => {
+    const row = document.createElement('button');
+    row.type = 'button'; row.className = 'prow';
+    const parts = c.name.split(', ');
+    row.innerHTML = '<span class="pic sm">' + svgIcon(PLACE_ICON.recent) + '</span><span><b>' +
+      esc(parts[0]) + '</b><small>' + esc(parts.slice(1).join(', ') || 'Directions') + '</small></span>';
+    row.title = 'Directions to ' + c.name;
+    row.addEventListener('click', () => navigateTo(Object.assign({}, c)));
+    return row;
+  }));
+  refreshPlacesLive();
+}
+placesEditBtn.addEventListener('click', () => {
+  placesEditing = !placesEditing;
+  placesEditBtn.textContent = placesEditing ? 'Done' : 'Edit';
+  placesEditBtn.setAttribute('aria-pressed', placesEditing ? 'true' : 'false');
+  renderPlaces();
+});
+document.getElementById('pliveall').addEventListener('click', () => {
+  setTool('alerts', { toggle: false, reveal: true });
+  scheduleAlerts();
+});
+const LIVE_CATS = [
+  ['Incidents', (g) => g.startsWith('inc_')],
+  ['Closures', (g) => g.startsWith('clo_')],
+  ['Chain controls', (g) => g === 'chain'],
+  ['Wildfires', (g) => g === 'fire_pt'],
+  ['Plugin alerts', (g) => g === 'plugin'],
+];
+function refreshPlacesLive() {
+  if (!placesPane.classList.contains('on')) return;
+  const b = map.getBounds();
+  const c = map.getCenter();
+  const rows = liveWhere((m) => b.contains([m.lat, m.lon]));
+  const chips = document.getElementById('pchips');
+  chips.replaceChildren(...LIVE_CATS.map(([label, test]) => {
+    const n = rows.filter((r) => test(r.it.g)).length;
+    if (!n) return null;
+    const chip = document.createElement('span');
+    chip.className = 'pchip';
+    chip.innerHTML = '<b>' + n.toLocaleString() + '</b> ' + esc(label.toLowerCase());
+    return chip;
+  }).filter(Boolean));
+  const list = document.getElementById('plive');
+  if (!rows.length) {
+    list.innerHTML = '<p class="panenote">Nothing live in view for the layers you have on.</p>';
+    return;
+  }
+  rows.forEach((r) => { r.d = map.distance(c, [r.it.m.lat, r.it.m.lon]); });
+  rows.sort((x, y) => x.sev - y.sev || x.d - y.d);
+  list.replaceChildren(...rows.slice(0, 4).map((r) => {
+    const row = alertRow(r.it.m, r.it.g);
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'alertrow';
+    btn.innerHTML = '<i style="--dot:' + GROUP_DOT[r.it.g] + '"></i><span><b>' +
+      esc(String(row.title).slice(0, 110)) + '</b><small>' + esc(row.sub) + '</small></span>';
+    btn.addEventListener('click', () => openPeek(r.it.m, r.it.g));
+    return btn;
+  }));
+}
+// The places list follows the Live list's refresh (scheduleAlerts runs
+// it on every move and data load); the tiles' counts every 30 seconds.
+setInterval(renderPlaces, 30000);
+[1500, 4000, 9000].forEach((ms) => setTimeout(renderPlaces, ms));
+document.querySelectorAll('#filters input[data-group]').forEach((box) => {
+  box.addEventListener('change', () => setTimeout(renderPlaces, 60));
+});
+document.addEventListener('cs-tool', (e) => { if (e.detail === 'places') renderPlaces(); });
+document.addEventListener('cs-places', () => renderPlaces());
+document.getElementById('psignin').addEventListener('click', () => {
+  setTool('watch', { toggle: false, reveal: true });
+});
+renderPlaces();
+
+// ── Route strip: the planned trip as one line, start to finish ────
+// Every item on the route sits at its mile. Click one, or step with the
+// arrows, and the map flies to it with its popup open.
+const rstrip = document.getElementById('rstrip');
+const rsopen = document.getElementById('rsopen');
+const rstrack = document.getElementById('rstrack');
+const rscard = document.getElementById('rscard');
+const STRIP_EXTRA = ['camera', 'rwis', 'plugin'];  // shown when their layer is on
+let stripItems = [];
+let stripSel = -1;
+let stripHidden = false;
+function routeMiles(latlngs) {
+  const cum = [0];
+  for (let i = 1; i < latlngs.length; i++) {
+    cum.push(cum[i - 1] + kmBetween({ lat: latlngs[i - 1][0], lon: latlngs[i - 1][1] },
+      { lat: latlngs[i][0], lon: latlngs[i][1] }));
+  }
+  const box = L.latLngBounds(latlngs);
+  const pad = 0.01;   // about a kilometre, more than the 0.35 km match
+  const padded = L.latLngBounds([box.getSouth() - pad, box.getWest() - pad],
+    [box.getNorth() + pad, box.getEast() + pad]);
+  return {
+    total: cum[cum.length - 1] || 0,
+    box: padded,
+    // The km along the route of the vertex nearest the item.
+    at(m) {
+      let best = 0, bd = Infinity;
+      for (let i = 0; i < latlngs.length; i++) {
+        const dlat = m.lat - latlngs[i][0], dlon = (m.lon - latlngs[i][1]) * Math.cos(m.lat * Math.PI / 180);
+        const d = dlat * dlat + dlon * dlon;
+        if (d < bd) { bd = d; best = i; }
+      }
+      return cum[best];
+    },
+  };
+}
+// "MESSAGE SIGN" -> "Message sign": the popup labels are set in caps by CSS elsewhere.
+function kindName(g) {
+  const t = String(POP_LABEL[g] || g).toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+let stripFitGen = -1;
+function hideRouteStrip() {
+  stripItems = []; stripSel = -1;
+  rstrip.hidden = true; rsopen.hidden = true;
+  document.getElementById('mapcard').classList.remove('has-strip');
+}
+function buildRouteStrip(latlngs, along) {
+  if (!plannedRoute) return;
+  const groups = ['clo_full', 'clo_lane', 'clo_oneway', 'clo_ramp', 'inc_collision', 'inc_fire',
+    'inc_hazard', 'inc_other', 'chain', 'fire_pt', 'sign'].concat(STRIP_EXTRA.filter(groupOn));
+  const hits = [];
+  for (const g of groups) {
+    for (const it of (items[g] || [])) {
+      const m = it.m;
+      if (!along.box.contains([m.lat, m.lon]) || !nearRoute(m, latlngs, 0.35)) continue;
+      hits.push({ m, g, km: along.at(m) });
+    }
+  }
+  hits.sort((x, y) => x.km - y.km);
+  stripItems = hits;
+  stripSel = -1;
+  const total = along.total || 1;
+  const r = plannedRoute.route;
+  document.getElementById('rsname').textContent =
+    (plannedRoute.fromName || 'Start').split(',')[0] + ' → ' + (plannedRoute.toName || 'Destination').split(',')[0];
+  const mins = Math.round(r.duration / 60);
+  document.getElementById('rsmeta').textContent = [csUnits.fmt(r.distance / 1000, 0),
+    mins >= 60 ? Math.floor(mins / 60) + ' h ' + (mins % 60) + ' min' : mins + ' min',
+    hits.length ? hits.length + (hits.length === 1 ? ' item' : ' items') + ' on the way' : 'nothing reported on the way',
+  ].join(' · ');
+  document.getElementById('rsa').textContent = 'Start';
+  document.getElementById('rsb').textContent = csUnits.fmt(total, 0);
+  // Three lanes so items a few hundred metres apart stay clickable; the
+  // middle one, on the line, fills first.
+  const lanes = [-1e9, -1e9, -1e9];
+  const LANE_ORDER = [1, 0, 2];
+  rstrack.replaceChildren();
+  const line = document.createElement('div');
+  line.className = 'rsline';
+  rstrack.append(line);
+  hits.forEach((h, i) => {
+    const pct = Math.max(0, Math.min(100, (h.km / total) * 100));
+    let lane = LANE_ORDER.find((l) => pct - lanes[l] >= 2.2);
+    if (lane === undefined) lane = lanes.indexOf(Math.min(...lanes));
+    lanes[lane] = pct;
+    const row = alertRow(h.m, h.g);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'rsdot';
+    b.tabIndex = -1;
+    b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', 'false');
+    b.style.setProperty('--x', pct + '%');
+    b.style.setProperty('--lane', lane);
+    b.style.setProperty('--dot', GROUP_DOT[h.g] || '#64748b');
+    b.setAttribute('aria-label', kindName(h.g) + ': ' + String(row.title) + ', at ' + csUnits.fmt(h.km, 1));
+    b.title = String(row.title);
+    b.addEventListener('click', () => selectStrip(i, true));
+    rstrack.append(b);
+  });
+  ['rsprev', 'rsnext'].forEach((id) => { document.getElementById(id).disabled = !hits.length; });
+  document.getElementById('rspos').textContent = hits.length ? '— of ' + hits.length : '';
+  rscard.replaceChildren();
+  rscard.hidden = true;
+  if (!stripHidden) {
+    rstrip.hidden = false; rsopen.hidden = true;
+    document.getElementById('mapcard').classList.add('has-strip');
+    // A new route: fit it above the strip, once, so the strip never
+    // covers the line it describes.
+    if (stripFitGen !== routeGen) {
+      stripFitGen = routeGen;
+      map.fitBounds(L.latLngBounds(latlngs), { paddingTopLeft: [40, 70],
+        paddingBottomRight: [40, rstrip.offsetHeight + 40 +
+          (isPhone() ? panelEl.offsetHeight + railEl.offsetHeight : 0)], animate: false });
+    }
+  } else { rsopen.hidden = false; }
+}
+function selectStrip(i, fly) {
+  if (!stripItems.length) return;
+  stripSel = (i + stripItems.length) % stripItems.length;
+  const h = stripItems[stripSel];
+  rstrack.querySelectorAll('.rsdot').forEach((b, j) => {
+    b.classList.toggle('on', j === stripSel);
+    b.setAttribute('aria-selected', j === stripSel ? 'true' : 'false');
+  });
+  rstrack.setAttribute('aria-activedescendant', '');
+  document.getElementById('rspos').textContent = (stripSel + 1) + ' of ' + stripItems.length;
+  const row = alertRow(h.m, h.g);
+  rscard.hidden = false;
+  rscard.innerHTML = '<i style="--dot:' + (GROUP_DOT[h.g] || '#64748b') + '"></i>' +
+    '<div><b>' + esc(String(row.title).slice(0, 120)) + '</b><small>' +
+    esc([kindName(h.g), csUnits.fmt(h.km, h.km < 10 ? 1 : 0) + ' from the start'].join(' · ')) +
+    '</small></div>';
+  const det = document.createElement('button');
+  det.type = 'button'; det.className = 'rsdet'; det.textContent = 'Details';
+  det.addEventListener('click', () => openInspector(h.m, h.g));
+  rscard.append(det);
+  if (fly) openPeek(h.m, h.g, 12);
+}
+document.getElementById('rsprev').addEventListener('click', () => selectStrip(stripSel < 0 ? stripItems.length - 1 : stripSel - 1, true));
+document.getElementById('rsnext').addEventListener('click', () => selectStrip(stripSel + 1, true));
+rstrack.addEventListener('keydown', (e) => {
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+  if (step) { e.preventDefault(); selectStrip(stripSel < 0 ? (step > 0 ? 0 : -1) : stripSel + step, true); }
+  else if (e.key === 'Home') { e.preventDefault(); selectStrip(0, true); }
+  else if (e.key === 'End') { e.preventDefault(); selectStrip(stripItems.length - 1, true); }
+  else if (e.key === 'Enter' && stripSel >= 0) { e.preventDefault(); openInspector(stripItems[stripSel].m, stripItems[stripSel].g); }
+});
+document.getElementById('rsclose').addEventListener('click', () => {
+  stripHidden = true;
+  rstrip.hidden = true; rsopen.hidden = false;
+  document.getElementById('mapcard').classList.remove('has-strip');
+  rsopen.focus();
+});
+rsopen.addEventListener('click', () => {
+  stripHidden = false;
+  if (plannedRoute) { rstrip.hidden = false; rsopen.hidden = true; document.getElementById('mapcard').classList.add('has-strip'); rstrack.focus(); }
+});
+L.DomEvent.disableClickPropagation(rstrip);
+L.DomEvent.disableScrollPropagation(rstrip);
+L.DomEvent.disableClickPropagation(rsopen);
+
+// ── The rail: slim by default, expands to labels and the rest ─────
+const RAIL_WIDE_KEY = 'cs-rail-wide';
+const railX = document.getElementById('railexpand');
+function setRailWide(on) {
+  shellEl.classList.toggle('railwide', on);
+  railX.setAttribute('aria-expanded', on ? 'true' : 'false');
+  railX.querySelector('span').textContent = on ? (isPhone() ? 'Close' : 'Collapse') : 'More';
+  railX.title = on ? 'Collapse the rail' : 'Show more tools and labels';
+  if (!isPhone()) store.set(RAIL_WIDE_KEY, on ? '1' : '');
+  setTimeout(() => map.invalidateSize(), 220);
+}
+railX.addEventListener('click', () => setRailWide(!shellEl.classList.contains('railwide')));
+setRailWide(!isPhone() && store.get(RAIL_WIDE_KEY) === '1');
+// On a phone the expanded rail is a menu over the tab bar: picking from
+// it, or tapping elsewhere, closes it.
+document.getElementById('railadv').addEventListener('click', (e) => {
+  if (isPhone() && e.target.closest('.tool')) setRailWide(false);
+});
+document.addEventListener('pointerdown', (e) => {
+  if (isPhone() && shellEl.classList.contains('railwide') && !railEl.contains(e.target)) setRailWide(false);
+});
+railEl.addEventListener('click', (e) => {
+  const act = e.target.closest('[data-act]');
+  if (!act || act.tagName !== 'BUTTON') return;
+  runAction(act.dataset.act);
+});
+function runAction(name) {
+  if (name === 'keys') {
+    setTool('settings', { toggle: false, reveal: true });
+    loadWatch().then(() => setTimeout(() => {
+      const card = document.getElementById('keycard');
+      const target = card && !card.hidden ? card : document.getElementById('acctnote');
+      if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }, 300));
+  } else if (name === 'report') {
+    document.getElementById('reportbtn').click();
+  } else if (name === 'theme') {
+    setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+  } else if (name === 'palette') {
+    openPalette();
+  }
+}
+
+// ── Theme: light or dark, the site's own setting (cs-theme) ───────
+// basemap-early.js applied it before first paint. With no base map
+// chosen, the map follows: Dark on a dark page, Positron on a light one.
+const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  document.getElementById('railtheme').textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+  let chosenBase = null;
+  try { chosenBase = localStorage.getItem('cs-basemap'); } catch (_) { /* private mode */ }
+  if (!chosenBase) {
+    const radio = document.querySelector('#basemap input[value="' + (theme === 'dark' ? 'Dark' : 'Positron') + '"]');
+    if (radio && !radio.checked) {
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change', { bubbles: true }));
+      try { localStorage.removeItem('cs-basemap'); } catch (_) { /* private mode */ }
+    }
+  }
+}
+function setTheme(choice) {
+  try {
+    if (choice === 'system') localStorage.removeItem('cs-theme');
+    else localStorage.setItem('cs-theme', choice);
+  } catch (_) { /* private mode */ }
+  applyTheme(choice === 'system' ? (darkMq.matches ? 'dark' : 'light') : choice);
+}
+darkMq.addEventListener('change', () => {
+  let saved = null;
+  try { saved = localStorage.getItem('cs-theme'); } catch (_) { /* private mode */ }
+  if (saved !== 'light' && saved !== 'dark') applyTheme(darkMq.matches ? 'dark' : 'light');
+});
+document.getElementById('railtheme').textContent =
+  document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode';
+
+// ── Command palette (Cmd-K / Ctrl-K) ──────────────────────────────
+// One box for every real action on the page: places, a place search,
+// tools, layers, base maps, units and theme. Each command calls the
+// same code its button does.
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
+const cpal = document.getElementById('cpal');
+const cpalQ = document.getElementById('cpalq');
+const cpalList = document.getElementById('cpallist');
+document.getElementById('cpalkey').textContent = IS_MAC ? '⌘K' : 'Ctrl K';
+document.getElementById('cpalhint').addEventListener('click', () => openPalette());
+let palCmds = [];
+let palSel = 0;
+let palOpener = null;
+let palSearchSeq = 0;
+let palPlaces = [];
+function labelText(input) {
+  const lab = input.closest('label');
+  if (!lab) return input.value;
+  return Array.from(lab.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' ').trim();
+}
+function paletteCommands() {
+  const cmds = [];
+  const add = (group, label, run, hint, keys) => cmds.push({ group, label, run, hint: hint || '', keys: [keys, label, hint].filter(Boolean).join(' ') });
+  const p = Places.load();
+  if (p.home) add('Places', 'Directions to Home', () => navigateTo(Object.assign({}, p.home)), p.home.name.split(', ')[0], 'home');
+  else add('Places', 'Set your Home address', () => { setTool('places', { toggle: false, reveal: true }); armPlaceSlot('home'); }, '', 'home');
+  if (p.work) add('Places', 'Directions to Work', () => navigateTo(Object.assign({}, p.work)), p.work.name.split(', ')[0], 'work office');
+  else add('Places', 'Set your Work address', () => { setTool('places', { toggle: false, reveal: true }); armPlaceSlot('work'); }, '', 'work office');
+  p.saved.forEach((c) => add('Places', 'Directions to ' + c.name.split(', ')[0], () => navigateTo(Object.assign({}, c)), 'Saved', 'saved favorite'));
+  p.recents.slice(0, 3).forEach((c) => add('Places', c.name.split(', ')[0], () => navigateTo(Object.assign({}, c)), 'Recent', 'recent'));
+  palPlaces.forEach((c) => add('Search results', c.name.split(', ')[0], () => showFound(c), c.name.split(', ').slice(1).join(', '), 'search find'));
+  add('Actions', 'Plan a route', () => { setTool('route', { toggle: false, reveal: true }); fromF.input.focus(); }, '', 'directions navigate trip');
+  add('Actions', 'Your places', () => setTool('places', { toggle: false, reveal: true }), '', 'home saved');
+  add('Actions', 'Live right now', () => { setTool('alerts', { toggle: false, reveal: true }); scheduleAlerts(); }, '', 'alerts incidents closures');
+  add('Actions', 'Layers', () => setTool('layers', { toggle: false, reveal: true }), '', 'filters show hide');
+  add('Actions', 'Ask about your drive', () => { setTool('ask', { toggle: false, reveal: true }); document.getElementById('q').focus(); }, '', 'assistant question ai');
+  add('Actions', 'Report something on the road', () => runAction('report'), '', 'report hazard');
+  add('Actions', 'Watch areas', () => setTool('watch', { toggle: false, reveal: true }), '', 'alerts notify watch');
+  add('Actions', 'Settings', () => setTool('settings', { toggle: false, reveal: true }), '', 'account preferences');
+  add('Actions', 'API keys', () => runAction('keys'), 'Settings', 'developer key token');
+  add('Actions', 'About the data', () => setTool('about', { toggle: false, reveal: true }), '', 'sources legal privacy');
+  add('Actions', shellEl.classList.contains('railwide') ? 'Collapse the rail' : 'Expand the rail', () => setRailWide(!shellEl.classList.contains('railwide')), '', 'sidebar menu');
+  if (plannedRoute) {
+    add('Route', 'Show the route strip', () => rsopen.hidden ? rstrack.focus() : rsopen.click(), '', 'strip along');
+    add('Route', 'Copy a share link', () => document.getElementById('sharebtn').click(), '', 'share link');
+    add('Route', 'Export as GPX', () => document.getElementById('gpxbtn').click(), '', 'gpx download');
+    add('Route', 'Export as KML', () => document.getElementById('kmlbtn').click(), '', 'kml download');
+    add('Route', 'Clear the route', () => document.getElementById('clearroutebtn').click(), '', 'remove reset');
+  }
+  if (!inspectorEl.hidden) add('Actions', 'Close the details pane', closeInspector, '', 'inspector');
+  document.querySelectorAll('#filters input[data-group]').forEach((box) => {
+    add('Layers', labelText(box), () => { box.click(); }, box.checked ? 'On' : 'Off', 'layer toggle show hide');
+  });
+  const traffic = document.getElementById('trafficlayer');
+  add('Layers', 'Live traffic overlay', () => traffic.click(), traffic.checked ? 'On' : 'Off', 'layer traffic flow');
+  document.querySelectorAll('#basemap input[name="basemap"]').forEach((r) => {
+    add('Map style', r.value + ' base map', () => { if (!r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } },
+      r.checked ? 'Current' : '', 'basemap style');
+  });
+  document.querySelectorAll('#unitpick input[name="units"]').forEach((r) => {
+    add('Units', r.value === 'mi' ? 'Distances in miles' : 'Distances in kilometers', () => csUnits.set(r.value),
+      csUnits.get() === r.value ? 'Current' : '', 'units');
+  });
+  const theme = document.documentElement.dataset.theme;
+  let savedTheme = null;
+  try { savedTheme = localStorage.getItem('cs-theme'); } catch (_) { /* private mode */ }
+  add('Theme', 'Light theme', () => setTheme('light'), savedTheme === 'light' ? 'Current' : '', 'appearance');
+  add('Theme', 'Dark theme', () => setTheme('dark'), savedTheme === 'dark' ? 'Current' : '', 'appearance night');
+  add('Theme', 'Match the system', () => setTheme('system'), !savedTheme ? 'Current, ' + theme : '', 'appearance auto');
+  return cmds;
+}
+// Every word typed must start a word in the label or its keywords.
+function palMatch(cmd, words) {
+  if (!words.length) return true;
+  const hay = cmd.keys.toLowerCase().split(/[^a-z0-9]+/);
+  return words.every((w) => hay.some((h) => h.startsWith(w)));
+}
+function renderPalette() {
+  const q = cpalQ.value.trim();
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const all = paletteCommands();
+  palCmds = all.filter((c) => c.group === 'Search results' || palMatch(c, words));
+  if (q.length >= 2) {
+    const coord = parseCoords(q);
+    if (coord && !palPlaces.length) palCmds.unshift({ group: 'Search results', label: coord.name, run: () => showFound(coord), hint: 'Coordinates', keys: '' });
+    palCmds.push({ group: 'Ask', label: 'Ask: ' + q, hint: 'Assistant', keys: '', run: () => {
+      setTool('ask', { toggle: false, reveal: true });
+      const box = document.getElementById('q');
+      box.value = q.slice(0, 300);
+      document.getElementById('form').requestSubmit();
+    } });
+  }
+  palSel = Math.min(palSel, Math.max(0, palCmds.length - 1));
+  cpalList.replaceChildren();
+  let group = null;
+  palCmds.forEach((c, i) => {
+    if (c.group !== group) {
+      group = c.group;
+      const h = document.createElement('div');
+      h.className = 'cpalgrp'; h.setAttribute('role', 'presentation');
+      h.textContent = group;
+      cpalList.append(h);
+    }
+    const row = document.createElement('div');
+    row.className = 'cpalrow' + (i === palSel ? ' on' : '');
+    row.id = 'cpal-' + i;
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', i === palSel ? 'true' : 'false');
+    const t = document.createElement('span'); t.textContent = c.label;
+    row.append(t);
+    if (c.hint) { const h = document.createElement('small'); h.textContent = c.hint; row.append(h); }
+    row.addEventListener('mousemove', () => { if (palSel !== i) { palSel = i; markPalette(); } });
+    row.addEventListener('click', () => runPalette(i));
+    cpalList.append(row);
+  });
+  if (!palCmds.length) {
+    const none = document.createElement('p');
+    none.className = 'cpalnone';
+    none.textContent = 'No command matches. Type at least two letters to search places.';
+    cpalList.append(none);
+  }
+  markPalette();
+}
+function markPalette() {
+  cpalList.querySelectorAll('.cpalrow').forEach((r, i) => {
+    r.classList.toggle('on', i === palSel);
+    r.setAttribute('aria-selected', i === palSel ? 'true' : 'false');
+  });
+  const cur = document.getElementById('cpal-' + palSel);
+  cpalQ.setAttribute('aria-activedescendant', cur ? cur.id : '');
+  if (cur) cur.scrollIntoView({ block: 'nearest' });
+}
+function runPalette(i) {
+  const c = palCmds[i];
+  if (!c) return;
+  closePalette(false);
+  c.run();
+}
+let palTimer = null;
+cpalQ.addEventListener('input', () => {
+  palSel = 0;
+  palPlaces = [];
+  renderPalette();
+  clearTimeout(palTimer);
+  const q = cpalQ.value.trim();
+  if (q.length < 2 || parseCoords(q)) return;
+  palTimer = setTimeout(async () => {
+    const mine = ++palSearchSeq;
+    try {
+      const c = map.getCenter();
+      const res = await fetch('/api/suggest?q=' + encodeURIComponent(q) +
+        '&lat=' + c.lat.toFixed(2) + '&lon=' + c.lng.toFixed(2));
+      const data = await res.json();
+      if (mine !== palSearchSeq || cpal.hidden) return;
+      palPlaces = (data.suggestions || []).slice(0, 5);
+      renderPalette();
+    } catch (_) { /* offline: the other commands still work */ }
+  }, 220);
+});
+cpalQ.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); palSel = Math.min(palCmds.length - 1, palSel + 1); markPalette(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); palSel = Math.max(0, palSel - 1); markPalette(); }
+  else if (e.key === 'Enter') { e.preventDefault(); runPalette(palSel); }
+});
+cpal.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePalette(true); }
+  if (e.key === 'Tab') { e.preventDefault(); cpalQ.focus(); }  // one field: focus stays in the dialog
+});
+cpal.addEventListener('mousedown', (e) => { if (e.target === cpal) closePalette(true); });
+function openPalette() {
+  if (!cpal.hidden) { cpalQ.select(); return; }
+  palOpener = document.activeElement;
+  cpalQ.value = '';
+  palSel = 0;
+  palPlaces = [];
+  cpal.hidden = false;
+  renderPalette();
+  cpalQ.focus();
+}
+function closePalette(restore) {
+  if (cpal.hidden) return;
+  cpal.hidden = true;
+  if (restore && palOpener && document.contains(palOpener)) palOpener.focus({ preventScroll: true });
+  palOpener = null;
+}
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    if (cpal.hidden) openPalette(); else closePalette(true);
+  }
+});
+
+// Escape closes the innermost thing first: an open popup before the
+// details pane behind it (the pane's own handler runs after this one).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !cpal.hidden) return;
+  const pop = map._popup;
+  if (pop && pop.isOpen() && !inspectorEl.contains(document.activeElement)) {
+    map.closePopup();
+    e.stopPropagation();
+  }
+}, true);

@@ -19,6 +19,18 @@ from mapsrc import map_source
 SNAP_HOST = "data.commutescout.com"
 
 
+@pytest.fixture(autouse=True)
+def _no_live_feed_state(monkeypatch):
+    """coverage_summary() leaves out states whose feeds are down right
+    now, which is what the topbar should say. The copy these tests pin
+    describes the registry, so they read it on a clean feed cache rather
+    than whatever fetch errors earlier tests left behind."""
+    from ca_roads.cache import TTLCache
+    from ca_roads_demo import states
+
+    monkeypatch.setattr(states, "_cache", TTLCache())
+
+
 def test_payload_carries_the_fields_the_client_depends_on():
     p = snapshot.build_payload([{"kind": "incident", "lat": 1, "lon": 2}])
     # schema drives the long-lived-tab self-reload; published drives the
@@ -244,7 +256,7 @@ def test_state_counts_are_current():
         # said 32 while the line above said 38, inside the text the
         # assistant reads to answer users.
         ("src/ca_roads_demo/prompt.py", r"(\d+) covered states"),
-        ("src/ca_roads_mcp/server.py", r"just California: (\d+) states today"),
+        ("src/ca_roads_mcp/server.py", r"any of the (\d+) states CommuteScout"),
         ("README.md", r"across \*\*(\d+) states\*\*|across (\d+) states"),
         # Two counts in this file, and the long connector description
         # says "across N US states" with the wrap falling between "US"
@@ -257,7 +269,7 @@ def test_state_counts_are_current():
         ("site/app/page.tsx", r"across (\d+) states"),
         ("site/components/blocks/hero-section-1.tsx", r"across (\d+) states"),
         ("docs/architecture.md", r"(\d+) states"),
-        ("docs/mcp.md", r"(\d+) states, not just California"),
+        ("docs/mcp.md", r"any of the (\d+) covered states"),
         # /mcp states the count inside the get_nearby_events blurb. It
         # used to be split across a string concatenation, which hid it
         # from every per-file pattern; the blurb now keeps "37 states"
@@ -366,9 +378,11 @@ def test_feed_counts_are_current():
     for path, pattern in (
         ("README.md", r"reads (\d+) official agency feeds"),
         ("site/lib/stats.ts", r"AGENCY_FEED_COUNT = (\d+)"),
-        ("site/app/about/page.tsx", r"reads (\d+) official agency feeds"),
+        # The marketing pages say "official sources" for a first-time
+        # reader (owner review, 2026-11-19); the guard reads either.
+        ("site/app/about/page.tsx", r"(\d+) official (?:agency )?(?:feeds|sources)"),
         ("site/components/blocks/hero-section-1.tsx",
-         r"reads (\d+) official agency feeds"),
+         r"(\d+) official (?:agency )?(?:feeds|sources)"),
         ("site/app/data-sources/page.tsx",
          r"reads (\d+) official agency feeds"),
     ):
@@ -476,8 +490,10 @@ def test_tool_counts_are_current():
                     f"{m.group(0)!r}, the registry has {actual}")
     assert not bad, sorted(bad)
     # The claim is made on several surfaces; if it vanishes everywhere
-    # the guard has stopped guarding anything.
-    assert checked >= 5, f"only {checked} tool-count claims found"
+    # the guard has stopped guarding anything. /mcp and /developers now
+    # render the count from site/lib/stats.ts instead of prose (owner
+    # review, 2026-11), so fewer prose claims remain.
+    assert checked >= 3, f"only {checked} tool-count claims found"
 
 
 @pytest.mark.asyncio

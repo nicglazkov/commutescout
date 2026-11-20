@@ -89,19 +89,30 @@ def parse_coords(text: str | None) -> tuple[float, float] | None:
 def guess_zone(lat: float, lon: float) -> str:
     """A US time zone from position alone, for when the weather service
     cannot say. Coarse on purpose (state lines bend); the NWS answer
-    wins whenever there is one."""
-    if lon < -154:
+    wins whenever there is one.
+
+    Alaska is tested before Hawaii: western Alaska (Nome, Bethel, the
+    Aleutians) lies west of Hawaii's longitude and once guessed
+    Honolulu."""
+    if lat > 50 and lon < -129:
+        # The western Aleutians keep Hawaii-Aleutian time.
+        return "America/Adak" if lon < -169 else "America/Anchorage"
+    if lon < -154 and lat < 30:
         return "Pacific/Honolulu"
-    if lat > 51 and lon < -129:
-        return "America/Anchorage"
     if lat < 19 and lon > -68:
         return "America/Puerto_Rico"
     if lon < -114.0:
+        # Southern Idaho (Boise) and Oregon's Malheur County east of
+        # -117.2 keep Mountain time; the rest of the far West is Pacific.
+        if 42.0 <= lat < 45.5 and lon > -117.2:
+            return "America/Boise"
         return "America/Los_Angeles"
     if lon < -102.0:
         return "America/Phoenix" if lat < 37 and lon < -109 else "America/Denver"
     if lon < -86.5:
         return "America/Chicago"
+    if 29.5 <= lat < 31.1 and lon < -85.0:
+        return "America/Chicago"  # the Florida Panhandle west of the Apalachicola
     return "America/New_York"
 
 
@@ -291,6 +302,29 @@ def via_roads(trip: dict, top: int = 4) -> list[str]:
     return [n for n, _ in sorted(length.items(), key=lambda kv: -kv[1])[:top]]
 
 
+# California's core feeds predate the per-marker ``src`` field every
+# other state's markers carry; their publishers by marker kind.
+_CA_SOURCE = {"incident": "CHP", "lane_closure": "Caltrans LCS",
+              "chain_control": "Caltrans", "wildfire": "WFIGS + CAL FIRE",
+              "sign": "Caltrans", "camera": "Caltrans", "rwis": "Caltrans"}
+
+
+def marker_source(m: dict) -> str | None:
+    """The agency that published a marker. Never a guess: a marker
+    without ``src`` is named only when it is one of California's core
+    feeds (inside California); anything else stays unattributed rather
+    than borrowing California's agencies."""
+    if m.get("src"):
+        return m["src"]
+    if m.get("kind") in ("plugin", "enforcement_camera"):
+        return "OpenStreetMap"
+    lat, lon = m.get("lat"), m.get("lon")
+    if (isinstance(lat, int | float) and isinstance(lon, int | float)
+            and 32.4 <= lat <= 42.1 and -124.6 <= lon <= -114.0):
+        return _CA_SOURCE.get(m.get("kind"))
+    return None
+
+
 def event_view(m: dict, mile: float | None) -> dict:
     """One live marker, trimmed to what a driver (or a model) reads."""
     kind = m.get("kind")
@@ -322,6 +356,8 @@ def event_view(m: dict, mile: float | None) -> dict:
     if kind == "incident" and "summary" not in out:
         bits = [m.get("type"), m.get("location")]
         out["summary"] = ": ".join(b for b in bits if b)
+    if "source" not in out and (src := marker_source(m)):
+        out["source"] = src
     out["lat"] = round(float(m["lat"]), 5)
     out["lon"] = round(float(m["lon"]), 5)
     return out
@@ -338,7 +374,9 @@ def minutes(seconds) -> int | None:
 # geocoder's text match ranks them level with the landmark itself.
 _LODGING = re.compile(
     r"\b(hotel|inn|suites?|motel|hostel|lodge|radisson|sheraton|marriott|"
-    r"hilton|hyatt|embassy suites|homestead|crashpad|parking|park (sfo|lax|"
+    r"hilton|hyatt|embassy suites|homestead|intercontinental|westin|"
+    r"doubletree|courtyard|ritz-carlton|four seasons|best western|"
+    r"crashpad|parking|park (sfo|lax|"
     r"jfk)|car service|transportation|shuttle|limo|rental|cell phone|"
     r"waiting lot)\b", re.I)
 # A famous match this close to the user beats a nearer namesake: "SFO"
@@ -389,6 +427,12 @@ async def place_candidates(client, query: str, near, limit: int = 5
             # Houston Elementary School in Austin, so the city itself has
             # to come from the unbiased answer, however far it is.
             out += [c for c in _rows(plain) if _is_city(c, city)]
+        elif "," not in query:
+            # A bare town name from a trip's start: the bias fills the
+            # list with "East Springfield St" and "Portland #2" around
+            # the origin, so the towns of that name come from the
+            # unbiased answer and lead (resolve then picks or asks).
+            out += [c for c in _rows(plain) if _is_town_named(c, query)]
     else:
         out = _rows(await stadia_suggest(client, query, None, None, limit=size))
     for c in await geocode_candidates(client, query, limit=limit, near=near,
@@ -411,9 +455,12 @@ async def place_candidates(client, query: str, near, limit: int = 5
     def lodging(c):
         return 0 if lodging_ok or not _LODGING.search(c[2].split(",")[0]) else 1
 
+    towns_first = (near is not None and not city and "," not in query
+                   and any(_is_town_named(c, query) for c in deduped))
     first = deduped[0] if deduped else None
     deduped.sort(key=lambda c: (
         0 if not city or _is_city(c, city) else 1,
+        0 if not towns_first or _is_town_named(c, query) else 1,
         lodging(c), 0 if not ranked or phrase in _name_key(c[2]) else 1))
     top = deduped[0] if deduped else None
     if (first is not None and top is not first and lodging(first) == 0
@@ -440,6 +487,14 @@ def city_state(query: str) -> tuple[str, str] | None:
         return None
     code = _STATES.get(parts[1].lower().rstrip("."))
     return (_name_key(parts[0]), code) if code else None
+
+
+def _is_town_named(cand: tuple[float, float, str], query: str) -> bool:
+    """The candidate is a town called exactly what was typed
+    ("Springfield, MA, USA" for "Springfield"), not a street, stop or
+    shop with the name inside it."""
+    parts = cand[2].split(", ")
+    return len(parts) == 3 and _name_key(cand[2]) == _name_key(query)
 
 
 def _is_city(cand: tuple[float, float, str], city: tuple[str, str]) -> bool:
@@ -548,7 +603,8 @@ async def resolve(client, place: str | None, coords: str | None,
               if haversine_meters(c[0], c[1], cands[0][0], cands[0][1]) > 25_000
               and _name_key(c[2]) == _name_key(cands[0][2])]
     town = len(cands[0][2].split(", ")) <= 3  # "Springfield, MO, USA"
-    if spread and town and "," not in place and near is None:
+    if spread and town and "," not in place and (
+            near is None or not _clearly_nearest(cands[0], spread, near)):
         return {
             "needs_clarification": True, "which": which,
             "options": [", ".join(c[2].split(", ")[:4]) for c in cands[:4]],
@@ -561,6 +617,42 @@ async def resolve(client, place: str | None, coords: str | None,
         # A venue name with namesakes elsewhere: the popular one leads,
         # and the rest are named so the answer can say which it used.
         out["other_matches"] = [", ".join(c[2].split(", ")[:4]) for c in spread]
+    if label.endswith(", California") and city_state(place) is None:
+        # The offline California list answered (the geocoder was down or
+        # had nothing): "Richmond" may well be Virginia's.
+        out["note"] = (f"matched {label} from the offline California list "
+                       "while the nationwide geocoder was unavailable; if "
+                       "the user meant another state, re-run with the state")
+    return out
+
+
+# A destination town shared by far-apart places is taken without
+# asking only when the trip's start makes one of them the obvious pick:
+# within this distance, and much nearer than any namesake ("Springfield"
+# from Boston is Massachusetts; from Kansas City it is a question).
+OBVIOUS_PICK_KM = 400
+
+
+def _clearly_nearest(top, namesakes, near) -> bool:
+    d_top = haversine_meters(near[0], near[1], top[0], top[1])
+    d_next = min(haversine_meters(near[0], near[1], c[0], c[1])
+                 for c in namesakes)
+    return d_top <= OBVIOUS_PICK_KM * 1000 and d_next >= 2 * d_top
+
+
+def match_notes(*ends: tuple[str, dict]) -> list[str]:
+    """A note per trip end that was picked among same-named places, so
+    the answer says which one it used."""
+    out = []
+    for which, end in ends:
+        if end.get("note"):
+            out.append(f"{which}: {end['note']}")
+        others = end.get("other_matches")
+        if others:
+            out.append(f"{which} taken as {end.get('name')}; other places "
+                       f"share the name ({'; '.join(others[:3])}). Say which "
+                       "was used, and re-run with the state if the user "
+                       "meant another.")
     return out
 
 
@@ -647,14 +739,20 @@ async def live_markers(client, box, kinds: set[str]
     snap = await snapshots.markers(client, box, kinds)
     if snap is not None:
         return snap[0], []
+    from ca_roads_demo import states  # noqa: PLC0415
     from ca_roads_demo.app import build_markers  # noqa: PLC0415 - heavy, lazy
 
     notes: list[str] = []
+    want = kinds - {"plugin", "enforcement"}
     try:
-        markers, ready, total, degraded = await build_markers(
-            box, kinds - {"plugin", "enforcement"}, feed_budget=12.0)
+        markers, _ready, _total, degraded = await build_markers(
+            box, want, feed_budget=12.0)
     except Exception:  # noqa: BLE001 - one bad feed must not sink a trip
         return [], ["live road events could not be loaded just now"]
+    # Warm-up is judged on the feeds this box touches. build_markers
+    # reports it for the whole country, and this process never prewarms,
+    # so every fallback trip used to say feeds were "still loading".
+    ready, total = states.warm_progress(box, want)
     if degraded or (total and ready < total):
         notes.append("some state feeds were still loading; a few live "
                      "events may be missing")
@@ -737,7 +835,7 @@ async def plan_trip(client, origin: str | None, destination: str | None,
     if hit and time.monotonic() - hit[0] < PLAN_TTL_SECONDS:
         return hit[1]
 
-    notes: list[str] = []
+    notes: list[str] = match_notes(("origin", o), ("destination", d))
     corridor_box = bbox([a, b], pad=0.3)
     route_markers, mnotes = await live_markers(
         client, corridor_box, {"incident", "closure", "chain"})
@@ -893,6 +991,15 @@ def _period_at(periods: list[dict], when: datetime) -> dict | None:
     return None
 
 
+def _zone_suffix(leave: datetime, arrive: datetime) -> str:
+    """" CST" when a trip ends in a different time zone than it starts
+    (Chicago to Indianapolis), so a bare arrival clock is not read in
+    the departure's zone; "" otherwise."""
+    if leave.utcoffset() == arrive.utcoffset():
+        return ""
+    return f" {arrive.tzname()} (destination time)"
+
+
 def _trip_summary(o, d, best, traffic, sections, alerts, leave, arrive, tz_d,
                   now_local) -> str:
     when = ("now" if abs((leave - now_local).total_seconds()) < 600 else
@@ -906,7 +1013,8 @@ def _trip_summary(o, d, best, traffic, sections, alerts, leave, arrive, tz_d,
         span = f"{hrs} h {mm} min" if hrs else f"{mm} min"
         bits.append(f"about {span} leaving {when}")
         if arrive:
-            bits[-1] += f", arriving around {clock(arrive.astimezone(tz_d))}"
+            bits[-1] += (f", arriving around {clock(arrive.astimezone(tz_d))}"
+                         + _zone_suffix(leave, arrive.astimezone(tz_d)))
     delay = (traffic or {}).get("traffic_delay_minutes")
     if delay and delay >= 5:
         bits.append(f"{delay} min of that is traffic")
@@ -985,7 +1093,7 @@ async def best_time_to_go(client, origin: str | None, destination: str | None,
     l_hm = parse_hhmm(latest) or (21, 0)
     start = datetime(the_day.year, the_day.month, the_day.day, *e_hm, tzinfo=tz_o)
     end = datetime(the_day.year, the_day.month, the_day.day, *l_hm, tzinfo=tz_o)
-    notes: list[str] = []
+    notes: list[str] = match_notes(("origin", o), ("destination", d))
 
     # A probe at the free-flow hour sizes the drive (and fetches the
     # route line for history) before the sweep picks its slots.
@@ -1095,7 +1203,7 @@ async def best_time_to_go(client, origin: str | None, destination: str | None,
 
     def severe(r):
         hz = (r.get("weather") or {}).get("driving_hazard")
-        return hz in ("blizzard", "freezing", "ice", "sleet", "snow")
+        return hz in nws_feed.SEVERE_HAZARDS
 
     fastest = min(rows, key=lambda r: r["minutes"])
     candidates = [r for r in rows if not severe(r)] or rows
@@ -1110,15 +1218,23 @@ async def best_time_to_go(client, origin: str | None, destination: str | None,
     avoid = [r["leave"] for r in rows if r["minutes"] >= fastest["minutes"] * 1.25]
 
     when = day_label(datetime.fromisoformat(best["leave_local"]).date(), now.date())
+    best_leave = datetime.fromisoformat(best["leave_local"])
+    arrive_zone = _zone_suffix(
+        best_leave, (best_leave + timedelta(minutes=best["minutes"])
+                     ).astimezone(tz_d))
     summary = (f"Best time to leave {when}: {best['leave']} (about "
-               f"{best['minutes']} min, arriving {best['arrive']}).")
+               f"{best['minutes']} min, arriving {best['arrive']}"
+               f"{arrive_zone}).")
     if worst["minutes"] - best["minutes"] >= 5:
         summary += (f" Worst: {worst['leave']} at about {worst['minutes']} "
                     "min.")
     if avoid:
         summary += " Traffic is heaviest leaving " + _ranges(avoid, rows) + "."
-    if severe(best) or any(severe(r) for r in rows):
-        summary += " Snow or ice is in the forecast for part of the window."
+    severe_words = sorted({r["weather"]["driving_hazard"] for r in rows
+                           if severe(r)})
+    if severe_words:
+        summary += (f" {_hazard_phrase(severe_words)} in the forecast for "
+                    "part of the window.")
     if target_by is not None:
         when = day_label(target_by.date(), now.astimezone(tz_d).date())
         summary = (f"To arrive by {clock(target_by)} {when}, leave by "
@@ -1128,6 +1244,7 @@ async def best_time_to_go(client, origin: str | None, destination: str | None,
         "summary": summary,
         "origin": o, "destination": d,
         "time_zone": tz_o.key,
+        "arrival_time_zone": tz_d.key,
         "recommended": best,
         "fastest": fastest,
         "slowest": worst,
@@ -1149,6 +1266,17 @@ async def best_time_to_go(client, origin: str | None, destination: str | None,
     else:
         notes.append("incident history: " + history.get("reason", "unavailable"))
     return out
+
+
+def _hazard_phrase(words: list[str]) -> str:
+    """"Snow or ice is", "A hurricane is": the severe forecast words of a
+    sweep as the start of a sentence."""
+    named = {"hurricane": "a hurricane", "tropical storm": "a tropical storm",
+             "freezing": "freezing rain or drizzle"}
+    parts = [named.get(w, w) for w in words]
+    text = parts[0] if len(parts) == 1 else (
+        ", ".join(parts[:-1]) + " or " + parts[-1])
+    return text[:1].upper() + text[1:] + " is"
 
 
 def _ranges(labels: list[str], rows: list[dict]) -> str:
@@ -1213,6 +1341,8 @@ async def get_weather(client, place: str | None = None,
     }
     if hazards:
         out["driving_hazards"] = [{"start": s, "hazard": h} for s, h in hazards[:12]]
+    if notes := match_notes(("place", p)):
+        out["notes"] = notes
     if not periods:
         out["note"] = "no NWS forecast for this point (outside NWS coverage, " \
                       "or the service is down)"
@@ -1228,11 +1358,21 @@ async def get_area_history(client, place: str | None = None,
     radius_km = max(0.2, min(float(radius_km), 25.0))
     info = await nws_feed.point_info(client, p["lat"], p["lon"])
     tz = zone((info or {}).get("time_zone"), p["lat"], p["lon"])
-    h = await hist.history([(p["lat"], p["lon"])], radius_km * 1000, days, tz.key)
-    return {"place": p, "radius_km": radius_km, "time_zone": tz.key, **h,
-            "note": ("Counts are incidents and closures CommuteScout saw "
-                     "start inside the circle, by local hour. Coverage "
-                     "follows each state's feeds; history began 2026-07-12.")}
+    h, feeds = await asyncio.gather(
+        hist.history([(p["lat"], p["lon"])], radius_km * 1000, days, tz.key),
+        state_feeds(client, info))
+    out = {"place": p, "radius_km": radius_km, "time_zone": tz.key, **h,
+           "note": ("Counts are incidents and closures CommuteScout saw "
+                    "start inside the circle, by local hour. Coverage "
+                    "follows each state's feeds; history began 2026-07-12.")}
+    notes = match_notes(("place", p))
+    if feeds:
+        out["state_coverage"] = feeds
+        if feeds.get("note"):
+            notes.append(feeds["note"])
+    if notes:
+        out["notes"] = notes
+    return out
 
 
 async def get_traffic(client, points: str | None = None, place: str | None = None,
@@ -1284,33 +1424,123 @@ async def get_traffic(client, points: str | None = None, place: str | None = Non
     return result
 
 
-def get_coverage() -> dict:
+# The map's own source list: the demo service holds every state's key,
+# so its /api/sources is what the map (and the snapshots the tools read)
+# actually serve. The MCP service often holds none of the per-state keys,
+# and listing only its own feeds once left Washington, Oregon, Ohio,
+# Colorado and four more out of get_coverage while get_nearby_events
+# answered for them. Off whenever snapshots are off (tests, self-hosts).
+SOURCES_URL = os.environ.get("MCP_SOURCES_URL",
+                             "https://commutescout.com/api/sources")
+SOURCES_TTL_SECONDS = 600.0
+_sources_cache: dict[str, tuple[float, list[dict]]] = {}
+# California's core feeds are not in the expansion list a self-hosted
+# server builds locally; the map's /api/sources carries them itself.
+_CA_CORE = [{"state": "California", "agency": a, "name": n} for a, n in (
+    ("CHP", "Incidents (with dispatch logs)"),
+    ("Caltrans LCS", "Lane closures"), ("Caltrans", "Chain controls"),
+    ("WFIGS + CAL FIRE", "Wildfires"), ("Caltrans CCTV", "Cameras"),
+    ("Caltrans CMS", "Message signs"), ("Caltrans RWIS", "Road weather"))]
+NATIONWIDE = ["NWS weather alerts and hourly forecasts",
+              "WFIGS wildfires and perimeters", "USGS earthquakes",
+              "TomTom traffic flow and time-of-day drive times",
+              "Stadia Maps routing and geocoding",
+              "CommuteScout event history (since 2026-07-12)"]
+
+
+async def _map_sources(client) -> list[dict] | None:
+    if not snapshots.base() or not SOURCES_URL:
+        return None
+    hit = _sources_cache.get(SOURCES_URL)
+    if hit and time.monotonic() - hit[0] < SOURCES_TTL_SECONDS:
+        return hit[1]
+    try:
+        resp = await client.get(SOURCES_URL, timeout=8.0, headers={
+            "User-Agent": "commutescout-mcp (coverage)"})
+        resp.raise_for_status()
+        entries = resp.json().get("sources")
+    except Exception:  # noqa: BLE001 - fall back to this process's feeds
+        return hit[1] if hit else None
+    if not isinstance(entries, list) or not entries:
+        return hit[1] if hit else None
+    _sources_cache[SOURCES_URL] = (time.monotonic(), entries)
+    return entries
+
+
+async def get_coverage(client=None) -> dict:
     from ca_roads_demo import states  # noqa: PLC0415
 
-    entries = states.source_status()
+    entries = await _map_sources(client) if client is not None else None
+    notes: list[str] = []
+    if entries is None:
+        entries = states.source_status() + _CA_CORE
+        notes.append("listed from this server's own feeds; the hosted "
+                     "map may cover more states")
     by_state: dict[str, list[str]] = {}
     for e in entries:
-        st = e.get("state")
-        if not st or e.get("enabled") is False:
+        label = e.get("state")
+        if (not label or label == "Nationwide" or e.get("enabled") is False
+                or e.get("status") == "off"):
             continue
-        by_state.setdefault(st, []).append(
-            f"{e.get('agency')}: {e.get('name')}"
-            + (" (stale)" if e.get("stale") else ""))
-    california = ["CHP incidents (with dispatch logs)", "Caltrans lane closures",
-                  "Caltrans chain controls", "Caltrans cameras and message signs",
-                  "Caltrans road weather", "511 SF Bay events and tolls",
-                  "CAL FIRE and WFIGS wildfires"]
-    by_state.setdefault("California", []).extend(california)
-    by_state.setdefault("Nevada", []).append("NDOT (nvroads)")
+        # "Texas (Austin)" is Texas: one state, however many feeds.
+        state = states._state_key(label)
+        where = label[len(state):].strip(" ()")
+        line = f"{e.get('agency')}: {e.get('name')}" + (
+            f" ({where})" if where else "")
+        if e.get("stale") or e.get("status") in ("stale", "down"):
+            line += f" ({e.get('status') or 'stale'})"
+        if line not in by_state.setdefault(state, []):
+            by_state[state].append(line)
     return {
-        "states_covered": len([s for s in by_state if s != "Nationwide"]),
-        "summary": states.coverage_summary(),
+        "states_covered": len(by_state),
         "by_state": dict(sorted(by_state.items())),
-        "nationwide": ["NWS weather alerts and hourly forecasts",
-                       "WFIGS wildfires and perimeters", "USGS earthquakes",
-                       "TomTom traffic flow and time-of-day drive times",
-                       "Stadia Maps routing and geocoding",
-                       "CommuteScout event history (since 2026-07-12)"],
+        "nationwide": NATIONWIDE,
+        "other_states": ("Every other US state gets the nationwide layers: "
+                         "routing, drive times, traffic speeds, NWS weather "
+                         "and alerts, wildfires and earthquakes, but no "
+                         "state feed of incidents or closures, so "
+                         "get_nearby_events there finds wildfires (and "
+                         "OpenStreetMap speed cameras when asked) only."),
         "note": "States publish different things: some publish roadwork "
                 "only, so a quiet answer there can be normal.",
+        **({"notes": notes} if notes else {}),
     }
+
+
+_STATE_NAMES = {code: name for name, code in US_STATE_CODES.items()}
+_ROADWORK_ONLY = ("roadwork", "toll pricing")
+
+
+async def state_feeds(client, info: dict | None) -> dict | None:
+    """What the point's own state publishes, from the NWS place ("Macon,
+    GA") and the coverage list: {"state", "feeds", "note"}. A quiet
+    answer in a state with no road-event feed, or a roadwork-only one,
+    is then explained instead of reading as a quiet road. None when the
+    state cannot be told, or when the map's own source list is not in
+    use (a self-hosted server's local feed list would misreport)."""
+    if not snapshots.base():
+        return None
+    place = (info or {}).get("place") or ""
+    code = place.rsplit(", ", 1)[-1].strip().upper() if ", " in place else ""
+    name = _STATE_NAMES.get(code)
+    if not name:
+        return None
+    cov = await get_coverage(client)
+    if cov.get("notes"):  # the map's list was unreachable
+        return None
+    feeds = cov["by_state"].get(name) or []
+    if not feeds:
+        note = (f"{name} publishes no live road-event feed CommuteScout "
+                "reads yet: incidents, closures and their history are not "
+                "available there, only the nationwide layers (weather, "
+                "wildfires, traffic speeds, drive times).")
+    elif all(any(k in f.lower() for k in _ROADWORK_ONLY) for f in feeds):
+        note = (f"{name}'s feed here is roadwork only: crashes and other "
+                "incidents are not published, so none appear (or count in "
+                "history) for it.")
+    else:
+        note = None
+    out = {"state": name, "feeds": feeds}
+    if note:
+        out["note"] = note
+    return out

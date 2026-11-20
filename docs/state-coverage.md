@@ -20,7 +20,7 @@ state's WZDx roadwork feed.
 | Ohio | Y | Y | Y | Y | Y | n/a | Y* |
 | Maryland | Y | Y (wz) | - (5) | Y | Y | n/a | Y* |
 | Illinois | Y | - (6) | Y | - (6) | - (6) | n/a | Y* |
-| Alabama | - (7) | - (7) | Y | - (7) | - (7) | n/a | Y* |
+| Alabama | Y | Y | Y | Y | - (7) | n/a | Y* |
 | Missouri | - (8) | Y (wz) | - (8) | Y | - (8) | n/a | Y* |
 | Iowa | - (9) | Y (wz) | - (9) | - (9) | - (9) | n/a | Y* |
 | North Carolina | Y | Y | Y | Y | - (27) | n/a | Y* |
@@ -33,7 +33,7 @@ state's WZDx roadwork feed.
 | Idaho | Y | Y | Y | Y | Y | - (22) | Y* |
 | Connecticut | Y | Y | - (26) | Y | - (26) | n/a | Y* |
 | Wisconsin | - (11) | Y (wz) | Y** | - (11) | - (11) | n/a | Y* |
-| New York | - (11) | Y (wz) | - (11) | - (11) | - (11) | n/a | Y* |
+| New York | Y | Y | - (11) | - (11) | - (11) | n/a | Y* |
 | Indiana | - (12) | Y (wz) | Y** | - (12) | - (12) | n/a | Y* |
 | Minnesota | - (13) | Y (wz) | - (13) | - (13) | - (13) | n/a | Y* |
 | Kansas | - (12) | Y (wz) | - (12) | - (12) | - (12) | n/a | Y* |
@@ -80,9 +80,10 @@ state.
    incidents and cameras; signs exist but the DMS CSV carries
    Chicago-area gantries with formatting we have not mapped yet; winter
    road conditions are seasonal ArcGIS layers (future work).
-7. **AL beyond cameras**: ALGO Traffic's other endpoints (incidents,
-   signs) return 404/401 without credentials and are undocumented;
-   ALDOT contact required.
+7. **AL road weather**: ALGO Traffic's public API serves traffic
+   events (incidents and roadwork), cameras and message signs keylessly
+   (`/v4.0/TrafficEvents`, `/cameras`, `/MessageSigns`; read since
+   2026-11-20, cameras only before that). No road-weather resource.
 8. **MO beyond signs/closures**: cameras are HLS streams with no still
    URL (snapshot-based popups), no incident or RWIS feed keyless.
 9. **IA beyond closures**: the documented feeds behind Iowa 511
@@ -90,11 +91,13 @@ state.
    credentialed CARS XML hub; the keyless path is WZDx only.
 10. (resolved in v2.38.0: DriveNC relaunched on Travel-IQ in May 2026
     and the held key unlocks the standard endpoints.)
-11. **Travel-IQ states (WI, NY)**: full incidents, cameras, signs,
-    and weather exist behind the free developer key; requests are
-    submitted and each state upgrades the moment its key arrives
-    (Utah, Arizona, Alaska, Idaho, and Connecticut upgraded this
-    way).
+11. **WI, NY**: Wisconsin's full incidents, cameras, signs and
+    weather exist behind the free Travel-IQ developer key; the request
+    is submitted. New York moved 511NY to the CARS platform in
+    2026-11: the old keyless WZDx URL now serves the site's HTML, the
+    platform's WZDx feed wants a key, and incidents, closures and
+    construction come from 511NY's public map layers instead. Cameras,
+    signs and weather there are not read yet.
 12. **IN, KS**: full data is in the credentialed Castle Rock CARS
     feeds (request-form access).
 13. **MN**: metro-area IRIS XML dumps (incidents, signs, RWIS,

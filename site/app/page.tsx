@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import HeroSection from "@/components/blocks/hero-section-1";
-import AppBand from "@/components/blocks/app-band";
-import Features from "@/components/blocks/features-1";
-import StatsSection from "@/components/blocks/stats-1";
-import { CopyField } from "@/components/copy-field";
+import { Coverage, DeveloperBand, DriveBand, FourWays } from "@/components/home/sections";
 
 // Homepage takes the product-level metadata (Task 7 brief). Description is
 // homepage-focused (brand and product overview) and distinct from the map
@@ -17,14 +13,14 @@ import { CopyField } from "@/components/copy-field";
 export const metadata: Metadata = {
   title: "CommuteScout: live road conditions, traffic map, and route planner",
   description:
-    "CommuteScout tracks live road conditions from 53 official agency feeds across 37 states and plans routes that avoid closures and chain controls.",
+    "CommuteScout tracks live road conditions from 53 official sources across 37 states and plans routes that avoid closures and chain controls.",
   alternates: {
     canonical: "https://commutescout.com/",
   },
   openGraph: {
     title: "CommuteScout: live road conditions, traffic map, and route planner",
     description:
-      "CommuteScout tracks live road conditions from 53 official agency feeds across 37 states and plans routes that avoid closures and chain controls.",
+      "CommuteScout tracks live road conditions from 53 official sources across 37 states and plans routes that avoid closures and chain controls.",
     // The brief pins this to exactly "https://commutescout.com/" (trailing
     // slash). Next 16's metadata resolver unconditionally normalizes a
     // root-path absolute URL to origin-only (see resolveAbsoluteUrlWithPathname
@@ -44,57 +40,20 @@ export const metadata: Metadata = {
   },
 };
 
-const MCP_URL = "https://mcp.commutescout.com/mcp";
-
+// The page in order: the live map (hero, with a real screenshot), what
+// you can do with it, what each state gets, the phone app as a compact
+// band, and the developer surfaces.
 export default function Home() {
   return (
     <>
       <HeroSection />
-      <AppBand />
-      <Features />
-      <StatsSection />
-
-      {/* Developer band. Not a vendored Tailark block: none of the six
-          required block types (hero, feature grid, stat band, pricing,
-          FAQ/content, footer) fit a one-off connector-URL callout, so this
-          is page-owned markup, styled to match the navy header/footer
-          bands. */}
-      <section className="bg-cs-navy text-white">
-        <div className="mx-auto max-w-7xl px-6 py-16 md:py-20">
-          <div className="grid gap-8 md:grid-cols-2 md:items-center md:gap-12">
-            <div>
-              <h2 className="text-balance text-3xl font-medium tracking-tight md:text-4xl">
-                Bring live roads to your assistant.
-              </h2>
-              <p className="text-white/70 mt-4 max-w-md text-balance">
-                Ask Claude, ChatGPT, Cursor or any MCP client when to leave, what is
-                on the road, and what the weather will be, from the same live feeds
-                the map reads.
-              </p>
-            </div>
-            <div className="space-y-4">
-              <CopyField value={MCP_URL} />
-              <Link
-                href="/mcp#connect"
-                prefetch={false}
-                className="inline-flex items-center gap-1.5 text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
-              >
-                Set up your assistant
-              </Link>
-              <Link
-                href="/developers"
-                prefetch={false}
-                className="ml-5 inline-flex items-center gap-1.5 text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
-              >
-                REST API and keys
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Global footer: rendered once from app/layout.tsx via
-          <SiteFooter/>, not repeated here. */}
+      <FourWays />
+      <Coverage />
+      <DriveBand />
+      <DeveloperBand>
+        The MCP server&rsquo;s 18 tools and the REST API read the same sources as the map. Both take
+        a free API key, which gives your account 2,000 requests a day, shared by all of its keys.
+      </DeveloperBand>
     </>
   );
 }

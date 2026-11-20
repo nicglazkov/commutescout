@@ -52,13 +52,13 @@ async def test_michigan_keeps_its_cameras_and_does_not_grow_them(monkeypatch):
     def handler(ok):
         def h(req):
             path = req.url.path
-            if path.endswith("/incidents/AllForMap/"):
+            if path.endswith("/incidents/AllForMap"):
                 return httpx.Response(200, json=inc)
-            if path.endswith("/construction/AllForMap/"):
+            if path.endswith("/construction/AllForMap"):
                 return httpx.Response(200, json=[])
             if not ok:
                 return httpx.Response(502)
-            if path.endswith("/camera/AllForMap/"):
+            if path.endswith("/camera/AllForMap"):
                 return httpx.Response(200, json=meta)
             return httpx.Response(200, json=rows)
         return h

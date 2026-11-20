@@ -1,40 +1,40 @@
 import Image from "next/image";
 
-// A phone screenshot inside a plain dark frame. Every app screenshot on
-// the site goes through this so the frames match: same radius, same
-// bezel, same shadow. The screenshots themselves are captured by
+// A real app screenshot, framed. Not a drawn phone: the frame is a thin
+// hairline, the screen's own corner radius and a soft shadow, so the
+// screenshot is the object. Every app screenshot on the site goes through
+// this so they line up. The screenshots are captured by
 // scripts/capture_app_shots.sh from the simulator and the emulator with
-// a demo status bar (9:41, full battery) and a simulated location, so
-// nothing personal is in them.
+// a demo status bar and a simulated location.
 //
-// Both platforms' screenshots are close to 9:19.5, so one aspect ratio
-// serves all of them and the frames in a row line up.
+// Both platforms' screenshots are close to 9:19.5 (640 x 1387-1391), so
+// one aspect ratio serves all of them.
 type Props = {
   src: string;
   alt: string;
-  /** Rendered width in px at the largest breakpoint; height follows. */
+  /** Largest rendered width in px (a cap and the image `sizes`); height follows.
+   *  The width itself comes from className (e.g. "w-full", "w-[46%]"), so it
+   *  can shrink with its container on a phone. */
   width?: number;
   className?: string;
   priority?: boolean;
 };
 
 export function PhoneShot({ src, alt, width = 300, className = "", priority }: Props) {
-  const height = Math.round(width * 2.17);
   return (
     <div
-      className={`shrink-0 rounded-[2.4rem] bg-cs-navy p-[6px] shadow-2xl shadow-cs-navy/40 ring-1 ring-white/15 ${className}`}
-      style={{ width }}
+      className={`min-w-0 overflow-hidden rounded-[13%/6%] border border-cs-line-strong bg-cs-surface-2 shadow-[var(--cs-shadow-md)] ${className}`}
+      style={{ maxWidth: width }}
     >
-      <div className="overflow-hidden rounded-[2rem] bg-cs-bg">
-        <Image
-          src={src}
-          alt={alt}
-          width={width * 2}
-          height={height * 2}
-          className="block h-auto w-full"
-          priority={priority}
-        />
-      </div>
+      <Image
+        src={src}
+        alt={alt}
+        width={640}
+        height={1389}
+        sizes={`${width}px`}
+        className="block aspect-[640/1389] h-auto w-full object-cover"
+        priority={priority}
+      />
     </div>
   );
 }

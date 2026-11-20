@@ -64,16 +64,29 @@
     <img class="mark" src="/logo.svg" alt="">
     <span class="wordmark">CommuteScout</span>
   </a>
-  <nav>
+  <!-- The same items, labels and order as the site header
+       (site/components/site-header.tsx): the three developer pages sit in
+       a Developers menu. Every link is in the HTML whether or not the menu
+       is open; topbar.js only flips the open state. Below 640px the nav
+       folds behind the Menu button, as on the site. -->
+  <nav id="topnav" aria-label="Site">
+    <a href="/watch">Watch areas</a>
     <a href="/data-sources">Data sources</a>
-    <a href="/developers">Developers</a>
-    <a href="/mcp">MCP server</a>
-    <a href="/marketplace">Marketplace</a>
+    <div class="devmenu">
+      <button type="button" class="devbtn" aria-expanded="false" aria-controls="devpop">Developers<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+      <p class="devlabel">For developers</p>
+      <ul class="devpop" id="devpop">
+        <li><a href="/developers">Developers</a><span>REST API reference, keys and daily limits</span></li>
+        <li><a href="/mcp">MCP Server</a><span>Connect Claude, ChatGPT, Cursor or any MCP client</span></li>
+        <li><a href="/marketplace">Marketplace</a><span>Plugins that add alerts to the map and the apps</span></li>
+      </ul>
+    </div>
     <a href="/app">Get the app</a>
     <a href="/pricing">Pricing</a>
   </nav>
   <!-- Current page: .on intentionally wins over .live in the CSS cascade above (declared after it) if a link ever carries both classes. -->
-  <a class="navcta on" href="/map">Live map</a>
+  <a class="navcta on" href="/map" aria-current="page">Live map</a>
+  <button type="button" class="navmenu" aria-expanded="false" aria-controls="topnav" aria-label="Menu"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <span class="sysok" id="sysok" title="Click for live data-source status"><i></i><span id="feedsok">checking live feeds&hellip;</span></span>
   <!-- Data age. On a map left open on a wall monitor this is the health
        indicator: if the publisher or the network stops, this ages in
@@ -89,26 +102,64 @@
 <h1 class="visually-hidden">Live US road conditions map</h1>
 <div class="shell" id="shell">
   <nav class="rail" id="rail" aria-label="Map tools">
-    <button type="button" class="tool on" data-tool="route" aria-pressed="true" title="Plan a route">
+    <button type="button" class="tool on" data-tool="places" aria-pressed="true" title="Your places">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span>Places</span></button>
+    <button type="button" class="tool" data-tool="route" aria-pressed="false" title="Directions">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M8.5 16.5 15.5 7.5"/></svg><span>Route</span></button>
-    <button type="button" class="tool" data-tool="ask" aria-pressed="false" title="Ask about your drive">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M12 8v3M12 13.5v.01"/></svg><span>Ask</span></button>
+    <button type="button" class="tool" data-tool="alerts" aria-pressed="false" title="What is live right now">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 16.5v.01"/></svg><span>Live</span></button>
     <button type="button" class="tool" data-tool="layers" aria-pressed="false" title="Show or hide layers">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 4 8 4.5-8 4.5-8-4.5z"/><path d="m4 13 8 4.5 8-4.5M4 17l8 4.5 8-4.5"/></svg><span>Layers</span></button>
-    <button type="button" class="tool" data-tool="watch" aria-pressed="false" title="Watch areas">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V7z"/><path d="m9 12 2 2 4-4"/></svg><span>Watch</span></button>
-    <button type="button" class="tool" data-tool="alerts" aria-pressed="false" title="What is live right now">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 16.5v.01"/></svg><span>Alerts</span></button>
+    <button type="button" class="tool" data-tool="ask" aria-pressed="false" title="Ask about your drive">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M12 8v3M12 13.5v.01"/></svg><span>Ask</span></button>
     <span class="railgap" aria-hidden="true"></span>
-    <button type="button" class="tool small" data-tool="settings" aria-pressed="false" title="Settings">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
-    <button type="button" class="tool small" data-tool="about" aria-pressed="false" title="About the data">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.01"/></svg><span>Data</span></button>
+    <!-- The expanded rail: account, settings and the less frequent tools.
+         Folded, only the open one of these shows, so the rail always
+         marks where you are. -->
+    <div class="railadv" id="railadv" role="group" aria-labelledby="railadvlabel">
+      <p class="raillabel" id="railadvlabel">More</p>
+      <button type="button" class="tool" data-tool="watch" aria-pressed="false" title="Watch areas">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V7z"/><path d="m9 12 2 2 4-4"/></svg><span>Watch areas</span></button>
+      <button type="button" class="tool small" data-tool="about" aria-pressed="false" title="About the data">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.01"/></svg><span>Data</span></button>
+      <button type="button" class="tool small" data-tool="settings" aria-pressed="false" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
+      <button type="button" class="tool act" data-act="keys" title="API keys">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.2-8.2M16 7l2 2M14 9l2 2"/></svg><span>API keys</span></button>
+      <button type="button" class="tool act" data-act="report" title="Report something on the road">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4h11l-1.5 4L16 12H5"/></svg><span>Report</span></button>
+      <button type="button" class="tool act" data-act="theme" title="Switch light or dark">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span id="railtheme">Dark mode</span></button>
+      <button type="button" class="tool act" data-act="palette" title="Command palette">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m7.5 10 2.5 2-2.5 2M12 14h4"/></svg><span>Commands</span></button>
+      <a class="tool act" href="/data-sources"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg><span>Data sources</span></a>
+      <a class="tool act" href="/marketplace"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><path d="M16.5 13v7M13 16.5h7"/></svg><span>Plugins</span></a>
+    </div>
+    <button type="button" class="railx" id="railexpand" aria-expanded="false" aria-controls="railadv" title="Show more tools and labels">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>More</span></button>
   </nav>
   <div class="resizer" id="railresize" role="separator" aria-orientation="vertical" aria-label="Resize the tool rail" tabindex="0"></div>
   <aside id="panel">
     <div class="grab" id="sheetgrab" role="separator" aria-orientation="horizontal" aria-label="Resize the panel" tabindex="0"></div>
-    <section id="pane-plan" data-tool="route" class="on">
+    <section id="pane-places" data-tool="places" class="on">
+      <div class="phead"><h3 class="panehead">Your places</h3>
+        <button type="button" class="txtbtn" id="placesedit" aria-pressed="false">Edit</button></div>
+      <div class="ptiles" id="ptiles"></div>
+      <p class="pnote" id="pnote" hidden></p>
+      <div class="psec" id="precentwrap" hidden>
+        <h4 class="subhead">Recent destinations</h4>
+        <div class="plist" id="precent"></div>
+      </div>
+      <div class="psec">
+        <div class="phead"><h4 class="subhead">Live in view</h4>
+          <button type="button" class="txtbtn" id="pliveall">Open the full list</button></div>
+        <div class="pchips" id="pchips"></div>
+        <div class="plist" id="plive"><p class="panenote">Loading what is on the map&hellip;</p></div>
+      </div>
+      <p class="panenote psync"><span id="psync">Saved in this browser. Sign in to sync with the app and your AI assistant.</span>
+        <button type="button" class="txtbtn" id="psignin">Sign in</button></p>
+    </section>
+    <section id="pane-plan" data-tool="route">
       <div class="fld"><label for="from">From</label>
         <button type="button" class="pickmap" id="pickfrom" data-pick="from">Pick on map</button>
         <input id="from" maxlength="200" placeholder="Address, place or city" autocomplete="off">
@@ -502,16 +553,55 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 16.5v.01"/></svg>Report</button>
     <div class="pickhint" id="pickhint" hidden></div>
     <div class="roadinfo" id="roadinfo"></div>
+    <section class="rstrip" id="rstrip" hidden aria-label="Along this route">
+      <div class="rshead">
+        <div class="rstitle"><b id="rsname"></b><span id="rsmeta"></span></div>
+        <div class="rsnav">
+          <button type="button" id="rsprev" aria-label="Previous item on the route">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+          <span id="rspos" aria-live="polite"></span>
+          <button type="button" id="rsnext" aria-label="Next item on the route">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+          <button type="button" id="rsclose" class="rsx" aria-label="Hide the route strip">&times;</button>
+        </div>
+      </div>
+      <div class="rstrack" id="rstrack" role="listbox" aria-label="Items along the route, start to finish" tabindex="0"></div>
+      <div class="rsscale"><span id="rsa"></span><span id="rsb"></span></div>
+      <div class="rscard" id="rscard"></div>
+    </section>
+    <button type="button" class="rsopen" id="rsopen" hidden>Show route strip</button>
+    <button type="button" class="cpalhint" id="cpalhint" aria-keyshortcuts="Meta+K Control+K">Command palette <kbd id="cpalkey">Ctrl K</kbd></button>
   </div>
   <div class="resizer" id="inspresize" role="separator" aria-orientation="vertical" aria-label="Resize the details pane" tabindex="0" hidden></div>
-  <aside class="inspector" id="inspector" hidden aria-label="Details">
+  <aside class="inspector" id="inspector" hidden aria-label="Details" tabindex="-1">
     <div class="insphead">
       <span class="inspicon" id="inspicon" aria-hidden="true"></span>
       <div class="insphd"><b id="insptitle">Details</b><span id="inspwhen"></span></div>
       <button type="button" class="inspx" id="inspclose" aria-label="Close the details pane">&times;</button></div>
-    <div class="inspbody" id="inspbody"></div>
+    <div class="inspai" id="inspai" hidden aria-live="polite"><span class="aimark" title="Written by an AI model from this record">AI</span><p id="inspaitext"></p></div>
+    <div class="inspmode" role="tablist" aria-label="Detail level" id="inspmode">
+      <button type="button" role="tab" id="insptab-basic" data-mode="basic" aria-selected="true" aria-controls="inspbody">Basic</button>
+      <button type="button" role="tab" id="insptab-adv" data-mode="advanced" aria-selected="false" aria-controls="inspadv" tabindex="-1">Advanced</button>
+    </div>
+    <div class="inspscroll" id="inspscroll">
+      <div class="inspbody" id="inspbody" role="tabpanel" aria-labelledby="insptab-basic"></div>
+      <div class="inspadv" id="inspadv" role="tabpanel" aria-labelledby="insptab-adv" hidden></div>
+    </div>
     <div class="inspfoot" id="inspfoot"></div>
   </aside>
+</div>
+<div class="cpal" id="cpal" hidden>
+  <div class="cpalbox" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="cpalin">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+      <input id="cpalq" type="text" role="combobox" aria-expanded="true" aria-controls="cpallist"
+             aria-autocomplete="list" autocomplete="off" spellcheck="false" maxlength="200"
+             placeholder="Search places, layers and actions" aria-label="Search commands">
+      <kbd>Esc</kbd>
+    </div>
+    <div class="cpallist" id="cpallist" role="listbox" aria-label="Commands"></div>
+    <div class="cpalfoot"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> move</span><span><kbd>Enter</kbd> run</span><span><kbd>Esc</kbd> close</span></div>
+  </div>
 </div>
 
 <script src="/static/vendor/leaflet.js?v=__ASSET_V__"></script>
@@ -523,6 +613,7 @@
 <script src="/static/plugin-badges.js?v=__ASSET_V__"></script>
 <script src="/static/map-assistant.js?v=__ASSET_V__"></script>
 <script src="/static/map-app.js?v=__ASSET_V__"></script>
+<script src="/static/topbar.js?v=__ASSET_V__"></script>
 <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d2d77aff6dfe4462b09ca501c9151de4"}'></script>
 </body>
 </html>

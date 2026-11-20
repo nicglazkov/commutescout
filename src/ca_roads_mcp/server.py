@@ -39,7 +39,7 @@ from ca_roads.feeds import nws as nws_feed
 from ca_roads.feeds import quakes as quakes_feed
 from ca_roads.feeds import tomtom as tomtom_feed
 from ca_roads.feeds import wildfire as wildfire_feed
-from ca_roads.geo import haversine_meters
+from ca_roads.geo import US_STATE_CODES, haversine_meters
 from ca_roads.roaddata import RoadData
 from ca_roads_mcp import corridors as corr
 from ca_roads_mcp import planning, snapshots
@@ -80,9 +80,12 @@ user's CommuteScout API key). This server cannot see the user's device:
 for "from here" or "near me", pass coordinates or a city you already
 know from the conversation, or ask.
 
-California has extra depth in check_route, check_region, get_incidents
-(CHP logs), get_lane_closures, get_chain_controls, get_wildfires,
-get_cameras, get_road_signs and rank_routes.
+Every state gets the same trip and place tools; what each state's DOT
+publishes varies (get_coverage). California has extra, California-only
+tools: check_route, check_region, rank_routes, get_incidents (CHP
+logs), get_lane_closures, get_chain_controls, get_wildfires,
+get_cameras, get_road_signs. Use them only for California places; for
+any other state use the trip tools and get_nearby_events.
 
 Lead with each tool's `summary` when it has one. Relay `notes`, stale
 `data_as_of` times and source errors. Speak in the user's local time
@@ -343,8 +346,8 @@ def parse_center(center: str) -> tuple[float, float] | None:
 
 
 MAX_RADIUS_KM = 500
-CENTER_FORMAT_ERROR = ("center must be 'lat,lon' (lat -90..90, lon -180..180), "
-                       "e.g. '38.58,-121.49'")
+CENTER_FORMAT_ERROR = ("center must be 'lat,lon' in decimal degrees (lat "
+                       "-90..90, lon -180..180), e.g. '39.7392,-104.9903'")
 
 
 def _clean(text: str | None) -> str | None:
@@ -385,6 +388,48 @@ MIN_CORRIDOR_SPAN_M = 15_000.0
 # California's bounding box (generous), for "could this query touch CA".
 CA_LAT = (31.0, 43.5)
 CA_LON = (-126.5, -112.5)
+# Every California-only tool points elsewhere with this when asked about
+# another state, instead of answering an Ohio question with "0 results".
+NOT_CALIFORNIA = (
+    "{tool} covers California only (Caltrans and CHP feeds), and this "
+    "point is outside California. Call get_nearby_events with center="
+    "'{center}'{kinds} for live events in any covered state, or plan_trip "
+    "for a drive.")
+
+
+def touches_california(lat: float, lon: float, radius_km: float = 0) -> bool:
+    """Could a circle at this point reach California (generous box)."""
+    pad = radius_km / 100.0  # degrees, generous
+    return (CA_LAT[0] - pad <= lat <= CA_LAT[1] + pad
+            and CA_LON[0] - pad <= lon <= CA_LON[1] + pad)
+
+
+def outside_california(tool: str, point: tuple[float, float],
+                       radius_km: float, kinds: str = "") -> dict | None:
+    """The redirect a California-only tool answers with for a circle that
+    cannot touch California, or None."""
+    if touches_california(*point, radius_km):
+        return None
+    return {"error": NOT_CALIFORNIA.format(
+                tool=tool, center=f"{point[0]:.4f},{point[1]:.4f}",
+                kinds=f" and kinds='{kinds}'" if kinds else ""),
+            "california_only": True}
+
+
+# Two-letter codes and names of every state but California and Nevada
+# (the corridors reach Reno and Las Vegas), for "Columbus, OH" typed into
+# a California corridor tool.
+_OTHER_STATES = {
+    k.lower() for name, code in US_STATE_CODES.items()
+    if code not in ("CA", "NV") for k in (name, code)}
+
+
+def names_other_state(place: str | None) -> bool:
+    """"Columbus, OH" or "Portland, Oregon": a place that says it is in a
+    state the California corridor tools do not cover."""
+    parts = [p.strip().lower().rstrip(".") for p in (place or "").split(",")]
+    tail = [p for p in parts[1:] if p and p not in ("usa", "us", "united states")]
+    return bool(tail) and tail[-1] in _OTHER_STATES
 
 
 def incident_severity(log_type: str) -> int:
@@ -408,16 +453,18 @@ REGION_CLOSURE_CAP = 12
 REGION_FIRE_CAP = 10
 
 
-@mcp.tool(annotations=_read_only("Check a route"))
+@mcp.tool(annotations=_read_only("Check a California corridor"))
 async def check_route(
     from_place: str,
     to_place: str,
     from_coords: str | None = None,
     to_coords: str | None = None,
 ) -> dict:
-    """Check current conditions along a major California highway corridor.
+    """CALIFORNIA ONLY: current conditions along a curated California
+    highway corridor. For a drive anywhere else in the US (or for drive
+    times, traffic and weather on any drive) use plan_trip instead.
 
-    The flagship trip-check tool: give it a start and end place and it
+    Give it a start and end place and it
     returns everything active along that stretch right now - CHP incidents,
     lane closures physically in place, chain controls, and wildfires within
     ~10 miles - ordered by miles from the start, plus a summary.
@@ -446,6 +493,20 @@ async def check_route(
     to_point = parse_center(to_coords) if to_coords else None
     if to_coords and to_point is None:
         return {"error": f"to_coords: {CENTER_FORMAT_ERROR}"}
+    # A trip that says it is in another state, or whose coordinates sit
+    # outside California, is plan_trip's: the ", California" geocoding
+    # ladder below would otherwise find a namesake street in California.
+    if (names_other_state(from_place) or names_other_state(to_place)
+            or any(p is not None and not touches_california(*p)
+                   for p in (from_point, to_point))):
+        return {
+            "error": (
+                "check_route covers California corridors only. For "
+                f"{from_place[:80]!r} to {to_place[:80]!r} call plan_trip "
+                "with the same places: it covers every US route, with "
+                "everything live on it."),
+            "california_only": True,
+        }
 
     # Caller-supplied coordinates are authoritative; only missing sides get
     # geocoded (offline gazetteer first, network geocoders for addresses and
@@ -770,9 +831,11 @@ async def check_route(
     return result
 
 
-@mcp.tool(annotations=_read_only("Check a region"))
+@mcp.tool(annotations=_read_only("Check a California region"))
 async def check_region(region: str) -> dict:
-    """Full current-conditions report for a California region.
+    """CALIFORNIA ONLY: a current-conditions report for one California
+    region. For an area in any other state use get_nearby_events with
+    place= or center= and a radius.
 
     Use this for area-scale questions ("how is the Bay Area?", "what's
     happening in SoCal?") instead of stitching together point queries. It
@@ -791,7 +854,10 @@ async def check_region(region: str) -> dict:
     resolved = reg.resolve_region(region)
     if resolved is None:
         return {
-            "error": f"Unknown region '{region}'.",
+            "error": (f"Unknown region '{region[:80]}'. check_region covers "
+                      "these California regions only; for anywhere else "
+                      "call get_nearby_events with place= (a city) and "
+                      "radius_km."),
             "supported_regions": reg.region_names(),
         }
 
@@ -913,14 +979,16 @@ async def check_region(region: str) -> dict:
     return payload
 
 
-@mcp.tool(annotations=_read_only("Live incidents"))
+@mcp.tool(annotations=_read_only("California incidents (CHP)"))
 async def get_incidents(
     highway: str | None = None,
     area: str | None = None,
     center: str | None = None,
     radius_km: float = 40,
 ) -> dict:
-    """Live CHP traffic incidents statewide, optionally filtered.
+    """CALIFORNIA ONLY: live CHP traffic incidents across California,
+    optionally filtered. For incidents in any other state use
+    get_nearby_events (kinds='incident').
 
     Data: the California Highway Patrol statewide computer-aided dispatch
     feed - collisions, traffic hazards, disabled vehicles, closures as CHP
@@ -932,7 +1000,7 @@ async def get_incidents(
       incidents whose location text mentions that route.
     - center: "lat,lon" with radius_km - incidents within that circle. THIS
       IS THE RIGHT FILTER FOR A TOWN OR PLACE NAME: use your knowledge of
-      where the place is (e.g. Coyote, CA -> "37.22,-121.74") with radius_km
+      where the place is (e.g. Fresno -> "36.74,-119.79") with radius_km
       15-30. A circle catches every road around the place, not just one
       highway.
     - area: substring match on the CHP dispatch-area name. These are CHP
@@ -950,6 +1018,10 @@ async def get_incidents(
     area = _clean(area)
     if center and (bad := _radius_error(radius_km)):
         return bad
+    if center and (point := parse_center(center)) and (
+            away := outside_california("get_incidents", point, radius_km,
+                                       "incident")):
+        return away
     result = await get_road().incidents()
     records = result.records
     warning = None
@@ -993,14 +1065,16 @@ async def get_incidents(
     return payload
 
 
-@mcp.tool(annotations=_read_only("Lane closures"))
+@mcp.tool(annotations=_read_only("California lane closures"))
 async def get_lane_closures(
     route: str | None = None,
     district: int | None = None,
     center: str | None = None,
     radius_km: float = 40,
 ) -> dict:
-    """Caltrans lane and road closures physically in place RIGHT NOW.
+    """CALIFORNIA ONLY: Caltrans lane and road closures physically in
+    place RIGHT NOW. For closures and roadwork in any other state use
+    get_nearby_events (kinds='closure').
 
     Data: the Caltrans Lane Closure System (LCS). Only closures that crews
     have actually established (CHP code 1097) and not yet picked up are
@@ -1036,6 +1110,10 @@ async def get_lane_closures(
         return bad
     if center and (bad := _radius_error(radius_km)):
         return bad
+    if center and (point := parse_center(center)) and (
+            away := outside_california("get_lane_closures", point, radius_km,
+                                       "closure")):
+        return away
     districts = [district] if district else None
     result = await get_road().lane_closures(districts=districts)
     records = result.records
@@ -1082,13 +1160,16 @@ async def get_lane_closures(
     return payload
 
 
-@mcp.tool(annotations=_read_only("Chain controls"))
+@mcp.tool(annotations=_read_only("California chain controls"))
 async def get_chain_controls(
     route: str | None = None,
     center: str | None = None,
     radius_km: float = 40,
 ) -> dict:
-    """Current chain-control requirements on California mountain highways.
+    """CALIFORNIA ONLY: current chain-control requirements on California
+    mountain highways. For chain laws and traction advisories in other
+    states (where the state publishes them) use get_nearby_events
+    (kinds='chain').
 
     Data: Caltrans chain-control status for fixed checkpoints on mountain
     routes (I-80 Donner, US-50 Echo Summit, SR-88, SR-89, and others).
@@ -1110,6 +1191,10 @@ async def get_chain_controls(
         return bad
     if center and (bad := _radius_error(radius_km)):
         return bad
+    if center and (point := parse_center(center)) and (
+            away := outside_california("get_chain_controls", point, radius_km,
+                                       "chain")):
+        return away
     result = await get_road().chain_controls()
     records = result.records
     if canonical:
@@ -1141,13 +1226,16 @@ async def get_chain_controls(
     return payload
 
 
-@mcp.tool(annotations=_read_only("Wildfires"))
+@mcp.tool(annotations=_read_only("California wildfires"))
 async def get_wildfires(
     near_route: str | None = None,
     center: str | None = None,
     radius_km: float = 50,
 ) -> dict:
-    """Active California wildfires, flagged when close to a major highway.
+    """CALIFORNIA ONLY: active California wildfires, flagged when close
+    to a major California highway. For fires near a place in any other
+    state use get_nearby_events (kinds='fire'); plan_trip lists fires
+    near any route.
 
     Data: the interagency WFIGS current-wildfire feed (NIFC) - name, size in
     acres, percent contained, discovery date. Points are each fire's ORIGIN,
@@ -1173,6 +1261,10 @@ async def get_wildfires(
         return bad
     if center and (bad := _radius_error(radius_km)):
         return bad
+    if center and (point := parse_center(center)) and (
+            away := outside_california("get_wildfires", point, radius_km,
+                                       "fire")):
+        return away
     result = await get_road().wildfires()
     route_corridors = (
         [c for c in corr.CORRIDORS if canonical in c.routes] if canonical else []
@@ -1242,14 +1334,17 @@ async def get_wildfires(
 
 
 
-@mcp.tool(annotations=_read_only("Rank busiest routes"))
+@mcp.tool(annotations=_read_only("Rank California corridors"))
 async def rank_routes(by: str = "activity", limit: int = 5) -> dict:
-    """Which major corridors have the most going on right now.
+    """CALIFORNIA ONLY: which of 17 curated California corridors have the
+    most going on right now.
 
-    Answers broad questions like "what are the busiest routes", "where is
-    traffic worst", or "which highways should I avoid today" across all 17
-    tracked corridors. by="activity" ranks on live events (full closures
-    weigh most, then incidents, lane closures, chain controls);
+    Answers "what are the busiest routes in California", "which
+    California highways should I avoid today". Not for other states: for
+    a place elsewhere use get_nearby_events or get_traffic.
+
+    by="activity" ranks on live events (full closures weigh most, then
+    incidents, lane closures, chain controls);
     by="congestion" ranks on measured speed vs free-flow at each
     corridor's midpoint and needs the traffic feed to be configured -
     if it is not, the ranking silently falls back to activity.
@@ -1406,14 +1501,17 @@ async def _live_cameras(candidates, limit: int):
     return live, dropped
 
 
-@mcp.tool(annotations=_read_only("Highway cameras"))
+@mcp.tool(annotations=_read_only("California highway cameras"))
 async def get_cameras(
     center: str | None = None,
     route: str | None = None,
     radius_km: float = 30,
     limit: int = 6,
 ) -> dict:
-    """Live Caltrans roadside camera snapshots near a point or on a route.
+    """CALIFORNIA ONLY: live Caltrans roadside camera snapshots near a
+    point or on a California route. For cameras in other states use
+    get_nearby_events (kinds='camera'); plan_trip lists cameras on any
+    route.
 
     Data: ~3,000 in-service Caltrans cameras statewide. Every returned
     image_url was verified live moments ago (offline cameras that serve a
@@ -1435,6 +1533,10 @@ async def get_cameras(
         return {"error": "Pass center 'lat,lon' and/or route."}
     if center and (bad := _radius_error(radius_km)):
         return bad
+    if center and (point := parse_center(center)) and (
+            away := outside_california("get_cameras", point, radius_km,
+                                       "camera")):
+        return away
     result = await get_road().cameras()
     records = result.records
     if canonical:
@@ -1470,13 +1572,15 @@ async def get_cameras(
     }
 
 
-@mcp.tool(annotations=_read_only("Message signs"))
+@mcp.tool(annotations=_read_only("California message signs"))
 async def get_road_signs(
     route: str | None = None,
     center: str | None = None,
     radius_km: float = 80,
 ) -> dict:
-    """What Caltrans changeable message signs are displaying right now.
+    """CALIFORNIA ONLY: what Caltrans changeable message signs are
+    displaying right now. For message signs in other states (where the
+    state publishes them) use get_nearby_events (kinds='sign').
 
     Data: statewide CMS sign text, blank and out-of-service signs already
     filtered - every record is a message a driver is physically seeing.
@@ -1493,6 +1597,10 @@ async def get_road_signs(
         return bad
     if center and (bad := _radius_error(radius_km)):
         return bad
+    if center and (point := parse_center(center)) and (
+            away := outside_california("get_road_signs", point, radius_km,
+                                       "sign")):
+        return away
     result = await get_road().message_signs()
     records = [s for s in result.records if s.text]
     if canonical:
@@ -1521,27 +1629,25 @@ NEARBY_KINDS = frozenset(NEARBY_DEFAULT_KINDS + (
     "sign", "rwis", "camera", "toll", "enforcement"))
 
 
-@mcp.tool(annotations=_read_only("Nearby events (nationwide)"))
+@mcp.tool(annotations=_read_only("Live events near a place"))
 async def get_nearby_events(
     center: str | None = None,
     radius_km: float = 40,
     kinds: str = "incident,closure,chain,fire",
     place: str | None = None,
 ) -> dict:
-    """Live road events near a point anywhere CommuteScout covers, not
-    just California: 37 states today (get_coverage lists them).
+    """Live road events near a place, in any of the 37 states CommuteScout
+    covers (get_coverage lists them and what each state publishes).
 
-    Data: the same multi-state feeds the live map shows, normalized -
-    state DOT incidents, roadwork and closures, chain and traction
+    Data: the same feeds the live map shows, normalized - state DOT and
+    highway-patrol incidents, roadwork and closures, chain and traction
     advisories, and nationwide wildfires. Every event names its
-    publishing agency in the source field. Coverage varies by state
-    (some publish roadwork only; docs/state-coverage.md has the
-    matrix); states added later appear here automatically.
-
-    For CALIFORNIA questions prefer the dedicated tools above (richer
-    detail: dispatch logs, lane counts, chain levels). Use THIS tool
-    for any location outside California, near a state border, or as a
-    supplement when a California tool comes back empty.
+    publishing agency in the source field. What a state publishes
+    varies (some publish roadwork only), so a quiet answer can be
+    normal there. This is the right tool for "what's happening near X"
+    in every state, California included; in California the
+    California-only tools add dispatch logs, lane counts and chain
+    levels.
 
     center is "lat,lon"; or pass place (an address or place name)
     instead. kinds is a comma list from: incident, closure, chain, fire,
@@ -1559,6 +1665,7 @@ async def get_nearby_events(
         # answered "nothing nearby" for a busy freeway.
         return {"error": f"unknown kinds {', '.join(repr(k[:30]) for k in unknown[:5])}; "
                          f"use a comma list from: {', '.join(sorted(NEARBY_KINDS))}."}
+    found: dict = {}
     if not center and place:
         found = await planning.point_from(get_road().client, place, None)
         if "lat" not in found:
@@ -1606,9 +1713,7 @@ async def get_nearby_events(
                                  m.get("area")) if x) or None,
             "route": m.get("route"),
             "closure_class": m.get("cls"),
-            "source": m.get("src") or (
-                "OpenStreetMap" if kind == "enforcement_camera"
-                else "Caltrans / CHP"),
+            "source": planning.marker_source(m),
         })
     # The multi-state feeds do not carry California (the dedicated tools
     # own it), so this tool used to answer "quiet" for the Bay Area. The
@@ -1632,10 +1737,21 @@ async def get_nearby_events(
     }
     if not trimmed:
         payload["message"] = (
-            "No live events in the covered feeds within this radius, "
-            "California included. If this state only publishes roadwork, "
-            "quiet is normal; coverage notes: docs/state-coverage.md."
-        )
+            "No live events in the covered feeds within this radius. "
+            "States publish different things (some roadwork only, some "
+            "nothing CommuteScout reads yet), so quiet can be normal; "
+            "get_coverage lists each state's sources.")
+    if place and (more := planning.match_notes(("place", found))):
+        notes.extend(more)
+    # Say what this state publishes when it explains the answer: a state
+    # with no event feed, or roadwork only, reads as "quiet" otherwise.
+    with contextlib.suppress(Exception):
+        info = (await nws_feed.point_info(get_road().client, lat, lon)
+                if snapshots.base() else None)
+        feeds = await planning.state_feeds(get_road().client, info)
+        if feeds and feeds.get("note"):
+            payload["state_coverage"] = feeds
+            notes.append(feeds["note"])
     return payload
 
 
@@ -1646,9 +1762,7 @@ async def _california_events(lat: float, lon: float, radius_km: float,
     out: list[dict] = []
     # A circle that cannot touch California skips the four fetches
     # (Denver queries used to pull every CA feed on a cold instance).
-    pad = radius_km / 100.0  # degrees, generous
-    if not (CA_LAT[0] - pad <= lat <= CA_LAT[1] + pad
-            and CA_LON[0] - pad <= lon <= CA_LON[1] + pad):
+    if not touches_california(lat, lon, radius_km):
         return out
     road = get_road()
     limit_m = radius_km * 1000
@@ -1847,8 +1961,10 @@ async def best_time_to_go(
     `recommended` is the pick: quickest without severe weather, or with
     arrive_by, the latest departure that still arrives on time.
     `summary` states it in one or two sentences; `departures` has the
-    whole curve if the user wants options. Times are in the origin's
-    local time zone (`time_zone`).
+    whole curve if the user wants options. Departure times are in the
+    origin's local time zone (`time_zone`), arrival times in the
+    destination's (`arrival_time_zone`); they differ on trips that cross
+    a time-zone line.
 
     Pair with plan_trip for what is on the road right now.
     """
@@ -1910,18 +2026,18 @@ async def get_area_history(
 
 
 @mcp.tool(annotations=_read_only("Coverage"))
-def get_coverage() -> dict:
+async def get_coverage() -> dict:
     """Which states and sources CommuteScout covers right now, with each
     feed's freshness. Check it when an answer is unexpectedly empty.
     """
-    return planning.get_coverage()
+    return await planning.get_coverage(get_road().client)
 
 
 @mcp.resource("commutescout://coverage", name="coverage",
               title="CommuteScout coverage", mime_type="application/json",
               description="States, sources and feed freshness.")
-def coverage_resource() -> str:
-    return json.dumps(planning.get_coverage())
+async def coverage_resource() -> str:
+    return json.dumps(await planning.get_coverage(get_road().client))
 
 
 @mcp.resource("commutescout://about", name="about",
@@ -2010,9 +2126,10 @@ I'm driving from {origin} to {destination}, leaving {depart_at}.
 """
 
 
-@mcp.prompt()
+@mcp.prompt(title="California corridor check")
 def road_trip_check(from_place: str, to_place: str) -> str:
-    """Check road conditions for a trip between two California places."""
+    """California only: check a drive on one of the curated California
+    corridors. For any other drive use the "Plan a trip" prompt."""
     return f"""\
 I'm about to drive from {from_place} to {to_place}. Check current road
 conditions for this trip:
@@ -2022,9 +2139,8 @@ conditions for this trip:
    along the route: chain controls first (say what level and what vehicles
    need), then full closures, then lane closures and incidents that could
    cause delays, then any wildfires near the route.
-3. If check_route doesn't cover the trip, fall back to get_incidents,
-   get_lane_closures, and get_chain_controls filtered to the highways the
-   trip would use.
+3. If check_route doesn't cover the trip (or either place is outside
+   California), call plan_trip with the same places instead.
 4. Report the data_as_of times and any source errors so I know how fresh
    this is. This is current status, not a forecast.
 5. Close with: conditions change - verify before driving (511 or your

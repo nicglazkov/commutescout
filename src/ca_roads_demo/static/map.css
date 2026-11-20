@@ -9,6 +9,23 @@
   --line:var(--cs-line); --bg:var(--cs-bg); --card:var(--cs-paper);
   --sky:var(--cs-sky); --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
   --green:#2f9e6e; --green-soft:#e2f5ec;
+  /* Text and hairline tones for popups, the details pane and lists. */
+  --t1:#0f172a; --t2:#475569; --t3:#64748b; --t4:#94a3b8;
+  --hair:#e2e8f0; --hair2:#f1f5f9; --hair-strong:#cbd5e1; --wash:#f8fafc;
+  --shadow:0 12px 32px rgba(15,28,43,.16), 0 2px 6px rgba(15,28,43,.08);
+  --ease:cubic-bezier(.22,1,.36,1);
+  --mono:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+/* Dark: the site's dark palette (site/app/globals.css), same names. */
+:root[data-theme="dark"] {
+  --navy:#08101a; --navy2:#152234; --ink:#e6edf5; --dim:#a3b2c4;
+  --line:#223042; --bg:#0a111b; --card:#111a26;
+  --sky:#5b9cff; --sky-soft:#14284a; --green-soft:#11301f;
+  --t1:#e6edf5; --t2:#a3b2c4; --t3:#8a9bb0; --t4:#6b7c91;
+  --hair:#223042; --hair2:#18222f; --hair-strong:#33445b; --wash:#152030;
+  --shadow:0 14px 36px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
+  color-scheme:dark;
 }
 * { box-sizing:border-box; margin:0 }
 html, body { height:100% }
@@ -20,25 +37,61 @@ body { background:var(--bg); color:var(--ink);
 
 /* ── App chrome ─────────────────────────────────────────────── */
 .topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
-  flex-wrap:wrap; gap:14px; padding:0 20px; height:56px; flex:none }
-.topbar a.brand { display:flex; align-items:center; gap:14px; color:inherit;
+  flex-wrap:wrap; gap:14px; padding:0 20px; height:56px; flex:none;
+  /* The site's type (Geist, site/app/layout.tsx), at the site header's
+     sizes and weights, so the bar reads the same on every page. */
+  font-family:Geist, Inter, system-ui, sans-serif; position:relative; z-index:1100 }
+.topbar a.brand { display:flex; align-items:center; gap:10px; color:inherit;
   text-decoration:none }
-.topbar img.mark { width:30px; height:30px; border-radius:7px }
-.topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
+.topbar img.mark { width:28px; height:28px; border-radius:7px }
+.topbar .wordmark { font-family:Geist, Inter, system-ui, sans-serif; font-size:.975rem;
+  font-weight:600; letter-spacing:-.01em }
 /* Present to crawlers and screen readers, absent from the layout. */
 .visually-hidden { position:absolute; width:1px; height:1px; padding:0;
   margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap;
   border:0 }
-.topbar nav { display:flex; gap:4px; margin-left:14px }
+.topbar nav { display:flex; align-items:center; gap:2px; margin-left:14px }
 /* .navcta is the Live map / current-page pill: a topbar-level sibling of
    nav (not nested inside it), same as the site's Next.js header, so it
    can sit beside the brand on its own row at <=640px (see that media
    query below). Shares nav a's base look. */
-.topbar nav a, .topbar .navcta { color:#b7c4d4; font-size:.85rem; padding:7px 12px;
-  border-radius:8px; text-decoration:none }
-.topbar nav a:hover, .topbar .navcta:hover { color:#fff }
+.topbar nav a, .topbar .navcta, .topbar .devbtn { color:#b7c4d4; font:400 .875rem/1 Geist, Inter, system-ui, sans-serif;
+  padding:0 12px; min-height:36px; display:inline-flex; align-items:center;
+  border-radius:10px; text-decoration:none; transition:color .15s, background-color .15s }
+.topbar nav a:hover, .topbar .devbtn:hover, .topbar .navcta:hover { color:#fff; background:rgba(255,255,255,.07) }
+.topbar .navcta { font-weight:500 }
 .topbar .navcta.live { background:var(--sky); color:#fff }
-.topbar nav a.on, .topbar .navcta.on { background:var(--navy2); color:#fff }
+.topbar nav a.on { background:var(--navy2); color:#fff }
+/* Live map is the site header's one accent button on every page, this
+   one included (aria-current marks it as the page you are on). */
+.topbar .navcta.on { background:var(--cs-accent, #1a63d6); color:#fff }
+.topbar .navcta.on:hover { background:var(--cs-accent-hover, #1555bb) }
+/* The Developers menu, as in the site header: a button, then a panel of
+   three destinations with a one-line note each. */
+.topbar .devmenu { position:relative }
+.topbar .devbtn { background:none; border:0; cursor:pointer; gap:4px }
+.topbar .devbtn svg { opacity:.7; transition:transform .2s }
+.topbar .devmenu.open .devbtn { color:#fff }
+.topbar .devmenu.open .devbtn svg { transform:rotate(180deg) }
+.topbar .devlabel { display:none }
+.topbar .devpop { list-style:none; padding:6px; position:absolute; left:50%; top:100%;
+  width:23rem; margin-top:8px; transform:translate(-50%, -4px); opacity:0; visibility:hidden;
+  background:var(--cs-paper, #fff); border:1px solid var(--line); border-radius:16px;
+  box-shadow:0 12px 32px rgba(11,31,51,.18), 0 2px 6px rgba(11,31,51,.08);
+  transition:opacity .2s cubic-bezier(.22,1,.36,1), transform .2s cubic-bezier(.22,1,.36,1), visibility .2s }
+.topbar .devmenu.open .devpop { opacity:1; visibility:visible; transform:translate(-50%, 0) }
+.topbar .devpop::before { content:""; position:absolute; left:0; right:0; top:-10px; height:10px }
+.topbar .devpop li { position:relative; padding:10px 12px; border-radius:10px }
+.topbar .devpop li:hover, .topbar .devpop li:focus-within { background:var(--hair2) }
+.topbar .devpop a { display:block; min-height:0; padding:0; color:var(--ink); font-weight:500; background:none }
+.topbar .devpop a:hover { color:var(--ink); background:none }
+.topbar .devpop a::after { content:""; position:absolute; inset:0; border-radius:10px }
+.topbar .devpop span { display:block; margin-top:3px; font-size:.8125rem; line-height:1.35; color:#5f6e82 }
+.topbar .navmenu { display:none; background:none; border:0; color:#b7c4d4;
+  width:40px; height:40px; border-radius:10px; align-items:center;
+  justify-content:center; cursor:pointer }
+.topbar .navmenu:hover { color:#fff; background:rgba(255,255,255,.08) }
+.topbar a:focus-visible, .topbar button:focus-visible { outline:2px solid var(--sky); outline-offset:2px }
 .sysok { margin-left:auto; display:flex; align-items:center; gap:7px;
   font-size:.78rem; color:#9fd8b7; white-space:nowrap }
 .sysok i { width:7px; height:7px; border-radius:99px; background:#3fcf8a; font-style:normal }
@@ -185,7 +238,7 @@ aside section[data-tool].on { display:block }
 .switch .track { position:absolute; inset:0; border-radius:99px; background:#c4cfdb;
   transition:.15s; cursor:pointer }
 .switch .track::after { content:""; position:absolute; top:2.5px; left:3px;
-  width:14px; height:14px; border-radius:99px; background:#fff; transition:.15s }
+  width:14px; height:14px; border-radius:99px; background:var(--card); transition:.15s }
 .switch input:checked + .track { background:var(--green) }
 .switch input:checked + .track::after { transform:translateX(14px) }
 .locstatus.on { color:var(--green); font-weight:600 }
@@ -376,7 +429,7 @@ aside section[data-tool].on { display:block }
 /* ============ v2 popup card (the 2026-07 redesign) ============
    Neutral slate scale, 4px spacing grid, one accent per kind used
    only in the header chip and left rail, 11px uppercase meta. */
-.p2 { font:13.5px/1.5 Inter, system-ui, sans-serif; color:#0f172a;
+.p2 { font:13.5px/1.5 Inter, system-ui, sans-serif; color:var(--t1);
   border-left:3px solid var(--acc, #64748b); padding-left:11px }
 .p2 .hd { display:flex; align-items:center; gap:7px; margin-bottom:3px }
 .p2 .kchip { font:700 10px Inter; letter-spacing:.7px;
@@ -384,30 +437,30 @@ aside section[data-tool].on { display:block }
   align-items:center; gap:5px }
 .p2 .kchip i { width:8px; height:8px; border-radius:99px;
   background:var(--acc); display:inline-block }
-.p2 .ago { margin-left:auto; font:600 11px Inter; color:#64748b;
+.p2 .ago { margin-left:auto; font:600 11px Inter; color:var(--t3);
   white-space:nowrap }
 .p2 h4 { margin:0 0 1px; font:650 15.5px Inter; letter-spacing:-.01em }
-.p2 .sub { color:#475569; font-size:13px; margin-bottom:2px }
-.p2 .body { margin:6px 0 0; color:#1e293b }
-.p2 .body.gloss { color:#475569; font-size:12.5px }
+.p2 .sub { color:var(--t2); font-size:13px; margin-bottom:2px }
+.p2 .body { margin:6px 0 0; color:var(--t1) }
+.p2 .body.gloss { color:var(--t2); font-size:12.5px }
 .p2 .facts { margin:8px 0 0; display:grid; gap:3px }
 .p2 .fact { display:flex; gap:8px; font-size:12.5px }
-.p2 .fact b { flex:none; width:74px; font-weight:600; color:#64748b }
-.p2 .fact span { color:#0f172a }
+.p2 .fact b { flex:none; width:74px; font-weight:600; color:var(--t3) }
+.p2 .fact span { color:var(--t1) }
 /* Footer items each get their own line; the Source line always names
    where the data came from. No middot separators anywhere. */
-.p2 .foot { margin-top:9px; padding-top:7px; border-top:1px solid #e2e8f0;
-  font-size:11.5px; color:#64748b; line-height:1.5 }
+.p2 .foot { margin-top:9px; padding-top:7px; border-top:1px solid var(--hair);
+  font-size:11.5px; color:var(--t3); line-height:1.5 }
 .p2 .foot em { font-style:normal; display:block }
 .p2 .warnline { margin-top:6px; font:600 12.5px Inter; color:#b91c1c }
 /* Schedule: a quiet panel whose first line answers the question a
    driver actually has ("when is this over?") in words, no symbols. */
-.p2 .sched { margin-top:8px; background:#f8fafc; border:1px solid #e2e8f0;
+.p2 .sched { margin-top:8px; background:var(--wash); border:1px solid var(--hair);
   border-radius:8px; padding:7px 11px; font-size:12.5px; line-height:1.5 }
-.p2 .sched b { display:block; font-weight:650; color:#0f172a }
-.p2 .sched span { color:#64748b }
+.p2 .sched b { display:block; font-weight:650; color:var(--t1) }
+.p2 .sched span { color:var(--t3) }
 .p2 .sched .tzl { display:block; margin-top:5px; padding-top:5px;
-  border-top:1px dashed #e2e8f0; color:#475569; font-size:12px }
+  border-top:1px dashed var(--hair); color:var(--t2); font-size:12px }
 .p2 .detbtn, .inspacts button, .reportform .detbtn, .confirmrow .detbtn { margin-top:8px;
   display:inline-block; font:600 12px Inter;
   color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe;
@@ -419,37 +472,37 @@ aside section[data-tool].on { display:block }
   ui-monospace, monospace; color:#ffb400; letter-spacing:1.6px;
   text-transform:uppercase; white-space:nowrap }
 .p2 .camnote { margin-top:6px; font-size:12px; line-height:1.45;
-  color:#64748b }
-.p2 .rleg { margin-top:8px; border:1px solid #e2e8f0; border-radius:8px;
+  color:var(--t3) }
+.p2 .rleg { margin-top:8px; border:1px solid var(--hair); border-radius:8px;
   overflow:hidden }
 .p2 .rleg .rrow { display:grid; grid-template-columns:34px 1fr; gap:8px;
-  padding:7px 10px; font-size:12px; line-height:1.45; color:#64748b;
+  padding:7px 10px; font-size:12px; line-height:1.45; color:var(--t3);
   border-top:1px solid #eef2f7 }
 .p2 .rleg .rrow:first-child { border-top:0 }
-.p2 .rleg .rrow b { color:#334155; font-size:12px }
+.p2 .rleg .rrow b { color:var(--t2); font-size:12px }
 .p2 .mchip { font:700 10px Inter; letter-spacing:.6px;
   text-transform:uppercase; border-radius:99px; padding:2px 8px;
-  background:#e2e8f0; color:#475569; margin-left:auto }
+  background:var(--hair); color:var(--t2); margin-left:auto }
 .p2 .mchip.live { background:#dcfce7; color:#15803d }
 .p2 .hd .mchip + .ago { margin-left:8px }
 /* Dispatch log: time as an anchor column, the plain-language reading
    directly under the raw entry (always on). */
 .p2 .dets { max-height:280px; overflow-y:auto; margin-top:4px }
-.p2 .lg { margin-top:8px; border-top:1px solid #e2e8f0 }
+.p2 .lg { margin-top:8px; border-top:1px solid var(--hair) }
 .p2 .lg h5 { margin:9px 0 4px; font:700 10.5px Inter; letter-spacing:.6px;
-  text-transform:uppercase; color:#64748b }
+  text-transform:uppercase; color:var(--t3) }
 .p2 .lgrow { display:grid; grid-template-columns:64px 1fr; gap:10px;
-  padding:4px 0; border-top:1px solid #f1f5f9; font-size:12.5px }
-.p2 .lgrow time { font:600 11.5px Inter; color:#475569;
+  padding:4px 0; border-top:1px solid var(--hair2); font-size:12.5px }
+.p2 .lgrow time { font:600 11.5px Inter; color:var(--t2);
   white-space:nowrap; padding-top:1px }
-.p2 .lgrow .raw { color:#0f172a }
+.p2 .lgrow .raw { color:var(--t1) }
 .p2 .lgrow .xpl { color:#0e7490; font-size:12px; margin-top:1px }
-.p2 .lgkey { font-size:11px; color:#94a3b8; margin:0 0 5px;
+.p2 .lgkey { font-size:11px; color:var(--t4); margin:0 0 5px;
   line-height:1.4 }
 .p2 .urow { display:grid; grid-template-columns:52px 1fr; gap:10px;
-  padding:5px 0; border-top:1px solid #f1f5f9; font-size:12.5px;
+  padding:5px 0; border-top:1px solid var(--hair2); font-size:12.5px;
   line-height:1.5 }
-.p2 .urow b { font:600 11.5px Inter; color:#475569; padding-top:1px }
+.p2 .urow b { font:600 11.5px Inter; color:var(--t2); padding-top:1px }
 .p2 .fact svg.cmp { vertical-align:-3px; margin-right:5px }
 /* Toll corridor popup: compact card that expands to the rate table;
    hovering a row highlights that stretch on the map. */
@@ -464,26 +517,26 @@ aside section[data-tool].on { display:block }
   background:#22c55e; border-radius:50%; margin-right:4px;
   animation:tpulse 1.6s infinite }
 @keyframes tpulse { 50% { opacity:.35 } }
-.tpop .chip.fixed { background:#e2e8f0; color:#475569 }
+.tpop .chip.fixed { background:var(--hair); color:var(--t2) }
 .tpop .chip.req { background:#fee2e2; color:#b91c1c }
 .tpop .chip.opt { background:#dbeafe; color:#1d4ed8 }
 .tpop .trange { font:800 1.55rem Lora, serif; color:#7c3aed;
   margin:2px 0 1px }
-.tpop .trange small { font:400 .78rem Inter, sans-serif; color:#64748b }
-.tpop .tsave { font-size:.82rem; margin:2px 0 4px; color:#334155 }
+.tpop .trange small { font:400 .78rem Inter, sans-serif; color:var(--t3) }
+.tpop .tsave { font-size:.82rem; margin:2px 0 4px; color:var(--t2) }
 .tpop .tsave b { color:#15803d }
-.tpop details { border-top:1px solid #e2e8f0; margin-top:5px }
+.tpop details { border-top:1px solid var(--hair); margin-top:5px }
 .tpop summary { cursor:pointer; color:#1d4ed8; font-size:.8rem;
   padding:6px 0 3px }
 .tpop .tbody { max-height:200px; overflow:auto }
-.tpop .tfrom { font-weight:700; font-size:.72rem; color:#475569;
+.tpop .tfrom { font-weight:700; font-size:.72rem; color:var(--t2);
   text-transform:uppercase; letter-spacing:.4px; margin:7px 0 2px;
   padding:1px 5px; border-radius:5px }
 .tpop .trow { display:flex; align-items:baseline; gap:6px;
   padding:2px 5px; border-radius:5px }
 .tpop .trow .td { white-space:nowrap; overflow:hidden;
   text-overflow:ellipsis }
-.tpop .trow .tdots { flex:1; border-bottom:2px dotted #cbd5e1;
+.tpop .trow .tdots { flex:1; border-bottom:2px dotted var(--hair-strong);
   min-width:14px }
 .tpop .trow .tp { font-weight:700; color:#7c3aed;
   font-variant-numeric:tabular-nums }
@@ -517,7 +570,7 @@ aside section[data-tool].on { display:block }
   font:600 .72rem Inter; color:var(--dim); text-transform:uppercase;
   letter-spacing:.6px }
 .departrow select, .departrow input { font:400 .82rem Inter; border:1.5px solid
-  var(--line); border-radius:8px; padding:5px 8px; background:#fff;
+  var(--line); border-radius:8px; padding:5px 8px; background:var(--card);
   text-transform:none; letter-spacing:0 }
 .departnote { margin-top:6px; font:500 .78rem Inter; color:var(--ink);
   background:var(--sky-soft); border-radius:8px; padding:7px 10px }
@@ -542,7 +595,7 @@ aside section[data-tool].on { display:block }
 .viachips .leg .badge { display:inline-flex; align-items:center;
   justify-content:center; flex:none }
 .viachips .leg.origin .badge { width:13px; height:13px; border-radius:99px;
-  background:#fff; border:3.5px solid var(--ink); color:transparent }
+  background:var(--card); border:3.5px solid var(--ink); color:transparent }
 .viachips .leg.stop .badge { width:15px; height:15px; border-radius:99px;
   background:#5b6b7d; color:#fff; font:700 .58rem Inter; border:0 }
 .viachips .leg.dest .badge { width:14px; height:14px; border-radius:50% 50% 50% 0;
@@ -620,16 +673,16 @@ aside section[data-tool].on { display:block }
 /* Toll details live in a left-hand panel, not a popup on the road:
    the popup used to cover the very corridor the rate rows highlight. */
 .tollside { position:absolute; z-index:1150; top:12px; left:12px;
-  bottom:12px; width:min(360px, calc(100vw - 40px)); background:#fff;
+  bottom:12px; width:min(360px, calc(100vw - 40px)); background:var(--card);
   border-radius:14px; box-shadow:0 10px 34px rgba(15,28,43,.35);
   padding:14px 16px; overflow-y:auto; display:none;
   overscroll-behavior:contain }
 .tollside.open { display:block }
 .tollside .tollx { position:sticky; top:0; float:right; z-index:2;
-  font:400 20px/1 Inter; color:var(--dim); background:#fff;
+  font:400 20px/1 Inter; color:var(--dim); background:var(--card);
   border:1px solid var(--line); border-radius:8px; width:28px;
   height:28px; cursor:pointer; margin:-2px -2px 0 8px }
-.tollside .tollx:hover { color:#0f172a; border-color:#94a3b8 }
+.tollside .tollx:hover { color:var(--t1); border-color:var(--t4) }
 @media (max-width: 960px) {
   .tollside { top:auto; bottom:var(--tab-h); left:0; right:0; width:auto;
     z-index:1250; max-height:55vh; border-radius:14px 14px 0 0 } }
@@ -650,7 +703,7 @@ aside section[data-tool].on { display:block }
 .basemap input, .pills input { position:absolute; opacity:0; width:0; height:0 }
 .basemap label:has(input:focus-visible), .pills label:has(input:focus-visible) { outline:2px solid var(--sky); outline-offset:1px }
 .filters u { display:block; text-decoration:none; font:700 .62rem Inter;
-  letter-spacing:.8px; text-transform:uppercase; color:#9aa8b6;
+  letter-spacing:.8px; text-transform:uppercase; color:var(--t4);
   margin:7px 0 2px }
 .filters label i.ring { background:transparent; border:2px solid var(--dot) }
 .filters label i.iline { width:16px; height:0; border-radius:0;
@@ -659,13 +712,13 @@ aside section[data-tool].on { display:block }
    number reads as belonging to that point on the road. */
 .ttag { transform:translate(-50%,-100%); text-align:center; pointer-events:none;
   filter:drop-shadow(0 1px 3px rgba(0,0,0,.35)) }
-.ttag .tb { background:#fff; border:1.5px solid #334155; color:#0f172a;
+.ttag .tb { background:var(--card); border:1.5px solid #334155; color:var(--t1);
   font:800 11.5px Inter, system-ui, sans-serif; padding:3px 8px;
   border-radius:6px; white-space:nowrap }
 .ttag .ts { width:1.5px; height:9px; background:#334155; margin:0 auto }
 .ttag .td { width:7px; height:7px; border-radius:50%; background:#334155;
   margin:0 auto }
-.stackdiv { border-top:2px solid #cbd5e1; margin:10px 0 8px }
+.stackdiv { border-top:2px solid var(--hair-strong); margin:10px 0 8px }
 .filters label.subopt { padding-left:16px; font-size:.73rem; color:var(--dim) }
 .filters label.subopt i { width:0; height:0 }
 .pop { font:13px/1.45 Inter, sans-serif; min-width:200px }
@@ -783,30 +836,34 @@ aside section[data-tool].on { display:block }
   input, select, textarea { font-size:16px !important }
   .examples button { padding:8px 12px }
 }
-/* ── Topbar: two rows below 640px ──────────────────────────────
-   Row 1 (unchanged flex row, just tighter): brand left, the Live
-   map/current-page pill right. Row 2: the four text nav links, one
-   row, four equal columns, each a >=40px tap target - full width,
-   evenly distributed, no scrolling (the 375px horizontal-scroll strip
-   this replaced hid 3 of 4 destinations with no visible affordance;
-   see git history on this file for that revision). flex-wrap on
-   .topbar plus flex-basis:100% on nav is what forces nav onto its own
-   line: brand + the pill fit on row 1 with room to spare, so wrap
-   only breaks before the item that alone demands the full row width. */
+/* ── Topbar below 640px ───────────────────────────────────────
+   One row, as on the site: brand left, the Live map pill and a Menu
+   button right. The Menu button (topbar.js) opens the nav as a sheet
+   under the bar, two columns of 44px targets, with the developer
+   pages listed in place under a "For developers" label. */
 @media (max-width: 640px) {
-  .topbar { height:auto; flex-wrap:wrap; gap:8px; row-gap:4px;
+  .topbar { height:auto; min-height:56px; gap:8px; row-gap:4px;
     padding:8px 12px;
     padding-left:max(12px, env(safe-area-inset-left));
     padding-right:max(12px, env(safe-area-inset-right)) }
   .topbar a.brand { gap:8px }
-  .topbar .wordmark { white-space:nowrap; font-size:.98rem }
-  .topbar .navcta { flex:0 0 auto; margin-left:auto; min-height:36px;
-    display:flex; align-items:center }
-  .topbar nav { order:3; flex:1 1 100%; margin-left:0;
-    display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px }
-  .topbar nav a { padding:2px 4px; font-size:.72rem; text-align:center;
-    white-space:normal; line-height:1.2; min-height:40px;
-    display:flex; align-items:center; justify-content:center }
+  .topbar .wordmark { white-space:nowrap }
+  .topbar .navcta { flex:0 0 auto; margin-left:auto }
+  .topbar .navmenu { display:flex }
+  .topbar .sysok, .topbar #ver { display:none }
+  .topbar nav { order:3; flex:1 1 100%; margin-left:0; display:none;
+    grid-template-columns:repeat(2, 1fr); gap:2px 4px; padding-bottom:6px }
+  .topbar.open nav { display:grid }
+  .topbar nav a { padding:0 12px; min-height:44px; font-size:.9375rem }
+  .topbar .devmenu { display:contents }
+  .topbar .devbtn { display:none }
+  .topbar .devlabel { display:block; grid-column:1 / -1; margin:6px 12px 0;
+    font:500 .72rem/1.4 "Geist Mono", ui-monospace, monospace; text-transform:uppercase;
+    letter-spacing:.08em; color:#8fa2b8 }
+  .topbar .devpop { display:contents; visibility:visible; opacity:1; transform:none }
+  .topbar .devpop li { display:contents }
+  .topbar .devpop a { display:flex; color:#b7c4d4; font-weight:400; min-height:44px; padding:0 12px }
+  .topbar .devpop a::after, .topbar .devpop span { display:none }
 }
 
 /* Plugin alerts: a rounded badge, colored by plugin (plugin-badges.js).
@@ -874,19 +931,19 @@ aside section[data-tool].on { display:block }
 .inspbody .p2 .hd { display:none }
 .inspbody .p2 h4 { font:650 1.24rem/1.25 Inter; letter-spacing:-.015em; margin:0 0 4px;
   text-wrap:balance }
-.inspbody .p2 .sub { font-size:.93rem; color:#475569; margin-bottom:0 }
+.inspbody .p2 .sub { font-size:.93rem; color:var(--t2); margin-bottom:0 }
 .inspbody .p2 .body { font-size:.93rem; margin-top:12px }
 .inspbody .p2 .body.gloss { font-size:.88rem }
 .inspbody .p2 .warnline { display:inline-block; margin-top:12px; padding:5px 11px;
   border-radius:999px; font:650 .82rem Inter;
-  color:var(--acc); background:color-mix(in srgb, var(--acc) 11%, #fff) }
+  color:var(--acc); background:color-mix(in srgb, var(--acc) 11%, var(--card)) }
 .inspbody .p2 .facts { margin-top:16px; gap:0; border:1px solid var(--line);
-  border-radius:12px; overflow:hidden; background:#f8fafc }
+  border-radius:12px; overflow:hidden; background:var(--wash) }
 .inspbody .p2 .fact { padding:10px 13px; font-size:.87rem; gap:18px;
   justify-content:space-between; align-items:baseline; border-top:1px solid var(--line) }
 .inspbody .p2 .fact:first-child { border-top:0 }
-.inspbody .p2 .fact b { width:auto; font-weight:500; color:#64748b; white-space:nowrap }
-.inspbody .p2 .fact span { text-align:right; font-weight:600; color:#0f172a; min-width:0;
+.inspbody .p2 .fact b { width:auto; font-weight:500; color:var(--t3); white-space:nowrap }
+.inspbody .p2 .fact span { text-align:right; font-weight:600; color:var(--t1); min-width:0;
   overflow-wrap:anywhere }
 .inspbody .p2 .sched { margin-top:16px; border-radius:12px; padding:12px 14px; font-size:.88rem }
 .inspbody .p2 img { border-radius:12px; margin-top:14px; display:block }
@@ -908,3 +965,336 @@ aside section[data-tool].on { display:block }
 .inspact.primary { grid-column:1 / -1; background:var(--sky); border-color:var(--sky); color:#fff }
 .inspact.primary:hover { filter:brightness(1.06) }
 .inspact:only-child, .inspact:nth-child(2):last-child { grid-column:1 / -1 }
+
+/* ============ Sidebar and details rebuild (2026-11) ============
+   A slim rail that expands to labels and the less frequent tools; Your
+   places as the front door; popups as small peeks with one Details
+   button; a right-hand details pane with Basic and Advanced; the planned
+   route as a strip; a command palette. Light and dark share every rule
+   through the tokens at the top of this sheet. */
+
+/* ── Dark-mode touch-ups for rules that carry their own colours ── */
+.leaflet-container { background:var(--bg) }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background:var(--card); color:var(--ink);
+  box-shadow:var(--shadow) }
+.leaflet-container a.leaflet-popup-close-button { color:var(--t3) }
+.leaflet-bar a, .leaflet-bar a:hover { background:var(--card); color:var(--ink); border-color:var(--line) }
+.leaflet-control-attribution { background:color-mix(in srgb, var(--card) 82%, transparent) !important;
+  color:var(--t3) }
+.leaflet-control-attribution a { color:var(--sky) }
+input, select, textarea { color:var(--ink); background:var(--card) }
+:root[data-theme="dark"] .p2 .detbtn, :root[data-theme="dark"] .inspacts button,
+:root[data-theme="dark"] .reportform .detbtn, :root[data-theme="dark"] .confirmrow .detbtn {
+  color:#9cc3ff; background:#14284a; border-color:#24406b }
+:root[data-theme="dark"] .p2 .warnline { color:#ff8f8f }
+:root[data-theme="dark"] .p2 .lgrow .xpl { color:#67c6dd }
+:root[data-theme="dark"] .p2 .mchip.live { background:#11301f; color:#6ee7a0 }
+:root[data-theme="dark"] .mapbtn.armed, :root[data-theme="dark"] .mapbtn:hover { color:var(--ink) }
+:root[data-theme="dark"] .ttag .tb { background:#f8fafc }
+
+/* ── Rail: slim, or expanded to labels ───────────────────────── */
+/* Expanded wins over a dragged slim width (an inline --rail-w). */
+.shell.railwide { --rail-w:224px !important }
+.shell.railwide #railresize { pointer-events:none }
+.rail { transition:none }
+.rail .railx { display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:9px 2px 7px; border:0; border-radius:10px; background:transparent;
+  color:#9fb0c3; font:600 .62rem Inter; cursor:pointer; min-height:48px; margin-top:4px;
+  border-top:1px solid rgba(255,255,255,.08); border-radius:0 0 10px 10px }
+.rail .railx svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.9;
+  stroke-linecap:round }
+.rail .railx:hover { color:#fff; background:var(--navy2) }
+.rail .railx:focus-visible { outline:2px solid #7fb3ee; outline-offset:-2px }
+.railadv { display:flex; flex-direction:column; gap:4px }
+.raillabel { display:none; font:600 .64rem Inter; letter-spacing:.9px; text-transform:uppercase;
+  color:#7f93a9; padding:10px 12px 4px }
+/* Slim: only the open one of the "more" tools shows, so the rail always
+   marks where you are; the rest live in the expanded rail. */
+.shell:not(.railwide) .railadv > :not(.on) { display:none }
+.shell.railwide .raillabel { display:block }
+.shell.railwide .rail { padding:8px 8px }
+.shell.railwide .rail .tool, .shell.railwide .rail .railx { flex-direction:row; justify-content:flex-start;
+  gap:12px; min-height:40px; padding:8px 12px; font:500 .84rem Inter; letter-spacing:0;
+  text-align:left }
+.shell.railwide .rail .tool svg, .shell.railwide .rail .railx svg { width:19px; height:19px; flex:none }
+.shell.railwide .rail .tool.small { min-height:40px; opacity:1 }
+.shell.railwide .rail .railx { border-radius:10px; margin-top:6px }
+.shell.railwide .rail .railx svg { transform:none }
+.rail .tool.act { color:#aebdcd }
+.rail a.tool.act::after { content:"↗"; margin-left:auto; font-size:.8em; opacity:.6 }
+.shell:not(.railwide) .rail a.tool.act::after { content:none }
+
+/* ── Small shared pieces ─────────────────────────────────────── */
+.txtbtn { border:0; background:none; padding:4px 6px; margin:-4px -6px; border-radius:6px;
+  font:600 .76rem Inter; color:var(--sky); cursor:pointer }
+.txtbtn:hover { background:var(--sky-soft) }
+.txtbtn:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+.phead { display:flex; align-items:baseline; justify-content:space-between; gap:12px }
+.phead .panehead { margin-bottom:12px }
+.phead .subhead { margin-bottom:6px }
+kbd { font:600 .68rem var(--mono); padding:1px 5px; border-radius:5px;
+  border:1px solid var(--line); border-bottom-width:2px; background:var(--card); color:var(--t2) }
+
+/* ── Your places ─────────────────────────────────────────────── */
+.ptiles { display:grid; grid-template-columns:1fr 1fr; gap:8px }
+.ptile { position:relative; display:flex; border:1px solid var(--line); border-radius:12px;
+  background:var(--card); transition:border-color .15s }
+.ptile:hover { border-color:color-mix(in srgb, var(--sky) 55%, var(--line)) }
+.ptile .pmain { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start;
+  gap:10px; padding:12px; border:0; background:none; text-align:left; cursor:pointer;
+  font:inherit; color:var(--ink); border-radius:12px }
+.ptile .pmain:focus-visible, .padd:focus-visible, .prow:focus-visible, .plook:focus-visible,
+.prm:focus-visible { outline:2px solid var(--sky); outline-offset:-2px }
+.pic { display:grid; place-items:center; width:30px; height:30px; border-radius:9px;
+  background:var(--sky-soft); color:var(--sky); flex:none }
+.pic svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.9;
+  stroke-linecap:round; stroke-linejoin:round }
+.pic.sm { width:26px; height:26px; border-radius:8px; background:var(--hair2); color:var(--t3) }
+.pic.sm svg { width:15px; height:15px }
+.ptxt { display:flex; flex-direction:column; min-width:0; width:100% }
+.ptxt b { font:600 .86rem Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.ptxt small { font-size:.72rem; color:var(--dim); line-height:1.35 }
+.ptxt small.haslive { color:#b45309 }
+:root[data-theme="dark"] .ptxt small.haslive { color:#f5b04c }
+.ptile.unset { border-style:dashed; background:transparent }
+.ptile.unset .pic { background:var(--hair2); color:var(--t3) }
+.ptile.unset small { color:var(--sky) }
+.plook { position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:8px;
+  border:0; background:transparent; color:var(--t3); cursor:pointer; display:grid; place-items:center }
+.plook svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round }
+.plook:hover { background:var(--hair2); color:var(--ink) }
+.prm { position:absolute; inset:auto 8px 8px auto; border:0; border-radius:7px; padding:3px 8px;
+  background:#fbe9e9; color:#a02c2c; font:600 .7rem Inter; cursor:pointer }
+:root[data-theme="dark"] .prm { background:#3a1717; color:#ff9f9f }
+.padd { display:flex; align-items:center; gap:8px; padding:12px; border:1px dashed var(--line);
+  border-radius:12px; background:transparent; color:var(--dim); font:600 .78rem Inter; cursor:pointer;
+  min-height:58px }
+.padd svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round }
+.padd:hover { color:var(--sky); border-color:var(--sky) }
+.pnote { display:flex; gap:10px; align-items:baseline; justify-content:space-between;
+  margin-top:10px; padding:9px 12px; border-radius:10px; background:var(--sky-soft);
+  font-size:.78rem; color:var(--ink) }
+.pnote[hidden] { display:none }
+.pnote .txtbtn { margin:-4px -4px -4px 0; flex:none }
+.psec { margin-top:18px }
+.psec[hidden] { display:none }
+.plist { display:flex; flex-direction:column }
+.prow { display:flex; align-items:center; gap:10px; width:100%; padding:8px 2px; border:0;
+  border-top:1px solid var(--line); background:transparent; text-align:left; cursor:pointer;
+  font:inherit; color:var(--ink) }
+.prow:first-child { border-top:0 }
+.prow:hover { background:var(--sky-soft) }
+.prow b { display:block; font:600 .8rem Inter }
+.prow small { display:block; color:var(--dim); font-size:.72rem; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; max-width:250px }
+.pchips { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 6px }
+.pchip { font:500 .72rem Inter; color:var(--dim); padding:3px 9px; border-radius:999px;
+  background:var(--hair2) }
+.pchip b { color:var(--ink); font-weight:650; font-variant-numeric:tabular-nums }
+#plive .alertrow:first-child { border-top:0 }
+
+/* ── Popups are peeks: what, where, the one line, then Details ── */
+.leaflet-popup .peek .facts .fact:nth-child(n+3), .leaflet-popup .peek .foot,
+.leaflet-popup .peek .body ~ .body, .leaflet-popup .peek .dets, .leaflet-popup .peek .lg,
+.leaflet-popup .peek .detbtn[data-inc], .leaflet-popup .peek .camnote,
+.leaflet-popup .peek .sched, .leaflet-popup .peek .rleg, .leaflet-popup .peek details,
+.leaflet-popup .peek a.detbtn, .leaflet-popup .peek .xbtn { display:none }
+.leaflet-popup .peek .cmsboard span { white-space:normal }
+.leaflet-popup .p2 .inspbtn, .leaflet-popup .pop .inspbtn { display:flex; align-items:center;
+  justify-content:center; gap:2px; width:100%; margin-top:10px; padding:7px 10px;
+  font:600 12.5px Inter; border-radius:8px; color:var(--sky); background:var(--sky-soft);
+  border:1px solid transparent }
+.leaflet-popup .inspbtn svg { width:15px; height:15px; fill:none; stroke:currentColor;
+  stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round }
+.leaflet-popup .inspbtn:hover { border-color:var(--sky) }
+.leaflet-popup .inspbtn:focus-visible { outline:2px solid var(--sky); outline-offset:2px }
+
+/* ── Details pane: header, AI line, Basic | Advanced ─────────── */
+.inspector { box-shadow:none }
+.inspector:focus { outline:none }
+.inspmode { display:flex; gap:2px; margin:10px 16px 0; padding:3px; border-radius:10px;
+  background:var(--hair2) }
+.inspmode [role="tab"] { flex:1; border:0; border-radius:8px; padding:6px 10px; background:transparent;
+  font:600 .78rem Inter; color:var(--dim); cursor:pointer }
+.inspmode [role="tab"][aria-selected="true"] { background:var(--card); color:var(--ink);
+  box-shadow:0 1px 2px rgba(15,28,43,.12) }
+.inspmode [role="tab"]:focus-visible { outline:2px solid var(--sky); outline-offset:-2px }
+.inspscroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain }
+.inspbody { overflow:visible; flex:none }
+.inspbody[hidden], .inspadv[hidden], .inspai[hidden] { display:none }
+.inspai { display:flex; gap:10px; align-items:flex-start; margin:14px 16px 0; padding:10px 12px;
+  border-radius:10px; background:var(--wash); border:1px solid var(--hair) }
+.inspai .aimark { flex:none; font:700 .6rem/1 Inter; letter-spacing:.6px; color:var(--sky);
+  border:1px solid color-mix(in srgb, var(--sky) 40%, transparent); border-radius:5px; padding:3px 4px;
+  margin-top:2px }
+.inspai p { margin:0; font-size:.88rem; line-height:1.5; color:var(--ink) }
+.inspai.loading p { flex:1; height:2.6em; border-radius:6px;
+  background:linear-gradient(90deg, var(--hair2) 0%, var(--hair) 50%, var(--hair2) 100%);
+  background-size:200% 100%; animation:aishimmer 1.6s ease-in-out infinite }
+@keyframes aishimmer { from { background-position:100% 0 } to { background-position:-100% 0 } }
+.inspadv { padding:6px 16px 20px }
+.advsec { padding:14px 0 4px; border-top:1px solid var(--line) }
+.advsec:first-child { border-top:0 }
+.advsec h5 { margin:0 0 8px; font:650 .68rem Inter; letter-spacing:.8px; text-transform:uppercase;
+  color:var(--t3) }
+.advnote { margin:0 0 10px; font-size:.78rem; line-height:1.5; color:var(--dim) }
+.advtbl { display:grid; grid-template-columns:minmax(84px, max-content) 1fr; gap:0 14px; margin:0 }
+.advtbl dt, .advtbl dd { padding:6px 0; border-top:1px solid var(--hair2); font-size:.8rem; margin:0 }
+.advtbl dt:first-of-type, .advtbl dt:first-of-type + dd { border-top:0 }
+.advtbl dt { color:var(--t3); font:500 .76rem var(--mono); word-break:break-all }
+.advtbl dd { color:var(--t1); overflow-wrap:anywhere }
+.advtbl.mono dd { font:500 .76rem/1.5 var(--mono) }
+.advtbl dd small { display:block; color:var(--dim); font:400 .72rem Inter }
+.advbar { display:flex; gap:8px; margin-bottom:8px }
+.advbar .inspact { flex:1; min-height:34px }
+.advjson { margin:0; padding:12px; border-radius:10px; background:var(--wash); border:1px solid var(--hair);
+  font:500 .72rem/1.55 var(--mono); color:var(--t1); white-space:pre-wrap; word-break:break-word;
+  max-height:340px; overflow:auto; tab-size:2 }
+.advjson:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+
+/* ── Route conditions in driving order ───────────────────────── */
+.routecond .condrow { display:flex; gap:8px; align-items:baseline }
+.routecond .condrow > span { flex:1; min-width:0 }
+.condmi { flex:none; font:600 .7rem Inter; color:var(--dim); font-variant-numeric:tabular-nums }
+
+/* ── Route strip ─────────────────────────────────────────────── */
+.rstrip { position:absolute; z-index:1001; left:50%; bottom:26px; transform:translateX(-50%);
+  width:min(760px, calc(100% - 24px)); background:var(--card); color:var(--ink);
+  border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:12px 14px 12px }
+.rstrip[hidden], .rsopen[hidden] { display:none }
+.rshead { display:flex; align-items:center; gap:12px }
+.rstitle { flex:1; min-width:0; display:flex; flex-direction:column }
+.rstitle b { font:650 .88rem Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.rstitle span { font-size:.74rem; color:var(--dim) }
+.rsnav { display:flex; align-items:center; gap:4px; flex:none }
+.rsnav button { width:30px; height:30px; display:grid; place-items:center; border-radius:8px;
+  border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer }
+.rsnav button:disabled { opacity:.4; cursor:default }
+.rsnav button:not(:disabled):hover { border-color:var(--sky) }
+.rsnav button:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+.rsnav svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2.2;
+  stroke-linecap:round; stroke-linejoin:round }
+.rsnav .rsx { border:0; font:400 20px/1 Inter; color:var(--t3); margin-left:2px }
+#rspos { min-width:56px; text-align:center; font:600 .72rem Inter; color:var(--dim);
+  font-variant-numeric:tabular-nums }
+.rstrack { position:relative; height:52px; margin:12px 6px 0; outline:none; border-radius:8px }
+.rstrack:focus-visible { box-shadow:0 0 0 2px var(--sky) }
+.rsline { position:absolute; left:0; right:0; top:50%; height:4px; margin-top:-2px; border-radius:99px;
+  background:var(--hair) }
+.rsline::before, .rsline::after { content:""; position:absolute; top:50%; width:12px; height:12px;
+  margin-top:-6px; border-radius:99px; background:var(--card); border:3px solid var(--ink) }
+.rsline::before { left:-6px }
+.rsline::after { right:-6px; background:var(--ink) }
+.rsdot { position:absolute; left:var(--x); top:calc(50% - 6px + (var(--lane) - 1) * 15px);
+  width:12px; height:12px; margin-left:-6px; padding:0; border-radius:99px;
+  background:var(--dot); border:2px solid var(--card); box-shadow:0 0 0 1px rgba(15,28,43,.18);
+  cursor:pointer; transition:transform .15s var(--ease) }
+.rsdot::before { content:""; position:absolute; inset:-8px }  /* a bigger hit area */
+.rsdot:hover { transform:scale(1.3) }
+.rsdot.on { transform:scale(1.5); box-shadow:0 0 0 2px var(--ink); z-index:2 }
+.rsscale { display:flex; justify-content:space-between; margin:4px 0 0; font:600 .66rem Inter;
+  color:var(--t3); letter-spacing:.3px; text-transform:uppercase }
+.rscard { display:flex; align-items:center; gap:10px; margin-top:10px; padding-top:10px;
+  border-top:1px solid var(--line) }
+.rscard[hidden] { display:none }
+.rscard > i { width:10px; height:10px; border-radius:99px; background:var(--dot); flex:none }
+.rscard > div { flex:1; min-width:0 }
+.rscard b { display:block; font:600 .82rem Inter; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.rscard small { display:block; font-size:.72rem; color:var(--dim) }
+.rsdet { flex:none; border:1px solid var(--line); background:var(--card); color:var(--sky);
+  border-radius:8px; padding:6px 12px; font:600 .76rem Inter; cursor:pointer }
+.rsdet:hover { border-color:var(--sky) }
+.rsopen { position:absolute; z-index:1001; left:50%; bottom:26px; transform:translateX(-50%);
+  border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px;
+  padding:7px 14px; font:600 .78rem Inter; box-shadow:var(--shadow); cursor:pointer }
+
+/* ── Command palette ─────────────────────────────────────────── */
+.cpalhint { position:absolute; z-index:1000; left:12px; bottom:26px; display:flex; align-items:center;
+  gap:7px; padding:5px 6px 5px 10px; border-radius:9px; border:1px solid var(--line);
+  background:color-mix(in srgb, var(--card) 92%, transparent); color:var(--dim);
+  font:500 .72rem Inter; cursor:pointer; box-shadow:0 1px 3px rgba(15,28,43,.12) }
+.cpalhint:hover { color:var(--ink); border-color:var(--sky) }
+.cpalhint:focus-visible { outline:2px solid var(--sky); outline-offset:1px }
+.map-card.has-strip .cpalhint { display:none }
+.cpal { position:fixed; inset:0; z-index:3000; background:rgba(8,16,26,.38);
+  display:flex; justify-content:center; align-items:flex-start; padding:12vh 16px 16px }
+.cpal[hidden] { display:none }
+.cpalbox { width:min(620px, 100%); max-height:min(560px, 76vh); display:flex; flex-direction:column;
+  background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:14px;
+  box-shadow:0 24px 64px rgba(8,16,26,.35); overflow:hidden; animation:cpalin .18s var(--ease) }
+@keyframes cpalin { from { opacity:0; transform:translateY(-6px) scale(.99) } to { opacity:1; transform:none } }
+.cpalin { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line) }
+.cpalin svg { width:18px; height:18px; flex:none; fill:none; stroke:var(--t3); stroke-width:2;
+  stroke-linecap:round }
+.cpalin input { flex:1; min-width:0; border:0; outline:none; background:transparent;
+  font:500 1rem Inter; color:var(--ink) }
+.cpallist { overflow-y:auto; padding:6px; flex:1; min-height:0 }
+.cpalgrp { padding:10px 10px 4px; font:650 .64rem Inter; letter-spacing:.8px; text-transform:uppercase;
+  color:var(--t3) }
+.cpalrow { display:flex; align-items:center; gap:12px; padding:8px 10px; border-radius:8px;
+  cursor:pointer; font-size:.88rem }
+.cpalrow span { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.cpalrow small { flex:none; color:var(--dim); font-size:.74rem; max-width:45%; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis }
+.cpalrow.on { background:var(--sky-soft) }
+.cpalrow.on span { color:var(--ink) }
+.cpalnone { padding:18px 12px; color:var(--dim); font-size:.84rem }
+.cpalfoot { display:flex; gap:16px; padding:9px 14px; border-top:1px solid var(--line);
+  font-size:.72rem; color:var(--dim) }
+.cpalfoot span { display:flex; align-items:center; gap:4px }
+
+/* ── Phone ───────────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .shell.railwide { --rail-w:auto !important }
+  .railadv { display:none }
+  .shell.railwide .railadv { display:flex; position:absolute; right:8px; bottom:calc(var(--tab-h) + 8px);
+    width:min(260px, calc(100vw - 16px)); padding:6px; gap:2px; border-radius:14px;
+    background:var(--navy); box-shadow:0 -8px 32px rgba(8,16,26,.4); z-index:1302 }
+  .shell.railwide .raillabel { display:block; padding:8px 10px 4px }
+  .shell.railwide .rail .railadv .tool { flex:none; flex-direction:row; justify-content:flex-start; gap:12px;
+    min-height:44px; padding:8px 12px; font:500 .86rem Inter; text-align:left }
+  .shell.railwide .rail .railadv .tool svg { width:19px; height:19px }
+  .shell.railwide .rail > .tool, .shell.railwide .rail .railx { flex-direction:column; gap:3px;
+    padding:5px 0 4px; font:600 .56rem Inter; min-height:44px; justify-content:center; text-align:center }
+  .shell.railwide .rail > .tool svg, .shell.railwide .rail .railx svg { width:20px; height:20px }
+  .shell.railwide .rail { padding:4px 6px env(safe-area-inset-bottom); overflow:visible }
+  .rail .railx { flex:1 1 0; min-width:0; min-height:44px; margin:0; padding:5px 0 4px;
+    font-size:.56rem; border:0; border-radius:10px }
+  .rail .railx svg { width:20px; height:20px }
+  .ptiles { grid-template-columns:1fr 1fr }
+  .rstrip { left:8px; right:8px; width:auto; transform:none; padding:10px 12px;
+    bottom:calc(var(--sheet-h) + var(--tab-h) + 8px); transition:bottom .2s ease }
+  .rstrip .rscard { display:none }
+  .rstrip .rstitle { flex:1; min-width:0 }
+  .rstrip #rsname, .rstrip #rsmeta { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .rsopen { bottom:calc(var(--sheet-h) + var(--tab-h) + 8px) }
+  .shell.sheet-full .rstrip, .shell.sheet-full .rsopen { display:none }
+  .cpalhint { display:none }
+  .cpal { padding:8px }
+  .cpalbox { max-height:calc(100dvh - 16px) }
+  .cpalfoot { display:none }
+  .inspmode { margin:10px 14px 0 }
+  /* The phone pane sizes to its content (up to 70dvh), so the scroller must
+     not start from zero height. */
+  .inspscroll { flex:0 1 auto }
+  .inspector { height:max-content }
+  .inspector { display:flex }
+  .inspector[hidden] { display:none }
+}
+@media (pointer: coarse) {
+  .rsdot { width:16px; height:16px; margin-left:-8px }
+}
+
+/* ── Motion: off when the system asks ────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration:.01ms !important; animation-duration:.01ms !important;
+    animation-iteration-count:1 !important; scroll-behavior:auto !important }
+  .inspai.loading p { animation:none }
+}
+
+/* Sky is lighter in dark mode; white on it falls under 4.5:1, so ink goes navy. */
+:root[data-theme="dark"] .inspact.primary { color:#08101a }
+
+/* Places: where the list lives, and the way to sign in. */
+.psync { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 8px }
+.psync .txtbtn[hidden] { display:none }

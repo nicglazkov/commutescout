@@ -1,0 +1,584 @@
+/* Shared layout for /terms and /privacy. Styled only with the shared
+   --cs-* tokens (workstream A defines them for light and dark in
+   app/globals.css); each var() carries a light fallback so the pages
+   render correctly before those tokens land. */
+
+.page {
+  --l-bg: var(--cs-bg, #f6f8fb);
+  --l-surface: var(--cs-surface, #ffffff);
+  --l-surface-2: var(--cs-surface-2, #f1f4f8);
+  --l-ink: var(--cs-ink, #0f1c2b);
+  --l-ink-2: var(--cs-ink-2, #46566a);
+  --l-ink-3: var(--cs-ink-3, #6b7a8c);
+  --l-line: var(--cs-line, #dbe3ec);
+  --l-line-strong: var(--cs-line-strong, #b9c6d4);
+  --l-accent: var(--cs-accent, #1f6fe5);
+  --l-accent-soft: var(--cs-accent-soft, #e8f0fd);
+  --l-warn: var(--cs-incident, #b5520f);
+  --l-warn-soft: var(--cs-incident-soft, #fdf0e6);
+  --l-radius: var(--cs-radius-md, 10px);
+  --l-radius-lg: var(--cs-radius-lg, 14px);
+  --l-mono: var(--cs-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+
+  background: var(--l-bg);
+  color: var(--l-ink);
+  font-family: var(--cs-font-sans, inherit);
+  padding: 56px 20px 96px;
+}
+
+@media (min-width: 48rem) {
+  .page { padding-inline: 32px; }
+}
+
+/* Same 1200px column as the marketing and docs pages. */
+.wrap {
+  margin: 0 auto;
+  max-width: 1200px;
+}
+
+/* ---------- header ---------- */
+
+.eyebrow {
+  font-family: var(--l-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--l-ink-3);
+  margin: 0 0 12px;
+}
+
+.title {
+  font-size: clamp(2rem, 1.4rem + 2.4vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.meta {
+  margin: 14px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 14px;
+  color: var(--l-ink-2);
+}
+
+.meta strong {
+  color: var(--l-ink);
+  font-weight: 600;
+}
+
+.lede {
+  margin: 20px 0 0;
+  max-width: 68ch;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--l-ink-2);
+}
+
+/* ---------- summary ---------- */
+
+.summary {
+  margin-top: 32px;
+  background: var(--l-surface);
+  border: 1px solid var(--l-line);
+  border-radius: var(--l-radius-lg);
+  padding: 24px;
+}
+
+.summaryTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.summaryNote {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--l-ink-3);
+}
+
+.summaryList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px 32px;
+}
+
+@media (min-width: 760px) {
+  .summaryList {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.summaryList li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--l-ink-2);
+}
+
+.summaryList li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--l-accent);
+}
+
+.summaryList li strong {
+  color: var(--l-ink);
+  font-weight: 600;
+}
+
+/* A key point of the summary, highlighted where it stands (the order of
+   the list never changes, so the reviewed text reads the same): a tinted
+   cell with an accent rule, ink text and a larger size. */
+.summaryList li.summaryKey {
+  padding: 14px 16px 14px 20px;
+  margin: -2px 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--l-ink);
+  background: var(--l-accent-soft);
+  border-radius: var(--l-radius);
+  box-shadow: inset 3px 0 0 var(--l-accent);
+}
+
+.summaryList li.summaryKey::before {
+  display: none;
+}
+
+.summaryList li.summaryKey strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--l-accent);
+}
+
+/* ---------- body grid ---------- */
+
+.grid {
+  margin-top: 40px;
+  display: grid;
+  gap: 32px;
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 56px;
+    align-items: start;
+  }
+}
+
+/* ---------- table of contents ---------- */
+
+.toc {
+  font-size: 14px;
+}
+
+@media (min-width: 1024px) {
+  .toc {
+    position: sticky;
+    top: 88px;
+    max-height: calc(100vh - 112px);
+    overflow-y: auto;
+  }
+}
+
+.tocDetails {
+  background: var(--l-surface);
+  border: 1px solid var(--l-line);
+  border-radius: var(--l-radius);
+}
+
+.tocDetails > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 16px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 44px;
+}
+
+.tocDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tocDetails > summary::after {
+  content: "+";
+  font-family: var(--l-mono);
+  color: var(--l-ink-3);
+}
+
+.tocDetails[open] > summary::after {
+  content: "\2212";
+}
+
+.tocList {
+  list-style: none;
+  margin: 0;
+  padding: 4px 8px 12px;
+  counter-reset: toc;
+}
+
+.tocList a {
+  display: flex;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  color: var(--l-ink-2);
+  text-decoration: none;
+  line-height: 1.35;
+}
+
+.tocList a:hover {
+  background: var(--l-surface-2);
+  color: var(--l-ink);
+}
+
+.tocList a:focus-visible,
+.prose a:focus-visible,
+.tocDetails > summary:focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 2px;
+}
+
+.tocNum {
+  font-family: var(--l-mono);
+  font-size: 12px;
+  color: var(--l-ink-3);
+  min-width: 1.6em;
+  padding-top: 1px;
+}
+
+.tocWide {
+  display: none;
+}
+
+.tocLabel {
+  margin: 0 0 8px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-family: var(--l-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--l-ink-3);
+}
+
+@media (min-width: 1024px) {
+  .tocDetails {
+    display: none;
+  }
+  .tocWide {
+    display: block;
+  }
+  .tocWide .tocList {
+    padding: 0;
+    border-left: 1px solid var(--l-line);
+  }
+  .tocWide .tocList a {
+    border-radius: 0 6px 6px 0;
+    margin-left: -1px;
+    border-left: 1px solid transparent;
+  }
+  .tocWide .tocList a:hover {
+    border-left-color: var(--l-ink-2);
+  }
+}
+
+/* ---------- sections ---------- */
+
+.sections {
+  min-width: 0;
+}
+
+.section {
+  scroll-margin-top: 88px; /* clears the sticky site header */
+  padding: 28px 0;
+  border-top: 1px solid var(--l-line);
+}
+
+.section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.sectionNum {
+  font-family: var(--l-mono);
+  font-size: 13px;
+  color: var(--l-ink-3);
+  min-width: 1.6em;
+}
+
+.sectionTitle {
+  font-size: 1.3rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+  margin: 0;
+}
+
+.anchor {
+  display: inline-block;
+  min-width: 24px;
+  text-align: center;
+  color: var(--l-ink-3);
+  text-decoration: none;
+  font-weight: 400;
+  opacity: 0;
+  margin-left: 2px;
+  border-radius: 4px;
+}
+
+.sectionHead:hover .anchor,
+.anchor:focus-visible {
+  opacity: 1;
+}
+
+/* ---------- prose ---------- */
+
+.prose {
+  max-width: 70ch;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--l-ink-2);
+}
+
+.prose > * + * {
+  margin-top: 14px;
+}
+
+.prose p,
+.prose ul,
+.prose ol {
+  margin: 0;
+}
+
+.prose * + p,
+.prose * + ul,
+.prose * + ol,
+.prose * + h3,
+.prose * + table,
+.prose * + div {
+  margin-top: 14px;
+}
+
+.prose h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--l-ink);
+  margin: 22px 0 0;
+}
+
+.prose strong {
+  color: var(--l-ink);
+  font-weight: 600;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.25rem;
+}
+
+.prose ul {
+  list-style: disc;
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose li + li {
+  margin-top: 8px;
+}
+
+.prose li::marker {
+  color: var(--l-ink-3);
+}
+
+.prose a {
+  color: var(--l-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.prose a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.prose code {
+  font-family: var(--l-mono);
+  font-size: 0.9em;
+  background: var(--l-surface-2);
+  border: 1px solid var(--l-line);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* ---------- callouts ---------- */
+
+.callout {
+  border-radius: var(--l-radius);
+  padding: 16px 18px;
+  border: 1px solid var(--l-line-strong);
+  background: var(--l-surface);
+  color: var(--l-ink);
+}
+
+.calloutWarn {
+  border-color: color-mix(in srgb, var(--l-warn) 45%, transparent);
+  background: var(--l-warn-soft);
+  border-left: 4px solid var(--l-warn);
+}
+
+.calloutTitle {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* Warranty disclaimer and limitation of liability: kept conspicuous
+   (bold, contrasting box, headed) as California Commercial Code 2316
+   and common practice expect. */
+.conspicuous {
+  border: 2px solid var(--l-ink);
+  border-radius: var(--l-radius);
+  padding: 18px 20px;
+  background: var(--l-surface);
+  color: var(--l-ink);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.conspicuous p + p {
+  margin-top: 12px;
+}
+
+/* ---------- data table (privacy categories) ---------- */
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--l-line);
+  border-radius: var(--l-radius-lg);
+  background: var(--l-surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 11px 16px;
+  border-top: 1px solid var(--l-line);
+}
+
+/* Same header treatment as the developer docs tables (docs.css .dx-table). */
+.table thead th {
+  border-top: 0;
+  background: var(--l-surface-2);
+  color: var(--l-ink-3);
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.table td:first-child {
+  color: var(--l-ink);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .table thead {
+    display: none;
+  }
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+  .table tr {
+    border-top: 1px solid var(--l-line);
+    padding: 8px 0;
+  }
+  .table tr:first-child {
+    border-top: 0;
+  }
+  .table td {
+    border-top: 0;
+    padding: 4px 14px;
+  }
+  .table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--l-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--l-ink-3);
+    font-weight: 500;
+  }
+}
+
+/* ---------- footer note ---------- */
+
+.foot {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--l-line);
+  font-size: 14px;
+  color: var(--l-ink-3);
+}
+
+.foot a {
+  color: var(--l-accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.page) {
+    scroll-behavior: smooth;
+  }
+}
+
+@media print {
+  .page {
+    padding: 0;
+    background: #fff;
+    color: #000;
+  }
+  .toc,
+  .anchor {
+    display: none;
+  }
+  .grid {
+    display: block;
+  }
+}

@@ -1,0 +1,231 @@
+/* Fig. "From agency feed to your map" (pipeline-flow.tsx). Tones from figures.css.
+   Two status colours and nothing else: --f-ok for a fresh copy, --f-stale for a copy that is
+   due. Data on the move is ink. Boxes, wires and text are neutral. */
+
+.pfl {
+  --pfl-fresh: var(--f-ok);
+  --pfl-due: var(--f-stale);
+}
+
+.pfl-svg text {
+  font-family: var(--f-sans);
+  fill: var(--f-ink2);
+}
+.pfl-svg .pfl-head {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  fill: var(--f-ink3);
+}
+.pfl-svg .pfl-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  fill: var(--f-ink);
+}
+.pfl-svg .pfl-sub {
+  font-size: 12px;
+  fill: var(--f-ink3);
+}
+.pfl-svg .pfl-ink2 {
+  fill: var(--f-ink2);
+}
+.pfl-svg .pfl-num {
+  font-family: var(--f-mono);
+  font-weight: 600;
+  fill: var(--f-ink);
+  font-variant-numeric: tabular-nums;
+}
+.pfl-svg .pfl-rule {
+  stroke: var(--f-line);
+  stroke-width: 1;
+}
+.pfl-svg .pfl-box {
+  fill: var(--f-bg);
+  stroke: var(--f-line2);
+  stroke-width: 1;
+}
+.pfl-svg .pfl-box2 {
+  fill: var(--f-bg2);
+  stroke: var(--f-line);
+  stroke-width: 1;
+}
+.pfl-svg .pfl-wire {
+  fill: none;
+  stroke: var(--f-line2);
+  stroke-width: 1.2;
+}
+.pfl-svg .pfl-dash {
+  fill: none;
+  stroke: var(--f-ink3);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.pfl-svg .pfl-arrow {
+  fill: var(--f-ink3);
+}
+.pfl-svg .pfl-track {
+  fill: var(--f-grid);
+}
+.pfl-svg .pfl-bar {
+  fill: var(--pfl-fresh);
+  transition: fill 0.25s;
+}
+.pfl-svg .pfl-bar[data-due] {
+  fill: var(--pfl-due);
+}
+.pfl-svg .pfl-dot {
+  fill: var(--f-ink);
+}
+.pfl-svg .pfl-hollow {
+  fill: var(--f-bg);
+  stroke: var(--f-ink);
+  stroke-width: 1.5;
+}
+
+/* legend swatches */
+.pfl-key-bar {
+  display: inline-block;
+  flex: none;
+  width: 22px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--f-ok) 55%, var(--f-grid) 55%);
+}
+.pfl-key-bar[data-due] {
+  background: var(--f-stale);
+}
+.pfl-key-dot,
+.pfl-key-hollow {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  background: var(--f-ink);
+  vertical-align: -0.5px;
+}
+.pfl-key-hollow {
+  background: var(--f-bg);
+  box-shadow: inset 0 0 0 1.5px var(--f-ink);
+}
+
+/* phone: the same story as numbered steps */
+.pfl-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pfl-steps > li {
+  position: relative;
+  padding: 0 0 18px 34px;
+}
+.pfl-steps > li::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 28px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--f-line2);
+}
+.pfl-steps > li:last-child {
+  padding-bottom: 0;
+}
+.pfl-steps > li:last-child::before {
+  display: none;
+}
+.pfl-step-h {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--f-ink);
+}
+.pfl-step-h > span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 99px;
+  font: 600 12px/1 var(--f-mono);
+  color: var(--f-ink2);
+  border: 1px solid var(--f-line2);
+  background: var(--f-bg);
+}
+.pfl-step-p {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--f-ink2);
+}
+.pfl-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--f-ink);
+}
+.pfl-lanes {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.pfl-lanes > li {
+  display: grid;
+  gap: 2px;
+  padding: 9px 12px 10px;
+  border: 1px solid var(--f-line);
+  border-radius: var(--f-r-sm);
+  background: var(--f-bg2);
+}
+.pfl-lane-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--f-ink);
+}
+.pfl-lane-what {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--f-ink2);
+}
+.pfl-lane-what b {
+  font-family: var(--f-mono);
+  font-weight: 600;
+  color: var(--f-ink);
+}
+.pfl-lane-bar {
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 3px;
+  background: var(--f-grid);
+  overflow: hidden;
+}
+.pfl-lane-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--pfl-fresh);
+  transition: background-color 0.25s;
+}
+.pfl-lane-bar > i[data-due] {
+  background: var(--pfl-due);
+}
+.pfl-lane-note {
+  font-size: 12.5px;
+  color: var(--f-ink2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pfl-svg .pfl-bar,
+  .pfl-lane-bar > i {
+    transition: none;
+  }
+}
+.pfl-nowrap {
+  white-space: nowrap;
+}

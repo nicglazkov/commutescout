@@ -1,48 +1,419 @@
 @import "tailwindcss";
-@import "../../src/ca_roads_demo/static/tokens.css";
+
+/* ==========================================================================
+   CommuteScout design tokens ("Clear Coat").
+   Every page, component and figure styles with these --cs-* custom
+   properties; nothing hardcodes a color. Decisions and the full contract
+   are written up in site/DESIGN.md.
+
+   Theme resolution:
+   - Light is the default.
+   - With no stored choice, the OS setting wins (prefers-color-scheme), so
+     the page is correct even with JavaScript off.
+   - An inline script in app/layout.tsx sets <html data-theme="light|dark">
+     before first paint from the visitor's stored choice or the OS setting;
+     the header's theme switch changes it. [data-theme] beats the media
+     query in both directions.
+   The legacy map app keeps its own sheet (src/ca_roads_demo/static/
+   tokens.css); the navy/sky/paper aliases at the bottom of each block keep
+   older class names (bg-cs-navy, text-cs-sky, bg-cs-paper) working.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --cs-bg: #f5f7fa;
+  --cs-surface: #ffffff;
+  --cs-surface-2: #eef2f7;
+  --cs-inset: #e7ecf3;
+
+  /* Ink (contrast on --cs-surface: 17.5, 7.6, 4.8) */
+  --cs-ink: #0b1a2c;
+  --cs-ink-2: #475569;
+  --cs-ink-3: #5f6e82;
+
+  /* Lines */
+  --cs-line: #e1e7ef;
+  --cs-line-strong: #c9d3df;
+
+  /* The one accent (white text on it: 5.5) */
+  --cs-accent: #1a63d6;
+  --cs-accent-hover: #1555bb;
+  --cs-accent-ink: #ffffff;
+  --cs-accent-soft: #e8f0fd;
+
+  /* Semantic: one hue per kind of road event, matching the live map's
+     families (incident orange, closure red, chain blue, fire amber,
+     road weather teal). Each is AA as text on --cs-surface. */
+  --cs-incident: #ab4d0d;
+  --cs-incident-soft: #fdf0e6;
+  --cs-closure: #a1262e;
+  --cs-closure-soft: #fcebec;
+  --cs-chain: #4053a8;
+  --cs-chain-soft: #eceffb;
+  --cs-fire: #946200;
+  --cs-fire-soft: #fbf3df;
+  --cs-weather: #0e7480;
+  --cs-weather-soft: #e3f4f5;
+  --cs-ok: #1a774f;
+  --cs-ok-soft: #e4f4ec;
+  --cs-stale: #6b5b95;
+  --cs-stale-soft: #efecf7;
+
+  /* The dark band (developer section, footer). Stays dark in both themes. */
+  --cs-band: #0b1a2c;
+  --cs-band-2: #12263d;
+  --cs-band-ink: #e8eef6;
+  --cs-band-ink-2: #a9b8ca;
+  --cs-band-line: rgb(255 255 255 / 0.12);
+
+  /* Type */
+  --cs-font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cs-font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Shape and depth */
+  --cs-radius-sm: 6px;
+  --cs-radius-md: 10px;
+  --cs-radius-lg: 16px;
+  --cs-shadow-sm: 0 1px 2px rgb(11 26 44 / 0.06), 0 1px 1px rgb(11 26 44 / 0.03);
+  --cs-shadow-md: 0 1px 2px rgb(11 26 44 / 0.05), 0 16px 40px -16px rgb(11 26 44 / 0.22);
+  --cs-focus: 0 0 0 2px var(--cs-bg), 0 0 0 4px var(--cs-accent);
+
+  /* Motion */
+  --cs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --cs-dur-fast: 150ms;
+  --cs-dur: 260ms;
+  --cs-dur-slow: 520ms;
+
+  /* Legacy aliases (older class names; prefer the tokens above) */
+  --cs-navy: var(--cs-band);
+  --cs-navy2: var(--cs-band-2);
+  --cs-sky: var(--cs-accent);
+  --cs-paper: var(--cs-surface);
+  --cs-font: var(--cs-font-sans);
+
+  /* shadcn/ui theme slots, mapped onto the tokens */
+  --background: var(--cs-bg);
+  --foreground: var(--cs-ink);
+  --card: var(--cs-surface);
+  --card-foreground: var(--cs-ink);
+  --popover: var(--cs-surface);
+  --popover-foreground: var(--cs-ink);
+  --primary: var(--cs-accent);
+  --primary-foreground: var(--cs-accent-ink);
+  --secondary: var(--cs-surface-2);
+  --secondary-foreground: var(--cs-ink);
+  --muted: var(--cs-surface-2);
+  --muted-foreground: var(--cs-ink-2);
+  --accent: var(--cs-surface-2);
+  --accent-foreground: var(--cs-ink);
+  --destructive: var(--cs-closure);
+  --border: var(--cs-line);
+  --input: var(--cs-line-strong);
+  --ring: var(--cs-accent);
+  --radius: var(--cs-radius-md);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --cs-bg: #0a111b;
+    --cs-surface: #111a26;
+    --cs-surface-2: #172231;
+    --cs-inset: #0d1520;
+    --cs-ink: #e6edf5;
+    --cs-ink-2: #a3b2c4;
+    --cs-ink-3: #8091a6;
+    --cs-line: #223042;
+    --cs-line-strong: #33445b;
+    --cs-accent: #5b9cff;
+    --cs-accent-hover: #7aafff;
+    --cs-accent-ink: #06101e;
+    --cs-accent-soft: #14284a;
+    --cs-incident: #f0914f;
+    --cs-incident-soft: #33200f;
+    --cs-closure: #ff8a8f;
+    --cs-closure-soft: #3a1619;
+    --cs-chain: #98a6f0;
+    --cs-chain-soft: #1c2244;
+    --cs-fire: #e3b341;
+    --cs-fire-soft: #2f2610;
+    --cs-weather: #4cc2c9;
+    --cs-weather-soft: #0f2c30;
+    --cs-ok: #4fc98e;
+    --cs-ok-soft: #10301f;
+    --cs-stale: #b4a5e0;
+    --cs-stale-soft: #241f3a;
+    --cs-band: #0e1a29;
+    --cs-band-2: #142134;
+    --cs-band-ink: #e6edf5;
+    --cs-band-ink-2: #a3b2c4;
+    --cs-band-line: rgb(255 255 255 / 0.09);
+    --cs-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --cs-shadow-md: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 18px 44px -18px rgb(0 0 0 / 0.7);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --cs-bg: #0a111b;
+  --cs-surface: #111a26;
+  --cs-surface-2: #172231;
+  --cs-inset: #0d1520;
+  --cs-ink: #e6edf5;
+  --cs-ink-2: #a3b2c4;
+  --cs-ink-3: #8091a6;
+  --cs-line: #223042;
+  --cs-line-strong: #33445b;
+  --cs-accent: #5b9cff;
+  --cs-accent-hover: #7aafff;
+  --cs-accent-ink: #06101e;
+  --cs-accent-soft: #14284a;
+  --cs-incident: #f0914f;
+  --cs-incident-soft: #33200f;
+  --cs-closure: #ff8a8f;
+  --cs-closure-soft: #3a1619;
+  --cs-chain: #98a6f0;
+  --cs-chain-soft: #1c2244;
+  --cs-fire: #e3b341;
+  --cs-fire-soft: #2f2610;
+  --cs-weather: #4cc2c9;
+  --cs-weather-soft: #0f2c30;
+  --cs-ok: #4fc98e;
+  --cs-ok-soft: #10301f;
+  --cs-stale: #b4a5e0;
+  --cs-stale-soft: #241f3a;
+  --cs-band: #0e1a29;
+  --cs-band-2: #142134;
+  --cs-band-ink: #e6edf5;
+  --cs-band-ink-2: #a3b2c4;
+  --cs-band-line: rgb(255 255 255 / 0.09);
+  --cs-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --cs-shadow-md: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 18px 44px -18px rgb(0 0 0 / 0.7);
+}
+
+/* `dark:` follows the resolved theme attribute. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
-  --color-background: var(--cs-bg);
-  --color-foreground: var(--cs-ink);
-  /* --font-inter comes from next/font/google in app/layout.tsx (self-hosted
-     Inter, matching the map app's self-hosted Inter). --cs-font is the
-     shared token sheet's generic fallback stack. */
-  --font-sans: var(--font-inter), var(--cs-font);
+  /* shadcn slots */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* cs-* utilities: bg-cs-surface, text-cs-ink-2, border-cs-line, ... */
+  --color-cs-bg: var(--cs-bg);
+  --color-cs-surface: var(--cs-surface);
+  --color-cs-surface-2: var(--cs-surface-2);
+  --color-cs-inset: var(--cs-inset);
+  --color-cs-ink: var(--cs-ink);
+  --color-cs-ink-2: var(--cs-ink-2);
+  --color-cs-ink-3: var(--cs-ink-3);
+  --color-cs-line: var(--cs-line);
+  --color-cs-line-strong: var(--cs-line-strong);
+  --color-cs-accent: var(--cs-accent);
+  --color-cs-accent-hover: var(--cs-accent-hover);
+  --color-cs-accent-ink: var(--cs-accent-ink);
+  --color-cs-accent-soft: var(--cs-accent-soft);
+  --color-cs-incident: var(--cs-incident);
+  --color-cs-incident-soft: var(--cs-incident-soft);
+  --color-cs-closure: var(--cs-closure);
+  --color-cs-closure-soft: var(--cs-closure-soft);
+  --color-cs-chain: var(--cs-chain);
+  --color-cs-chain-soft: var(--cs-chain-soft);
+  --color-cs-fire: var(--cs-fire);
+  --color-cs-fire-soft: var(--cs-fire-soft);
+  --color-cs-weather: var(--cs-weather);
+  --color-cs-weather-soft: var(--cs-weather-soft);
+  --color-cs-ok: var(--cs-ok);
+  --color-cs-ok-soft: var(--cs-ok-soft);
+  --color-cs-stale: var(--cs-stale);
+  --color-cs-stale-soft: var(--cs-stale-soft);
+  --color-cs-band: var(--cs-band);
+  --color-cs-band-2: var(--cs-band-2);
+  --color-cs-band-ink: var(--cs-band-ink);
+  --color-cs-band-ink-2: var(--cs-band-ink-2);
+  --color-cs-band-line: var(--cs-band-line);
+  /* legacy names */
   --color-cs-navy: var(--cs-navy);
   --color-cs-navy2: var(--cs-navy2);
   --color-cs-sky: var(--cs-sky);
-  --color-cs-ink: var(--cs-ink);
   --color-cs-paper: var(--cs-paper);
-  --color-cs-bg: var(--cs-bg);
-  --color-cs-line: var(--cs-line);
-  --font-cs: var(--cs-font);
-  /* Keyframes the vendored Tailark accordion block (components/ui/accordion.tsx)
-     animates open/closed with. Defined here instead of pulling in the
-     tw-animate-css package, which the site otherwise has no use for. */
-  --animate-accordion-down: accordion-down 0.2s ease-out;
-  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  --font-sans: var(--cs-font-sans);
+  --font-mono: var(--cs-font-mono);
+  --font-cs: var(--cs-font-sans);
+
+  --radius-sm: var(--cs-radius-sm);
+  --radius-md: var(--cs-radius-md);
+  --radius-lg: var(--cs-radius-lg);
+  --shadow-cs-sm: var(--cs-shadow-sm);
+  --shadow-cs-md: var(--cs-shadow-md);
+  --ease-cs: var(--cs-ease);
+
+  /* Accordion open/close (components/ui/accordion.tsx). */
+  --animate-accordion-down: accordion-down 0.22s var(--cs-ease);
+  --animate-accordion-up: accordion-up 0.18s var(--cs-ease);
 }
 
 @keyframes accordion-down {
-  from {
-    height: 0;
-  }
-  to {
-    height: var(--accordion-panel-height);
-  }
+  from { height: 0; }
+  to { height: var(--accordion-panel-height); }
 }
 
 @keyframes accordion-up {
-  from {
-    height: var(--accordion-panel-height);
+  from { height: var(--accordion-panel-height); }
+  to { height: 0; }
+}
+
+/* ---------- Base ---------- */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
   }
-  to {
-    height: 0;
+  body {
+    background: var(--cs-bg);
+    color: var(--cs-ink);
+    font-family: var(--cs-font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--cs-accent) 24%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--cs-accent);
+    outline-offset: 2px;
+  }
+  code, kbd, samp, pre {
+    font-family: var(--cs-font-mono);
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
   }
 }
 
-body {
-  background: var(--cs-bg);
+/* ---------- Type and layout utilities ---------- */
+
+/* The page column: 1200px of content with a 20px (phone) to 32px gutter. */
+@utility cs-container {
+  width: 100%;
+  max-width: 1264px;
+  margin-inline: auto;
+  padding-inline: 20px;
+  @media (width >= 48rem) {
+    padding-inline: 32px;
+  }
+}
+
+/* Mono label above a heading: "HOW IT WORKS". */
+@utility cs-eyebrow {
+  font-family: var(--cs-font-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cs-ink-3);
+}
+
+/* Page hero heading. */
+@utility cs-display {
+  font-size: clamp(2.5rem, 1.55rem + 3.6vw, 4.25rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  font-weight: 600;
   color: var(--cs-ink);
-  font-family: var(--font-sans);
+}
+
+/* Section heading. */
+@utility cs-h2 {
+  font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.5rem);
+  line-height: 1.08;
+  letter-spacing: -0.028em;
+  font-weight: 600;
+  color: var(--cs-ink);
+}
+
+/* Card or item heading. */
+@utility cs-h3 {
+  font-size: 1.0625rem;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+  color: var(--cs-ink);
+}
+
+/* Intro paragraph under a heading. */
+@utility cs-lede {
+  font-size: clamp(1.0625rem, 1rem + 0.3vw, 1.1875rem);
+  line-height: 1.6;
+  color: var(--cs-ink-2);
+}
+
+/* Data and metadata (timestamps, counts, URLs). */
+@utility cs-data {
+  font-family: var(--cs-font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Inline text link. */
+@utility cs-link {
+  color: var(--cs-accent);
+  font-weight: 500;
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, var(--cs-accent) 35%, transparent);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color var(--cs-dur-fast) var(--cs-ease);
+  &:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+/* Hairline-bordered surface (cards, figure frames). */
+@utility cs-panel {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius-lg);
+  box-shadow: var(--cs-shadow-sm);
+}
+
+/* Entrance: fade and rise once on load. Off under reduced motion. */
+@keyframes cs-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@utility cs-rise {
+  animation: cs-rise var(--cs-dur-slow) var(--cs-ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -35,6 +35,28 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname, ".."),
   },
+  // Dev only: /map, /watch and /trip are served by the Python app in
+  // production, so the Next dev server 404s on them. Proxy them, and the
+  // /static and /api paths they load, to the live site so the preview
+  // works end to end. The key is absent from production builds, so the
+  // static export (which cannot use rewrites) is unaffected.
+  ...(process.env.NODE_ENV === "development"
+    ? {
+        async rewrites() {
+          const live = "https://commutescout.com";
+          return [
+            "/map",
+            "/watch",
+            "/trip",
+            "/health",
+            "/sw.js",
+            "/logo.svg",
+            "/static/:path*",
+            "/api/:path*",
+          ].map((source) => ({ source, destination: live + source }));
+        },
+      }
+    : {}),
 };
 
 export default nextConfig;

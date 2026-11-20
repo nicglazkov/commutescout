@@ -43,7 +43,7 @@ flagged as stale rather than hidden.
 | **[Trip planning](https://commutescout.com/map)** | Closure-aware routes, drive time for any departure, the best time to leave, and an assistant that answers from the live feeds. |
 | **[Watch areas](https://commutescout.com/watch)** | Push and email alerts when something appears inside a drawn area or along a commute. |
 | **[Mobile apps](https://commutescout.com/app)** | Turn-by-turn navigation for iOS and Android that announces what is ahead in your direction of travel. |
-| **[MCP server](https://commutescout.com/mcp)** | 18 tools for Claude, ChatGPT, Cursor, VS Code and any MCP client. No key required. |
+| **[MCP server](https://commutescout.com/mcp)** | 18 tools for Claude, ChatGPT, Cursor, VS Code and any MCP client. Free API key required. |
 | **[REST API](https://commutescout.com/developers)** | Every tool as a plain HTTP GET, with an OpenAPI document, one error envelope and published rate limits. |
 | **[Plugins](https://commutescout.com/plugins)** | Flare, an open protocol for adding third-party alerts to the map and the apps, with a [marketplace](https://commutescout.com/marketplace). |
 

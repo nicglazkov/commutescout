@@ -1,26 +1,40 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CopyField } from "@/components/copy-field";
+import { DocsShell, Section, type TocItem } from "@/components/docs/docs-shell";
+import { C, CodeBlock, CopyField } from "@/components/docs/code-block";
+import { Callout } from "@/components/docs/callout";
+import { Quickstart, QuickstartSteps } from "@/components/docs/quickstart";
 import reference from "@/lib/api-reference.json";
 
 // The developer documentation: the REST API in full (base URL, keys,
 // limits, errors, conventions, every tool with every parameter), the
-// MCP server, bulk snapshots, and what not to do. The tool reference is
+// MCP server, bulk snapshots, and guidelines for using the data. The tool reference is
 // rendered from site/lib/api-reference.json, which
 // scripts/gen_api_reference.py generates from the tools' own schemas;
 // tests/test_api_reference.py fails when the JSON is stale, so the
 // parameter list here cannot drift from the server.
+//
+// Access: every /v1 and /mcp request needs a key (owner decision,
+// 2026-11-19; a request without one is a 401 missing_key). Keys are read
+// by src/ca_roads/apikeys.py from_headers: X-API-Key, or Authorization:
+// Bearer. Limits come from apikeys.py (TIERS, five keys per account, ten
+// new keys a day) and src/ca_roads_mcp/ratelimit.py (Retry-After values).
+// Bulk cadences come from src/ca_roads_demo/snapshot.py BUNDLES.
+//
+// Security (owner review): this page documents only what a developer
+// needs about their own limits and errors. How requests are identified,
+// limited or logged internally stays off the site.
 export const metadata: Metadata = {
   title: "Developers - CommuteScout",
   description:
-    "Use CommuteScout's live road data from your own code: a REST API with an OpenAPI document, an MCP server, keys and limits, and every tool documented parameter by parameter.",
+    "Use CommuteScout's live road data from your own code: a REST API with an OpenAPI document, keys and limits, and every tool documented parameter by parameter.",
   alternates: {
     canonical: "https://commutescout.com/developers",
   },
   openGraph: {
     title: "Developers - CommuteScout",
     description:
-      "Use CommuteScout's live road data from your own code: a REST API with an OpenAPI document, an MCP server, keys and limits, and every tool documented parameter by parameter.",
+      "Use CommuteScout's live road data from your own code: a REST API with an OpenAPI document, keys and limits, and every tool documented parameter by parameter.",
     url: "https://commutescout.com/developers",
     images: ["/static/shots/og.png"],
   },
@@ -35,117 +49,6 @@ const API_ROOT = `${BASE}${reference.prefix}`;
 // Link text for the OpenAPI, docs, and index links: the same URL as the
 // href without the scheme, so a reader sees which host answers.
 const API_ROOT_TEXT = API_ROOT.replace(/^https?:\/\//, "");
-const MCP_URL = `${BASE}/mcp`;
-
-const SECTIONS = [
-  { id: "quickstart", label: "Quickstart" },
-  { id: "basics", label: "Base URL and versioning" },
-  { id: "keys", label: "Keys and limits" },
-  { id: "responses", label: "Responses and conventions" },
-  { id: "errors", label: "Errors" },
-  { id: "rules", label: "What not to do" },
-  { id: "tools", label: "Tool reference" },
-  { id: "mcp", label: "MCP server" },
-  { id: "bulk", label: "Bulk snapshots" },
-  { id: "flare", label: "Flare plugins" },
-  { id: "terms", label: "Attribution and terms" },
-];
-
-const CURL_QUICK = `curl "${API_ROOT}/tools/get_incidents?center=LAT,LON&radius_km=20"`;
-
-const RESPONSE_SHAPE = `{
-  "count": 1,
-  "filters": { "highway": null, "area": null, "center": "LAT,LON" },
-  "incidents": [
-    {
-      "id": "260916GG0001",
-      "type": "1182-Trfc Collision-No Inj",
-      "location": "Route E / Cross St Onr",
-      "direction_hint": "eastbound",
-      "area": "CHP dispatch area",
-      "lat": LAT, "lon": LON,
-      "reported_at": "2026-09-16T12:00:00+00:00"
-    }
-  ],
-  "sources": [
-    { "source": "chp",
-      "description": "CHP live incidents (media.chp.ca.gov, refreshes ~1/min)",
-      "ok": true, "data_as_of": "2026-09-16T12:00:41+00:00" }
-  ],
-  "signs": [
-    { "route": "ROUTE", "direction": "N", "near": "Nearest town",
-      "county": "County", "lat": LAT, "lon": LON,
-      "message": "CRASH AHEAD / EXPECT DELAYS" }
-  ],
-  "cameras": [
-    { "name": "ROUTE at Cross St", "route": "ROUTE", "direction": "E",
-      "near": "Nearest town", "lat": LAT, "lon": LON,
-      "image_url": "https://cwwp2.dot.ca.gov/.../image.jpg", "stream_url": null }
-  ]
-}`;
-
-const CURL_KEYED = `curl -H "X-API-Key: cs_live_..." \\
-  "${API_ROOT}/tools/check_route?from_place=START&to_place=END"`;
-
-const ERROR_SHAPE = `{
-  "error": {
-    "code": "missing_parameter",
-    "message": "check_route needs to_place.",
-    "hint": "See ${API_ROOT}/docs#operation/check_route."
-  }
-}`;
-
-const ERRORS = [
-  ["400", "missing_parameter", "A required parameter is absent. The message names it."],
-  ["400", "unknown_parameter", "A parameter the tool does not have. The hint lists the accepted names."],
-  ["400", "invalid_parameter", "A value of the wrong type, for example radius_km=wide."],
-  ["400", "tool_error", "The tool refused the arguments for a reason it explains."],
-  ["401", "invalid_key", "The key is unknown or revoked. There is no silent fallback to keyless."],
-  ["404", "unknown_tool", "No tool by that name. The index at /v1 lists them."],
-  ["429", "rate_limited", "Too many requests at once. Retry-After says how long to wait."],
-  ["429", "daily_limit", "The account (for a keyed request) or the address (without a key) has used its day. Retry-After is 3600."],
-  ["502", "upstream_error", "A source feed did not answer. Retry in a minute."],
-  ["503", "keys_unavailable", "Key checks are down. Retry, or call without a key."],
-];
-
-const TIERS = [
-  ["No key", "Per address", "30 a minute sustained, 20 in a burst", "10,000 shared by everything behind that address"],
-  ["Free key", "Per account (all its keys together)", "30 a minute, 30 in a burst", "2,000"],
-  ["Pro key", "Per account (all its keys together)", "120 a minute, 60 in a burst", "10,000"],
-];
-
-const RULES = [
-  {
-    title: "Do not poll faster than the data changes.",
-    body:
-      "Every tool below says how often its source refreshes. Asking more often returns the same answer and spends your limit. A dashboard that re-reads incidents every 60 seconds and closures every five minutes is doing it right.",
-  },
-  {
-    title: "Do not put a key in a web page or a mobile app.",
-    body:
-      "A key is a secret. Anyone who can open your app can read it and spend your limit. Call keyless from browsers (the API allows cross-origin reads) or keep the key on a server you control.",
-  },
-  {
-    title: "Do not call the map's private endpoints.",
-    body:
-      "Everything under commutescout.com/api is for the site's own pages and changes without notice. The supported surface is this API, the MCP server, and the bulk snapshots below.",
-  },
-  {
-    title: "Do not present the data as complete or official.",
-    body:
-      "It is a live compilation of agency feeds, each with its own delay. Show the data_as_of time next to what you display, name the source, and tell your users to verify with 511 or the state DOT before they drive. Never use it for evacuation or emergency decisions.",
-  },
-  {
-    title: "Do not resell the raw feeds.",
-    body:
-      "Build on the data, do not redistribute it as a feed of your own. If your product needs the whole stream, use the bulk snapshots with attribution, or contact us.",
-  },
-  {
-    title: "Do not share one key across products.",
-    body:
-      "One key per app or job. When a key leaks, revoke it in Settings; requests with it stop within a minute.",
-  },
-];
 
 type Param = { name: string; required: boolean; doc: string };
 type Tool = {
@@ -162,494 +65,583 @@ type Tool = {
 };
 
 const TOOLS = reference.tools as Tool[];
+const BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
-function code(text: string) {
-  return (
-    <code className="bg-cs-bg text-cs-ink rounded px-1.5 py-0.5 text-[0.85em]">{text}</code>
-  );
+// The same three groups the MCP server's instructions use. Every tool in
+// the generated reference lands in exactly one group (checked below).
+const GROUPS: { id: string; title: string; blurb: string; tools: string[] }[] = [
+  {
+    id: "tools-trips",
+    title: "Trips, anywhere in the US",
+    blurb: "Plan a drive between any two US places, pick the best time to leave, resolve an address, and read your saved places.",
+    tools: ["plan_trip", "best_time_to_go", "find_place", "get_my_places"],
+  },
+  {
+    id: "tools-place",
+    title: "Around one place",
+    blurb: "Live events, weather, traffic speed and history around a point, in every covered state.",
+    tools: ["get_nearby_events", "get_weather", "get_traffic", "get_area_history", "get_coverage"],
+  },
+  {
+    id: "tools-ca",
+    title: "California, in depth",
+    blurb: "California publishes the deepest feeds, so these tools read them directly: highway patrol logs, closures in place, chain controls, fires, cameras and message signs.",
+    tools: [
+      "check_route",
+      "check_region",
+      "get_incidents",
+      "get_lane_closures",
+      "get_chain_controls",
+      "get_wildfires",
+      "get_cameras",
+      "get_road_signs",
+      "rank_routes",
+    ],
+  },
+];
+const GROUPED = new Set(GROUPS.flatMap((g) => g.tools));
+const UNGROUPED = TOOLS.filter((t) => !GROUPED.has(t.name));
+if (UNGROUPED.length) {
+  // A tool added to the server but not to a group still renders, last.
+  GROUPS.push({ id: "tools-more", title: "More tools", blurb: "", tools: UNGROUPED.map((t) => t.name) });
 }
 
-function H2({ id, children }: { id: string; children: React.ReactNode }) {
+const TOC: TocItem[] = [
+  { id: "quickstart", label: "Quickstart" },
+  { id: "basics", label: "Base URL and versioning" },
+  { id: "keys", label: "Keys and limits" },
+  { id: "responses", label: "Responses" },
+  { id: "errors", label: "Errors" },
+  {
+    id: "tools",
+    label: "Tool reference",
+    children: GROUPS.flatMap((g) => g.tools).map((n) => ({ id: `tool-${n}`, label: n })),
+  },
+  { id: "mcp", label: "MCP Server" },
+  { id: "bulk", label: "Bulk snapshots" },
+  { id: "flare", label: "Flare plugins" },
+  { id: "rules", label: "Guidelines" },
+  { id: "terms", label: "Attribution and terms" },
+];
+
+const CURL_BEARER = `curl -H "Authorization: Bearer YOUR_KEY" \\
+  "${API_ROOT}/tools/plan_trip?origin=home&destination=work"`;
+
+const ERROR_SHAPE = `{
+  "error": {
+    "code": "missing_parameter",
+    "message": "check_route needs to_place.",
+    "hint": "See ${API_ROOT}/docs#operation/check_route."
+  }
+}`;
+
+const ERRORS = [
+  ["400", "missing_parameter", "A required parameter is absent. The message names it."],
+  ["400", "unknown_parameter", "A parameter the tool does not have. The hint lists the accepted names."],
+  ["400", "invalid_parameter", "A value of the wrong type, for example radius_km=wide."],
+  ["400", "tool_error", "The tool refused the arguments for a reason it explains."],
+  ["401", "missing_key", "No key was sent. Create a free key (see Keys and limits) and send it with every request."],
+  ["401", "invalid_key", "The key is unknown or has been revoked."],
+  ["404", "unknown_tool", "No tool by that name. The index at /v1 lists them."],
+  ["429", "rate_limited", "Too many requests at once. Retry-After says how long to wait."],
+  ["429", "daily_limit", "Your account has used today's requests. Retry-After is 3600."],
+  ["502", "upstream_error", "A source feed did not answer. Retry in a minute."],
+  ["503", "keys_unavailable", "Keys cannot be checked right now. Retry in a minute."],
+];
+
+// [tier, sustained, burst, per UTC day], from apikeys.py TIERS
+// (per_second x 60, burst, daily). Counted per account.
+const TIERS = [
+  ["Free", "30 a minute", "30", "2,000"],
+  ["Pro (coming soon)", "120 a minute", "60", "10,000"],
+];
+
+// Phrased as what to do; the one hard "no" (reselling) says so plainly.
+const RULES = [
+  {
+    title: "Poll no faster than the data changes.",
+    body:
+      "Every tool in the reference says how often its source refreshes. Asking more often returns the same answer and spends your limit. A dashboard that re-reads incidents every 60 seconds and closures every five minutes is doing it right.",
+  },
+  {
+    title: "Keep your key on a server you control.",
+    body:
+      "A key is a secret. Call the API from your own server, not from a web page or a mobile app, where anyone can read the key and spend your limit.",
+  },
+  {
+    title: "Use one key per app or job.",
+    body:
+      "Then a leak only costs one key. Revoke a leaked key in Settings. Requests with it stop within a minute.",
+  },
+  {
+    title: "Build on the supported surface.",
+    body:
+      "That is this API, the MCP server and the bulk snapshots. Everything under commutescout.com/api serves the site's own pages and changes without notice.",
+  },
+  {
+    title: "Show how fresh the data is, and where it came from.",
+    body:
+      "It is a live compilation of agency feeds, each with its own delay, so it is neither complete nor official. Show the data_as_of time next to what you display, name the source, and tell your users to verify with 511 or the state DOT before they drive. It is not for evacuation or emergency decisions.",
+  },
+  {
+    title: "Build on the data rather than reselling it.",
+    body:
+      "Use it inside your product. Redistributing the raw feeds as a feed of your own is not allowed. If your product needs the whole stream, use the bulk snapshots with attribution, or contact us.",
+  },
+];
+
+const BULK = [
+  ["live.json.gz", "Every 30 seconds", "Incidents, closures, chain controls, wildfires, toll prices and plugin alerts"],
+  ["signs.json.gz", "Every 5 minutes", "Message signs and road-weather stations"],
+  ["cameras.json.gz", "Every hour", "The camera inventory"],
+];
+
+function statusTag(status: string) {
+  const cls = status.startsWith("5") ? "dx-tag-5xx" : status.startsWith("4") ? "dx-tag-4xx" : "dx-tag-2xx";
+  return <span className={`dx-tag ${cls}`}>{status}</span>;
+}
+
+function pollText(s: number) {
+  if (s % 3600 === 0) return s === 3600 ? "every hour" : `every ${s / 3600} hours`;
+  if (s % 60 === 0) return s === 60 ? "every minute" : `every ${s / 60} minutes`;
+  return `every ${s} seconds`;
+}
+
+// Every request sends the key.
+function exampleCommand(t: Tool) {
+  return `curl -H "X-API-Key: YOUR_KEY" \\\n  "${API_ROOT}/tools/${t.example}"`;
+}
+
+function ToolEntry({ t }: { t: Tool }) {
   return (
-    <h2
-      id={id}
-      className="text-cs-ink scroll-mt-24 text-balance text-2xl font-medium tracking-tight md:text-3xl"
-    >
-      {children}
-    </h2>
+    <article id={`tool-${t.name}`} className="dx-endpoint" aria-labelledby={`tool-${t.name}-h`}>
+      <div className="dx-endpoint-head">
+        <div className="dx-endpoint-title">
+          <h4 id={`tool-${t.name}-h`} className="dx-endpoint-name">
+            {t.name}
+          </h4>
+          <span className="dx-tag dx-tag-muted">{t.title}</span>
+        </div>
+        <p className="dx-endpoint-path">
+          <span className="dx-tag dx-tag-get">GET</span>
+          <span>{t.path}</span>
+        </p>
+        <p className="dx-endpoint-sum">{t.summary}</p>
+      </div>
+      <div className="dx-endpoint-body">
+        <dl className="dx-meta">
+          <dt>Reads</dt>
+          <dd>{t.reads}</dd>
+          <dt>Refresh</dt>
+          <dd>{t.refresh}</dd>
+          <dt>Poll at most</dt>
+          <dd>{pollText(t.poll_s)}</dd>
+          <dt>Limits</dt>
+          <dd>{t.caps}</dd>
+        </dl>
+        <h5 className="dx-param-h">
+          {t.params.length ? "Query parameters" : "Parameters"}
+        </h5>
+        {t.params.length ? (
+          <ul className="dx-params">
+            {t.params.map((p) => (
+              <li key={p.name}>
+                <div className="dx-param-name">
+                  <code>{p.name}</code>
+                  {p.required ? <span className="dx-req">required</span> : <span className="dx-opt">optional</span>}
+                </div>
+                <p className="dx-param-doc">{p.doc}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="dx-param-doc">None.</p>
+        )}
+        <CodeBlock code={exampleCommand(t)} lang="bash" title="Example" />
+      </div>
+    </article>
   );
 }
 
 export default function DevelopersPage() {
   return (
-    <>
-      <section className="bg-cs-navy text-white">
-        <div className="mx-auto max-w-4xl px-6 py-16 md:py-20">
-          <h1 className="text-balance text-4xl font-medium tracking-tight md:text-5xl">
-            Live roads, from your own code.
-          </h1>
-          <p className="text-white/70 mt-4 max-w-2xl text-balance md:text-lg">
-            One REST API and one MCP server over the same live data as the map:
-            trip planning and the best time to leave anywhere in the US, plus
-            incidents, closures, chain controls, wildfires, cameras, message
-            signs, traffic, weather and event history, California in the most
-            depth and live events across every covered state. This page is the
-            whole contract. Nothing here needs guessing. Connecting an assistant?
-            The{" "}
-            <Link href="/mcp#connect" prefetch={false} className="underline underline-offset-2 hover:text-white">
-              MCP setup for each client
-            </Link>{" "}
-            is one click away.
-          </p>
-          <div className="mt-8 max-w-xl">
-            <CopyField value={`${API_ROOT}/tools/{tool}`} />
+    <DocsShell
+      current="/developers"
+      title="REST API"
+      dek={
+        <>
+          The same live road data as the map, from your own code. Every tool is one GET request with your
+          API key.
+        </>
+      }
+      headExtra={<QuickstartSteps docsHref={`${API_ROOT}/docs`} />}
+      aside={<Quickstart apiRoot={API_ROOT} />}
+      toc={TOC}
+    >
+      <Section id="basics" title="Base URL and versioning">
+        <div className="dx-mt-20">
+          <CopyField method="GET" value={`${API_ROOT}/tools/{tool}`} label="Tool URL pattern" />
+        </div>
+        <dl className="dx-defs">
+          <div>
+            <dt>Base URL</dt>
+            <dd>
+              <C>{API_ROOT}</C>. Every tool is <C>{"GET " + reference.prefix + "/tools/{tool}"}</C> with
+              arguments as query parameters. Only GET and OPTIONS are accepted.
+            </dd>
           </div>
-          <nav aria-label="On this page" className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-            {SECTIONS.map((s) => (
-              <a key={s.id} href={`#${s.id}`} className="text-white/70 hover:text-white">
-                {s.label}
-              </a>
-            ))}
-          </nav>
-        </div>
-      </section>
-
-      <section className="py-14 md:py-16" aria-labelledby="quickstart">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="quickstart">Quickstart</H2>
-          <p className="text-cs-ink/70 mt-4 text-balance">
-            No key, no account, no SDK. One GET returns JSON. Replace{" "}
-            {code("LAT,LON")} with the point you care about.
-          </p>
-          <pre className="bg-cs-navy2 mt-5 overflow-x-auto rounded-xl p-5 text-sm text-white/90">
-            <code>{CURL_QUICK}</code>
-          </pre>
-          <p className="text-cs-ink/70 mt-5 text-balance">
-            Every response carries the records you asked for, the filters the
-            server understood, and a {code("sources")} list with each source&apos;s
-            own {code("data_as_of")} time. Show that time to your users.
-            When {code("get_incidents")}, {code("get_lane_closures")}, or{" "}
-            {code("get_chain_controls")} is filtered by route or center, the
-            response also carries the {code("signs")} and verified{" "}
-            {code("cameras")} near the returned records, when there are any.
-          </p>
-          <pre className="bg-cs-navy2 mt-5 overflow-x-auto rounded-xl p-5 text-sm text-white/90">
-            <code>{RESPONSE_SHAPE}</code>
-          </pre>
-          <p className="text-cs-ink/70 mt-5 text-balance">
-            The full machine-readable contract is the OpenAPI document at{" "}
-            <a href={`${API_ROOT}/openapi.json`} className="text-cs-sky hover:underline">
-              {API_ROOT_TEXT}/openapi.json
-            </a>
-            , with a browsable reference at{" "}
-            <a href={`${API_ROOT}/docs`} className="text-cs-sky hover:underline">
-              {API_ROOT_TEXT}/docs
-            </a>{" "}
-            and an index at{" "}
-            <a href={API_ROOT} className="text-cs-sky hover:underline">
-              {API_ROOT_TEXT}
-            </a>
-            . It is generated from the tools&apos; own schemas, so it is never out of date.
-          </p>
-        </div>
-      </section>
-
-      <section className="bg-cs-bg py-14 md:py-16" aria-labelledby="basics">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="basics">Base URL and versioning</H2>
-          <ul className="text-cs-ink/70 mt-4 space-y-3 text-balance">
-            <li>
-              <b className="text-cs-ink">Base URL:</b> {code(API_ROOT)}. Every tool is{" "}
-              {code("GET " + reference.prefix + "/tools/{tool}")} with arguments as query
-              parameters. Only GET and OPTIONS are accepted.
-            </li>
-            <li>
-              <b className="text-cs-ink">Versioning:</b> the path carries the version.
-              Changes within {code("/v1")} are additive: new fields, new parameters with
-              defaults, new tools. Nothing is renamed or removed within a version. A
-              breaking change would ship as {code("/v2")} with {code("/v1")} kept running.
-            </li>
-            <li>
-              <b className="text-cs-ink">Encoding:</b> query strings are URL-encoded UTF-8;
-              a space in a value is {code("%20")}, as in {code("Main%20St")}. Responses are{" "}
-              {code("application/json")}, UTF-8, uncompressed unless you send{" "}
-              {code("Accept-Encoding: gzip")}.
-            </li>
-            <li>
-              <b className="text-cs-ink">Cross-origin:</b> every {code("/v1")} response
-              carries {code("Access-Control-Allow-Origin: *")} and answers preflight, so a
-              browser page can call it directly. Do that keyless (see the rules below).
-            </li>
-            <li>
-              <b className="text-cs-ink">Caching:</b> tool responses are{" "}
-              {code("Cache-Control: no-store")}; cache them yourself for as long as the
+          <div>
+            <dt>Versioning</dt>
+            <dd>
+              The path carries the version. Changes within <C>/v1</C> only add things: new fields, new
+              parameters with defaults, new tools. A breaking change would ship as <C>/v2</C>, with{" "}
+              <C>/v1</C> kept running.
+            </dd>
+          </div>
+          <div>
+            <dt>Encoding</dt>
+            <dd>
+              Query strings are URL-encoded UTF-8. A space in a value is <C>%20</C>, as in{" "}
+              <C>Main%20St</C>. Responses are <C>application/json</C>, UTF-8, and gzip when you send{" "}
+              <C>Accept-Encoding: gzip</C>.
+            </dd>
+          </div>
+          <div>
+            <dt>Caching</dt>
+            <dd>
+              Tool responses are <C>Cache-Control: no-store</C>. Cache them yourself for as long as the
               tool&apos;s refresh interval says.
-            </li>
-          </ul>
-        </div>
-      </section>
+            </dd>
+          </div>
+          <div>
+            <dt>Contract</dt>
+            <dd>
+              The OpenAPI document at{" "}
+              <a href={`${API_ROOT}/openapi.json`} className="dx-link">
+                {API_ROOT_TEXT}/openapi.json
+              </a>
+              , generated from the tools&apos; own schemas, with a browsable reference at{" "}
+              <a href={`${API_ROOT}/docs`} className="dx-link">
+                {API_ROOT_TEXT}/docs
+              </a>{" "}
+              and an index of every tool at{" "}
+              <a href={API_ROOT} className="dx-link">
+                {API_ROOT_TEXT}
+              </a>
+              .
+            </dd>
+          </div>
+        </dl>
+      </Section>
 
-      <section className="py-14 md:py-16" aria-labelledby="keys">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="keys">Keys and limits</H2>
-          <p className="text-cs-ink/70 mt-4 text-balance">
-            Without a key, requests are limited per network address, and everything
-            behind that address shares the day. A key moves you onto your own limits.
-            Every key belongs to a signed-in account: open the{" "}
-            <Link href="/map" prefetch={false} className="text-cs-sky hover:underline">
-              live map
+      <Section id="keys" title="Keys and limits">
+        <div className="dx-prose dx-lead">
+          <p>
+            Every request needs a key. Send it as <C>X-API-Key</C> or as <C>Authorization: Bearer</C>.
+            Limits belong to your account and are shared by all of its keys.
+          </p>
+        </div>
+        <CodeBlock code={CURL_BEARER} lang="bash" title="The same key as a bearer token" />
+        <div className="dx-tbox">
+          <table className="dx-table dx-table--stack">
+            <caption className="sr-only">Limits by plan, per account</caption>
+            <thead>
+              <tr>
+                <th scope="col">Plan</th>
+                <th scope="col">Sustained</th>
+                <th scope="col">Burst</th>
+                <th scope="col">Requests per UTC day</th>
+              </tr>
+            </thead>
+            <tbody>
+              {TIERS.map((row) => (
+                <tr key={row[0]}>
+                  <th scope="row">{row[0]}</th>
+                  <td data-label="Sustained" className="num">{row[1]}</td>
+                  <td data-label="Burst" className="num">{row[2]}</td>
+                  <td data-label="Requests per UTC day" className="num">{row[3]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <ul className="dx-list dx-mt-20">
+          <li>
+            An account can have up to five active keys and create up to ten a day. A revoked key stops
+            working within a minute.
+          </li>
+          <li>
+            Responses carry <C>RateLimit-Limit</C> and <C>RateLimit-Remaining</C> for the day. Too many
+            requests at once is a 429 with <C>Retry-After: 2</C>. A used-up day is a 429 with{" "}
+            <C>Retry-After: 3600</C>. Days reset at midnight UTC.
+          </li>
+          <li>
+            The same key and limits work for the REST API and the{" "}
+            <Link href="/mcp" prefetch={false} className="dx-link">
+              MCP Server
             </Link>
-            , choose Settings in the rail, sign in with Google or an email link, and
-            create a key under API keys. The key is shown once. Send it as{" "}
-            {code("X-API-Key")} or {code("Authorization: Bearer cs_live_...")}.
+            .
+          </li>
+        </ul>
+        <Callout>
+          New keys are on the Free plan. <strong>Pro is coming soon.</strong> If you need more than Free
+          today, write to{" "}
+          <a href="mailto:hello@commutescout.com" className="dx-link">
+            hello@commutescout.com
+          </a>{" "}
+          with what you are building and the volume you expect.
+        </Callout>
+      </Section>
+
+      <Section id="responses" title="What every response carries">
+        <dl className="dx-defs">
+          <div>
+            <dt>Coordinates</dt>
+            <dd>
+              Decimal degrees, WGS 84, as <C>lat</C> and <C>lon</C> fields on records. Parameters take a
+              point as one string, <C>&quot;lat,lon&quot;</C>: latitude first, then longitude.
+            </dd>
+          </div>
+          <div>
+            <dt>Distances</dt>
+            <dd>
+              Kilometers unless the field name says otherwise (<C>miles_from_start</C>,{" "}
+              <C>size_acres</C>). Radii are <C>radius_km</C>.
+            </dd>
+          </div>
+          <div>
+            <dt>Timestamps</dt>
+            <dd>
+              ISO 8601 with an offset. Most are UTC. Some sources log in their own local offset. Parse
+              the offset rather than assuming one.
+            </dd>
+          </div>
+          <div>
+            <dt>Lists</dt>
+            <dd>
+              Carry <C>count</C>. A capped list also carries <C>total</C> and <C>truncated: true</C>,
+              and a note saying so. Counts are exact even when the list is cut.
+            </dd>
+          </div>
+          <div>
+            <dt>Sources</dt>
+            <dd>
+              Every response lists each source it read with <C>ok</C> and <C>data_as_of</C>. When a
+              source is down the response still answers from the others and marks that one{" "}
+              <C>ok: false</C>.
+            </dd>
+          </div>
+          <div>
+            <dt>Notes</dt>
+            <dd>
+              A <C>notes</C> list explains anything the server did on your behalf, such as clamping a
+              radius or listing the corridors when a route did not match. Read it. It is meant for
+              people.
+            </dd>
+          </div>
+          <div>
+            <dt>Errors inside a 200</dt>
+            <dd>
+              A tool that understood the request but could not act on it (an unrecognized region, a
+              malformed center) answers 200 with an <C>error</C> field in the body and usually the
+              accepted values next to it. Transport and parameter errors use the envelope below.
+            </dd>
+          </div>
+        </dl>
+      </Section>
+
+      <Section id="errors" title="One envelope everywhere">
+        <div className="dx-prose dx-lead">
+          <p>
+            A status code, a stable <C>code</C> you can branch on, a <C>message</C> for a log line, and a{" "}
+            <C>hint</C> for a person.
           </p>
-          <pre className="bg-cs-navy2 mt-5 overflow-x-auto rounded-xl p-5 text-sm text-white/90">
-            <code>{CURL_KEYED}</code>
-          </pre>
-          <div className="mt-6 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-cs-ink/60 border-cs-line border-b">
-                <tr>
-                  <th className="py-2 pr-4 font-medium">Tier</th>
-                  <th className="py-2 pr-4 font-medium">Counted</th>
-                  <th className="py-2 pr-4 font-medium">Rate</th>
-                  <th className="py-2 font-medium">Requests per UTC day</th>
+        </div>
+        <CodeBlock code={ERROR_SHAPE} lang="json" title="400 Bad Request" />
+        <div className="dx-tbox">
+          <table className="dx-table dx-table--stack">
+            <caption className="sr-only">Error codes</caption>
+            <thead>
+              <tr>
+                <th scope="col">Status</th>
+                <th scope="col">code</th>
+                <th scope="col">Meaning</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ERRORS.map((row) => (
+                <tr key={row[1]}>
+                  <td>{statusTag(row[0])}</td>
+                  <th scope="row">
+                    <code>{row[1]}</code>
+                  </th>
+                  <td>{row[2]}</td>
                 </tr>
-              </thead>
-              <tbody className="text-cs-ink/80">
-                {TIERS.map((row) => (
-                  <tr key={row[0]} className="border-cs-line border-b">
-                    <td className="py-2 pr-4 font-medium">{row[0]}</td>
-                    <td className="py-2 pr-4">{row[1]}</td>
-                    <td className="py-2 pr-4">{row[2]}</td>
-                    <td className="py-2">{row[3]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <ul className="text-cs-ink/70 mt-6 space-y-3 text-balance">
-            <li>
-              Every keyed response carries {code("RateLimit-Limit")} and{" "}
-              {code("RateLimit-Remaining")} for the day. A spent day answers 429 with{" "}
-              {code("Retry-After: 3600")}; a burst answers 429 with {code("Retry-After: 2")}.
-            </li>
-            <li>
-              Days reset at midnight UTC. Limits apply to {code("/v1")} and {code("/mcp")}{" "}
-              alike.
-            </li>
-            <li>
-              New keys are Free. Pro is switched on per key; more than Pro is a
-              conversation.{" "}
-              <Link href="/contact" prefetch={false} className="text-cs-sky hover:underline">
-                Ask through the contact page
-              </Link>{" "}
-              with what you are building and the volume you expect. Nothing is billed
-              yet; that comes with the Pro tier later.
-            </li>
-            <li>
-              The limits belong to the account: all of its keys share one burst
-              allowance and one daily count.
-              An account holds up to five active keys and creates up to ten a day. Revoking
-              a key stops it within a minute.
-            </li>
-          </ul>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </section>
+        <Callout>
+          Retry only 429, 502 and 503: after the <C>Retry-After</C> the response gives, or one minute when
+          it gives none, with backoff. A 400 or 401 will not fix itself.
+        </Callout>
+      </Section>
 
-      <section className="bg-cs-bg py-14 md:py-16" aria-labelledby="responses">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="responses">Responses and conventions</H2>
-          <ul className="text-cs-ink/70 mt-4 space-y-3 text-balance">
-            <li>
-              <b className="text-cs-ink">Coordinates</b> are decimal degrees, WGS 84, as{" "}
-              {code("lat")} and {code("lon")} fields on records. Parameters take a point
-              as one string, {code("\"lat,lon\"")}: latitude first, then longitude.
-            </li>
-            <li>
-              <b className="text-cs-ink">Distances</b> are kilometers unless the field
-              name says otherwise ({code("miles_from_start")}, {code("size_acres")}).
-              Radii are {code("radius_km")}.
-            </li>
-            <li>
-              <b className="text-cs-ink">Timestamps</b> are ISO 8601 with an offset. Most
-              are UTC; CHP&apos;s {code("reported_at")} carries the Pacific offset it was
-              logged in. Parse the offset rather than assuming one.
-            </li>
-            <li>
-              <b className="text-cs-ink">Lists</b> carry {code("count")}. A capped list also
-              carries {code("total")} and {code("truncated: true")}, and a note saying so.
-              Counts are exact even when the list is cut.
-            </li>
-            <li>
-              <b className="text-cs-ink">Sources</b>: every response lists each source it
-              read with {code("ok")} and {code("data_as_of")}. When a source is down the
-              response still answers from the others and marks that one{" "}
-              {code("ok: false")}.
-            </li>
-            <li>
-              <b className="text-cs-ink">Notes</b>: a {code("notes")} list explains anything
-              the server did on your behalf, such as clamping a radius or listing the
-              corridors when a route did not match. Read it; it is meant for people.
-            </li>
-            <li>
-              <b className="text-cs-ink">Semantic errors inside a 200</b>: a tool that
-              understood the request but could not act on it (an unrecognized region, a
-              malformed center) answers 200 with an {code("error")} field in the body and
-              usually the accepted values next to it. Transport and parameter errors use
-              the envelope below.
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section className="py-14 md:py-16" aria-labelledby="errors">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="errors">Errors</H2>
-          <p className="text-cs-ink/70 mt-4 text-balance">
-            One envelope everywhere: a status code, a stable {code("code")} you can branch
-            on, a {code("message")} for a log line, and a {code("hint")} for a person.
-          </p>
-          <pre className="bg-cs-navy2 mt-5 overflow-x-auto rounded-xl p-5 text-sm text-white/90">
-            <code>{ERROR_SHAPE}</code>
-          </pre>
-          <div className="mt-6 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-cs-ink/60 border-cs-line border-b">
-                <tr>
-                  <th className="py-2 pr-4 font-medium">Status</th>
-                  <th className="py-2 pr-4 font-medium">code</th>
-                  <th className="py-2 font-medium">Meaning</th>
-                </tr>
-              </thead>
-              <tbody className="text-cs-ink/80">
-                {ERRORS.map((row) => (
-                  <tr key={row[1]} className="border-cs-line border-b align-top">
-                    <td className="py-2 pr-4">{row[0]}</td>
-                    <td className="py-2 pr-4">
-                      <code className="text-cs-ink">{row[1]}</code>
-                    </td>
-                    <td className="py-2">{row[2]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-cs-ink/70 mt-5 text-balance">
-            Retry only 429, 502 and 503, after the {code("Retry-After")} the response gives
-            or one minute when it gives none, with backoff. A 400 or 401 will not fix
-            itself.
+      <Section id="tools" title="Tool reference">
+        <div className="dx-prose dx-lead">
+          <p>
+            Each tool lists its parameters, what it reads, how fresh that is, and what it caps. Replace the
+            capitalized placeholders (<C>LAT,LON</C>, <C>ROUTE</C>, <C>PLACE</C> and the like) with your
+            own values. <C>home</C> and <C>work</C> work when your account has them saved. Optional
+            parameters combine. Leave them out to get everything.
           </p>
         </div>
-      </section>
-
-      <section className="bg-cs-bg py-14 md:py-16" aria-labelledby="rules">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="rules">What not to do</H2>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {RULES.map((r) => (
-              <div key={r.title} className="ring-cs-line bg-cs-paper rounded-xl p-5 ring-1">
-                <p className="text-cs-ink font-medium">{r.title}</p>
-                <p className="text-cs-ink/60 mt-2 text-sm">{r.body}</p>
-              </div>
-            ))}
+        {GROUPS.map((g) => (
+          <div key={g.id} className="dx-mt-36">
+            <h3 id={g.id}>{g.title}</h3>
+            {g.blurb ? (
+              <p className="dx-small dx-mt-8 dx-measure">
+                {g.blurb}
+              </p>
+            ) : null}
+            {g.tools.map((n) => {
+              const t = BY_NAME.get(n);
+              return t ? <ToolEntry key={n} t={t} /> : null;
+            })}
           </div>
-        </div>
-      </section>
+        ))}
+      </Section>
 
-      <section className="py-14 md:py-16" aria-labelledby="tools">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="tools">Tool reference</H2>
-          <p className="text-cs-ink/70 mt-4 text-balance">
-            18 tools. Each one lists every parameter it accepts, what it reads, how
-            fresh that is, and what it caps. The examples are URLs relative to{" "}
-            {code(BASE)}; replace the capitalized placeholders ({code("LAT,LON")},{" "}
-            {code("ROUTE")}, {code("PLACE")} and the like) with your own values.{" "}
-            {code("home")} and {code("work")} need a key whose account has them saved. Optional parameters combine; leave them out for everything.
+      <Section id="mcp" title="The same tools over MCP">
+        <div className="dx-prose dx-lead">
+          <p>
+            Claude and other MCP clients can use the same {TOOLS.length} tools over streamable HTTP, with the
+            same key and limits. Your key also lets <C>&quot;home&quot;</C>, <C>&quot;work&quot;</C> and your
+            saved places work in every trip tool.
           </p>
-          <div className="mt-8 space-y-10">
-            {TOOLS.map((t) => (
-              <article
-                key={t.name}
-                id={`tool-${t.name}`}
-                className="ring-cs-line bg-cs-paper scroll-mt-24 rounded-xl p-6 ring-1"
-              >
-                <h3 className="text-cs-ink text-xl font-medium tracking-tight">{t.title}</h3>
-                <code className="text-cs-ink/80 mt-1 block text-sm break-all">GET {t.path}</code>
-                <p className="text-cs-ink/70 mt-3 text-balance">{t.summary}</p>
-                <dl className="text-cs-ink/70 mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[7rem_1fr]">
-                  <dt className="text-cs-ink font-medium">Reads</dt>
-                  <dd>{t.reads}</dd>
-                  <dt className="text-cs-ink font-medium">Refresh</dt>
-                  <dd>{t.refresh}</dd>
-                  <dt className="text-cs-ink font-medium">Poll at most</dt>
-                  <dd>every {t.poll_s} seconds</dd>
-                  <dt className="text-cs-ink font-medium">Limits</dt>
-                  <dd>{t.caps}</dd>
-                </dl>
-                <h4 className="text-cs-ink mt-5 text-sm font-medium">Parameters</h4>
-                <div className="mt-2 overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <tbody className="text-cs-ink/80">
-                      {t.params.map((p) => (
-                        <tr key={p.name} className="border-cs-line border-b align-top">
-                          <td className="py-2 pr-4 whitespace-nowrap">
-                            <code className="text-cs-ink">{p.name}</code>
-                            {p.required ? (
-                              <span className="text-cs-sky ml-2 text-xs font-medium">required</span>
-                            ) : (
-                              <span className="text-cs-ink/50 ml-2 text-xs">optional</span>
-                            )}
-                          </td>
-                          <td className="py-2">{p.doc}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <h4 className="text-cs-ink mt-5 text-sm font-medium">Example</h4>
-                <pre className="bg-cs-navy2 mt-2 overflow-x-auto rounded-lg p-4 text-xs text-white/90">
-                  <code>{`${API_ROOT}/tools/${t.example}`}</code>
-                </pre>
-              </article>
-            ))}
-          </div>
         </div>
-      </section>
-
-      <section className="bg-cs-bg py-14 md:py-16" aria-labelledby="mcp">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="mcp">MCP server</H2>
-          <p className="text-cs-ink/70 mt-4 text-balance">
-            The same 18 tools for Claude and any other MCP client, over streamable
-            HTTP. No key is needed. A key works the same way as on {code("/v1")}: it
-            gives your client its own limits, and it lets {code('"home"')},{" "}
-            {code('"work"')} and your saved places work in every trip tool.
-          </p>
-          <div className="mt-5 max-w-xl">
-            <CopyField value={MCP_URL} />
-          </div>
-          <p className="text-cs-ink/70 mt-5 text-balance">
-            Step-by-step setup for Claude Code, claude.ai, Cursor, VS Code,
-            Windsurf, Codex, Gemini CLI and ChatGPT, plus local stdio, the registry
-            entry and the eval scorecard, is on the{" "}
-            <Link href="/mcp#connect" prefetch={false} className="text-cs-sky hover:underline">
-              MCP server page
+        <div className="dx-mt-20">
+          <CopyField value={`${BASE}/mcp`} label="MCP endpoint" />
+        </div>
+        <div className="dx-prose dx-mt-20">
+          <p>
+            Setup for each client is on the{" "}
+            <Link href="/mcp#connect" prefetch={false} className="dx-link">
+              MCP Server page
             </Link>
             . Agents can read the same steps as plain text at{" "}
-            <a href="/llms.txt" className="text-cs-sky hover:underline">
+            <a href="/llms.txt" className="dx-link">
               /llms.txt
             </a>
-            . The server is open source; the tool docstrings there are written for the
-            model reading them and say the same things this page says.
+            .
           </p>
         </div>
-      </section>
+      </Section>
 
-      <section className="py-14 md:py-16" aria-labelledby="bulk">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="bulk">Bulk snapshots</H2>
-          <p className="text-cs-ink/70 mt-4 text-balance">
-            The map does not poll the API; it reads three gzip JSON snapshots the
-            server publishes and the edge caches. They are public and the cheapest way
-            to read everything at once. They carry the same records as the map&apos;s
-            markers, so their shape follows the map, not this API, and it can change
-            between releases.
-          </p>
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-cs-ink/60 border-cs-line border-b">
-                <tr>
-                  <th className="py-2 pr-4 font-medium">Object</th>
-                  <th className="py-2 pr-4 font-medium">Rebuilt</th>
-                  <th className="py-2 font-medium">Holds</th>
-                </tr>
-              </thead>
-              <tbody className="text-cs-ink/80">
-                <tr className="border-cs-line border-b">
-                  <td className="py-2 pr-4"><code>https://data.commutescout.com/live.json.gz</code></td>
-                  <td className="py-2 pr-4">every 30 seconds</td>
-                  <td className="py-2">incidents, closures, chain controls, wildfires, toll prices</td>
-                </tr>
-                <tr className="border-cs-line border-b">
-                  <td className="py-2 pr-4"><code>https://data.commutescout.com/signs.json.gz</code></td>
-                  <td className="py-2 pr-4">every 5 minutes</td>
-                  <td className="py-2">message signs and road-weather stations</td>
-                </tr>
-                <tr className="border-cs-line border-b">
-                  <td className="py-2 pr-4"><code>https://data.commutescout.com/cameras.json.gz</code></td>
-                  <td className="py-2 pr-4">every hour</td>
-                  <td className="py-2">the camera inventory</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p className="text-cs-ink/70 mt-5 text-balance">
-            Fetch with {code("If-None-Match")} and honor the {code("Cache-Control")} you
-            get back; the objects only change on their rebuild cadence. Attribution
-            applies exactly as it does to the API.
+      <Section id="bulk" title="Bulk snapshots">
+        <div className="dx-prose dx-lead">
+          <p>
+            The map reads three gzip JSON snapshots instead of the API. They are public and the cheapest
+            way to read everything at once. They hold the same records as the map&apos;s markers, so their
+            shape follows the map, not this API, and it can change between releases.
           </p>
         </div>
-      </section>
+        <div className="dx-tbox">
+          <table className="dx-table dx-table--stack">
+            <caption className="sr-only">Bulk snapshot objects</caption>
+            <thead>
+              <tr>
+                <th scope="col">Object</th>
+                <th scope="col">Rebuilt</th>
+                <th scope="col">Holds</th>
+              </tr>
+            </thead>
+            <tbody>
+              {BULK.map(([name, every, holds]) => (
+                <tr key={name}>
+                  <th scope="row">
+                    <code>https://data.commutescout.com/{name}</code>
+                  </th>
+                  <td data-label="Rebuilt" className="num">{every}</td>
+                  <td data-label="Holds">{holds}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="dx-prose dx-mt-20">
+          <p>
+            An object is only uploaded when its contents changed. Fetch with <C>If-None-Match</C> and honor
+            the <C>Cache-Control</C> you get back. Attribution applies exactly as it does to the API.
+          </p>
+        </div>
+      </Section>
 
-      <section className="bg-cs-bg py-14 md:py-16" aria-labelledby="flare">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="flare">Flare plugins</H2>
-          <p className="text-cs-ink/70 mt-4 text-balance">
-            Flare is CommuteScout&apos;s open protocol for third-party alert sources: a
-            small HTTPS contract a plugin server implements (handshake, alerts by
-            radius, reports, confirmations) so that anyone can run a public or private
-            source that shows on the map and in the app, with full read and write
-            support.{" "}
-            <Link href="/plugins" prefetch={false} className="text-cs-sky hover:underline">
+      <Section id="flare" title="Flare plugins">
+        <div className="dx-prose dx-lead">
+          <p>
+            Flare is CommuteScout&apos;s open protocol for third-party alert sources: a small HTTPS contract
+            a plugin server implements (handshake, alerts by radius, reports, confirmations) so that anyone
+            can run a public or private source that shows on the map and in the apps.{" "}
+            <Link href="/plugins" prefetch={false} className="dx-link">
               Read the plugins page
             </Link>
-            , then run the conformance check against your plugin:{" "}
-            {code("python -m ca_roads.flare check https://your-plugin.example")}. The
-            backend and the apps accept exactly what the check accepts.
+            , then run the conformance check against your plugin. The backend and the apps accept exactly
+            what the check accepts.
           </p>
         </div>
-      </section>
+        <CodeBlock code="python -m ca_roads.flare check https://your-plugin.example" lang="bash" />
+      </Section>
 
-      <section className="py-14 md:py-16" aria-labelledby="terms">
-        <div className="mx-auto max-w-3xl px-6">
-          <H2 id="terms">Attribution and terms</H2>
-          <ul className="text-cs-ink/70 mt-4 space-y-3 text-balance">
-            <li>
-              Credit CommuteScout and the agency named in each record&apos;s{" "}
-              {code("source")} wherever the data is shown. The{" "}
-              <Link href="/data-sources" prefetch={false} className="text-cs-sky hover:underline">
-                data sources page
-              </Link>{" "}
-              lists every agency and what it publishes.
-            </li>
-            <li>
-              The data is informational and can be delayed, incomplete or wrong. Show
-              the {code("data_as_of")} time, and tell people to verify with 511 or the
-              state DOT before they drive.
-            </li>
-            <li>
-              Limits are enforced and keys can be revoked. The{" "}
-              <Link href="/terms" prefetch={false} className="text-cs-sky hover:underline">
-                terms
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" prefetch={false} className="text-cs-sky hover:underline">
-                privacy page
-              </Link>{" "}
-              apply to API use; keyed requests are logged per key (key id, tool,
-              status) for metering and nothing else.
-            </li>
-            <li>
-              Questions, a higher limit, or a feed you would like added:{" "}
-              <Link href="/contact" prefetch={false} className="text-cs-sky hover:underline">
-                contact
-              </Link>
-              .
-            </li>
-          </ul>
+      <Section id="rules" title="Guidelines">
+        <div className="dx-prose dx-lead">
+          <p>Six habits that keep your app fast, within its limits, and honest with the people using it.</p>
         </div>
-      </section>
-    </>
+        <ol className="dx-rules">
+          {RULES.map((r) => (
+            <li key={r.title}>
+              <b>{r.title}</b>
+              <p>{r.body}</p>
+            </li>
+          ))}
+        </ol>
+      </Section>
+
+      <Section id="terms" title="Attribution and terms">
+        <ul className="dx-list dx-lead dx-mt-16">
+          <li>
+            Credit CommuteScout and the agency named in each record&apos;s <C>source</C> wherever the data
+            is shown. The{" "}
+            <Link href="/data-sources" prefetch={false} className="dx-link">
+              data sources page
+            </Link>{" "}
+            lists every agency and what it publishes.
+          </li>
+          <li>
+            The data is informational and can be delayed, incomplete or wrong. Show the <C>data_as_of</C>{" "}
+            time, and tell people to verify with 511 or the state DOT before they drive.
+          </li>
+          <li>
+            Limits are enforced and keys can be revoked. The{" "}
+            <Link href="/terms" prefetch={false} className="dx-link">
+              terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" prefetch={false} className="dx-link">
+              privacy policy
+            </Link>{" "}
+            apply to API use.
+          </li>
+          <li>
+            Questions, a higher limit, or a feed you would like added:{" "}
+            <Link href="/contact" prefetch={false} className="dx-link">
+              contact
+            </Link>
+            .
+          </li>
+        </ul>
+      </Section>
+    </DocsShell>
   );
 }
+

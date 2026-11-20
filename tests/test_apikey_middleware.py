@@ -237,3 +237,65 @@ def test_cors_preflight_needs_no_key(required):
     r = c.options("/v1/tools/x", headers={"Origin": "https://example.com",
                                           "Access-Control-Request-Method": "GET"})
     assert r.status_code != 401
+
+
+async def echo_mcp(request):
+    body = await request.body()
+    return JSONResponse({"ok": True, "len": len(body)})
+
+
+@pytest.mark.asyncio
+async def test_mcp_protocol_traffic_is_not_billed_but_tool_calls_are(monkeypatch):
+    """mcp-remote probes discovery paths and the GET stream and every
+    session sends initialize/list/notifications: none of that may spend
+    the account's tier, or a client launch locks the account out. Tool
+    calls still count, and the body reaches the app intact."""
+    store = apikeys.MemoryKeyStore()
+    app = Starlette(routes=[
+        Route("/mcp", echo_mcp, methods=["GET", "POST", "DELETE"]),
+        Route("/mcp/.well-known/oauth-protected-resource", ok),
+    ])
+    mw = ApiKeyMiddleware(app, resolver=apikeys.KeyResolver(store), require_key=True)
+    c = TestClient(mw)
+    full, _ = await apikeys.create_key(store, "sam", "sam@example.com", "t")
+    monkeypatch.setitem(apikeys.TIERS, "free", {"daily": 3, "burst": 3, "per_second": 0})
+    h = {"Authorization": f"Bearer {full}", "content-type": "application/json"}
+    free = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        [{"jsonrpc": "2.0", "id": 3, "method": "prompts/list"},
+         {"jsonrpc": "2.0", "id": 4, "result": {}}],
+    ]
+    for _ in range(5):
+        for msg in free:
+            raw = json.dumps(msg)
+            r = c.post("/mcp", content=raw, headers=h)
+            assert r.status_code == 200 and r.json()["len"] == len(raw)
+        assert c.get("/mcp", headers=h).status_code == 200
+        assert c.get("/mcp/.well-known/oauth-protected-resource", headers=h).status_code == 200
+    call = json.dumps({"jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                       "params": {"name": "get_coverage", "arguments": {}}})
+    for _ in range(3):
+        r = c.post("/mcp", content=call, headers=h)
+        assert r.status_code == 200 and r.json()["len"] == len(call)
+    assert c.post("/mcp", content=call, headers=h).status_code == 429
+    # A batch hiding a tool call among free methods counts; junk counts.
+    batch = json.dumps([free[0], json.loads(call)])
+    assert c.post("/mcp", content=batch, headers=h).status_code == 429
+    assert c.post("/mcp", content=b"not json", headers=h).status_code == 429
+    # Protocol traffic still works after the tier is spent.
+    assert c.post("/mcp", content=json.dumps(free[2]), headers=h).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_protocol_traffic_has_its_own_ceiling():
+    store = apikeys.MemoryKeyStore()
+    mw = ApiKeyMiddleware(Starlette(routes=[Route("/mcp", echo_mcp, methods=["POST"])]),
+                          resolver=apikeys.KeyResolver(store), require_key=True)
+    c = TestClient(mw)
+    full, _ = await apikeys.create_key(store, "sam", "sam@example.com", "t")
+    h = {"X-API-Key": full}
+    ping = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"})
+    codes = [c.post("/mcp", content=ping, headers=h).status_code for _ in range(400)]
+    assert 429 in codes and codes[:200].count(200) == 200
