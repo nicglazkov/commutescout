@@ -63,7 +63,7 @@ TZ_EAST = ZoneInfo("America/New_York")
 # location (README.md, site/lib/stats.ts, site/app/about/page.tsx,
 # site/components/blocks/hero-section-1.tsx) and pins them to this
 # constant.
-PUBLIC_SOURCE_COUNT = 53
+PUBLIC_SOURCE_COUNT = 54
 
 # (lat_min, lon_min, lat_max, lon_max) - fetch a state only when the
 # viewport overlaps it.
