@@ -238,12 +238,18 @@ export async function initWatch(opts) {
   const handleLayer = L.layerGroup();
   const routeLayer = L.layerGroup();
   const savedLayer = L.layerGroup();
+  // The detail pane's live markers, and each saved area's shape by id.
+  const insideLayer = L.layerGroup();
+  const shapes = {};
+  const DETAIL = document.getElementById('wdetail');
+  let selectedId = null;
+  let insideReq = 0;
   let visible = false;
   function setVisible(on) {
     on = !!on;
     if (on === visible) return;
     visible = on;
-    for (const l of [savedLayer, drawLayer, routeLayer, handleLayer]) {
+    for (const l of [savedLayer, insideLayer, drawLayer, routeLayer, handleLayer]) {
       if (on) l.addTo(map); else map.removeLayer(l);
     }
     if (on && !fittedOnce) fitSaved();
@@ -1430,7 +1436,8 @@ export async function initWatch(opts) {
     });
     cancel.addEventListener('click', (e) => {
       e.stopPropagation();
-      const toggle = form.closest('.witem')?.querySelector('.wedit');
+      const toggle = form.closest('.witem')?.querySelector('.wedit')
+        || (DETAIL && DETAIL.contains(form) ? DETAIL.querySelector('.d-actions [aria-expanded]') : null);
       form.remove();
       if (toggle) { toggle.setAttribute('aria-expanded', 'false'); toggle.focus(); }
     });
@@ -1458,8 +1465,48 @@ export async function initWatch(opts) {
     btnRow.append(delBtn);
     const cap = (t) => { const d = document.createElement('div');
       d.className = 'wlabel'; d.textContent = t; d.setAttribute('aria-hidden', 'true'); return d; };
+    // Live preview: what these choices would alert on right now, so
+    // narrowing the kinds shows its effect before saving.
+    const preview = document.createElement('p');
+    preview.className = 'wpreview';
+    preview.setAttribute('aria-live', 'polite');
+    let pvTimer = 0;
+    let pvReq = 0;
+    let pvBase = null;
+    const runPreview = async () => {
+      const kinds = [...kindsBox.querySelectorAll('input:checked')].map((c) => c.dataset.kind);
+      const shape = shapeOf(w);
+      if (!shape) return;
+      if (!kinds.length) { preview.textContent = 'Pick at least one kind to get alerts.'; return; }
+      const f = panel.read();
+      if (f.error) return;
+      const req = ++pvReq;
+      try {
+        const body = { ...shape, kinds, filters: f.filters };
+        if (w.type === 'route' && w.buffer_km) body.buffer_km = w.buffer_km;
+        const r = await api('/api/watch/preview', { method: 'POST', body: JSON.stringify(body) });
+        if (req !== pvReq) return;
+        if (pvBase == null) pvBase = r.count;
+        const n = r.count;
+        preview.innerHTML = '<i class="d-dot' + (n ? '' : ' quiet') + '"></i>';
+        const b = document.createElement('b');
+        b.textContent = n === 1 ? '1 live item' : n + ' live items';
+        preview.append(b, document.createTextNode(' would alert right now'));
+        if (pvBase !== n) {
+          const d = document.createElement('span');
+          d.className = 'wpv-diff';
+          d.textContent = (n < pvBase ? (pvBase - n) + ' fewer' : (n - pvBase) + ' more') + ' than saved';
+          preview.append(d);
+        }
+      } catch (err) { if (req === pvReq) preview.textContent = ''; }
+    };
+    const schedulePreview = () => { clearTimeout(pvTimer); pvTimer = setTimeout(runPreview, 350); };
+    kindsBox.addEventListener('change', schedulePreview);
+    panel.el.addEventListener('change', schedulePreview);
+    panel.el.addEventListener('click', (e) => { if (e.target.closest('button')) schedulePreview(); });
+    runPreview();
     form.append(cap('Name'), nameIn, cap('Alert me about'), kindsBox, panel.el,
-      cap('Send alerts by'), chanBox, btnRow);
+      cap('Send alerts by'), chanBox, preview, btnRow);
     return form;
   }
 
@@ -1510,6 +1557,7 @@ export async function initWatch(opts) {
     const list = $('wlist');
     list.innerHTML = '';
     savedLayer.clearLayers();
+    for (const k of Object.keys(shapes)) delete shapes[k];
     const used = me.watches.length;
     const cap = LIMITS.free_watches;
     $('wcount').textContent = used + ' of ' + cap + ' watch areas used';
@@ -1519,6 +1567,7 @@ export async function initWatch(opts) {
         + '<div class="empty-title">No watch areas yet</div>'
         + '<div class="empty-sub">Choose a shape, draw it on the map, '
         + 'then name it to start getting alerts.</div></div>';
+      closeDetail();
       return;
     }
     for (const w of me.watches) {
@@ -1604,15 +1653,312 @@ export async function initWatch(opts) {
       const del = iconBtn('del', 'Delete ' + w.name);
       del.addEventListener('click', (e) => { e.stopPropagation(); deleteWatch(w); });
       row.append(dot, text, pause, edit, del);
-      name.addEventListener('click', () => {
-        map.fitBounds(shape.getBounds().pad(0.3));
-      });
-      row.addEventListener('click', () => {
-        map.fitBounds(shape.getBounds().pad(0.3));
-      });
+      shapes[w.id] = shape;
+      row.dataset.id = w.id;
+      // Live right now, from the last check: the count the detail opens on.
+      const liveN = (w.live || {}).count;
+      if (DETAIL && !paused && liveN) {
+        const n = document.createElement('span');
+        n.className = 'wlive';
+        n.textContent = String(liveN);
+        n.title = liveN + ' live inside at the last check';
+        n.setAttribute('aria-label', liveN + ' live inside');
+        row.insertBefore(n, pause);
+      }
+      if (DETAIL && w.id === selectedId) row.classList.add('sel');
+      name.addEventListener('click', (e) => { e.stopPropagation(); selectWatch(w); });
+      row.addEventListener('click', () => selectWatch(w));
       list.append(row);
     }
+    if (DETAIL && selectedId) {
+      const w = me.watches.find((x) => x.id === selectedId);
+      if (w) selectWatch(w, { fit: false }); else closeDetail();
+    }
     if (!fittedOnce && active()) fitSaved();
+  }
+
+  // ------------------------------------------------ detail: inside now
+  // /watch only (the map page has no #wdetail): picking an area opens
+  // its detail beside the list, with everything live inside it right
+  // now, drawn on the map too. Routes list items by distance along the
+  // route, other shapes most serious first.
+  const KIND_ORDER = ['fire', 'chain', 'incident', 'weather', 'closure'];
+  const kindColor = (k) => {
+    const probe = document.createElement('i');
+    probe.dataset.kind = k;
+    probe.hidden = true;
+    (DETAIL || document.body).append(probe);
+    const c = getComputedStyle(probe).getPropertyValue('--k').trim();
+    probe.remove();
+    return c || '#1a63d6';
+  };
+  const along = (km) => (U && U.get() === 'mi'
+    ? 'mi ' + (km / 1.609344).toFixed(1) : 'km ' + km.toFixed(1));
+  const clockOf = (iso) => {
+    try {
+      return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch (e) { return ''; }
+  };
+  const focusUrl = (lat, lon, k) => '/map?focus=' + lat.toFixed(5) + ',' + lon.toFixed(5)
+    + (k ? '&k=' + encodeURIComponent(k === 'closure' ? 'lane_closure' : k) : '');
+
+  function closeDetail() {
+    if (!DETAIL) return;
+    selectedId = null;
+    insideReq += 1;
+    insideLayer.clearLayers();
+    DETAIL.hidden = true;
+    DETAIL.innerHTML = '';
+    const app = DETAIL.closest('.wp-app');
+    if (app) app.classList.remove('has-detail');
+    for (const r of document.querySelectorAll('#wlist .witem.sel')) r.classList.remove('sel');
+    setTimeout(() => map.invalidateSize(), 60);
+  }
+
+  function shapeLine(w) {
+    const fmt = (km, d) => (U ? U.fmt(km, d) : Math.round(km) + ' km');
+    const nStops = (w.stops || []).length || 2;
+    return w.type === 'circle'
+      ? fmt(w.radius_km) + ' circle'
+      : w.type === 'route'
+        ? fmt(w.length_km || 0, 0) + ' route · ' + nStops + ' stops · '
+          + fmt(w.buffer_km || 3, 1) + ' either side'
+        : 'Drawn area';
+  }
+
+  async function selectWatch(w, { fit = true } = {}) {
+    const shape = shapes[w.id];
+    if (!DETAIL) {
+      if (shape) map.fitBounds(shape.getBounds().pad(0.3));
+      return;
+    }
+    const opening = selectedId !== w.id;
+    selectedId = w.id;
+    for (const r of document.querySelectorAll('#wlist .witem')) {
+      r.classList.toggle('sel', r.dataset.id === w.id);
+    }
+    const app = DETAIL.closest('.wp-app');
+    const wasOpen = app && app.classList.contains('has-detail');
+    if (app) app.classList.add('has-detail');
+    DETAIL.hidden = false;
+    if (opening || !DETAIL.firstChild) renderDetail(w, null);
+    const reframe = () => {
+      map.invalidateSize();
+      if (fit && shape) map.fitBounds(shape.getBounds().pad(0.25), { maxZoom: 13, animate: !!wasOpen });
+    };
+    // Phones: the detail replaces the list below the map; bring its top
+    // into view rather than leaving the reader where the list was.
+    if (opening && matchMedia('(max-width: 900px)').matches) {
+      const top = DETAIL.getBoundingClientRect().top + window.scrollY - 72;
+      if (window.scrollY > top) window.scrollTo({ top, behavior: 'auto' });
+    }
+    if (wasOpen) reframe(); else setTimeout(reframe, 80);
+    if (opening) DETAIL.querySelector('h2')?.focus({ preventScroll: true });
+    const req = ++insideReq;
+    try {
+      const data = await api('/api/watch/' + w.id + '/inside');
+      if (req !== insideReq) return;
+      renderDetail(w, data);
+    } catch (err) {
+      if (req !== insideReq) return;
+      renderDetail(w, { error: err.message });
+    }
+  }
+
+  function detailButton(icon, label, text) {
+    const b = iconBtn(icon, label);
+    b.classList.add('dbtn');
+    if (text) b.append(document.createTextNode(text));
+    return b;
+  }
+
+  if (DETAIL) {
+    DETAIL.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !DETAIL.querySelector('.weditor')) DETAIL.querySelector('.d-back')?.click();
+    });
+  }
+
+  function renderDetail(w, data) {
+    const paused = w.active === false;
+    DETAIL.innerHTML = '';
+    const head = document.createElement('header');
+    head.className = 'd-head';
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'd-back';
+    back.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" '
+      + 'stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M15 18l-6-6 6-6"/></svg>All watch areas';
+    back.addEventListener('click', () => {
+      const id = selectedId;
+      closeDetail();
+      document.querySelector('#wlist .witem[data-id="' + id + '"] .wname')?.focus();
+    });
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'd-close';
+    close.setAttribute('aria-label', 'Close ' + w.name);
+    close.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" '
+      + 'stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    close.addEventListener('click', () => back.click());
+    const title = document.createElement('h2');
+    title.tabIndex = -1;
+    title.textContent = w.name;
+    const meta = document.createElement('p');
+    meta.className = 'd-meta';
+    meta.textContent = shapeLine(w);
+    const actions = document.createElement('div');
+    actions.className = 'd-actions';
+    const pause = detailButton(paused ? 'play' : 'pause',
+      (paused ? 'Resume alerts for ' : 'Pause alerts for ') + w.name, paused ? 'Resume' : 'Pause');
+    pause.addEventListener('click', async () => {
+      try {
+        await api('/api/watch/' + w.id, { method: 'PATCH', body: JSON.stringify({ active: paused }) });
+        await reloadWatches();
+      } catch (err) { msg('listmsg', err.message, 'err'); }
+    });
+    const edit = detailButton('edit', 'Edit ' + w.name, 'Edit');
+    edit.setAttribute('aria-expanded', 'false');
+    edit.addEventListener('click', () => {
+      const open = DETAIL.querySelector('.weditor');
+      if (open) { open.remove(); edit.setAttribute('aria-expanded', 'false'); return; }
+      const ed = watchEditor(w);
+      ed.classList.add('d-editor');
+      head.after(ed);
+      edit.setAttribute('aria-expanded', 'true');
+      ed.querySelector('input').focus();
+    });
+    const del = detailButton('del', 'Delete ' + w.name);
+    del.classList.add('d-del');
+    del.addEventListener('click', () => deleteWatch(w));
+    actions.append(pause, edit, del);
+    const status = document.createElement('p');
+    status.className = 'd-status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    head.append(back, close, title, meta, actions, status);
+    DETAIL.append(head);
+
+    const body = document.createElement('section');
+    body.className = 'd-body';
+    body.setAttribute('aria-label', 'Live inside ' + w.name);
+    DETAIL.append(body);
+    insideLayer.clearLayers();
+
+    if (paused) {
+      status.innerHTML = '<i class="d-dot off"></i>Paused: no alerts are sent for this area.';
+    }
+    if (!data) {
+      if (!paused) status.innerHTML = '<i class="d-dot wait"></i>Checking what is live inside…';
+      body.innerHTML = '<div class="d-skel" aria-hidden="true"><i></i><i></i><i></i><i></i></div>';
+      return;
+    }
+    if (data.error) {
+      status.textContent = '';
+      body.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'd-empty';
+      p.textContent = 'Could not load what is live here: ' + data.error;
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.className = 'ghost'; retry.textContent = 'Try again';
+      retry.addEventListener('click', () => selectWatch(w, { fit: false }));
+      body.append(p, retry);
+      return;
+    }
+    const items = data.items || [];
+    if (!paused) {
+      status.innerHTML = '<i class="d-dot' + (items.length ? '' : ' quiet') + '"></i>';
+      const b = document.createElement('b');
+      b.textContent = items.length ? items.length + ' live inside' : 'Quiet right now';
+      status.append(b, document.createTextNode(' · checked ' + clockOf(data.checked_at)));
+    }
+
+    const top = document.createElement('div');
+    top.className = 'd-top';
+    const eyebrow = document.createElement('h3');
+    eyebrow.className = 'd-eyebrow';
+    eyebrow.textContent = 'Inside now';
+    top.append(eyebrow);
+    const c = shapes[w.id] && shapes[w.id].getBounds().getCenter();
+    if (c) {
+      const live = document.createElement('a');
+      live.className = 'cs-link';
+      live.href = focusUrl(c.lat, c.lng);
+      live.textContent = 'Open on the live map';
+      top.append(live);
+    }
+    body.append(top);
+
+    if (!items.length) {
+      const e = document.createElement('div');
+      e.className = 'd-quiet';
+      e.innerHTML = '<span class="d-quiet-ico" aria-hidden="true"></span>';
+      const t = document.createElement('p');
+      t.innerHTML = '<b>Nothing live inside this area.</b>';
+      const s = document.createElement('p');
+      s.textContent = 'You get an alert when something you watch for shows up here. '
+        + 'Areas are checked about every 5 minutes.';
+      e.append(t, s);
+      body.append(e);
+      return;
+    }
+
+    const groups = {};
+    for (const it of items) (groups[it.kind] = groups[it.kind] || []).push(it);
+    const route = w.type === 'route';
+    for (const k of KIND_ORDER.concat(Object.keys(groups).filter((x) => !KIND_ORDER.includes(x)))) {
+      const rows = groups[k];
+      if (!rows) continue;
+      const g = document.createElement('section');
+      g.className = 'd-group';
+      g.dataset.kind = k;
+      const h = document.createElement('h4');
+      h.innerHTML = '<i aria-hidden="true"></i>';
+      h.append(document.createTextNode(KIND_LABELS[k] || (k === 'weather' ? 'Weather alerts' : k)));
+      const n = document.createElement('span');
+      n.textContent = String(rows.length);
+      h.append(n);
+      const ul = document.createElement('ul');
+      const color = kindColor(k);
+      for (const it of rows) {
+        const li = document.createElement('li');
+        li.dataset.kind = k;
+        const at = document.createElement('span');
+        at.className = 'd-at';
+        at.textContent = route && it.at_km != null ? along(it.at_km) : '';
+        const txt = document.createElement('div');
+        const t = document.createElement('b');
+        t.textContent = it.title || 'Reported event';
+        const sub = document.createElement('p');
+        sub.textContent = [it.body, it.meta].filter(Boolean).join(' · ');
+        txt.append(t, sub);
+        li.append(at, txt);
+        if (it.lat != null && it.lon != null) {
+          const mk = L.circleMarker([it.lat, it.lon], {
+            radius: 6, weight: 2, color: '#fff', fillColor: color, fillOpacity: 1,
+          }).addTo(insideLayer);
+          mk.bindTooltip(esc(it.title || ''), { direction: 'top', offset: [0, -6] });
+          mk.on('click', () => {
+            li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            li.classList.add('hl');
+            setTimeout(() => li.classList.remove('hl'), 1400);
+          });
+          li.tabIndex = 0;
+          li.setAttribute('role', 'button');
+          li.setAttribute('aria-label', (it.title || 'Event') + ': show on the map');
+          const show = () => { map.panTo([it.lat, it.lon]); mk.openTooltip(); };
+          li.addEventListener('click', show);
+          li.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); }
+          });
+          li.addEventListener('mouseenter', () => mk.setStyle({ radius: 9 }));
+          li.addEventListener('mouseleave', () => mk.setStyle({ radius: 6 }));
+        }
+        ul.append(li);
+      }
+      g.append(h, ul);
+      body.append(g);
+    }
   }
 
   // First sight of the saved areas frames them once. On the map page
