@@ -358,3 +358,114 @@
 @media (prefers-reduced-motion: reduce) {
   .wp *, .wp *::before { transition:none !important; scroll-behavior:auto !important }
 }
+
+/* ── Watch detail: what is live inside one area ───────────────── */
+.wp .watch .wlive { display:inline-grid; place-items:center; align-self:center; min-width:22px; height:22px; margin-left:auto; padding:0 7px;
+  border-radius:99px; background:var(--cs-ok-soft); color:var(--cs-ok); font:600 .6875rem/1 var(--cs-font-mono);
+  vertical-align:1px; font-variant-numeric:tabular-nums }
+.wp .watch .witem.sel { border-color:var(--cs-accent); background:var(--cs-accent-soft);
+  box-shadow:inset 3px 0 0 var(--cs-accent) }
+.wp .watch .witem.sel button.wname { color:var(--cs-ink) }
+.wp .watch .witem { cursor:pointer }
+
+.wp-detail { display:flex; flex-direction:column; min-height:0; overflow-y:auto; overscroll-behavior:contain;
+  background:var(--cs-surface); border-right:1px solid var(--cs-line) }
+.wp-detail[hidden] { display:none }
+.wp .d-head { position:relative; padding:22px 24px 18px; border-bottom:1px solid var(--cs-line) }
+.wp .d-back { display:none; align-items:center; gap:4px; margin:-4px 0 12px -6px; padding:4px 8px 4px 4px; border:0;
+  border-radius:8px; background:none; color:var(--cs-ink-2); font:500 .8125rem var(--cs-font-sans); cursor:pointer }
+.wp .d-back:hover { background:var(--cs-surface-2); color:var(--cs-ink) }
+.wp .d-close { position:absolute; top:16px; right:16px; display:grid; place-items:center; width:32px; height:32px;
+  border:0; border-radius:8px; background:none; color:var(--cs-ink-3); cursor:pointer }
+.wp .d-close:hover { background:var(--cs-surface-2); color:var(--cs-ink) }
+.wp .d-head h2 { margin:0 40px 4px 0; font:600 1.375rem/1.25 var(--cs-font-sans); letter-spacing:-.02em;
+  color:var(--cs-ink); overflow-wrap:anywhere }
+.wp .d-head h2:focus { outline:none }
+.wp .d-meta { margin:0; font-size:.875rem; color:var(--cs-ink-3) }
+.wp .d-actions { display:flex; gap:8px; margin-top:14px }
+.wp .watch .d-actions .dbtn { display:inline-flex; align-items:center; gap:6px; width:auto; min-height:34px; height:34px;
+  padding:0 12px 0 10px; border:1px solid var(--cs-line-strong); border-radius:8px; background:var(--cs-surface);
+  color:var(--cs-ink); font:500 .8125rem var(--cs-font-sans); cursor:pointer;
+  transition:background-color 150ms, border-color 150ms, color 150ms }
+.wp .watch .d-actions .dbtn:hover { background:var(--cs-surface-2) }
+.wp .watch .d-actions .dbtn[aria-expanded="true"] { border-color:var(--cs-accent); background:var(--cs-accent-soft); color:var(--cs-accent) }
+.wp .watch .d-actions .d-del { margin-left:auto; padding:0; width:34px; justify-content:center; color:var(--cs-ink-3) }
+.wp .watch .d-actions .d-del:hover { background:var(--cs-closure-soft); border-color:color-mix(in srgb, var(--cs-closure) 35%, var(--cs-line)); color:var(--cs-closure) }
+.wp .d-status { display:flex; align-items:center; gap:8px; min-height:20px; margin:14px 0 0;
+  font:400 .8125rem var(--cs-font-mono); color:var(--cs-ink-3) }
+.wp .d-status b { font-weight:500; color:var(--cs-ink) }
+.wp .d-dot { flex:none; width:8px; height:8px; border-radius:99px; background:var(--cs-ok);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--cs-ok) 22%, transparent) }
+.wp .d-dot.quiet { background:var(--cs-ink-3); box-shadow:none }
+.wp .d-dot.off { background:transparent; border:1.5px solid var(--cs-ink-3); box-shadow:none }
+.wp .d-dot.wait { animation:d-pulse 1.2s var(--cs-ease) infinite alternate }
+@keyframes d-pulse { from { opacity:.35 } to { opacity:1 } }
+.wp .watch .d-editor { margin:0; padding:18px 24px 22px; border-radius:0; border-width:0 0 1px; border-color:var(--cs-line);
+  background:var(--cs-surface) }
+.wp .watch .d-editor .wdelete { display:none }
+/* A live count takes the auto margin that normally pushes the buttons right. */
+.wp .watch .witem .wlive + button { margin-left:0 }
+
+.wp .d-body { padding:18px 24px 32px }
+.wp .d-top { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px }
+.wp .d-eyebrow { margin:0; font:500 .6875rem/1 var(--cs-font-mono); letter-spacing:.1em; text-transform:uppercase;
+  color:var(--cs-ink-3) }
+.wp .d-top .cs-link { font-size:.8125rem; font-weight:500; color:var(--cs-accent); text-decoration:none }
+.wp .d-top .cs-link:hover { text-decoration:underline; text-underline-offset:3px }
+.wp .d-group { margin-top:16px }
+.wp .d-group h4 { display:flex; align-items:center; gap:8px; margin:0 0 4px; font:600 .875rem/1.4 var(--cs-font-sans);
+  color:var(--cs-ink) }
+.wp .d-group h4 i { width:8px; height:8px; border-radius:99px; background:var(--k) }
+.wp .d-group h4 span { margin-left:auto; font:500 .75rem var(--cs-font-mono); color:var(--cs-ink-3) }
+.wp .d-group ul { list-style:none; margin:0; padding:0 }
+.wp .d-group li { display:grid; grid-template-columns:64px minmax(0, 1fr); gap:2px 10px; margin:0 -10px;
+  padding:10px; border-radius:10px; cursor:pointer; transition:background-color 150ms }
+.wp .d-group li + li { border-top:1px solid var(--cs-line) }
+.wp .d-group li:hover, .wp .d-group li:focus-visible { background:var(--cs-surface-2); outline:none }
+.wp .d-group li:focus-visible { box-shadow:inset 0 0 0 2px var(--cs-accent) }
+.wp .d-group li.hl { background:var(--ks) }
+.wp .d-at { padding-top:2px; font:500 .75rem var(--cs-font-mono); color:var(--cs-ink-3); font-variant-numeric:tabular-nums }
+.wp .d-group li b { display:block; font:600 .875rem/1.4 var(--cs-font-sans); color:var(--cs-ink) }
+.wp .d-group li p { margin:1px 0 0; font-size:.8125rem; line-height:1.45; color:var(--cs-ink-2) }
+.wp .d-group li p:empty { display:none }
+/* Circles and drawn areas have no mile markers: drop the column. */
+.wp .d-group li:has(.d-at:empty) { grid-template-columns:minmax(0, 1fr) }
+.wp .d-group li .d-at:empty { display:none }
+.wp .d-quiet { margin-top:14px; padding:22px; border:1px dashed var(--cs-line-strong); border-radius:12px; text-align:center }
+.wp .d-quiet p { margin:0; font-size:.875rem; color:var(--cs-ink-2) }
+.wp .d-quiet p + p { margin-top:6px; font-size:.8125rem; color:var(--cs-ink-3) }
+.wp .d-quiet-ico { display:block; width:28px; height:28px; margin:0 auto 10px; border-radius:99px;
+  background:radial-gradient(circle, var(--cs-ok) 0 4px, var(--cs-ok-soft) 5px 100%) }
+.wp .d-empty { margin:12px 0; font-size:.875rem; color:var(--cs-closure) }
+.wp .d-skel { display:grid; gap:10px; margin-top:20px }
+.wp .d-skel i { display:block; height:44px; border-radius:10px; background:linear-gradient(90deg,
+  var(--cs-surface-2) 0%, color-mix(in srgb, var(--cs-surface-2) 40%, var(--cs-surface)) 50%, var(--cs-surface-2) 100%);
+  background-size:200% 100%; animation:d-shimmer 1.3s linear infinite }
+@keyframes d-shimmer { to { background-position:-200% 0 } }
+
+/* Wide screens: list, detail and map side by side. */
+@media (min-width: 1200px) {
+  .wp-app.has-detail { grid-template-columns:376px 432px minmax(0, 1fr) }
+  /* With a detail open the list is just for switching: names, counts. */
+  .wp-app.has-detail .witem .wkinds, .wp-app.has-detail .witem > button { display:none }
+  .wp-app.has-detail .witem { padding-right:14px }
+}
+/* Narrower: the detail takes the list's place, with a way back. */
+@media (max-width: 1199.98px) {
+  .wp-app.has-detail .wp-panel { display:none }
+  .wp .d-back { display:inline-flex }
+  .wp .d-close { display:none }
+}
+@media (max-width: 900px) {
+  .wp-detail { overflow:visible; border-right:0 }
+  .wp .d-head, .wp .d-body { padding-left:20px; padding-right:20px }
+  .wp .watch .d-actions .dbtn { height:40px }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wp .d-dot.wait, .wp .d-skel i { animation:none }
+}
+.wp .watch .wpreview { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:16px 0 0; padding:10px 12px;
+  border-radius:10px; background:var(--cs-surface-2); font:400 .8125rem var(--cs-font-sans); color:var(--cs-ink-2) }
+.wp .watch .wpreview:empty { display:none }
+.wp .watch .wpreview b { font-weight:600; color:var(--cs-ink) }
+.wp .watch .wpv-diff { margin-left:auto; font:500 .75rem var(--cs-font-mono); color:var(--cs-accent) }

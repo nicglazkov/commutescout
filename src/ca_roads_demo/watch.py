@@ -1441,6 +1441,127 @@ async def api_watch_options(request: Request) -> JSONResponse:
     return JSONResponse(wf.area_options(states))
 
 
+def route_mile_km(points: list, lat: float, lon: float) -> float:
+    """How far along a route (km from its start) the nearest point to
+    (lat, lon) lies: the mile marker the watch detail lists items by."""
+    pairs = [[p["lat"], p["lon"]] if isinstance(p, dict) else p
+             for p in points]
+    if len(pairs) < 2:
+        return 0.0
+    best, best_at, run = math.inf, 0.0, 0.0
+    for a, b in zip(pairs, pairs[1:], strict=False):
+        seg = haversine_km(a[0], a[1], b[0], b[1])
+        d = _point_to_segment_km(lat, lon, a, b)
+        if d < best:
+            kx = math.cos(math.radians(lat)) * 111.32
+            ky = 110.57
+            ax, ay = (a[1] - lon) * kx, (a[0] - lat) * ky
+            bx, by = (b[1] - lon) * kx, (b[0] - lat) * ky
+            dx, dy = bx - ax, by - ay
+            seg2 = dx * dx + dy * dy
+            t = (0.0 if seg2 == 0
+                 else max(0.0, min(1.0, -(ax * dx + ay * dy) / seg2)))
+            best, best_at = d, run + t * seg
+        run += seg
+    return best_at
+
+
+INSIDE_MAX_ITEMS = 200
+
+
+async def inside_now(watch: dict) -> list[dict]:
+    """The live items a watch would alert on right now: its kinds and
+    report-type filters, inside its shape. Routes order them by distance
+    along the route; other shapes by kind, most serious first."""
+    events = await _collect_events()
+    matched = [e for e in events
+               if wf.passes(watch, e)
+               and watch_matches(watch, e["lat"], e["lon"])]
+    if "weather" in (watch.get("kinds") or []):
+        matched += [e for e in await _weather_events(watch)
+                    if wf.passes(watch, e)]
+    route = watch.get("points") if watch.get("type") == "route" else None
+    out = []
+    for e in matched:
+        item = {k: e.get(k) for k in ("id", "kind", "title", "body", "meta",
+                                      "subtype", "src_label")}
+        if e.get("lat") and e.get("lon"):
+            item["lat"], item["lon"] = round(e["lat"], 5), round(e["lon"], 5)
+        if route and item.get("lat"):
+            item["at_km"] = round(route_mile_km(route, e["lat"], e["lon"]), 2)
+        out.append(item)
+    if route:
+        out.sort(key=lambda i: (i.get("at_km") is None, i.get("at_km") or 0))
+    else:
+        out.sort(key=lambda i: (_TOP_KIND.get(i["kind"], 9), i.get("title") or ""))
+    return out[:INSIDE_MAX_ITEMS]
+
+
+def _inside_body(items: list[dict]) -> dict:
+    by_kind: dict[str, int] = {}
+    for i in items:
+        by_kind[i["kind"]] = by_kind.get(i["kind"], 0) + 1
+    return {"items": items, "count": len(items), "by_kind": by_kind,
+            "checked_at": datetime.now(UTC).isoformat(timespec="seconds")}
+
+
+async def api_watch_inside(request: Request) -> JSONResponse:
+    """GET: what is live inside one of your watch areas right now, for
+    the watch detail pane."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    watch_id = _safe_id(request.path_params["watch_id"])
+    if not watch_id:
+        return _err("not found", 404)
+    watch = await get_store().get_watch(watch_id)
+    if watch is None or watch.get("uid") != claims["sub"]:
+        return _err("not found", 404)
+    return JSONResponse(_inside_body(await inside_now(watch)))
+
+
+async def api_watch_preview(request: Request) -> JSONResponse:
+    """POST a draft watch (shape, kinds, filters, buffer) and get what it
+    would alert on right now, for the editor's live preview. Nothing is
+    stored."""
+    claims = await verify_user(request)
+    if not claims:
+        return _err("sign in required", 401)
+    user = await _load_user(claims)
+    if not _approved(user):
+        return _err("watch access is not enabled for this account", 403)
+    body = await _read_json(request)
+    if body is None:
+        return _err("json body required")
+    kinds, filters, kerr = _parse_kinds(body)
+    if kerr:
+        return _err(kerr)
+    wtype = body.get("type")
+    draft: dict = {"type": wtype, "kinds": kinds, "filters": filters or {}}
+    try:
+        if wtype == "circle":
+            c = body.get("center") or {}
+            draft["center"] = {"lat": float(c["lat"]), "lon": float(c["lon"])}
+            draft["radius_km"] = min(float(body.get("radius_km") or 1.0),
+                                     MAX_RADIUS_KM)
+        elif wtype in ("polygon", "route"):
+            raw = body.get("points") or []
+            if not 1 <= len(raw) <= MAX_OPTION_POINTS:
+                return _err(f"points: 1 to {MAX_OPTION_POINTS}")
+            draft["points"] = [
+                {"lat": float(p["lat"]), "lon": float(p["lon"])}
+                if isinstance(p, dict) else {"lat": float(p[0]), "lon": float(p[1])}
+                for p in raw]
+            if wtype == "route":
+                buf = float(body.get("buffer_km") or 3.0)
+                draft["buffer_km"] = max(MIN_BUFFER_KM, min(buf, MAX_BUFFER_KM))
+        else:
+            return _err("type must be circle, polygon, or route")
+    except (TypeError, ValueError, KeyError, IndexError):
+        return _err("shape needs a center and radius_km, or [lat, lon] points")
+    return JSONResponse(_inside_body(await inside_now(draft)))
+
+
 async def api_account_delete(request: Request) -> JSONResponse:
     """Self-serve account deletion: removes the user record, every
     watch and its alert state, all push subscriptions, and every API

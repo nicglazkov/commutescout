@@ -3026,6 +3026,8 @@ app = Starlette(
         Route("/api/flare/sources", flare_sources.api_flare_sources, methods=["GET"]),
         Route("/api/flare/report", flare_sources.api_flare_report, methods=["POST"]),
         Route("/api/flare/confirm", flare_sources.api_flare_confirm, methods=["POST"]),
+        Route("/api/watch/preview", watch.api_watch_preview, methods=["POST"]),
+        Route("/api/watch/{watch_id}/inside", watch.api_watch_inside, methods=["GET"]),
         Route("/api/watch/{watch_id}", watch.api_watch_delete,
               methods=["DELETE"]),
         Route("/api/watch/{watch_id}", watch.api_watch_update,
