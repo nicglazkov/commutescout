@@ -1,29 +1,33 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="cc">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b1f33">
+<meta name="theme-color" content="#f5f7fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a111b" media="(prefers-color-scheme: dark)">
 <title>Admin - CommuteScout</title>
 <meta name="robots" content="noindex">
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
+<script src="/static/basemap-early.js?v=__ASSET_V__"></script>
 <link rel="stylesheet" href="/static/fonts/fonts.css">
+<link rel="stylesheet" href="/static/tokens.css?v=__ASSET_V__">
 <style>
+/* The site's tokens (tokens.css, :root.cc), under this page's short names. */
 :root {
-  --navy:#0b1f33; --navy2:#122c47; --ink:#0f1c2b; --dim:#5b6b7d;
-  --bg:#f5f2ea; --card:#fffdf7; --line:#e3ddd0;
-  --sky:#2f81f7; --sky-soft:#e8f1fe; --amber:#e8a13c; --red:#d64545;
-  --green:#2f9e6e;
+  --navy:#0b1f33; --ink:var(--cs-ink); --dim:var(--cs-ink-3);
+  --bg:var(--cs-bg); --card:var(--cs-surface); --line:var(--cs-line);
+  --sky:var(--cs-accent); --sky-soft:var(--cs-accent-soft);
+  --red:var(--cs-closure); --green:var(--cs-ok);
 }
 * { box-sizing:border-box; margin:0 }
 body { background:var(--bg); color:var(--ink);
-  font:14.5px/1.55 Inter, system-ui, sans-serif }
+  font:14.5px/1.55 var(--cs-font-sans) }
 .topbar { background:var(--navy); color:#e9eef5; display:flex; align-items:center;
   flex-wrap:wrap; gap:14px; padding:0 20px; height:56px; flex:none }
 .topbar a.brand { display:flex; align-items:center; gap:14px; color:inherit;
   text-decoration:none }
 .topbar img.mark { width:30px; height:30px; border-radius:7px }
-.topbar .wordmark { font:600 1.08rem Lora, serif; letter-spacing:.2px }
+.topbar .wordmark { font:600 1.02rem var(--cs-font-sans); letter-spacing:-.01em }
 .topbar nav { display:flex; gap:4px; margin-left:14px }
 /* .navcta is the Live map pill: a topbar-level sibling of nav (not
    nested inside it), same as the site's Next.js header, so it can sit
@@ -42,28 +46,30 @@ body { background:var(--bg); color:var(--ink);
 main { max-width:1000px; margin:0 auto; padding:18px 16px 50px }
 h1 { font-size:1.2rem; margin:6px 0 14px }
 .card { background:var(--card); border:1px solid var(--line);
-  border-radius:14px; padding:18px; margin-bottom:14px }
+  border-radius:var(--cs-radius-lg); padding:18px; margin-bottom:14px; box-shadow:var(--cs-shadow-sm) }
 .card h2 { font-size:.95rem; margin-bottom:10px }
 table { width:100%; border-collapse:collapse; font-size:.83rem }
-th { text-align:left; font:600 .7rem Inter; letter-spacing:.6px;
+th { text-align:left; font:600 .7rem var(--cs-font-sans); letter-spacing:.6px;
   text-transform:uppercase; color:var(--dim); padding:6px 8px;
   border-bottom:1px solid var(--line) }
-td { padding:7px 8px; border-bottom:1px solid #efeadf }
-.pill { display:inline-block; font:600 .68rem Inter; padding:2px 9px;
+td { padding:7px 8px; border-bottom:1px solid var(--line) }
+.pill { display:inline-block; font:600 .68rem var(--cs-font-sans); padding:2px 9px;
   border-radius:99px }
-.pill.approved { background:#e3f4ec; color:var(--green) }
-.pill.pending { background:#fdf2df; color:#a86d1d }
-.pill.revoked { background:#fbe5e5; color:var(--red) }
-button { border:1px solid var(--line); background:#fff; border-radius:8px;
-  padding:5px 12px; font:500 .78rem Inter; cursor:pointer; color:var(--ink) }
+.pill.approved { background:var(--cs-ok-soft); color:var(--green) }
+.pill.pending { background:var(--cs-fire-soft); color:var(--cs-fire) }
+.pill.revoked { background:var(--cs-closure-soft); color:var(--red) }
+button { border:1px solid var(--cs-line-strong); background:var(--card); border-radius:8px;
+  padding:5px 12px; font:500 .78rem var(--cs-font-sans); cursor:pointer; color:var(--ink) }
 button:hover { border-color:var(--sky); color:var(--sky) }
 button.warn:hover { border-color:var(--red); color:var(--red) }
 button.primary { background:var(--sky); border-color:var(--sky);
-  color:#fff }
+  color:var(--cs-accent-ink) }
+button.primary:hover { background:var(--cs-accent-hover); color:var(--cs-accent-ink) }
 .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
   margin-bottom:10px }
 input { border:1.5px solid var(--line); border-radius:8px;
-  padding:7px 10px; font:400 .84rem Inter; background:#fff; outline:none }
+  padding:7px 10px; font:400 .84rem var(--cs-font-sans); background:var(--card); color:var(--ink); outline:none }
+select, textarea { border:1.5px solid var(--line); border-radius:8px; padding:7px 10px; background:var(--card); color:var(--ink) }
 input:focus { border-color:var(--sky) }
 .msg { font-size:.8rem; margin-top:8px; min-height:1.2em }
 .msg.err { color:var(--red) } .msg.ok { color:var(--green) }
@@ -76,14 +82,14 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
   color:var(--dim); font-size:.72rem }
 .pagefoot a { color:var(--dim) }
 .an-kpis { display:flex; gap:32px; margin:4px 0 14px }
-.an-n { font:700 1.7rem Inter; display:block; line-height:1.1 }
+.an-n { font:600 1.7rem var(--cs-font-mono); letter-spacing:-.02em; display:block; line-height:1.1 }
 .an-l { font-size:.72rem; color:var(--dim); text-transform:uppercase;
   letter-spacing:.6px }
 .an-chart { width:100%; height:110px; display:block; margin-bottom:12px;
   border-bottom:1px solid var(--line) }
 .an-chart rect { fill:var(--sky) }
 .an-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px }
-.an-grid h3 { font:600 .72rem Inter; text-transform:uppercase;
+.an-grid h3 { font:600 .72rem var(--cs-font-sans); text-transform:uppercase;
   letter-spacing:.6px; color:var(--dim); margin-bottom:4px }
 .an-grid td:last-child { text-align:right; color:var(--dim);
   font-variant-numeric:tabular-nums }
@@ -177,7 +183,7 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
     <div class="card">
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
         <h2 style="margin:0">Answer feedback ("Was this right?")</h2>
-        <span id="fb-tally" style="font:600 .8rem Inter;color:var(--dim)"></span>
+        <span id="fb-tally" style="font:600 .8rem var(--cs-font-sans);color:var(--dim)"></span>
       </div>
       <div class="tablewrap"><table>
         <thead><tr><th>When</th><th>Vote</th><th>Question</th><th>Visitor</th></tr></thead>
@@ -359,7 +365,7 @@ $('fl-add').addEventListener('click', async () => {
   } else {
     let manifest;
     try { manifest = JSON.parse(raw); }
-    catch (e) { msg('fl-msg', 'Paste a manifest (JSON) or the plugin's https URL.', 'err'); return; }
+    catch (e) { msg('fl-msg', 'Paste a manifest (JSON) or the plugin\u2019s https URL.', 'err'); return; }
     payload = { action: 'add', manifest };
   }
   try {

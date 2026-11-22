@@ -2137,8 +2137,12 @@ async def watch_page(_: Request):
     return HTMLResponse(_watch_template(), headers={"Cache-Control": "no-cache"})
 
 
+_ADMIN_CACHE: dict = {}
+
+
 async def admin_page(_: Request):
-    return FileResponse(STATIC_DIR / "admin.html")
+    return HTMLResponse(_stamped_template("admin.html", _ADMIN_CACHE),
+                        headers={"Cache-Control": "no-store"})
 
 
 # The admin page lives at a secret, unguessable path in production (ADMIN_PATH);
