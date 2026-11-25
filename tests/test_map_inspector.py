@@ -49,6 +49,14 @@ def test_lazy_sign_words_load_in_both_the_popup_and_the_inspector():
     assert "wireLazySign(inspBody, null)" in APP
     # A sign with no words yet is not called blank.
     assert "!lines.length && !m.lazy ?" in APP
+    # The words fill every live copy of the sign's box, a later redraw
+    # starts from them, and the popup is resized without update(), which
+    # would redraw the original content over them.
+    wire = APP[APP.index("async function wireLazySign"):APP.index("async function loadLazySigns")]
+    assert "popup.update()" not in wire.replace("No popup.update() here", "")
+    assert "popup._updateLayout()" in wire
+    assert "document.querySelectorAll('.lazysign[data-lazy]')" in APP
+    assert "lazySignHtml(freshLazySign(m.lazy), true)" in APP
 
 
 def test_inspector_docks_wide_and_overlays_narrow():

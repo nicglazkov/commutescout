@@ -611,7 +611,7 @@ function popupFor(m, g) {
       [!lines.length && !m.lazy ? { text: 'This sign is blank right now.', gloss: true } : null],
       [], ['Source: ' + (m.src ? esc(m.src) + ' message signs' : 'Caltrans CMS')],
       m.lazy ? '<div class="lazysign" data-lazy="' + esc(m.lazy) + '">' +
-        '<div class="body gloss">Reading this sign…</div></div>'
+        lazySignHtml(freshLazySign(m.lazy), true) + '</div>'
         : lines.length ? signBoard(lines) : '');
   }
   if (g === 'toll') {
@@ -1183,26 +1183,44 @@ function signBoard(lines) {
 
 // A lazy sign's words, read when its popup or inspector pane opens.
 // Kept for a minute so opening it again does not ask again.
+function freshLazySign(key) {
+  const d = lazySignText.get(key);
+  return d && Date.now() - d.at <= 60000 ? d : null;
+}
+
+function lazySignHtml(d, reading) {
+  if (!d) {
+    return '<div class="body gloss">' + (reading ? 'Reading this sign…'
+      : 'This sign could not be read just now. Close this and open it again to retry.') + '</div>';
+  }
+  const lines = d.lines || [];
+  return (lines.length ? signBoard(lines) : '<div class="body gloss">This sign is blank right now.</div>') +
+    (d.updated ? '<div class="body gloss">Sign last updated ' + esc(d.updated) + '</div>' : '');
+}
+
+// The words go to whichever copies of the sign's box are on the page
+// when they arrive: the popup and the inspector pane can both show it,
+// and either may have been drawn again since it asked.
 async function wireLazySign(el, popup) {
   const box = el && el.querySelector('.lazysign[data-lazy]');
-  if (!box || box.dataset.wired) return;
-  box.dataset.wired = '1';
+  if (!box) return;
   const key = box.dataset.lazy;
-  let d = lazySignText.get(key);
-  if (!d || Date.now() - d.at > 60000) {
-    d = null;
+  let d = freshLazySign(key);
+  if (!d) {
     try {
       const res = await fetch('/api/signtext/' + key.split('/').map(encodeURIComponent).join('/'));
       if (res.ok) { d = await res.json(); d.at = Date.now(); lazySignText.set(key, d); }
     } catch (e) { /* shown below */ }
   }
-  if (!box.isConnected) return;
-  const lines = (d && d.lines) || [];
-  box.innerHTML = !d
-    ? '<div class="body gloss">This sign could not be read just now. Close this and open it again to retry.</div>'
-    : (lines.length ? signBoard(lines) : '<div class="body gloss">This sign is blank right now.</div>') +
-      (d.updated ? '<div class="body gloss">Sign last updated ' + esc(d.updated) + '</div>' : '');
-  if (popup && popup.update) popup.update();
+  for (const b of document.querySelectorAll('.lazysign[data-lazy]')) {
+    if (b.dataset.lazy === key) b.innerHTML = lazySignHtml(d, false);
+  }
+  // No popup.update() here: it redraws from the original content and
+  // would wipe the words just put in. Resize around them instead.
+  if (popup && popup.isOpen && popup.isOpen() && popup._updateLayout) {
+    popup._updateLayout();
+    popup._updatePosition();
+  }
 }
 
 async function loadLazySigns() {
