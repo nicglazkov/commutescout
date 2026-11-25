@@ -1802,7 +1802,8 @@ async def _fetch_mi(client) -> dict:
     real road geometry, and cameras. Camera stills come from the bulk
     /camera/list rows (HTML-embedded image URLs, joined to the clean
     AllForMap metadata by id); one request, not one per camera. Signs
-    still carry no message text in any bulk feed."""
+    carry no message text in any bulk feed, so they are served apart
+    from this, by ``lazy_signs`` and ``lazy_sign_text``."""
     base = "https://mdotjboss.state.mi.us/MiDrive"
 
     async def get_json(path: str):
@@ -1869,6 +1870,99 @@ async def _fetch_mi(client) -> dict:
                 m["end"] = path[-1]
         markers.append(m)
     return {"markers": markers}
+
+
+# Michigan signs. MiDrive lists where its 568 signs are but gives their
+# words one sign at a time, so the map gets the positions here and asks
+# for a sign's words when someone opens it. Reading all of them on a
+# timer would be hundreds of requests a cycle against a state server
+# for words nobody is looking at.
+_MI_BASE = "https://mdotjboss.state.mi.us/MiDrive"
+_MI_SIGN_TITLE = re.compile(r"^(NB|SB|EB|WB)\s+(\S+)\s*@\s*(.+)$")
+_MI_DMS_MSG = re.compile(r"class=['\"]dmsMessage['\"][^>]*>(.*?)</div>", re.S | re.I)
+_MI_DMS_TIME = re.compile(r"class=['\"]dmstimeStamp['\"][^>]*>(.*?)</div>", re.S | re.I)
+_MI_BR = re.compile(r"<br\s*/?>", re.I)
+LAZY_SIGN_LIST_TTL = 6 * 3600.0
+LAZY_SIGN_TEXT_TTL = 120.0
+_lazy_sign_list: tuple[float, list[dict]] | None = None
+_lazy_sign_text: dict[str, tuple[float, dict]] = {}
+
+
+def _mi_sign_stub(row: dict) -> dict | None:
+    """One MiDrive sign as a map marker with no words yet. ``lazy``
+    names where its words come from; it is deliberately not ``blank``,
+    which would say the sign is showing nothing."""
+    lat, lon, sid = row.get("latitude"), row.get("longitude"), row.get("id")
+    if not lat or not lon or not isinstance(sid, int):
+        return None
+    title = (row.get("title") or "").strip()
+    m = {"kind": "sign", "lat": lat, "lon": lon, "route": None,
+         "direction": None, "near": title or None, "lines": [],
+         "message": "", "src": "MDOT MiDrive", "lazy": f"mi/{sid}"}
+    hit = _MI_SIGN_TITLE.match(title)
+    if hit:
+        m["direction"], m["route"], m["near"] = hit.group(1), hit.group(2), hit.group(3).strip()
+    return m
+
+
+def _mi_sign_text(payload) -> dict:
+    """The words on one MiDrive sign, from its popup HTML."""
+    blob = payload[0] if isinstance(payload, list) and payload else ""
+    if not isinstance(blob, str):
+        blob = ""
+    msg = _MI_DMS_MSG.search(blob)
+    lines: list[str] = []
+    for part in _MI_BR.split(msg.group(1) if msg else ""):
+        text = re.sub(r"\s+", " ", _html.unescape(_TAG_RE.sub(" ", part))).strip()
+        if text:
+            lines.append(text[:80])
+    stamp = _MI_DMS_TIME.search(blob)
+    updated = re.sub(r"\s+", " ", _TAG_RE.sub(" ", stamp.group(1))).strip() if stamp else ""
+    return {"lines": lines[:8], "updated": updated[:40] or None}
+
+
+async def lazy_signs(client) -> list[dict]:
+    """Signs whose words are read one at a time (Michigan). Never
+    raises: a failed read serves the last list, or nothing."""
+    global _lazy_sign_list
+    now = time.monotonic()
+    if _lazy_sign_list and now - _lazy_sign_list[0] < LAZY_SIGN_LIST_TTL:
+        return _lazy_sign_list[1]
+    try:
+        resp = await client.get(f"{_MI_BASE}/dms/AllForMap", headers=UA, timeout=20.0)
+        resp.raise_for_status()
+        stubs = [m for m in (_mi_sign_stub(r) for r in resp.json() or []) if m]
+    except Exception:
+        return _lazy_sign_list[1] if _lazy_sign_list else []
+    if stubs:
+        _lazy_sign_list = (now, stubs)
+    return stubs
+
+
+async def lazy_sign_text(client, state: str, sign_id: str) -> dict | None:
+    """The words on one lazy sign right now, or None when the sign is
+    not one we know or its source did not answer. Cached briefly so a
+    sign opened by many people is read once."""
+    if state != "mi" or not (sign_id.isascii() and sign_id.isdigit() and len(sign_id) <= 8):
+        return None
+    key = f"{state}/{sign_id}"
+    if not any(m["lazy"] == key for m in await lazy_signs(client)):
+        return None
+    now = time.monotonic()
+    hit = _lazy_sign_text.get(key)
+    if hit and now - hit[0] < LAZY_SIGN_TEXT_TTL:
+        return hit[1]
+    try:
+        resp = await client.get(f"{_MI_BASE}/dms/getDMSInfo/{sign_id}", headers=UA, timeout=15.0)
+        resp.raise_for_status()
+        out = _mi_sign_text(resp.json())
+    except Exception:
+        return hit[1] if hit else None
+    if len(_lazy_sign_text) > 1200:
+        for old in sorted(_lazy_sign_text, key=lambda k: _lazy_sign_text[k][0])[:400]:
+            del _lazy_sign_text[old]
+    _lazy_sign_text[key] = (now, out)
+    return out
 
 
 async def _fetch_de_tmc(client) -> dict:

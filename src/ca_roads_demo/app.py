@@ -1772,6 +1772,25 @@ async def api_stcam(request: Request):
                     headers={"Cache-Control": "public, max-age=120"})
 
 
+async def api_lazysigns(request: Request):
+    """Signs whose words the source gives one at a time (Michigan):
+    where they are, without their words. The map draws them and asks
+    /api/signtext when one is opened."""
+    signs = await states.lazy_signs(tools.get_road().client)
+    return JSONResponse({"markers": signs}, headers={
+        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400"})
+
+
+async def api_signtext(request: Request):
+    """The words on one such sign right now."""
+    out = await states.lazy_sign_text(
+        tools.get_road().client,
+        request.path_params.get("state", ""), request.path_params.get("sign_id", ""))
+    if out is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return JSONResponse(out, headers={"Cache-Control": "public, max-age=60"})
+
+
 async def api_incident(request: Request):
     """Full dispatch log for one CHP incident, straight from the cached
     feed. Fetched lazily when someone opens 'Show dispatch log' in a
@@ -3020,6 +3039,8 @@ app = Starlette(
         Route("/api/incident/{incident_id}", api_incident, methods=["GET"]),
         Route("/api/event-status", api_event_status, methods=["GET"]),
         Route("/api/stcam/{state}/{cam_id:path}", api_stcam, methods=["GET"]),
+        Route("/api/lazysigns", api_lazysigns, methods=["GET"]),
+        Route("/api/signtext/{state}/{sign_id}", api_signtext, methods=["GET"]),
         Route("/watch", watch_page),
         Route(ADMIN_PAGE_PATH, admin_page),
         Route("/api/admin/analytics", analytics.api_admin_analytics,
@@ -3424,6 +3445,7 @@ app = RateLimitMiddleware(
                      "/api/warmup",
                      "/api/geocode",
                      "/api/incident/", "/api/event-status", "/api/sources", "/api/stcam/",
+                     "/api/lazysigns",
                      "/api/suggest", "/api/flow", "/api/traffictile",
                      # Watch pages + public bootstrap config are as cheap
                      # as static files; the mutating watch APIs stay

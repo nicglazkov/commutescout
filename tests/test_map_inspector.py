@@ -44,6 +44,13 @@ def test_dispatch_log_wiring_is_one_function_used_by_both():
     assert "wireDispatchLog(inspBody, null)" in APP
 
 
+def test_lazy_sign_words_load_in_both_the_popup_and_the_inspector():
+    assert "map.on('popupopen', (e) => wireLazySign(e.popup.getElement(), e.popup))" in APP
+    assert "wireLazySign(inspBody, null)" in APP
+    # A sign with no words yet is not called blank.
+    assert "!lines.length && !m.lazy ?" in APP
+
+
 def test_inspector_docks_wide_and_overlays_narrow():
     assert "--insp-w:0px" in CSS
     assert ".shell.insp { --insp-gap:6px; --insp-w:var(--insp-user, 340px) }" in CSS
