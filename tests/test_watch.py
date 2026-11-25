@@ -210,6 +210,52 @@ def test_first_sign_in_lands_pending(client, store):
     assert store.users["sam"]["email"] == "sam@example.com"
 
 
+@pytest.fixture
+def notices(monkeypatch):
+    sent = []
+
+    async def fake_email(to, subject, html, text, reply_to=None):
+        sent.append((to, subject, text))
+        return True
+
+    monkeypatch.setattr(watch, "_email_alert", fake_email)
+    monkeypatch.setattr(watch, "_pending_notices", ["", 0])
+    return sent
+
+
+def test_first_sign_in_tells_the_admin_once(client, store, notices):
+    client.get("/api/watch/me", headers=auth())
+    client.get("/api/watch/me", headers=auth())
+    assert len(notices) == 1
+    to, subject, text = notices[0]
+    assert to == "admin@example.com"
+    assert "waiting for approval" in subject
+    assert "sam@example.com" in text
+
+
+def test_admin_notice_failure_does_not_break_sign_in(client, store,
+                                                     monkeypatch):
+    async def boom(*a, **k):
+        raise RuntimeError("resend down")
+
+    monkeypatch.setattr(watch, "_email_alert", boom)
+    monkeypatch.setattr(watch, "_pending_notices", ["", 0])
+    r = client.get("/api/watch/me", headers=auth())
+    assert r.status_code == 200 and r.json()["status"] == "pending"
+
+
+def test_admin_notices_are_capped_per_day(client, store, notices,
+                                          monkeypatch):
+    monkeypatch.setattr(watch, "PENDING_NOTICES_DAILY", 0)
+    client.get("/api/watch/me", headers=auth())
+    assert notices == []
+
+
+def test_an_admin_signing_in_sends_no_notice(client, store, notices):
+    client.get("/api/watch/me", headers=auth("tok-admin"))
+    assert notices == []
+
+
 def test_pending_users_cannot_create(client):
     r = client.post("/api/watch/create", json=CIRCLE, headers=auth())
     assert r.status_code == 403
