@@ -58,6 +58,7 @@ from ca_roads_demo import (
     hero_dots,
     lanecount,
     leavelater,
+    mailroom,
     mapfiles,
     nav,
     roadsnap,
@@ -2658,6 +2659,47 @@ async def sw_js(_: Request):
                                  "Cache-Control": "no-cache, max-age=0"})
 
 
+_app_release: dict = {"at": 0.0, "text": ""}
+
+
+async def _mail_status_context() -> str:
+    """Public, live facts for the reply drafter (mailroom.py): the site
+    version, which sources are failing, and the newest Android build.
+    Nothing here is private; all of it is on the site or on GitHub."""
+    lines = [f"Today is {datetime.now(UTC):%A %Y-%m-%d} (UTC).",
+             f"Site version: {VERSION}. The site is up."]
+    try:
+        data = json.loads((await api_sources(None)).body)
+        live = [r for r in data.get("sources", [])
+                if r.get("status") in ("fresh", "stale", "down")]
+        down = sorted({f"{r.get('agency')} ({r.get('state')})"
+                       for r in live if r["status"] == "down"})
+        lines.append(f"Data sources: {len(live) - len(down)} of {len(live)} "
+                     "working." + (" Failing right now: " + "; ".join(down)
+                                   + "." if down else ""))
+    except Exception:  # noqa: BLE001
+        lines.append("Data source status is unavailable right now.")
+    if time.time() - _app_release["at"] > 3600:
+        try:
+            r = await tools.get_road().client.get(
+                "https://api.github.com/repos/nicglazkov/commutescout-app/"
+                "releases/latest", timeout=8,
+                headers={"Accept": "application/vnd.github+json"})
+            rel = r.json() if r.status_code == 200 else {}
+            if rel.get("tag_name"):
+                _app_release.update(at=time.time(), text=(
+                    f"Newest Android release: {rel['tag_name'].lstrip('v')}"
+                    f", published {str(rel.get('published_at'))[:10]}."))
+        except Exception:  # noqa: BLE001
+            log.info("mail: could not read the newest app release")
+    if _app_release["text"]:
+        lines.append(_app_release["text"])
+    return "\n".join(lines)
+
+
+mailroom.set_context_provider(_mail_status_context)
+
+
 async def manifest_file(_: Request):
     return FileResponse(STATIC_DIR / "manifest.webmanifest",
                         media_type="application/manifest+json")
@@ -2866,7 +2908,7 @@ class CloudflareOnly:
     (deploy verification hits the origin before traffic routing).
     """
 
-    EXEMPT = frozenset({"/api/check-watches", "/health"})
+    EXEMPT = frozenset({"/api/check-watches", "/api/mail/poll", "/health"})
 
     def __init__(self, app_):
         self.app = app_
@@ -3041,6 +3083,13 @@ app = Starlette(
         Route("/api/admin/user", watch.api_admin_user, methods=["POST"]),
         Route("/api/admin/code", watch.api_admin_code, methods=["POST"]),
         Route("/api/admin/waitlist", api_admin_waitlist, methods=["GET"]),
+        Route("/api/admin/mail", mailroom.api_admin_mail,
+              methods=["GET", "POST"]),
+        Route("/api/admin/mail/connect", mailroom.api_admin_mail_connect,
+              methods=["POST"]),
+        Route(mailroom.REDIRECT_PATH, mailroom.oauth_callback,
+              methods=["GET"]),
+        Route("/api/mail/poll", mailroom.api_mail_poll, methods=["POST"]),
         Route("/api/check-watches", watch.api_check_watches,
               methods=["POST"]),
         Mount("/static", app=_GuardedStatic(directory=str(STATIC_DIR)),

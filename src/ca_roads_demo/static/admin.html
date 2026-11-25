@@ -255,6 +255,39 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
       <div class="msg" id="fl-msg"></div>
     </div>
 
+    <div class="card" id="mailcard">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Mail replies</h2>
+        <button id="mail-refresh" class="ghost">Refresh</button>
+      </div>
+      <p class="msg" id="mail-status" style="margin:.6rem 0"></p>
+      <div class="row">
+        <button id="mail-connect">Connect mailbox</button>
+        <button id="mail-run" class="ghost">Check mail now</button>
+        <label style="display:flex;gap:.4rem;align-items:center">
+          <input type="checkbox" id="mail-autosend"> Send simple replies automatically
+        </label>
+        <label style="display:flex;gap:.4rem;align-items:center">
+          <input type="checkbox" id="mail-paused"> Pause
+        </label>
+      </div>
+      <div class="msg" id="mail-msg"></div>
+      <details style="margin:.8rem 0">
+        <summary>Try it on a made-up email</summary>
+        <p class="msg" style="margin:.5rem 0">Shows what the drafter would do. Nothing is sent and no mailbox is touched.</p>
+        <input id="mail-try-subject" placeholder="Subject" style="width:100%;margin-bottom:.4rem">
+        <textarea id="mail-try-body" rows="5" placeholder="Email text" style="width:100%"></textarea>
+        <div class="row" style="margin-top:.4rem">
+          <button id="mail-try" class="ghost">Draft a reply</button>
+        </div>
+        <pre id="mail-try-out" style="white-space:pre-wrap;margin:.6rem 0 0"></pre>
+      </details>
+      <table>
+        <thead><tr><th>When</th><th>Subject</th><th>What happened</th><th>Note</th></tr></thead>
+        <tbody id="mail-rows"></tbody>
+      </table>
+    </div>
+
     <div class="card">
       <h2>Checker</h2>
       <div class="row">
@@ -315,6 +348,7 @@ onAuthStateChanged(auth, async (u) => {
     loadAnalytics();
     loadFeedback();
     loadWaitlist();
+    loadMail();
     loadFlare();
   } catch (e) {
     $('signin').classList.remove('hidden');
@@ -504,6 +538,87 @@ async function loadFeedback() {
       tb.innerHTML = '<tr><td colspan="4" style="color:var(--dim)">No feedback votes in the last ' + f.days + ' days.</td></tr>';
     }
   } catch (e) { msg('fb-msg', e.message, 'err'); }
+}
+
+// ── Mail replies ───────────────────────────────────────────────────────
+const MAIL_LANES = { auto: 'Replied automatically', draft: 'Draft ready in Gmail',
+                     needs_you: 'Needs you', none: 'No reply' };
+
+function showMail(m) {
+  const st = $('mail-status');
+  if (!m.configured) {
+    st.textContent = 'Not set up on this deployment yet.';
+  } else if (!m.connected) {
+    st.textContent = 'No mailbox connected. Connect ' + m.address + ' to start.';
+  } else {
+    st.textContent = 'Connected to ' + m.mailbox + '. ' +
+      (m.error ? 'Problem: ' + m.error + '. Reconnect the mailbox.'
+        : m.last_ok ? 'Last checked ' + new Date(m.last_ok).toLocaleTimeString([], {
+            hour: 'numeric', minute: '2-digit' }) + '.' : 'Not checked yet.') +
+      ' Today: ' + m.today.drafted + ' drafted, ' + m.today.sent + ' sent.';
+  }
+  $('mail-connect').textContent = m.connected ? 'Reconnect mailbox' : 'Connect mailbox';
+  $('mail-connect').disabled = !m.configured;
+  $('mail-run').disabled = !m.connected;
+  $('mail-autosend').checked = !!m.autosend;
+  $('mail-paused').checked = !!m.paused;
+  const tb = $('mail-rows');
+  tb.innerHTML = '';
+  for (const e of m.recent || []) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td></td><td></td><td></td><td></td>';
+    tr.children[0].textContent = e.at ? new Date(e.at).toLocaleString([], {
+      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    tr.children[1].textContent = e.subject || '(no subject)';
+    tr.children[2].textContent = MAIL_LANES[e.lane] || e.lane || '';
+    tr.children[3].textContent = e.note || '';
+    tb.append(tr);
+  }
+  if (!(m.recent || []).length) {
+    tb.innerHTML = '<tr><td colspan="4" style="color:var(--dim)">Nothing handled yet.</td></tr>';
+  }
+}
+
+async function loadMail() {
+  try { showMail(await api('/api/admin/mail')); }
+  catch (e) { msg('mail-msg', e.message, 'err'); }
+}
+
+$('mail-refresh').addEventListener('click', loadMail);
+$('mail-connect').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/admin/mail/connect', { method: 'POST' });
+    location.href = r.url;
+  } catch (e) { msg('mail-msg', e.message, 'err'); }
+});
+$('mail-run').addEventListener('click', async () => {
+  try {
+    msg('mail-msg', 'Checking mail…');
+    const r = await api('/api/mail/poll', { method: 'POST' });
+    msg('mail-msg', r.ok ? 'Checked. ' + (r.handled || 0) + ' new.'
+      : 'Could not check: ' + (r.reason || 'unknown'), r.ok ? '' : 'err');
+    loadMail();
+  } catch (e) { msg('mail-msg', e.message, 'err'); }
+});
+$('mail-try').addEventListener('click', async () => {
+  const out = $('mail-try-out');
+  out.textContent = 'Drafting…';
+  try {
+    const r = await api('/api/admin/mail', { method: 'POST',
+      body: JSON.stringify({ action: 'try', subject: $('mail-try-subject').value,
+                             body: $('mail-try-body').value }) });
+    out.textContent = 'What would happen: ' + (MAIL_LANES[r.lane] || r.lane) +
+      (r.withheld && r.withheld.length ? '\nWithheld because the reply ' + r.withheld.join(', ') : '') +
+      '\nNote: ' + (r.note || '') + (r.reply ? '\n\n' + r.reply : '');
+  } catch (e) { out.textContent = e.message; }
+});
+for (const key of ['autosend', 'paused']) {
+  $('mail-' + key).addEventListener('change', async (ev) => {
+    try {
+      showMail(await api('/api/admin/mail', { method: 'POST',
+        body: JSON.stringify({ action: key, on: ev.target.checked }) }));
+    } catch (e) { msg('mail-msg', e.message, 'err'); }
+  });
 }
 
 // ── Pro waitlist ───────────────────────────────────────────────────────

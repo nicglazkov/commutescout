@@ -414,6 +414,15 @@ class FirestoreStore:
     async def set_meta(self, key: str, data: dict) -> None:
         await self.db.collection("watch_meta").document(key).set(data)
 
+    async def get_mail_doc(self, name: str) -> dict | None:
+        """A document under mailroom (the contact mailbox's connection,
+        settings and recent activity; see mailroom.py)."""
+        snap = await self.db.collection("mailroom").document(name).get()
+        return snap.to_dict() if snap.exists else None
+
+    async def set_mail_doc(self, name: str, data: dict) -> None:
+        await self.db.collection("mailroom").document(name).set(data)
+
     async def add_waitlist_email(self, email: str) -> bool:
         """Store a Pro-waitlist signup. Returns False when the address
         is already on the list. Document id is the sha256 hex digest of
