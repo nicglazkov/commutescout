@@ -740,8 +740,10 @@ def _alert_once(reason: str) -> None:
 
 async def api_mail_poll(request: Request) -> JSONResponse:
     """Cloud Scheduler entry point (also runnable by an admin)."""
-    if not (await watch.verify_scheduler(request)
-            or await watch._require_admin(request)):
+    # Admin first: the scheduler check logs an error for any token that is
+    # not Cloud Scheduler's, and an admin's button press is not an error.
+    if not (await watch._require_admin(request)
+            or await watch.verify_scheduler(request)):
         return watch._err("not authorized", 403)
     return JSONResponse(await poll())
 
