@@ -326,6 +326,14 @@ export default function PrivacyPage() {
                 Pro waitlist, we store that email address only to tell you when
                 Pro launches. We do not add you to any other list.
               </p>
+              <p>
+                Email you send us, including contact form messages, arrives in
+                our Google Workspace mailbox. To help us answer, the text of
+                your message is sent to Anthropic to draft a reply. A person
+                reviews the draft before it is sent, except that a routine
+                answer, such as where to download the app, may be sent
+                automatically.
+              </p>
 
               <h3>Analytics and logs</h3>
               <ul>
@@ -410,8 +418,8 @@ export default function PrivacyPage() {
                   ],
                   [
                     "Anthropic",
-                    "Generating assistant answers",
-                    "Your question, earlier questions in the same chat, and the app's approximate location if sent",
+                    "Generating assistant answers, drafting replies to email you send us",
+                    "Your question, earlier questions in the same chat, and the app's approximate location if sent; the text of email you send us",
                   ],
                   [
                     "Resend",
