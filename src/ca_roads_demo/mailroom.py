@@ -24,6 +24,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import html as _html
 import json
 import logging
 import os
@@ -430,10 +431,20 @@ attempts.
 
 Plain text, as Nic would write to a user: warm, direct, short. Usually \
 two to five sentences. Greet them by first name when the thread gives \
-one. Answer the question first. For a bug report, thank them, say \
-whether it is known or fixed (only if the facts say so), and give the \
-one next step. No marketing voice, no exclamation marks, no bullet \
-lists unless they asked several separate questions, no "as an AI". \
+one, on a line of its own. Answer the question first. For a bug report, \
+thank them, say whether it is known or fixed (only if the facts say so), \
+and give the one next step. No marketing voice, no exclamation marks, no \
+"as an AI".
+
+Lay it out so it is easy to read on a phone. Short paragraphs of one or \
+two sentences, with an empty line between paragraphs, never one long \
+block. When they have to do things in order, put each step on its own \
+line, numbered "1.", "2." and so on. Put every link on a line of its \
+own, written out in full starting with https://, with nothing after it \
+on that line. No bullet lists unless they asked several separate \
+questions, and no markdown (no asterisks, no brackets around links): \
+the mail is sent as written.
+
 Sign off exactly:
 
 Nic
@@ -561,6 +572,43 @@ def _may_autosend(target: str, verified: bool, already_auto: bool,
     return ""
 
 
+def _reply_html(body: str) -> str:
+    """The reply as simple HTML, built by code from the plain text: each
+    paragraph in its own block, line breaks kept, and links made
+    tappable. Only a web address on the allowed list becomes a link;
+    everything else is escaped text."""
+    def link(m: re.Match) -> str:
+        text = m.group(0)
+        tail = ""
+        while text and text[-1] in ".,;:!?":
+            text, tail = text[:-1], text[-1] + tail
+        host = m.group(1).lower().removeprefix("www.")
+        path = (m.group(2) or "").rstrip(".,;:!?")
+        if host not in LINK_HOSTS or not path.startswith(LINK_HOSTS[host]):
+            return _html.escape(m.group(0))
+        href = text if text.lower().startswith("http") else "https://" + text
+        return (f'<a href="{_html.escape(href, quote=True)}">'
+                f"{_html.escape(text)}</a>{_html.escape(tail)}")
+
+    def para(block: str) -> str:
+        out, pos = [], 0
+        for m in _URL.finditer(block):
+            # An email address is text, not a link to its domain.
+            if m.start() and block[m.start() - 1] == "@":
+                continue
+            out.append(_html.escape(block[pos:m.start()]))
+            out.append(link(m))
+            pos = m.end()
+        out.append(_html.escape(block[pos:]))
+        return ('<p style="margin:0 0 14px">'
+                + "".join(out).replace("\n", "<br>\n") + "</p>")
+
+    blocks = [b.strip("\n") for b in re.split(r"\n\s*\n", body.strip())]
+    return ('<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,'
+            'sans-serif;font-size:15px;line-height:1.5;color:#0f1c2b">\n'
+            + "\n".join(para(b) for b in blocks if b.strip()) + "\n</div>")
+
+
 def _build_reply(last: dict, target: str, body: str) -> dict:
     mime = EmailMessage()
     subject = _header(last, "Subject").replace("\r", " ").replace("\n", " ")
@@ -574,6 +622,9 @@ def _build_reply(last: dict, target: str, body: str) -> dict:
         mime["In-Reply-To"] = msg_id
         mime["References"] = msg_id
     mime.set_content(body)
+    # The same words as HTML, so paragraphs keep their spacing and the
+    # links can be tapped in every mail app.
+    mime.add_alternative(_reply_html(body), subtype="html")
     raw = base64.urlsafe_b64encode(mime.as_bytes()).decode()
     return {"raw": raw, "threadId": last["threadId"]}
 
