@@ -409,7 +409,7 @@ const TZ_BY_SRC = {
   'ALGO Traffic (ALDOT)': 'America/Chicago',
   'NTTA': 'America/Chicago', 'HCTRA': 'America/Chicago',
   'MDOT MiDrive': 'America/Detroit',
-  '511NY': 'America/New_York', 'NJDOT': 'America/New_York',
+  '511NY': 'America/New_York', 'NYC DOT': 'America/New_York', 'NJDOT': 'America/New_York',
   'MDOT SHA': 'America/New_York', 'MDOT CHART': 'America/New_York',
   'KYTC': 'America/New_York', 'DelDOT': 'America/New_York',
   'FDOT': 'America/New_York', 'FDOT (WZDx)': 'America/New_York', 'FDOT (FL511)': 'America/New_York', 'FHP': 'America/New_York',

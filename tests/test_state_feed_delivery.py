@@ -230,6 +230,98 @@ async def test_new_york_reaches_the_map_in_albany(only):
     assert lane["cls"] == "lane" and lane["path"][-1] == [42.81, -73.91]
 
 
+NY_CAMS = [
+    # State camera with video: the still preview is the image.
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-73.79, 42.69]},
+     "properties": {"name": "I-87 at  Exit 2", "public": True, "cameraOwner": "NYSDOT",
+                    "views": [{"type": "WMP", "broken": False,
+                               "url": "https://s51.nysdot.skyvdn.com/rtplive/R1_001/playlist.m3u8",
+                               "videoPreviewUrl": "https://public.carsprogram.org/cameras/NYSDOT/R1_001.flv.png"}]}},
+    # A plain still.
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-73.78, 42.68]},
+     "properties": {"name": "NY 5 at Wolf Rd", "public": True, "cameraOwner": "NYSDOT",
+                    "views": [{"type": "STILL_IMAGE", "broken": False,
+                               "url": "https://public.carsprogram.org/cameras/NYSDOT/other/42.jpg"}]}},
+    # Broken view, a javascript: URL and a city camera: none ship from this list.
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-73.77, 42.67]},
+     "properties": {"name": "Broken", "public": True, "cameraOwner": "NYSDOT",
+                    "views": [{"type": "STILL_IMAGE", "broken": True,
+                               "url": "https://public.carsprogram.org/x.jpg"}]}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-73.76, 42.66]},
+     "properties": {"name": "Bad URL", "public": True, "cameraOwner": "NYSDOT",
+                    "views": [{"type": "STILL_IMAGE", "broken": False,
+                               "url": "javascript:alert(1)"}]}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-73.97, 40.78]},
+     "properties": {"name": "Central Park West @ 86 St", "public": True,
+                    "cameraOwner": "NYC DOT",
+                    "views": [{"type": "STILL_IMAGE", "broken": False,
+                               "url": "https://nyctmc.org/api/cameras/aaa/image"}]}},
+]
+NYC_CAMS = [
+    {"id": "bbb", "name": "Atlantic Ave @ 111 St", "latitude": 40.69, "longitude": -73.83,
+     "area": "Brooklyn", "isOnline": "true",
+     "imageUrl": "https://nyctmc.org/api/cameras/bbb/image"},
+    {"id": "ccc", "name": "Offline", "latitude": 40.70, "longitude": -73.84,
+     "area": "Queens", "isOnline": "false",
+     "imageUrl": "https://nyctmc.org/api/cameras/ccc/image"},
+    {"id": "ddd", "name": "Elsewhere", "latitude": 40.71, "longitude": -73.85,
+     "isOnline": "true", "imageUrl": "https://example.com/x.jpg"},
+]
+NY_SIGNS = [
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-73.90, 40.77]},
+     "properties": {"status": "DISPLAYING_MESSAGE", "route": "I-278",
+                    "name": "EB at 49th St", "signFacingDirection": "E",
+                    "pages": [{"lines": ["RAIN & HIGH WINDS", "THURS MORNING", ""]},
+                              {"lines": ["PLAN AHEAD"]}]}},
+    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-73.91, 40.78]},
+     "properties": {"status": "BLANK", "route": "I-278", "name": "WB at 50th St",
+                    "pages": []}},
+]
+
+
+def test_new_york_cameras_and_signs_parse():
+    cams = states._parse_ny_cameras(NY_CAMS, NYC_CAMS)
+    assert [c["name"] for c in cams] == [
+        "I-87 at Exit 2", "NY 5 at Wolf Rd", "Atlantic Ave @ 111 St"]
+    video, still, city = cams
+    assert video["image"].endswith("R1_001.flv.png")
+    assert video["stream"].endswith("playlist.m3u8")
+    assert still["stream"] is None and still["image"].endswith("42.jpg")
+    assert city["src"] == "NYC DOT" and city["near"] == "Brooklyn"
+    # Without the city's own list its cameras are left out, not guessed.
+    assert len(states._parse_ny_cameras(NY_CAMS, None)) == 2
+    shown, blank = states._parse_ny_signs(NY_SIGNS)
+    assert shown["lines"] == ["RAIN & HIGH WINDS", "THURS MORNING", "PLAN AHEAD"]
+    assert shown["message"] == "RAIN & HIGH WINDS / THURS MORNING | PLAN AHEAD"
+    assert shown["direction"] == "EB" and shown["route"] == "I-278"
+    assert blank["blank"] is True and blank["lines"] == []
+
+
+async def test_new_york_cameras_and_signs_reach_the_map(only):
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.host == "nyctmc.org":
+            return httpx.Response(200, json=NYC_CAMS)
+        if req.url.path == "/cameras/map-features":
+            return httpx.Response(200, json={"features": NY_CAMS})
+        if req.url.path == "/signs/map-features":
+            return httpx.Response(200, json={"features": NY_SIGNS})
+        return _ny(req)
+    only("ny")
+    out = await _through_mapdata(handler, (40.4, -74.3, 43.0, -73.5),
+                                 want=("incident", "camera", "sign"))
+    kinds = sorted(m["kind"] for m in out)
+    assert kinds.count("camera") == 3 and kinds.count("sign") == 2
+
+
+async def test_new_york_events_survive_a_camera_outage(only):
+    # _ny answers 404 for the camera, sign and city lists.
+    only("ny")
+    out = await _through_mapdata(_ny, (42.5, -74.0, 42.9, -73.6),
+                                 want=("incident", "closure", "camera", "sign"))
+    assert sorted(m["kind"] for m in out) == [
+        "incident", "lane_closure", "lane_closure"]
+
+
 async def test_new_york_rejects_an_html_shell():
     def shell(req):
         return httpx.Response(200, text="<!doctype html><html></html>")
