@@ -30,8 +30,8 @@ class MemoryStore:
 def _msg(mid="m1", thread="t1", sender="Ryan <ryan@user.test>", body="hi",
          labels=("INBOX",), auth="mx.google.com; dkim=pass; dmarc=pass",
          **headers):
-    hs = {"From": sender, "Subject": "Sign-in error", "Message-ID": "<a@x>",
-          "Authentication-Results": auth, **headers}
+    hs = {"From": sender, "To": ME, "Subject": "Sign-in error",
+          "Message-ID": "<a@x>", "Authentication-Results": auth, **headers}
     return {"id": mid, "threadId": thread, "labelIds": list(labels),
             "payload": {"mimeType": "text/plain",
                         "headers": [{"name": k.replace("_", "-"), "value": v}
@@ -77,6 +77,7 @@ def box(monkeypatch):
     monkeypatch.setattr(watch, "get_store", lambda: store)
     monkeypatch.setattr(mailroom, "MAIL_ADDRESS", ME)
     monkeypatch.setattr(mailroom, "MAIL_DOMAIN", "example.com")
+    monkeypatch.setattr(mailroom, "MAIL_ADDRESSES", (ME,))
     monkeypatch.setattr(mailroom, "CLIENT_ID", "id")
     monkeypatch.setattr(mailroom, "CLIENT_SECRET", "secret")
     monkeypatch.setattr(mailroom, "_label_ids", {})
@@ -272,3 +273,68 @@ def test_mail_endpoints_are_admin_or_scheduler_only(box, monkeypatch):
                 json={"action": "autosend", "on": True}).json()
     assert on["autosend"] is True
     assert c.get(mailroom.REDIRECT_PATH + "?state=bad&code=x").status_code == 400
+
+
+async def test_mail_for_other_addresses_in_a_shared_mailbox_is_untouched(box):
+    """The mailbox also takes mail for unrelated addresses: none of it may
+    be labelled, drafted on, or shown to the model."""
+    use = box
+    use.store.docs["gmail"]["email"] = "owner@other.test"
+    gmail = use(FakeGmail(
+        _msg("m1", "t1", To="owner@other.test", body="private business"),
+        _msg("m2", "t2", To="Someone <sales@other.test>", Cc="x@y.test"),
+        _msg("m3", "t3", To="owner@other.test", Delivered_To=ME)))
+    out = await mailroom.poll()
+    assert out["handled"] == 1
+    assert set(gmail.labelled) == {"m3"}
+    assert len(use.calls) == 1 and "private business" not in use.calls[0]
+
+
+def test_the_inbox_search_only_asks_for_our_addresses(monkeypatch):
+    monkeypatch.setattr(mailroom, "MAIL_ADDRESSES",
+                        ("hello@example.com", "support@example.com"))
+    q = mailroom._to_us_query()
+    assert q.startswith("{") and q.endswith("}")
+    for a in mailroom.MAIL_ADDRESSES:
+        assert f"to:{a}" in q and f"deliveredto:{a}" in q
+
+
+class _Resp:
+    def __init__(self, data, status=200):
+        self._data, self.status_code = data, status
+
+    def json(self):
+        return self._data
+
+
+@pytest.mark.parametrize("send_as,connected", [
+    ([ME, "owner@other.test"], True),   # our address is an alias here
+    (["owner@other.test"], False),      # some other inbox
+])
+async def test_only_a_mailbox_that_can_send_as_us_connects(
+        box, monkeypatch, send_as, connected):
+    box.store.docs.pop("gmail")
+
+    class Client:
+        async def post(self, url, **kw):
+            return _Resp({"refresh_token": "r", "access_token": "a",
+                          "scope": mailroom.SCOPE})
+
+        async def get(self, url, **kw):
+            if url.endswith("/profile"):
+                return _Resp({"emailAddress": "owner@other.test"})
+            assert url.endswith("/settings/sendAs")
+            return _Resp({"sendAs": [{"sendAsEmail": a} for a in send_as]})
+
+    monkeypatch.setattr(mailroom, "_client", lambda: Client())
+    monkeypatch.setattr(mailroom, "_state_ok", lambda s: True)
+
+    class Req:
+        query_params = {"state": "s", "code": "c"}
+        base_url = "https://example.com/"
+        url = "https://example.com/cb"
+        headers = {}
+
+    resp = await mailroom.oauth_callback(Req())
+    assert (resp.status_code == 200) is connected
+    assert ("gmail" in box.store.docs) is connected

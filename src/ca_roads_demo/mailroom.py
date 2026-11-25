@@ -32,7 +32,7 @@ import secrets
 import time
 from datetime import UTC, datetime
 from email.message import EmailMessage
-from email.utils import parseaddr
+from email.utils import getaddresses, parseaddr
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -47,6 +47,13 @@ log = logging.getLogger(__name__)
 MAIL_ADDRESS = (os.environ.get("MAIL_ADDRESS")
                 or os.environ.get("CONTACT_EMAIL", "")).strip().lower()
 MAIL_DOMAIN = MAIL_ADDRESS.rpartition("@")[2]
+# The addresses this drafter answers for. The mailbox behind them may be a
+# shared one that also receives mail for unrelated addresses; anything not
+# addressed to one of these is never read, labelled or sent to the model.
+MAIL_ADDRESSES = tuple(dict.fromkeys(
+    a for a in [MAIL_ADDRESS, *(
+        x.strip().lower()
+        for x in os.environ.get("MAIL_ALSO", "").split(","))] if a))
 CLIENT_ID = os.environ.get("GMAIL_CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("GMAIL_CLIENT_SECRET", "")
 MODEL = os.environ.get("MAIL_MODEL", "claude-opus-5-5")
@@ -169,8 +176,9 @@ async def oauth_callback(request: Request):
     """Google sends the mailbox owner back here after consent.
 
     The state proves an admin started this within the last 15 minutes, and
-    the mailbox must be on the contact address's own domain, so nobody can
-    trick an admin into connecting some other inbox."""
+    Google must list the contact address as one this mailbox may send
+    from (its own address or an alias), so nobody can trick an admin into
+    connecting some other inbox."""
     if not configured():
         return _page("Mail is not set up", "Nothing to connect here.", 503)
     q = request.query_params
@@ -195,10 +203,18 @@ async def oauth_callback(request: Request):
         headers={"Authorization": f"Bearer {tok['access_token']}"})
     email = (prof.json().get("emailAddress") or "").lower() \
         if prof.status_code == 200 else ""
-    if not email.endswith("@" + MAIL_DOMAIN):
-        return _page("Wrong account", "That Google account is not a "
-                     f"{MAIL_DOMAIN} mailbox, so nothing was connected. "
-                     "Start again and pick the right account.", 400)
+    aliases = await _client().get(
+        f"{GMAIL}/settings/sendAs",
+        headers={"Authorization": f"Bearer {tok['access_token']}"})
+    send_as = {(a.get("sendAsEmail") or "").lower()
+               for a in (aliases.json().get("sendAs") or [])} \
+        if aliases.status_code == 200 else set()
+    if not email or MAIL_ADDRESS not in send_as:
+        return _page("Wrong account", "That Google account cannot send "
+                     f"mail as {MAIL_ADDRESS}, so nothing was connected. "
+                     "Start again and pick the account that owns that "
+                     "address. If it is an alias, add it first in Gmail "
+                     "under Settings, Accounts, Send mail as.", 400)
     await _set_doc("gmail", {"refresh_token": refresh, "email": email,
                              "connected_at": datetime.now(UTC).isoformat()})
     _token.update(value="", exp=0.0)
@@ -295,7 +311,20 @@ _ROBOT = re.compile(r"^(mailer-daemon|postmaster|no-?reply|donotreply|"
 
 def _is_ours(addr: str, connected: str) -> bool:
     addr = addr.lower()
-    return addr in (MAIL_ADDRESS, connected)
+    return addr in MAIL_ADDRESSES or addr == connected
+
+
+def addressed_to_us(msg: dict) -> bool:
+    """True when the message was sent to one of our addresses.
+
+    The connected mailbox can be shared with unrelated addresses, so this
+    is the gate that keeps everything else in it away from the model."""
+    seen = set()
+    for name in ("To", "Cc", "Delivered-To", "X-Original-To"):
+        value = _header(msg, name)
+        if value:
+            seen.update(a.lower() for _, a in getaddresses([value]))
+    return any(a in seen for a in MAIL_ADDRESSES)
 
 
 def classify_inbound(msg: dict, connected: str) -> tuple[str, str]:
@@ -571,6 +600,10 @@ async def _handle_thread(thread_id: str, new_ids: list[str],
     if not messages:
         return {}
     last = messages[-1]
+    # Not written to one of our addresses: leave it completely alone.
+    if not any(addressed_to_us(m) for m in messages
+               if m.get("id") in new_ids):
+        return {}
     subject = _header(last, "Subject")[:120]
     entry = {"thread": thread_id, "subject": subject,
              "at": datetime.now(UTC).isoformat()}
@@ -634,6 +667,12 @@ async def _handle_thread(thread_id: str, new_ids: list[str],
     return await finish("draft", note, category=category)
 
 
+def _to_us_query() -> str:
+    terms = " ".join(f"{op}:{a}" for a in MAIL_ADDRESSES
+                     for op in ("to", "cc", "deliveredto"))
+    return "{" + terms + "}"
+
+
 async def poll() -> dict:
     """Handle new inbox mail. Safe to call often; one run at a time."""
     if not configured():
@@ -651,12 +690,15 @@ async def poll() -> dict:
             connected = gmail_doc.get("email", "")
             skip = " ".join(f'-label:"{n}"' for n in LABELS.values())
             listing = await _gmail("GET", "/messages", params={
-                "q": f"in:inbox newer_than:3d {skip}", "maxResults": 40})
+                "q": f"in:inbox newer_than:3d {_to_us_query()} {skip}",
+                "maxResults": 40})
             by_thread: dict[str, list[str]] = {}
             for m in listing.get("messages") or []:
                 by_thread.setdefault(m["threadId"], []).append(m["id"])
             handled = []
-            for thread_id, ids in list(by_thread.items())[:MAX_PER_POLL]:
+            for thread_id, ids in by_thread.items():
+                if len(handled) >= MAX_PER_POLL:
+                    break
                 try:
                     entry = await _handle_thread(
                         thread_id, ids, settings, connected)
