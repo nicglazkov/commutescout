@@ -591,7 +591,7 @@ async def resolve(client, place: str | None, coords: str | None,
                 "the address.")
         return {"needs_saved_place": kind, "which": which,
                 "error": f"'{place}' means the user's saved {kind}. {hint}"}
-    cands = await place_candidates(client, place, near, limit=4)
+    cands = await place_candidates(client, place, near, limit=6)
     if not cands:
         return {"error": (f"could not find {place[:120]!r}. Ask for a "
                           "fuller address (street, city, state), or pass "
@@ -611,6 +611,23 @@ async def resolve(client, place: str | None, coords: str | None,
             "error": (f"'{place}' matches places far apart. Do not guess: "
                       "ask the user which one they meant, offering these."),
         }
+    # The geocoder can lead with a bigger place that only holds the typed
+    # word ("District of Columbia" for "Columbia") ahead of the towns
+    # that are called exactly that. Two or more of those towns far
+    # apart is the same question as above, so it is asked, not guessed.
+    if "," not in place and not _is_town_named(cands[0], place):
+        towns = [c for c in cands[1:] if _is_town_named(c, place)]
+        apart = any(haversine_meters(a[0], a[1], b[0], b[1]) > 25_000
+                    for i, a in enumerate(towns) for b in towns[i + 1:])
+        if apart and (near is None
+                      or not _clearly_nearest(cands[0], towns, near)):
+            return {
+                "needs_clarification": True, "which": which,
+                "options": [", ".join(c[2].split(", ")[:4])
+                            for c in (towns + [cands[0]])[:4]],
+                "error": (f"'{place}' matches places far apart. Do not guess: "
+                          "ask the user which one they meant, offering these."),
+            }
     lat, lon, label = cands[0]
     out = {"lat": lat, "lon": lon, "name": ", ".join(label.split(", ")[:4])}
     if spread and "," not in place:

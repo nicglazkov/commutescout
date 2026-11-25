@@ -85,6 +85,43 @@ def _fake_places(monkeypatch, suggest_rows, search_rows=()):
     monkeypatch.setattr(planning, "geocode_candidates", search)
 
 
+async def test_bigger_place_on_top_still_asks_between_same_named_towns(monkeypatch):
+    # "Columbia" with no trip start: the geocoder leads with the District
+    # of Columbia, which used to be taken without asking.
+    _fake_places(monkeypatch, [
+        {"name": "District of Columbia, DC", "lat": 38.91, "lon": -77.01},
+        {"name": "Columbia County, GA", "lat": 33.53, "lon": -82.26},
+        {"name": "Columbia, SC", "lat": 34.04, "lon": -80.85},
+        {"name": "Columbia, MO", "lat": 38.95, "lon": -92.33},
+        {"name": "Columbia, MD", "lat": 39.2, "lon": -76.84},
+    ])
+    out = await planning.resolve(None, "Columbia", None, None, "destination")
+    assert out["needs_clarification"] is True
+    assert out["options"][:3] == ["Columbia, SC, USA", "Columbia, MO, USA",
+                                  "Columbia, MD, USA"]
+    assert "District of Columbia, DC, USA" in out["options"]
+
+
+async def test_bigger_place_on_top_with_one_town_is_taken(monkeypatch):
+    # One town of the name is not a question: the top match stands.
+    _fake_places(monkeypatch, [
+        {"name": "Hollywood, Los Angeles, CA", "lat": 34.1, "lon": -118.33},
+        {"name": "Hollywood, FL", "lat": 26.01, "lon": -80.15},
+    ])
+    out = await planning.resolve(None, "Hollywood", None, None, "destination")
+    assert "needs_clarification" not in out
+    assert out["name"].startswith("Hollywood, Los Angeles")
+
+
+async def test_state_named_skips_the_question(monkeypatch):
+    _fake_places(monkeypatch, [
+        {"name": "Columbia, SC", "lat": 34.04, "lon": -80.85},
+        {"name": "Columbia, MO", "lat": 38.95, "lon": -92.33},
+    ])
+    out = await planning.resolve(None, "Columbia, SC", None, None, "destination")
+    assert out["name"] == "Columbia, SC, USA"
+
+
 async def test_ambiguous_town_asks_instead_of_guessing(monkeypatch):
     _fake_places(monkeypatch, [
         {"name": "Springfield, Springfield, MO", "lat": 37.2, "lon": -93.3},
