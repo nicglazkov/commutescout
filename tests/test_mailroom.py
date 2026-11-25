@@ -338,3 +338,33 @@ async def test_only_a_mailbox_that_can_send_as_us_connects(
     resp = await mailroom.oauth_callback(Req())
     assert (resp.status_code == 200) is connected
     assert ("gmail" in box.store.docs) is connected
+
+
+def test_the_reply_also_goes_as_html_with_paragraphs_and_safe_links(
+        monkeypatch):
+    monkeypatch.setattr(mailroom, "MAIL_ADDRESS", ME)
+    body = ("Hi Ryan,\n\nThe Android app installs from a file:\n"
+            "1. Open the link below on your phone.\n"
+            "2. Tap the file ending in .apk.\n\n"
+            "https://github.com/nicglazkov/commutescout-app/releases/latest\n\n"
+            f"More at commutescout.com/app. Write to {ME} if it fails, "
+            "not evil.example/x <b>.\n\nNic\nCommuteScout")
+    page = mailroom._reply_html(body)
+    assert page.count("<p ") == 5
+    assert "1. Open the link below on your phone.<br>" in page
+    assert ('<a href="https://github.com/nicglazkov/commutescout-app/'
+            'releases/latest">') in page
+    # A bare allowed address gets https, and the full stop stays outside.
+    assert '<a href="https://commutescout.com/app">commutescout.com/app</a>.' in page
+    # Nothing else becomes a link or markup.
+    assert page.count("<a ") == 2 and "&lt;b&gt;" in page
+    assert "evil.example/x" in page and 'href="https://evil' not in page
+
+    last = {"threadId": "t1", "payload": {"headers": [
+        {"name": "Subject", "value": "Help"},
+        {"name": "Message-ID", "value": "<a@x>"}]}}
+    import email
+    mime = email.message_from_bytes(base64.urlsafe_b64decode(
+        mailroom._build_reply(last, "ryan@user.test", body)["raw"]))
+    kinds = [part.get_content_type() for part in mime.walk()]
+    assert kinds == ["multipart/alternative", "text/plain", "text/html"]
