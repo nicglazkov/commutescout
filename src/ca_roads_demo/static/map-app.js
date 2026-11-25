@@ -52,6 +52,10 @@ Object.keys(GROUP_DOT).forEach(g => {
 });
 let cameraCache = [];
 let signCache = [];
+// Signs whose source gives their words one sign at a time (Michigan).
+// They are drawn from a list of positions and read when opened.
+let lazySigns = [];
+const lazySignText = new Map();   // "mi/2143" -> { at, lines, updated }
 
 function classify(m) {
   if (m.kind === 'incident') {
@@ -604,10 +608,11 @@ function popupFor(m, g) {
     return v2(ACC.sign, 'Message sign', null,
       esc([m.route, m.direction].filter(Boolean).join(' ') || 'Changeable sign'),
       esc(m.near || ''),
-      [!lines.length ? { text: 'This sign is blank right now.', gloss: true } : null],
+      [!lines.length && !m.lazy ? { text: 'This sign is blank right now.', gloss: true } : null],
       [], ['Source: ' + (m.src ? esc(m.src) + ' message signs' : 'Caltrans CMS')],
-      lines.length ? '<div class="cmsboard">' +
-        lines.map((l) => '<span>' + esc(l) + '</span>').join('') + '</div>' : '');
+      m.lazy ? '<div class="lazysign" data-lazy="' + esc(m.lazy) + '">' +
+        '<div class="body gloss">Reading this sign…</div></div>'
+        : lines.length ? signBoard(lines) : '');
   }
   if (g === 'toll') {
     const money = (v) => '$' + v.toFixed(2).replace(/\.00$/, '');
@@ -1171,12 +1176,51 @@ map.on('click', (e) => {
   pop.openOn(map);
 });
 
+function signBoard(lines) {
+  return '<div class="cmsboard">' +
+    lines.map((l) => '<span>' + esc(l) + '</span>').join('') + '</div>';
+}
+
+// A lazy sign's words, read when its popup or inspector pane opens.
+// Kept for a minute so opening it again does not ask again.
+async function wireLazySign(el, popup) {
+  const box = el && el.querySelector('.lazysign[data-lazy]');
+  if (!box || box.dataset.wired) return;
+  box.dataset.wired = '1';
+  const key = box.dataset.lazy;
+  let d = lazySignText.get(key);
+  if (!d || Date.now() - d.at > 60000) {
+    d = null;
+    try {
+      const res = await fetch('/api/signtext/' + key.split('/').map(encodeURIComponent).join('/'));
+      if (res.ok) { d = await res.json(); d.at = Date.now(); lazySignText.set(key, d); }
+    } catch (e) { /* shown below */ }
+  }
+  if (!box.isConnected) return;
+  const lines = (d && d.lines) || [];
+  box.innerHTML = !d
+    ? '<div class="body gloss">This sign could not be read just now. Close this and open it again to retry.</div>'
+    : (lines.length ? signBoard(lines) : '<div class="body gloss">This sign is blank right now.</div>') +
+      (d.updated ? '<div class="body gloss">Sign last updated ' + esc(d.updated) + '</div>' : '');
+  if (popup && popup.update) popup.update();
+}
+
+async function loadLazySigns() {
+  try {
+    const res = await fetch('/api/lazysigns');
+    if (!res.ok) return;
+    const d = await res.json();
+    lazySigns = (d.markers || []).filter((m) => m && m.lat && m.lon && m.lazy);
+    rebuildSigns();
+  } catch (e) { /* the rest of the map does not depend on these */ }
+}
+
 function rebuildSigns() {
   ambient.sign.clearLayers();
   items.sign = [];
   const withBlank = document.getElementById('signblank').checked;
   let blanks = 0;
-  for (const m of signCache) {
+  for (const m of signCache.concat(lazySigns)) {
     if (m.blank) {
       blanks++;
       if (!withBlank) continue;
@@ -1185,7 +1229,7 @@ function rebuildSigns() {
   }
   if (GL.on) GL.rebuild(); else cullSync();
   const el = document.getElementById('n-sign');
-  if (el) el.textContent = signCache.length - blanks;
+  if (el) el.textContent = signCache.length + lazySigns.length - blanks;
   const bl = document.getElementById('n-signblank');
   if (bl) bl.textContent = blanks;
 }
@@ -2781,6 +2825,8 @@ function wireDispatchLog(el, popup) {
   });
 }
 map.on('popupopen', (e) => wireDispatchLog(e.popup.getElement(), e.popup));
+map.on('popupopen', (e) => wireLazySign(e.popup.getElement(), e.popup));
+loadLazySigns();
 
 // ── Inspector: a wider pane for what a popup cannot hold ─────────
 // Opened on demand from a popup's button or an Alerts row; the same
@@ -2908,6 +2954,7 @@ function openInspector(m, g) {
   for (const el of [inspBody.querySelector('.p2 > .hd'), h4, sub]) if (el) el.classList.add('inhead');
   inspScroll.scrollTop = 0;
   wireDispatchLog(inspBody, null);
+  wireLazySign(inspBody, null);
   if (g === 'toll') {
     // Hover a rate row: light up that stretch of the corridor.
     inspBody.querySelectorAll('[data-tg]').forEach((row) => {

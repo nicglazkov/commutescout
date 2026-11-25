@@ -1,6 +1,9 @@
 """Expansion-state adapters: NE Compass (ME/NH/VT) and Iowa WZDx."""
 
+import asyncio
 import base64
+
+import pytest
 
 from ca_roads_demo import states
 
@@ -1204,3 +1207,104 @@ def test_fhp_place_and_route():
         == "I-95 NB (MM308), Saint Augustine"
     assert states._fhp_place("US-1 NB") == "US-1 NB"
     assert "flp" in states.KEYLESS_STATES
+
+
+# ── Michigan signs: positions in bulk, words one sign at a time ──────
+
+class _LazyResp:
+    def __init__(self, data, status=200):
+        self._data, self.status_code = data, status
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+    def json(self):
+        return self._data
+
+
+class _LazyClient:
+    """MiDrive's two sign endpoints, counting what was asked for."""
+
+    def __init__(self, text=None, fail_text=False):
+        self.calls: list[str] = []
+        self.text = text or [
+            "<div class='dmsMessage'> TRAVEL TIME TO<br> M-39     9 MI 7 MIN<br/>"
+            " I-96 &amp; M-8   16 MI</div>"
+            "<div class='dmstimeStamp'>Nov 25 2026, 5:44 AM</div>",
+            "NB I-75 @ West"]
+        self.fail_text = fail_text
+
+    async def get(self, url, **kw):
+        self.calls.append(url)
+        assert not url.endswith("/"), "MiDrive 404s on a trailing slash"
+        if url.endswith("/dms/AllForMap"):
+            return _LazyResp([
+                {"latitude": 42.1384, "longitude": -83.2411, "id": 2143, "title": "NB I-75 @ West"},
+                {"latitude": 42.3, "longitude": -83.1, "id": 77, "title": "Ambassador Bridge"},
+                {"latitude": None, "longitude": -83.1, "id": 78, "title": "No position"},
+                {"latitude": 42.3, "longitude": -83.1, "id": "x9", "title": "Odd id"},
+            ])
+        if self.fail_text:
+            return _LazyResp(None, 503)
+        return _LazyResp(self.text)
+
+
+@pytest.fixture
+def _fresh_lazy_signs(monkeypatch):
+    monkeypatch.setattr(states, "_lazy_sign_list", None)
+    monkeypatch.setattr(states, "_lazy_sign_text", {})
+
+
+def test_michigan_signs_are_listed_without_words_and_not_as_blank(_fresh_lazy_signs):
+    client = _LazyClient()
+    signs = asyncio.run(states.lazy_signs(client))
+    assert [m["lazy"] for m in signs] == ["mi/2143", "mi/77"]
+    first = signs[0]
+    assert (first["direction"], first["route"], first["near"]) == ("NB", "I-75", "West")
+    assert signs[1]["near"] == "Ambassador Bridge" and signs[1]["route"] is None
+    assert all(m["kind"] == "sign" and "blank" not in m and m["lines"] == [] for m in signs)
+    # The list is read once, not on every map load.
+    asyncio.run(states.lazy_signs(client))
+    assert len(client.calls) == 1
+
+
+def test_a_michigan_signs_words_are_read_when_asked_and_kept_briefly(_fresh_lazy_signs):
+    client = _LazyClient()
+    out = asyncio.run(states.lazy_sign_text(client, "mi", "2143"))
+    assert out == {"lines": ["TRAVEL TIME TO", "M-39 9 MI 7 MIN", "I-96 & M-8 16 MI"],
+                   "updated": "Nov 25 2026, 5:44 AM"}
+    asyncio.run(states.lazy_sign_text(client, "mi", "2143"))
+    assert sum(u.endswith("/dms/getDMSInfo/2143") for u in client.calls) == 1
+
+
+def test_sign_text_refuses_ids_it_does_not_know(_fresh_lazy_signs):
+    client = _LazyClient()
+    bad = (("mi", "999"), ("mi", "../admin"), ("mi", "21 43"), ("oh", "2143"), ("mi", ""))
+    for state, sid in bad:
+        assert asyncio.run(states.lazy_sign_text(client, state, sid)) is None
+    assert not any("getDMSInfo" in u for u in client.calls), "nothing unknown is sent upstream"
+
+
+def test_a_blank_michigan_sign_and_a_failed_read_are_told_apart(_fresh_lazy_signs):
+    blank = _LazyClient(
+        text=["<div class='dmsMessage'> </div><div class='dmstimeStamp'></div>", "t"])
+    assert asyncio.run(states.lazy_sign_text(blank, "mi", "77")) == {"lines": [], "updated": None}
+    states._lazy_sign_text.clear()
+    assert asyncio.run(states.lazy_sign_text(_LazyClient(fail_text=True), "mi", "77")) is None
+
+
+def test_the_lazy_sign_routes_serve_the_list_and_one_signs_words(_fresh_lazy_signs, monkeypatch):
+    from starlette.testclient import TestClient
+
+    from ca_roads_demo import app as demo_app
+
+    class _Road:
+        client = _LazyClient()
+    monkeypatch.setattr(demo_app.tools, "get_road", lambda: _Road())
+    web = TestClient(demo_app.app)
+    listed = web.get("/api/lazysigns")
+    assert listed.status_code == 200 and len(listed.json()["markers"]) == 2
+    assert "max-age=3600" in listed.headers["cache-control"]
+    assert web.get("/api/signtext/mi/2143").json()["lines"][0] == "TRAVEL TIME TO"
+    assert web.get("/api/signtext/mi/31337").status_code == 404
