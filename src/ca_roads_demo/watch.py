@@ -556,7 +556,44 @@ async def _load_user(claims: dict) -> dict:
             "created_at": datetime.now(UTC).isoformat(),
         }
         await store.upsert_user(uid, user)
+        await _notify_admins_pending(user["email"])
     return user
+
+
+# A new account can do nothing until an admin approves it, and people who
+# sign in from the app have no invite code to redeem, so without a notice
+# they wait until someone happens to open the admin page. One short email
+# per new account, capped per day so a burst of sign-ups cannot flood the
+# inbox; the rest still show on the admin page.
+PENDING_NOTICES_DAILY = int(os.environ.get("PENDING_NOTICES_DAILY", "10"))
+_pending_notices: list = ["", 0]  # [UTC day, sent that day]
+
+
+async def _notify_admins_pending(email: str) -> None:
+    if not email or email in ADMIN_EMAILS:
+        return
+    day = datetime.now(UTC).strftime("%Y-%m-%d")
+    if _pending_notices[0] != day:
+        _pending_notices[:] = [day, 0]
+    if _pending_notices[1] >= PENDING_NOTICES_DAILY:
+        return
+    _pending_notices[1] += 1
+    subject = "CommuteScout: a new account is waiting for approval"
+    text = (f"{email} signed in for the first time and is waiting for "
+            "approval.\n\nApprove or revoke the account in the Users table "
+            "on the admin page. Until then the account cannot create watch "
+            "areas or get alerts.")
+    import html as html_mod
+    html = (f"<p><strong>{html_mod.escape(email)}</strong> signed in for the first time "
+            "and is waiting for approval.</p><p>Approve or revoke the account "
+            "in the Users table on the admin page. Until then the account "
+            "cannot create watch areas or get alerts.</p>")
+    for admin in sorted(ADMIN_EMAILS):
+        try:
+            await asyncio.wait_for(
+                _email_alert(admin, subject, html, text), timeout=6)
+        except Exception:  # noqa: BLE001 - a notice must never block sign-in
+            log.warning("pending notice: could not email an admin")
 
 
 def _approved(user: dict) -> bool:
