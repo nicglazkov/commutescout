@@ -31,7 +31,7 @@ body { background:var(--bg); color:var(--ink);
 .topbar nav { display:flex; gap:4px; margin-left:14px }
 /* .navcta is the Live map pill: a topbar-level sibling of nav (not
    nested inside it), same as the site's Next.js header, so it can sit
-   beside the brand on its own row at <=640px (see that media query
+   beside the brand on its own row at <=960px (see that media query
    below). Shares nav a's base look. */
 .topbar nav a, .topbar .navcta { color:#b7c4d4; font-size:.85rem; padding:7px 12px;
   border-radius:8px; text-decoration:none }
@@ -100,7 +100,7 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
   input { font-size:16px !important }
   body { overflow-x:clip }
 }
-/* ── Topbar: two rows below 640px ──────────────────────────────
+/* ── Topbar: Menu button at 960px and below ──────────────────────────────
    Row 1 (unchanged flex row, just tighter): brand left, the Live map
    CTA right. Row 2: the four text nav links, one row, four equal
    columns, each a >=40px tap target - full width, evenly distributed,
@@ -108,7 +108,7 @@ code { background:var(--sky-soft); padding:1px 7px; border-radius:6px;
    what forces nav onto its own line: brand + the pill fit on row 1
    with room to spare, so wrap only breaks before the item that alone
    demands the full row width. */
-@media (max-width: 640px) {
+@media (max-width: 960px) {
   .topbar { height:auto; flex-wrap:wrap; gap:8px; row-gap:4px;
     padding:8px 12px;
     padding-left:max(12px, env(safe-area-inset-left));

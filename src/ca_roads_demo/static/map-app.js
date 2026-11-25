@@ -5752,22 +5752,38 @@ map.on('zoomend', syncZoomBtns);
 syncZoomBtns();
 let myDot = null;
 const locBtn = document.getElementById('locbtn');
+// Puts the blue dot where you are and lets Your places say "Here".
+function showMyPos(pos) {
+  myPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+  const ll = [myPos.lat, myPos.lon];
+  if (myDot) myDot.setLatLng(ll);
+  else {
+    myDot = L.marker(ll, { interactive: false, keyboard: false, zIndexOffset: 600,
+      icon: L.divIcon({ className: 'mydot', iconSize: [18, 18] }) }).addTo(map);
+  }
+  locBtn.classList.add('on');
+  renderPlaces();
+  return ll;
+}
+// When this site already has location permission, read the position
+// once on load so "Here" shows without a tap. It never asks: a browser
+// that has not been told yes (or cannot say) is left alone, and the map
+// stays where it is.
+if (navigator.geolocation && navigator.permissions && navigator.permissions.query) {
+  navigator.permissions.query({ name: 'geolocation' }).then((st) => {
+    if (st.state !== 'granted' || myPos) return;
+    navigator.geolocation.getCurrentPosition((pos) => { if (!myPos) showMyPos(pos); }, () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+  }).catch(() => { /* no Permissions API answer: wait for the button */ });
+}
 locBtn.addEventListener('click', () => {
   if (!navigator.geolocation) { locBtn.title = 'Location is not available in this browser'; return; }
   locBtn.classList.add('busy');
   locBtn.setAttribute('aria-busy', 'true');
   navigator.geolocation.getCurrentPosition((pos) => {
     locBtn.classList.remove('busy'); locBtn.removeAttribute('aria-busy');
-    myPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-    const ll = [myPos.lat, myPos.lon];
-    if (myDot) myDot.setLatLng(ll);
-    else {
-      myDot = L.marker(ll, { interactive: false, keyboard: false, zIndexOffset: 600,
-        icon: L.divIcon({ className: 'mydot', iconSize: [18, 18] }) }).addTo(map);
-    }
-    locBtn.classList.add('on');
+    const ll = showMyPos(pos);
     map.setView(ll, Math.max(map.getZoom(), 13));
-    renderPlaces();
   }, () => {
     locBtn.classList.remove('busy'); locBtn.removeAttribute('aria-busy');
     locBtn.title = 'Location was blocked. Allow it for this site to use this button.';
@@ -5946,56 +5962,89 @@ function labelText(input) {
   if (!lab) return input.value;
   return Array.from(lab.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' ').trim();
 }
+// One small line icon per row, drawn like the rail's icons (24px grid,
+// stroke only). The strings are constants from this file, never page or
+// feed text, so setting them as markup is safe.
+const PAL_ICONS = {
+  home: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10v9.5h11V10"/><path d="M10 19.5v-5h4v5"/>',
+  work: '<rect x="3.5" y="7.5" width="17" height="12" rx="2"/><path d="M9 7.5V5.5h6v2M3.5 13h17"/>',
+  star: '<path d="m12 3.8 2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/>',
+  clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+  pin: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  target: '<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>',
+  directions: '<path d="M12 2.8 21.2 12 12 21.2 2.8 12z"/><path d="M9 14v-2.5a1.5 1.5 0 0 1 1.5-1.5H15M13 8l2 2-2 2"/>',
+  live: '<path d="M12 4 3 20h18z"/><path d="M12 10v4M12 16.5v.01"/>',
+  layers: '<path d="m12 4 8 4.5-8 4.5-8-4.5z"/><path d="m4 13 8 4.5 8-4.5M4 17l8 4.5 8-4.5"/>',
+  ask: '<path d="M4 5h16v11H9l-5 4z"/><path d="M12 8v3M12 13.5v.01"/>',
+  report: '<path d="M5 21V4h11l-1.5 4L16 12H5"/>',
+  watch: '<path d="M12 3 4 7v5c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V7z"/><path d="m9 12 2 2 4-4"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.2-8.2M16 7l2 2M14 9l2 2"/>',
+  data: '<ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
+  plugins: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><path d="M16.5 13v7M13 16.5h7"/>',
+  route: '<circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H14a3 3 0 0 0 0-6h-4a3 3 0 0 1 0-6h5.8"/>',
+  steps: '<path d="M9 6.5h11M9 12h11M9 17.5h11M4 6.5h.01M4 12h.01M4 17.5h.01"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1"/>',
+  download: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.500M5 19.500h14"/>',
+  close: '<path d="M6 6l12 12M18 6 6 18"/>',
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+  eyeoff: '<path d="M4 4l16 16"/><path d="M9.7 6A9 9 0 0 1 12 5.500c6 0 9.5 6.5 9.5 6.500a15 15 0 0 1-3 3.700M14.5 17.900a8 8 0 0 1-2.5.6C6 18.5 2.5 12 2.5 12a15 15 0 0 1 4-4.6"/>',
+  map: '<path d="m3.5 6.5 5.5-2 6 2 5.5-2v13l-5.5 2-6-2-5.5 2z"/><path d="M9 4.500v13M15 6.500v13"/>',
+  ruler: '<rect x="3" y="8.5" width="18" height="7" rx="1.5"/><path d="M7 8.500v3M11 8.500v2M15 8.500v3M19 8.500v2"/>',
+  sun: '<circle cx="12" cy="12" r="3.5"/><path d="M12 3v2.500M12 18.500V21M3 12h2.500M18.5 12H21M5.6 5.600l1.8 1.800M16.6 16.600l1.8 1.800M5.6 18.400l1.8-1.800M16.6 7.400l1.8-1.8"/>',
+  moon: '<path d="M20 14.500A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.500z"/>',
+  system: '<rect x="3.5" y="5" width="17" height="11.5" rx="2"/><path d="M9 20h6M12 16.500V20"/>',
+};
 function paletteCommands() {
   const cmds = [];
-  const add = (group, label, run, hint, keys) => cmds.push({ group, label, run, hint: hint || '', keys: [keys, label, hint].filter(Boolean).join(' ') });
+  const add = (group, label, run, hint, keys, icon) => cmds.push({ group, label, run, icon, hint: hint || '', keys: [keys, label, hint].filter(Boolean).join(' ') });
   const p = Places.load();
-  if (p.home) add('Places', 'Directions to Home', () => navigateTo(Object.assign({}, p.home)), p.home.name.split(', ')[0], 'home');
-  else add('Places', 'Set your Home address', () => { setTool('places', { toggle: false, reveal: true }); armPlaceSlot('home'); }, '', 'home');
-  if (p.work) add('Places', 'Directions to Work', () => navigateTo(Object.assign({}, p.work)), p.work.name.split(', ')[0], 'work office');
-  else add('Places', 'Set your Work address', () => { setTool('places', { toggle: false, reveal: true }); armPlaceSlot('work'); }, '', 'work office');
-  p.saved.forEach((c) => add('Places', 'Directions to ' + c.name.split(', ')[0], () => navigateTo(Object.assign({}, c)), 'Saved', 'saved favorite'));
-  p.recents.slice(0, 3).forEach((c) => add('Places', c.name.split(', ')[0], () => navigateTo(Object.assign({}, c)), 'Recent', 'recent'));
-  palPlaces.forEach((c) => add('Search results', c.name.split(', ')[0], () => showFound(c), c.name.split(', ').slice(1).join(', '), 'search find'));
-  add('Actions', 'Directions', () => openDirections(fromF), '', 'directions navigate trip plan route');
-  add('Actions', 'Your places', () => setTool('places', { toggle: false, reveal: true }), '', 'home saved');
-  add('Actions', 'Live right now', () => { setTool('alerts', { toggle: false, reveal: true }); scheduleAlerts(); }, '', 'alerts incidents closures');
-  add('Actions', 'Layers', () => openLayers(), '', 'filters show hide');
-  add('Actions', 'Ask about your drive', () => { setTool('ask', { toggle: false, reveal: true }); document.getElementById('q').focus(); }, '', 'assistant question ai');
-  add('Actions', 'Report a road problem', () => runAction('report'), '', 'report hazard');
-  add('Actions', 'Watch areas', () => setTool('watch', { toggle: false, reveal: true }), '', 'alerts notify watch');
-  add('Actions', 'Settings', () => setTool('settings', { toggle: false, reveal: true }), '', 'account preferences');
-  add('Actions', 'API keys', () => runAction('keys'), 'More', 'developer key token');
-  add('Actions', 'Data sources', () => setTool('about', { toggle: false, reveal: true }), '', 'sources about data legal privacy');
-  add('Actions', 'Plugins', () => { location.href = '/marketplace'; }, '', 'marketplace community');
+  if (p.home) add('Places', 'Directions to Home', () => navigateTo(Object.assign({}, p.home)), p.home.name.split(', ')[0], 'home', 'home');
+  else add('Places', 'Set your Home address', () => { setTool('places', { toggle: false, reveal: true }); armPlaceSlot('home'); }, '', 'home', 'home');
+  if (p.work) add('Places', 'Directions to Work', () => navigateTo(Object.assign({}, p.work)), p.work.name.split(', ')[0], 'work office', 'work');
+  else add('Places', 'Set your Work address', () => { setTool('places', { toggle: false, reveal: true }); armPlaceSlot('work'); }, '', 'work office', 'work');
+  p.saved.forEach((c) => add('Places', 'Directions to ' + c.name.split(', ')[0], () => navigateTo(Object.assign({}, c)), 'Saved', 'saved favorite', 'star'));
+  p.recents.slice(0, 3).forEach((c) => add('Places', c.name.split(', ')[0], () => navigateTo(Object.assign({}, c)), 'Recent', 'recent', 'clock'));
+  palPlaces.forEach((c) => add('Search results', c.name.split(', ')[0], () => showFound(c), c.name.split(', ').slice(1).join(', '), 'search find', 'pin'));
+  add('Actions', 'Directions', () => openDirections(fromF), '', 'directions navigate trip plan route', 'directions');
+  add('Actions', 'Your places', () => setTool('places', { toggle: false, reveal: true }), '', 'home saved', 'pin');
+  add('Actions', 'Live right now', () => { setTool('alerts', { toggle: false, reveal: true }); scheduleAlerts(); }, '', 'alerts incidents closures', 'live');
+  add('Actions', 'Layers', () => openLayers(), '', 'filters show hide', 'layers');
+  add('Actions', 'Ask about your drive', () => { setTool('ask', { toggle: false, reveal: true }); document.getElementById('q').focus(); }, '', 'assistant question ai', 'ask');
+  add('Actions', 'Report a road problem', () => runAction('report'), '', 'report hazard', 'report');
+  add('Actions', 'Watch areas', () => setTool('watch', { toggle: false, reveal: true }), '', 'alerts notify watch', 'watch');
+  add('Actions', 'Settings', () => setTool('settings', { toggle: false, reveal: true }), '', 'account preferences', 'settings');
+  add('Actions', 'API keys', () => runAction('keys'), 'More', 'developer key token', 'key');
+  add('Actions', 'Data sources', () => setTool('about', { toggle: false, reveal: true }), '', 'sources about data legal privacy', 'data');
+  add('Actions', 'Plugins', () => { location.href = '/marketplace'; }, '', 'marketplace community', 'plugins');
   if (plannedRoute) {
-    add('Route', 'Show what is along the route', () => { setTool('route', { toggle: false, reveal: true }); rstrack.focus(); }, '', 'strip along');
-    add('Route', 'Turn-by-turn steps', () => { setTool('route', { toggle: false, reveal: true }); setStepsOpen(true); document.getElementById('stepsbtn').focus(); }, '', 'steps directions');
-    add('Route', 'Copy a share link', () => document.getElementById('sharebtn').click(), '', 'share link');
-    add('Route', 'Export as GPX', () => document.getElementById('gpxbtn').click(), '', 'gpx download');
-    add('Route', 'Export as KML', () => document.getElementById('kmlbtn').click(), '', 'kml download');
-    add('Route', 'Clear the route', () => document.getElementById('clearroutebtn').click(), '', 'remove reset');
+    add('Route', 'Show what is along the route', () => { setTool('route', { toggle: false, reveal: true }); rstrack.focus(); }, '', 'strip along', 'route');
+    add('Route', 'Turn-by-turn steps', () => { setTool('route', { toggle: false, reveal: true }); setStepsOpen(true); document.getElementById('stepsbtn').focus(); }, '', 'steps directions', 'steps');
+    add('Route', 'Copy a share link', () => document.getElementById('sharebtn').click(), '', 'share link', 'link');
+    add('Route', 'Export as GPX', () => document.getElementById('gpxbtn').click(), '', 'gpx download', 'download');
+    add('Route', 'Export as KML', () => document.getElementById('kmlbtn').click(), '', 'kml download', 'download');
+    add('Route', 'Clear the route', () => document.getElementById('clearroutebtn').click(), '', 'remove reset', 'close');
   }
-  if (!inspectorEl.hidden) add('Actions', 'Close the details pane', closeInspector, '', 'inspector');
+  if (!inspectorEl.hidden) add('Actions', 'Close the details pane', closeInspector, '', 'inspector', 'close');
   document.querySelectorAll('#filters input[data-group]').forEach((box) => {
-    add('Layers', labelText(box), () => { box.click(); }, box.checked ? 'On' : 'Off', 'layer toggle show hide');
+    add('Layers', labelText(box), () => { box.click(); }, box.checked ? 'On' : 'Off', 'layer toggle show hide', box.checked ? 'eye' : 'eyeoff');
   });
   const traffic = document.getElementById('trafficlayer');
-  add('Layers', 'Live traffic overlay', () => traffic.click(), traffic.checked ? 'On' : 'Off', 'layer traffic flow');
+  add('Layers', 'Live traffic overlay', () => traffic.click(), traffic.checked ? 'On' : 'Off', 'layer traffic flow', traffic.checked ? 'eye' : 'eyeoff');
   document.querySelectorAll('#basemap input[name="basemap"]').forEach((r) => {
     add('Map style', r.value + ' base map', () => { if (!r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } },
-      r.checked ? 'Current' : '', 'basemap style');
+      r.checked ? 'Current' : '', 'basemap style', 'map');
   });
   document.querySelectorAll('#unitpick input[name="units"]').forEach((r) => {
     add('Units', r.value === 'mi' ? 'Distances in miles' : 'Distances in kilometers', () => csUnits.set(r.value),
-      csUnits.get() === r.value ? 'Current' : '', 'units');
+      csUnits.get() === r.value ? 'Current' : '', 'units', 'ruler');
   });
   const theme = document.documentElement.dataset.theme;
   let savedTheme = null;
   try { savedTheme = localStorage.getItem('cs-theme'); } catch (_) { /* private mode */ }
-  add('Theme', 'Light theme', () => setTheme('light'), savedTheme === 'light' ? 'Current' : '', 'appearance');
-  add('Theme', 'Dark theme', () => setTheme('dark'), savedTheme === 'dark' ? 'Current' : '', 'appearance night');
-  add('Theme', 'Match the system', () => setTheme('system'), !savedTheme ? 'Current, ' + theme : '', 'appearance auto');
+  add('Theme', 'Light theme', () => setTheme('light'), savedTheme === 'light' ? 'Current' : '', 'appearance', 'sun');
+  add('Theme', 'Dark theme', () => setTheme('dark'), savedTheme === 'dark' ? 'Current' : '', 'appearance night', 'moon');
+  add('Theme', 'Match the system', () => setTheme('system'), !savedTheme ? 'Current, ' + theme : '', 'appearance auto', 'system');
   return cmds;
 }
 // Every word typed must start a word in the label or its keywords.
@@ -6016,11 +6065,11 @@ function renderPalette() {
   palCmds = all.filter((c) => c.group === 'Search results' || palMatch(c, words));
   if (q.length >= 2) {
     const coord = parseCoords(q);
-    if (coord && !palPlaces.length) palCmds.unshift({ group: 'Search results', label: coord.name, run: () => showFound(coord), hint: 'Coordinates', keys: '' });
+    if (coord && !palPlaces.length) palCmds.unshift({ group: 'Search results', label: coord.name, run: () => showFound(coord), hint: 'Coordinates', keys: '', icon: 'target' });
     // The typed text goes to Ask as the question. It leads the list
     // (so Enter sends it) when no command matched, unless a place
     // matched and the text does not read as a question.
-    const askCmd = { group: 'Ask', label: 'Ask: ' + q, hint: 'Assistant', keys: '', run: () => askAbout(q) };
+    const askCmd = { group: 'Ask', label: 'Ask: ' + q, hint: 'Assistant', keys: '', icon: 'ask', run: () => askAbout(q) };
     const commands = palCmds.filter((c) => c.group !== 'Search results');
     if (!commands.length && (!palPlaces.length || looksLikeQuestion(q))) palCmds.unshift(askCmd);
     else palCmds.push(askCmd);
@@ -6041,8 +6090,11 @@ function renderPalette() {
     row.id = 'cpal-' + i;
     row.setAttribute('role', 'option');
     row.setAttribute('aria-selected', i === palSel ? 'true' : 'false');
+    const ic = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    ic.setAttribute('viewBox', '0 0 24 24'); ic.setAttribute('aria-hidden', 'true');
+    ic.innerHTML = PAL_ICONS[c.icon] || PAL_ICONS.pin;
     const t = document.createElement('span'); t.textContent = c.label;
-    row.append(t);
+    row.append(ic, t);
     if (c.hint) { const h = document.createElement('small'); h.textContent = c.hint; row.append(h); }
     row.addEventListener('mousemove', () => { if (palSel !== i) { palSel = i; markPalette(); } });
     row.addEventListener('click', () => runPalette(i));

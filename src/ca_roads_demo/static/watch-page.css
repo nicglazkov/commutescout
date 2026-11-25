@@ -4,7 +4,10 @@
    body.wp, so they only restyle this page and win over the base. */
 
 .wp, .wp * { box-sizing:border-box }
-.wp { margin:0; min-height:100vh; background:var(--cs-bg); color:var(--cs-ink);
+/* A column as tall as the window, with main taking the slack, so the
+   footer sits on the bottom edge. Without it the white footer ended
+   early on a tall window and the grey page showed as a band below. */
+.wp { margin:0; min-height:100vh; display:flex; flex-direction:column; background:var(--cs-bg); color:var(--cs-ink);
   font:400 .9375rem/1.6 var(--cs-font-sans); -webkit-font-smoothing:antialiased }
 .wp :where(h1, h2, h3, p, ol, ul, fieldset) { margin:0 }
 .wp main:focus { outline:none }
@@ -19,6 +22,7 @@
 .wp .eyebrow .dot { width:3px; height:3px; border-radius:99px; background:currentColor }
 
 /* ── Controls (this page's versions of the shared components) ───── */
+.wp > main { flex:1 0 auto }
 .wp .watch button.primary { width:100%; min-height:44px; padding:0 18px; border:0;
   border-radius:var(--cs-radius-md); background:var(--cs-accent); color:var(--cs-accent-ink);
   font:500 .9375rem var(--cs-font-sans); cursor:pointer; box-shadow:var(--cs-shadow-sm);

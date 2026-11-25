@@ -1,5 +1,5 @@
 // Menu button for the .topbar on the static app pages (watch, trip,
-// admin). Below 640px the nav is hidden behind this button so the bar
+// admin). At 960px and below the nav is hidden behind this button so the bar
 // stays one row, matching the site's Next.js header. The CSS for both
 // states lives in each page's own <style>; this only flips the class.
 (function () {
@@ -16,7 +16,7 @@
 // The Developers menu in the map page's top bar (map.html), the same
 // menu the site header has. Hover opens it for a mouse; the button opens
 // it for touch and keyboard; Escape and a click outside close it. The
-// links are always in the HTML; below 640px they are listed in place in
+// links are always in the HTML; at 960px and below they are listed in place in
 // the Menu sheet, so the menu button is not needed there.
 (function () {
   var menu = document.querySelector(".topbar .devmenu");
