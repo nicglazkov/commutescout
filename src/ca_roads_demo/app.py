@@ -3186,7 +3186,9 @@ class SecurityHeaders:
         "https://images-dis.divas.cloud https://511.idaho.gov "
         "https://www.nvroads.com https://www.drivenc.gov "
         "https://micamerasimages.net https://*.skyvdn.com "
-        "https://mdotjboss.state.mi.us; "
+        "https://mdotjboss.state.mi.us "
+        # New York: 511NY's stills and video previews, and the city's.
+        "https://public.carsprogram.org https://nyctmc.org; "
         # data.* serves the pre-built map snapshots the page boots from.
         # Leaving it out does not break the site (the client falls back
         # to /api/mapdata) which is exactly why it is easy to miss: the

@@ -2058,11 +2058,107 @@ def _parse_ny(layers: dict[str, list[dict]]) -> list[dict]:
     return out
 
 
+NY_API = "https://api-511x-nysdot.carsprogram.org"
+NYC_CAMERAS_URL = "https://nyctmc.org/api/cameras"
+_NY_DIRS = {"N": "NB", "S": "SB", "E": "EB", "W": "WB"}
+
+
+def _parse_ny_cameras(features: list[dict],
+                      nyc_online: list[dict] | None) -> list[dict]:
+    """511NY's camera layer to camera markers.
+
+    The state's own cameras (NYSDOT, the Thruway) are HLS video with a
+    still preview, or plain stills. New York City's are listed too, but
+    about two in three of their image URLs answer 404 at any moment:
+    the city's own list says which are online, so the city cameras come
+    from that list, and are left out when it could not be read.
+    """
+    out: list[dict] = []
+    for feat in features:
+        props = feat.get("properties") or {}
+        if props.get("cameraOwner") == "NYC DOT" or props.get("public") is False:
+            continue
+        pts = _ny_points(feat.get("geometry"))
+        if not pts:
+            continue
+        name = re.sub(r"\s+", " ", props.get("name") or "").strip() or "Camera"
+        for view in props.get("views") or []:
+            if not isinstance(view, dict) or view.get("broken"):
+                continue
+            url = view.get("url") or ""
+            still = view.get("type") == "STILL_IMAGE"
+            image = url if still else view.get("videoPreviewUrl")
+            if not image or not str(image).startswith("https://"):
+                continue
+            stream = url if not still and url.startswith("https://") else None
+            out.append({
+                "kind": "camera", "lat": float(pts[0][1]), "lon": float(pts[0][0]),
+                "name": name[:90], "route": None, "direction": None,
+                "near": None, "src": NY_SRC, "image": image, "stream": stream})
+            break  # one marker per camera: its first working view
+    for cam in nyc_online or []:
+        lat, lon, image = cam.get("latitude"), cam.get("longitude"), cam.get("imageUrl")
+        if (not isinstance(lat, int | float) or not isinstance(lon, int | float)
+                or str(cam.get("isOnline")).lower() != "true"
+                or not str(image or "").startswith("https://nyctmc.org/")):
+            continue
+        out.append({
+            "kind": "camera", "lat": float(lat), "lon": float(lon),
+            "name": (cam.get("name") or "Camera")[:90], "route": None,
+            "direction": None, "near": cam.get("area") or None,
+            "src": "NYC DOT", "image": image, "stream": None})
+    return out
+
+
+def _parse_ny_signs(features: list[dict]) -> list[dict]:
+    """511NY's sign layer to sign markers: each page's lines as typed on
+    the sign, pages in order. A sign showing nothing ships as blank."""
+    out: list[dict] = []
+    for feat in features:
+        props = feat.get("properties") or {}
+        pts = _ny_points(feat.get("geometry"))
+        if not pts:
+            continue
+        pages = []
+        for page in props.get("pages") or []:
+            lines = [re.sub(r"\s+", " ", str(ln)).strip()
+                     for ln in (page or {}).get("lines") or []]
+            lines = [ln for ln in lines if ln]
+            if lines:
+                pages.append(lines)
+        if props.get("status") != "DISPLAYING_MESSAGE":
+            pages = []
+        lines = [ln for page in pages for ln in page][:9]
+        m = {"kind": "sign", "lat": float(pts[0][1]), "lon": float(pts[0][0]),
+             "route": props.get("route") or None,
+             "direction": _NY_DIRS.get(props.get("signFacingDirection") or ""),
+             "near": re.sub(r"\s+", " ", props.get("name") or "").strip()[:120],
+             "message": " | ".join(" / ".join(page) for page in pages)[:400],
+             "lines": lines, "src": NY_SRC}
+        if not lines:
+            m["blank"] = True
+        out.append(m)
+    return out
+
+
 async def _fetch_ny(client) -> dict:
     """New York via 511NY's public map layers (keyless GeoJSON from the
     CARS platform the site moved to in 2026-11): incidents, closures
-    and construction in effect now. Construction runs ~5 MB, so the
-    parse runs off the event loop."""
+    and construction in effect now, plus cameras and message signs.
+    Construction runs ~5 MB, so the parse runs off the event loop.
+    Cameras and signs are extras: a failure there never costs the
+    state its incidents."""
+    async def extra(url: str):
+        try:
+            for attempt in (0, 1):  # the gateway's odd 502, as below
+                resp = await client.get(url, headers=UA, timeout=45.0)
+                if resp.status_code < 500 or attempt:
+                    break
+                await asyncio.sleep(1.0)
+            resp.raise_for_status()
+            return resp.content
+        except Exception:  # noqa: BLE001 - extras never fail the state
+            return None
     async def layer(name: str) -> bytes:
         # The gateway throws the odd 502 between good answers; one retry
         # keeps a blip from blanking the whole state for a cycle.
@@ -2076,9 +2172,21 @@ async def _fetch_ny(client) -> dict:
         return resp.content
 
     names = ("incidents", "closures", "construction")
-    raw = await asyncio.gather(*(layer(n) for n in names))
+    *raw, cam_raw, sign_raw, nyc_raw = await asyncio.gather(
+        *(layer(n) for n in names),
+        extra(f"{NY_API}/cameras/map-features"),
+        extra(f"{NY_API}/signs/map-features"),
+        extra(NYC_CAMERAS_URL))
 
-    def parse() -> list[dict]:
+    def features(body) -> list[dict]:
+        try:
+            payload = json.loads(body) if body else None
+        except ValueError:
+            return []
+        feats = payload.get("features") if isinstance(payload, dict) else None
+        return feats if isinstance(feats, list) else []
+
+    def parse() -> tuple[list[dict], list[dict]]:
         layers = {}
         for name, body in zip(names, raw, strict=True):
             payload = json.loads(body)
@@ -2086,9 +2194,16 @@ async def _fetch_ny(client) -> dict:
                     payload.get("features"), list):
                 raise ValueError(f"511NY {name}: not a feature collection")
             layers[name] = payload["features"]
-        return _parse_ny(layers)
+        try:
+            nyc = json.loads(nyc_raw) if nyc_raw else None
+        except ValueError:
+            nyc = None
+        cams = _parse_ny_cameras(features(cam_raw),
+                                 nyc if isinstance(nyc, list) else None)
+        return _parse_ny(layers) + _parse_ny_signs(features(sign_raw)), cams
 
-    return {"markers": await asyncio.to_thread(parse)}
+    markers, cameras = await asyncio.to_thread(parse)
+    return {"markers": markers + _keep_cameras("ny", cameras)}
 
 
 async def _fetch_ms(client) -> dict:

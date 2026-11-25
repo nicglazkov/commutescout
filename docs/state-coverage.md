@@ -33,7 +33,7 @@ state's WZDx roadwork feed.
 | Idaho | Y | Y | Y | Y | Y | - (22) | Y* |
 | Connecticut | Y | Y | - (26) | Y | - (26) | n/a | Y* |
 | Wisconsin | - (11) | Y (wz) | Y** | - (11) | - (11) | n/a | Y* |
-| New York | Y | Y | - (11) | - (11) | - (11) | n/a | Y* |
+| New York | Y | Y | Y | Y | - (11) | n/a | Y* |
 | Indiana | - (12) | Y (wz) | Y** | - (12) | - (12) | n/a | Y* |
 | Minnesota | - (13) | Y (wz) | - (13) | - (13) | - (13) | n/a | Y* |
 | Kansas | - (12) | Y (wz) | - (12) | - (12) | - (12) | n/a | Y* |
