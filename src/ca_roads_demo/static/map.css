@@ -785,12 +785,14 @@ aside#panel:not([data-tool="places"]):not([data-tool="alerts"]) section[data-too
   input, select, textarea { font-size:16px !important }
   .examples button { padding:8px 12px }
 }
-/* ── Topbar below 640px ───────────────────────────────────────
+/* ── Topbar at 960px and below ────────────────────────────────
    One row, as on the site: brand left, the Live map pill and a Menu
-   button right. The Menu button (topbar.js) opens the nav as a sheet
+   button right. The break matches the shell's (960px): between 641px
+   and about 815px the five links and the pill did not fit one row, so
+   the pill wrapped under the bar and sat on the map. The Menu button (topbar.js) opens the nav as a sheet
    under the bar, two columns of 44px targets, with the developer
    pages listed in place under a "For developers" label. */
-@media (max-width: 640px) {
+@media (max-width: 960px) {
   .topbar { height:auto; min-height:56px; gap:8px; row-gap:4px;
     padding:8px 12px;
     padding-left:max(12px, env(safe-area-inset-left));
@@ -1042,6 +1044,9 @@ kbd { font:600 .68rem var(--mono); padding:1px 5px; border-radius:5px;
 .cpalrow span { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 .cpalrow small { flex:none; color:var(--dim); font-size:.74rem; max-width:45%; white-space:nowrap;
   overflow:hidden; text-overflow:ellipsis }
+.cpalrow svg { width:16px; height:16px; flex:none; fill:none; stroke:var(--t3); stroke-width:1.8;
+  stroke-linecap:round; stroke-linejoin:round }
+.cpalrow.on svg { stroke:var(--sky) }
 .cpalrow.on { background:var(--sky-soft) }
 .cpalrow.on span { color:var(--ink) }
 .cpalnone { padding:18px 12px; color:var(--dim); font-size:.84rem }
@@ -1671,7 +1676,7 @@ aside#panel section#pane-layers.pop { display:block; position:fixed; z-index:130
 .asof.stale { color:var(--k-fire) }
 .asof.old { color:var(--k-closure) }
 #ver { color:var(--ink-3) }
-@media (max-width: 640px) {
+@media (max-width: 960px) {
   .topbar .devlabel { color:var(--ink-3) }
   .topbar .devpop a { color:var(--ink-2) }
 }

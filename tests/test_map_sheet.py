@@ -10,7 +10,7 @@ CSS = (STATIC / "map.css").read_text(encoding="utf-8")
 APP = (STATIC / "map-app.js").read_text(encoding="utf-8")
 ASSIST = (STATIC / "map-assistant.js").read_text(encoding="utf-8")
 PHONE = CSS[CSS.index("@media (max-width: 960px) {\n  /* Phone:"):
-            CSS.index("/* ── Topbar below 640px")]
+            CSS.index("/* ── Topbar at 960px and below")]
 
 
 def test_one_grab_handle_first_in_the_panel_hidden_on_desktop():
